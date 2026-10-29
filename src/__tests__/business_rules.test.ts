@@ -1,10 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-
-// Business Rules & Domain Helpers
-export const MINIMUM_SALE_PRICE_RUPEES = 25;
-export const ALLOWED_PAYMENT_MODES = ['CASH', 'BANK', 'PENDING'] as const;
-export type PaymentMode = typeof ALLOWED_PAYMENT_MODES[number];
+import {
+  applySaleEffects,
+  checkRolePermission,
+  validateCustomerOnboarding,
+  validatePaymentMode,
+  validateSalePrice,
+} from '../api/domainRules.ts';
+import type { PaymentMode, SaleStatus } from '../api/types';
 
 export interface SaleOrder {
   id: string;
@@ -13,7 +16,7 @@ export interface SaleOrder {
   packetCount: number;
   unitPriceRupees: number;
   totalAmountRupees: number;
-  status: 'PENDING' | 'APPROVED' | 'CONFIRMED' | 'REJECTED';
+  status: SaleStatus;
   paymentMode: PaymentMode;
   appliedIncentiveRatePaise: number; // Snapshot of rate when confirmed
   confirmedAt?: string;
@@ -23,92 +26,6 @@ export interface SaleOrder {
 export interface InventoryBalance {
   sellerId: string;
   stockBalance: number;
-}
-
-export function validateSalePrice(unitPriceRupees: number, configuredMinPrice: number = MINIMUM_SALE_PRICE_RUPEES) {
-  const requiresApproval = unitPriceRupees < configuredMinPrice;
-  return {
-    requiresApproval,
-    initialStatus: requiresApproval ? ('PENDING' as const) : ('CONFIRMED' as const),
-    warningMessage: requiresApproval
-      ? `Price ₹${unitPriceRupees} is below minimum ₹${configuredMinPrice}. Requires Super Admin approval.`
-      : null,
-  };
-}
-
-export function applySaleEffects(
-  sale: SaleOrder,
-  inventory: InventoryBalance
-): { inventory: InventoryBalance; earnedCommissionPaise: number; invoiceGenerated: boolean } {
-  // RULE: Only CONFIRMED sales deduct stock, earn incentive, or generate invoices
-  if (sale.status === 'CONFIRMED') {
-    return {
-      inventory: {
-        ...inventory,
-        stockBalance: Math.max(0, inventory.stockBalance - sale.packetCount),
-      },
-      earnedCommissionPaise: sale.packetCount * sale.appliedIncentiveRatePaise,
-      invoiceGenerated: true,
-    };
-  }
-
-  // PENDING, REJECTED, or APPROVED (awaiting dispatch) must NOT deduct stock or credit incentives
-  return {
-    inventory: { ...inventory },
-    earnedCommissionPaise: 0,
-    invoiceGenerated: false,
-  };
-}
-
-export function validatePaymentMode(mode: string): mode is PaymentMode {
-  return (ALLOWED_PAYMENT_MODES as readonly string[]).includes(mode);
-}
-
-export function validateCustomerOnboarding(data: {
-  name: string;
-  phone: string;
-  email: string;
-  category: string;
-  location?: { lat: number; lng: number } | null;
-}) {
-  const errors: Record<string, string> = {};
-  if (!data.name || data.name.trim().length < 2) errors.name = 'Store name is required';
-  if (!data.phone || data.phone.trim().length < 10) errors.phone = 'Valid 10-digit phone number is required';
-  if (!data.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
-    errors.email = 'Valid customer email is required';
-  }
-  if (!data.category) errors.category = 'Category selection is required';
-
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors,
-    hasLocation: !!data.location,
-  };
-}
-
-export function checkRolePermission(userRole: 'SELLER' | 'MANAGER' | 'ADMIN', action: string): boolean {
-  const rolePermissions: Record<string, string[]> = {
-    SELLER: ['CREATE_SALE', 'VIEW_CUSTOMERS', 'ADD_CUSTOMER', 'VIEW_VAN_STOCK', 'VIEW_INCENTIVES'],
-    MANAGER: ['VIEW_CUSTOMERS', 'VIEW_TEAM', 'ONBOARD_SELLER', 'VIEW_TERRITORY_SALES', 'VIEW_TERRITORY_STOCK'],
-    ADMIN: [
-      'CREATE_SALE',
-      'VIEW_CUSTOMERS',
-      'ADD_CUSTOMER',
-      'VIEW_VAN_STOCK',
-      'VIEW_INCENTIVES',
-      'VIEW_TEAM',
-      'ONBOARD_SELLER',
-      'VIEW_TERRITORY_SALES',
-      'APPROVE_LOW_PRICE_SALE',
-      'REJECT_LOW_PRICE_SALE',
-      'CONFIGURE_MIN_PRICE',
-      'MANAGE_HQ_INVENTORY',
-      'TRANSFER_HQ_STOCK',
-      'MANAGE_CATEGORIES',
-    ],
-  };
-
-  return (rolePermissions[userRole] || []).includes(action);
 }
 
 // ==========================================

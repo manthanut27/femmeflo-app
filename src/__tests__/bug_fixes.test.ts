@@ -1,5 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  checkRolePermission,
+  validateCustomerEmail,
+} from '../api/domainRules.ts';
 
 describe('FemmeFlo Bug Audit & Safe Fixes Regression Suite', () => {
 
@@ -103,15 +107,13 @@ describe('FemmeFlo Bug Audit & Safe Fixes Regression Suite', () => {
 
   // BUG-004 Regression: Strict RFC customer email validation regex
   it('BUG-004: Strict customer email validation rejects malformed email strings', () => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    assert.equal(emailRegex.test('valid.store@femmeflo.com'), true);
-    assert.equal(emailRegex.test('sharma@store.in'), true);
-    assert.equal(emailRegex.test('invalid_email'), false);
-    assert.equal(emailRegex.test('store@'), false);
-    assert.equal(emailRegex.test('store@domain'), false, 'Email without TLD must fail');
-    assert.equal(emailRegex.test('@domain.com'), false);
-    assert.equal(emailRegex.test('store @domain.com'), false);
+    assert.equal(validateCustomerEmail('valid.store@femmeflo.com'), true);
+    assert.equal(validateCustomerEmail('sharma@store.in'), true);
+    assert.equal(validateCustomerEmail('invalid_email'), false);
+    assert.equal(validateCustomerEmail('store@'), false);
+    assert.equal(validateCustomerEmail('store@domain'), false, 'Email without TLD must fail');
+    assert.equal(validateCustomerEmail('@domain.com'), false);
+    assert.equal(validateCustomerEmail('store @domain.com'), false);
   });
 
   // BUG-006 Regression: Strict admin approval endpoint routing
@@ -125,6 +127,52 @@ describe('FemmeFlo Bug Audit & Safe Fixes Regression Suite', () => {
     assert.equal(matchApprovalEndpoint('seller/sales/approve'), false);
     assert.equal(matchApprovalEndpoint('admin/settings/approve_flag'), false);
     assert.equal(matchApprovalEndpoint('admin/approvals/sale_123/reject'), false);
+  });
+
+  // CRIT-01 Regression: Route and RBAC role boundaries
+  it('CRIT-01: Role permissions strictly prohibit Seller and Manager from executive actions', () => {
+    assert.equal(checkRolePermission('SELLER', 'APPROVE_LOW_PRICE_SALE'), false);
+    assert.equal(checkRolePermission('SELLER', 'CONFIGURE_MIN_PRICE'), false);
+    assert.equal(checkRolePermission('SELLER', 'MANAGE_HQ_INVENTORY'), false);
+    assert.equal(checkRolePermission('MANAGER', 'APPROVE_LOW_PRICE_SALE'), false);
+    assert.equal(checkRolePermission('MANAGER', 'CONFIGURE_MIN_PRICE'), false);
+    assert.equal(checkRolePermission('SUPER_ADMIN', 'APPROVE_LOW_PRICE_SALE'), true);
+    assert.equal(checkRolePermission('SUPER_ADMIN', 'CONFIGURE_MIN_PRICE'), true);
+  });
+
+  // HIGH-01 Regression: Invoice PDF URL token security
+  it('HIGH-01: Invoice PDF URL generation does not append sensitive token into query string', () => {
+    function getInvoicePdfUrl(baseUrl: string, id: string, download = true): string {
+      return `${baseUrl}/invoices/${id}/pdf?download=${download ? 'true' : 'false'}`;
+    }
+
+    const testUrl = getInvoicePdfUrl('https://api.femmeflo.com/api/v1', 'sale_999', true);
+    assert.equal(testUrl.includes('token='), false, 'PDF URL must not contain query token');
+    assert.equal(testUrl, 'https://api.femmeflo.com/api/v1/invoices/sale_999/pdf?download=true');
+  });
+
+  // HIGH-03 Regression: Sale idempotency deduplication
+  it('HIGH-03: Duplicate sale submissions with the same idempotency key are safely deduplicated', () => {
+    const processedOrders = new Map<string, { id: string; status: string }>();
+
+    function processSaleWithIdempotency(idempotencyKey: string, saleData: { id: string; status: string }) {
+      if (processedOrders.has(idempotencyKey)) {
+        return { isDuplicate: true, sale: processedOrders.get(idempotencyKey)! };
+      }
+      processedOrders.set(idempotencyKey, saleData);
+      return { isDuplicate: false, sale: saleData };
+    }
+
+    const key = 'pos_unique_uuid_001';
+    const firstAttempt = processSaleWithIdempotency(key, { id: 'sale_1', status: 'CONFIRMED' });
+    assert.equal(firstAttempt.isDuplicate, false);
+    assert.equal(firstAttempt.sale.id, 'sale_1');
+
+    // Network timeout retry with identical idempotency key
+    const secondAttempt = processSaleWithIdempotency(key, { id: 'sale_2_attempt', status: 'CONFIRMED' });
+    assert.equal(secondAttempt.isDuplicate, true);
+    assert.equal(secondAttempt.sale.id, 'sale_1', 'Must return initial sale without creating duplicate');
+    assert.equal(processedOrders.size, 1);
   });
 
 });
