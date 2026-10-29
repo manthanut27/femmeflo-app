@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  StyleProp,
   StyleSheet,
   Text,
   TextStyle,
@@ -12,12 +13,20 @@ import { BrandColors, HitSlop, Radius, Shadows, Spacing, Typography } from '../.
 export interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
+  variant?:
+    | 'primary'
+    | 'secondary'
+    | 'admin'
+    | 'outline'
+    | 'outline-secondary'
+    | 'outline-admin'
+    | 'danger'
+    | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   icon?: React.ReactNode;
   accessibilityLabel?: string;
   accessibilityHint?: string;
@@ -37,6 +46,15 @@ export function Button({
   accessibilityHint,
 }: ButtonProps) {
   const isInteractive = !disabled && !loading;
+
+  const indicatorColor =
+    variant === 'outline' || variant === 'ghost'
+      ? BrandColors.pink.primary
+      : variant === 'outline-secondary'
+      ? BrandColors.green.primary
+      : variant === 'outline-admin'
+      ? BrandColors.pink.dark
+      : '#FFFFFF';
 
   return (
     <Pressable
@@ -59,7 +77,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'outline' || variant === 'ghost' ? BrandColors.pink.primary : '#FFFFFF'}
+          color={indicatorColor}
         />
       ) : (
         <>
@@ -112,10 +130,24 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.green.primary,
     ...Shadows.sm,
   },
+  admin: {
+    backgroundColor: BrandColors.pink.dark,
+    ...Shadows.sm,
+  },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
     borderColor: BrandColors.pink.primary,
+  },
+  'outline-secondary': {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: BrandColors.green.primary,
+  },
+  'outline-admin': {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: BrandColors.pink.dark,
   },
   danger: {
     backgroundColor: BrandColors.pink.deep,
@@ -145,8 +177,17 @@ const styles = StyleSheet.create({
   secondaryText: {
     color: '#FFFFFF',
   },
+  adminText: {
+    color: '#FFFFFF',
+  },
   outlineText: {
     color: BrandColors.pink.primary,
+  },
+  'outline-secondaryText': {
+    color: BrandColors.green.primary,
+  },
+  'outline-adminText': {
+    color: BrandColors.pink.dark,
   },
   dangerText: {
     color: '#FFFFFF',
@@ -168,7 +209,19 @@ const pressedStyles = StyleSheet.create({
     backgroundColor: BrandColors.green.pressed,
     transform: [{ scale: 0.985 }],
   },
+  admin: {
+    backgroundColor: BrandColors.pink.deep,
+    transform: [{ scale: 0.985 }],
+  },
   outline: {
+    backgroundColor: BrandColors.pink.subtle,
+    transform: [{ scale: 0.985 }],
+  },
+  'outline-secondary': {
+    backgroundColor: BrandColors.green.surface,
+    transform: [{ scale: 0.985 }],
+  },
+  'outline-admin': {
     backgroundColor: BrandColors.pink.subtle,
     transform: [{ scale: 0.985 }],
   },
@@ -192,7 +245,20 @@ const disabledContainerStyles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
+  admin: {
+    backgroundColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   outline: {
+    backgroundColor: 'transparent',
+    borderColor: '#CBD5E1',
+  },
+  'outline-secondary': {
+    backgroundColor: 'transparent',
+    borderColor: '#CBD5E1',
+  },
+  'outline-admin': {
     backgroundColor: 'transparent',
     borderColor: '#CBD5E1',
   },
@@ -213,7 +279,16 @@ const disabledTextStyles = StyleSheet.create({
   secondary: {
     color: '#94A3B8',
   },
+  admin: {
+    color: '#94A3B8',
+  },
   outline: {
+    color: '#94A3B8',
+  },
+  'outline-secondary': {
+    color: '#94A3B8',
+  },
+  'outline-admin': {
     color: '#94A3B8',
   },
   danger: {

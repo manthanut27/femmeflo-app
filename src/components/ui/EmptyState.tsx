@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { BrandColors, Spacing, Typography } from '../../constants/theme';
-import { Button } from './Button';
+import { Button, ButtonProps } from './Button';
 
 export interface EmptyStateProps {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -11,6 +11,10 @@ export interface EmptyStateProps {
   actionTitle?: string;
   onAction?: () => void;
   style?: ViewStyle;
+  iconColor?: string;
+  iconBgColor?: string;
+  iconBorderColor?: string;
+  buttonVariant?: ButtonProps['variant'];
 }
 
 export function EmptyState({
@@ -20,11 +24,15 @@ export function EmptyState({
   actionTitle,
   onAction,
   style,
+  iconColor = BrandColors.pink.primary,
+  iconBgColor = BrandColors.pink.subtle,
+  iconBorderColor = BrandColors.pink.tint,
+  buttonVariant = 'primary',
 }: EmptyStateProps) {
   return (
     <View style={[styles.container, style]} accessibilityRole="summary">
-      <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={36} color={BrandColors.pink.primary} />
+      <View style={[styles.iconCircle, { backgroundColor: iconBgColor, borderColor: iconBorderColor }]}>
+        <Ionicons name={icon} size={36} color={iconColor} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {description ? <Text style={styles.description}>{description}</Text> : null}
@@ -32,7 +40,7 @@ export function EmptyState({
         <Button
           title={actionTitle}
           onPress={onAction}
-          variant="primary"
+          variant={buttonVariant}
           size="sm"
           style={styles.actionButton}
         />

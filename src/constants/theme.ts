@@ -4,9 +4,9 @@ export const BrandColors = {
   // Brand Pink / Rose (Healthcare FMCG & Hygiene)
   pink: {
     primary: '#E61C5D',
-    pressed: '#C91550',
+    pressed: '#C01048',
     dark: '#9F2545',
-    deep: '#B4234D',
+    deep: '#881337',
     vibrant: '#F0006E',
     surface: '#FFF8FA',
     subtle: '#FFF5F7',
@@ -33,10 +33,10 @@ export const BrandColors = {
 
 export const Colors = {
   light: {
-    text: '#1E293B',
-    textPrimary: '#1E293B',
+    text: '#0F172A',
+    textPrimary: '#0F172A',
     heading: '#09090B',
-    textSecondary: '#64748B',
+    textSecondary: '#475569',
     textMuted: '#94A3B8',
     textTertiary: '#94A3B8',
     textPlaceholder: '#A1A1AA',

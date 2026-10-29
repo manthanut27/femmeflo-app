@@ -21,6 +21,7 @@ export interface StatCardProps {
   iconBg?: string; // Design system alias
   badge?: string;
   badgeVariant?: BadgeVariant;
+  trend?: { value: string; isPositive?: boolean };
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   accentColor?: string;
@@ -36,6 +37,7 @@ export function StatCard({
   iconBg,
   badge,
   badgeVariant = 'neutral',
+  trend,
   onPress,
   style,
   accentColor,
@@ -58,6 +60,22 @@ export function StatCard({
       <Text style={styles.value} numberOfLines={1}>
         {value}
       </Text>
+
+      {trend ? (
+        <View style={styles.trendRow}>
+          <View style={[styles.trendPill, trend.isPositive !== false ? styles.trendPositive : styles.trendNegative]}>
+            <Ionicons
+              name={trend.isPositive !== false ? 'trending-up' : 'trending-down'}
+              size={12}
+              color={trend.isPositive !== false ? '#156035' : '#DC2626'}
+              style={{ marginRight: 3 }}
+            />
+            <Text style={[styles.trendText, trend.isPositive !== false ? styles.trendTextPositive : styles.trendTextNegative]}>
+              {trend.value}
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       {subtitle || badge ? (
         <View style={styles.footerRow}>
@@ -141,6 +159,37 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
     marginVertical: 2,
+  },
+  trendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  trendPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  trendPositive: {
+    backgroundColor: '#EDF7F0',
+    borderColor: '#BCE3C8',
+  },
+  trendNegative: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  trendText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  trendTextPositive: {
+    color: '#156035',
+  },
+  trendTextNegative: {
+    color: '#DC2626',
   },
   footerRow: {
     flexDirection: 'row',
