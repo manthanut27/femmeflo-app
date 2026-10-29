@@ -50,9 +50,12 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow FemmeFlo to upload retail storefront photos."
+          "photosPermission": "Allow FemmeFlo to upload retail storefront photos.",
+          "cameraPermission": "Allow FemmeFlo to capture retail storefront photos."
         }
-      ]
+      ],
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": false
