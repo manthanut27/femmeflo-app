@@ -20,10 +20,19 @@ import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import {
+  draftStorage,
+  generateIdempotencyKey,
+  computePayloadHash,
+  shouldRotateIdempotencyKey,
+} from '@/utils/draftStorage';
 
 export default function NewSaleScreen() {
   const params = useLocalSearchParams<{ customerId?: string; customerName?: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id || 'anonymous';
 
   // Data states
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
@@ -31,24 +40,31 @@ export default function NewSaleScreen() {
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  // Form states
+  // Form states & Persistent Draft
   const [selectedCustomerId, setSelectedCustomerId] = useState(params.customerId || '');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantityStr, setQuantityStr] = useState('10');
   const [unitPriceRupees, setUnitPriceRupees] = useState('35');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('CASH');
   const [paymentReference, setPaymentReference] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey());
+  const [boundPayloadHash, setBoundPayloadHash] = useState<string>('');
+  const [wasSubmitted, setWasSubmitted] = useState<boolean>(false);
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    Promise.all([
-      sellerApi.listCustomers({ pageSize: 50 }).catch(() => ({ items: [] })),
-      sellerApi.listProducts().catch(() => ({ items: [] })),
-      sellerApi.getInventory().catch(() => ({ balance: 0, products: [] })),
-    ])
-      .then(([custRes, prodRes, invRes]) => {
+    async function initScreen() {
+      try {
+        const [custRes, prodRes, invRes, savedDraft] = await Promise.all([
+          sellerApi.listCustomers({ pageSize: 50 }).catch(() => ({ items: [] })),
+          sellerApi.listProducts().catch(() => ({ items: [] })),
+          sellerApi.getInventory().catch(() => ({ balance: 0, products: [] })),
+          draftStorage.getOrderDraft(userId).catch(() => null),
+        ]);
+
         setCustomers(custRes.items);
         setProducts(prodRes.items);
 
@@ -61,20 +77,101 @@ export default function NewSaleScreen() {
         }
         setStockMap(map);
 
-        if (prodRes.items.length > 0) {
-          const first = prodRes.items[0];
-          setSelectedProductId(first.id);
-          setUnitPriceRupees(String((first.basePricePaise || 3500) / 100));
+        if (savedDraft) {
+          setIdempotencyKey(savedDraft.idempotencyKey);
+          setBoundPayloadHash(savedDraft.payloadHash || '');
+          setWasSubmitted(Boolean(savedDraft.submitted));
+          if (savedDraft.customerId) setSelectedCustomerId(savedDraft.customerId);
+          if (savedDraft.items && savedDraft.items.length > 0) {
+            const first = savedDraft.items[0];
+            setSelectedProductId(first.productId);
+            setQuantityStr(String(first.quantity || 10));
+            setUnitPriceRupees(String((first.unitPricePaise || 3500) / 100));
+          }
+          if (savedDraft.paymentMode) setPaymentMode(savedDraft.paymentMode);
+          if (savedDraft.paymentReference) setPaymentReference(savedDraft.paymentReference);
+          setIsDraftRestored(true);
+        } else {
+          if (prodRes.items.length > 0) {
+            const first = prodRes.items[0];
+            setSelectedProductId(first.id);
+            setUnitPriceRupees(String((first.basePricePaise || 3500) / 100));
+          }
+          if (params.customerId) {
+            setSelectedCustomerId(params.customerId);
+          } else if (custRes.items.length > 0) {
+            setSelectedCustomerId(custRes.items[0].id);
+          }
         }
+      } finally {
+        setLoading(false);
+      }
+    }
 
-        if (params.customerId) {
-          setSelectedCustomerId(params.customerId);
-        } else if (custRes.items.length > 0) {
-          setSelectedCustomerId(custRes.items[0].id);
-        }
-      })
-      .finally(() => setLoading(false));
-  }, [params.customerId]);
+    initScreen();
+  }, [params.customerId, userId]);
+
+  // Autosave draft on any field change and rotate idempotency key if modified after submit attempt
+  useEffect(() => {
+    if (loading || !idempotencyKey) return;
+    const qty = parseInt(quantityStr, 10) || 0;
+    const pricePaise = Math.round((parseFloat(unitPriceRupees) || 0) * 100);
+
+    const items = selectedProductId
+      ? [
+          {
+            productId: selectedProductId,
+            productName: products.find((p) => p.id === selectedProductId)?.name || 'Product',
+            quantity: qty,
+            unitPricePaise: pricePaise,
+          },
+        ]
+      : [];
+
+    const currentHash = computePayloadHash({
+      customerId: selectedCustomerId,
+      items,
+      paymentMode,
+    });
+
+    let activeKey = idempotencyKey;
+    let submittedFlag = wasSubmitted;
+
+    // Rotate idempotency key if draft changes after a submit attempt
+    if (shouldRotateIdempotencyKey(currentHash, boundPayloadHash, wasSubmitted)) {
+      activeKey = generateIdempotencyKey();
+      setIdempotencyKey(activeKey);
+      setBoundPayloadHash(currentHash);
+      setWasSubmitted(false);
+      submittedFlag = false;
+    } else if (!boundPayloadHash) {
+      setBoundPayloadHash(currentHash);
+    }
+
+    draftStorage.saveOrderDraft(userId, {
+      idempotencyKey: activeKey,
+      payloadHash: currentHash,
+      submitted: submittedFlag,
+      customerId: selectedCustomerId,
+      items,
+      paymentMode,
+      paymentReference,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [
+    idempotencyKey,
+    selectedCustomerId,
+    selectedProductId,
+    quantityStr,
+    unitPriceRupees,
+    paymentMode,
+    paymentReference,
+    loading,
+    products,
+    userId,
+    wasSubmitted,
+    boundPayloadHash,
+  ]);
 
   const selectedProduct = products.find((p) => p.id === selectedProductId);
   const currentStock = selectedProductId ? stockMap[selectedProductId] ?? 0 : 0;
@@ -88,6 +185,20 @@ export default function NewSaleScreen() {
   function handleProductSelect(prod: ProductItem) {
     setSelectedProductId(prod.id);
     setUnitPriceRupees(String((prod.basePricePaise || 3500) / 100));
+  }
+
+  function handleIncrementQuantity() {
+    const current = parseInt(quantityStr, 10) || 0;
+    setQuantityStr(String(current + 5));
+  }
+
+  function handleDecrementQuantity() {
+    const current = parseInt(quantityStr, 10) || 0;
+    if (current > 5) {
+      setQuantityStr(String(current - 5));
+    } else if (current > 1) {
+      setQuantityStr(String(current - 1));
+    }
   }
 
   function validate() {
@@ -114,11 +225,13 @@ export default function NewSaleScreen() {
     }
 
     setIsSubmitting(true);
+    setWasSubmitted(true);
     try {
       const res = await sellerApi.createSale({
         customerId: selectedCustomerId,
         paymentMode,
         paymentReference: paymentReference.trim() || undefined,
+        idempotencyKey,
         items: [
           {
             productId: selectedProductId,
@@ -127,6 +240,9 @@ export default function NewSaleScreen() {
           },
         ],
       });
+
+      // Clear draft upon successful order submission
+      await draftStorage.clearOrderDraft(userId);
 
       const sale = res.sale;
       const isPending = sale.status === 'PENDING';
@@ -150,6 +266,26 @@ export default function NewSaleScreen() {
     }
   }
 
+  async function handleDiscardDraft() {
+    Alert.alert('Discard Draft', 'Are you sure you want to reset this order draft?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: async () => {
+          await draftStorage.clearOrderDraft();
+          setIdempotencyKey(generateIdempotencyKey());
+          setQuantityStr('10');
+          setIsDraftRestored(false);
+          if (products.length > 0) {
+            setSelectedProductId(products[0].id);
+            setUnitPriceRupees(String((products[0].basePricePaise || 3500) / 100));
+          }
+        },
+      },
+    ]);
+  }
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -167,6 +303,24 @@ export default function NewSaleScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrapper}>
+          {/* Draft Autosave & Idempotency Key Status */}
+          <View style={styles.draftBadgeRow}>
+            <View style={styles.draftBadge}>
+              <Ionicons name="cloud-done-outline" size={14} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.draftBadgeText}>
+                {isDraftRestored ? 'Draft restored' : 'Draft autosaved'} • #{idempotencyKey.slice(0, 14)}
+              </Text>
+            </View>
+            <Pressable
+              onPress={handleDiscardDraft}
+              style={styles.discardDraftBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Reset order draft"
+            >
+              <Text style={styles.discardDraftText}>Reset</Text>
+            </Pressable>
+          </View>
+
           {/* Customer Selector */}
           <Text style={styles.sectionHeading}>1. Retail Store</Text>
           <Card style={styles.card}>
@@ -208,6 +362,11 @@ export default function NewSaleScreen() {
                     >
                       {c.ownerName}
                     </Text>
+                    <View style={[styles.tierPill, isSelected && styles.tierPillActive]}>
+                      <Text style={[styles.tierPillText, isSelected && styles.tierPillTextActive]}>
+                        Tier A • 15d Credit
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -274,6 +433,25 @@ export default function NewSaleScreen() {
                   error={errors.quantity}
                   leftIcon={<Ionicons name="cube-outline" size={18} color="#94A3B8" />}
                 />
+                <View style={styles.stepperRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Decrease quantity by 5"
+                    style={styles.stepperBtn}
+                    onPress={handleDecrementQuantity}
+                  >
+                    <Ionicons name="remove" size={16} color={BrandColors.pink.primary} />
+                  </Pressable>
+                  <Text style={styles.stepperHint}>±5 Quick Step</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Increase quantity by 5"
+                    style={styles.stepperBtn}
+                    onPress={handleIncrementQuantity}
+                  >
+                    <Ionicons name="add" size={16} color={BrandColors.pink.primary} />
+                  </Pressable>
+                </View>
               </View>
 
               <View style={{ flex: 1 }}>
@@ -412,6 +590,41 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
   },
+  draftBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: BrandColors.green.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.green.light,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  draftBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  draftBadgeText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: BrandColors.green.primary,
+  },
+  discardDraftBtn: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.xs,
+  },
+  discardDraftText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.light.danger,
+  },
   sectionHeading: {
     ...Typography.overline,
     color: Colors.light.textSecondary,
@@ -441,6 +654,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.light.border,
     minWidth: 140,
+    minHeight: 48,
+    justifyContent: 'center',
   },
   customerChipActive: {
     backgroundColor: BrandColors.pink.primary,
@@ -468,6 +683,52 @@ const styles = StyleSheet.create({
   },
   customerChipSubActive: {
     color: '#FFF5F7',
+  },
+  tierPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EDF7F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
+    marginTop: 4,
+  },
+  tierPillActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  tierPillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#156035',
+  },
+  tierPillTextActive: {
+    color: '#FFFFFF',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.light.surfaceMuted,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+    marginTop: 4,
+  },
+  stepperBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.xs,
+    backgroundColor: Colors.light.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  stepperHint: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
   },
   productGrid: {
     flexDirection: 'row',

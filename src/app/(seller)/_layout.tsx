@@ -1,10 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 
 export default function SellerTabsLayout() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      router.replace('/(auth)/login' as any);
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user) {
+    return (
+      <View style={styles.authLoadingContainer}>
+        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -29,12 +48,12 @@ export default function SellerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="customers"
+        name="shift/index"
         options={{
-          title: 'Customers',
+          title: 'Duty Shift',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'people' : 'people-outline'}
+              name={focused ? 'time' : 'time-outline'}
               size={size}
               color={typeof color === 'string' ? color : undefined}
             />
@@ -55,16 +74,22 @@ export default function SellerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="inventory/index"
+        name="customers"
         options={{
-          title: 'Stock',
+          title: 'Customers',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'cube' : 'cube-outline'}
+              name={focused ? 'people' : 'people-outline'}
               size={size}
               color={typeof color === 'string' ? color : undefined}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="inventory/index"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen
@@ -91,6 +116,12 @@ export default function SellerTabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  authLoadingContainer: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabBar: {
     backgroundColor: Colors.light.surface,
     borderTopWidth: 1,

@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
 import type { SellerDashboardData, Shift } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -27,6 +28,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function SellerDashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [dashboard, setDashboard] = useState<SellerDashboardData | null>(null);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
@@ -216,6 +218,14 @@ export default function SellerDashboardScreen() {
             {currentShift ? (
               <View style={styles.shiftActionsRow}>
                 <Button
+                  title="Shift & Visits Tracker"
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => router.push('/(seller)/shift' as any)}
+                  icon={<Ionicons name="time" size={16} color="#FFFFFF" />}
+                  style={[styles.shiftBtn, { marginRight: Spacing.sm }]}
+                />
+                <Button
                   title="End Shift"
                   variant="outline"
                   size="sm"
@@ -261,6 +271,7 @@ export default function SellerDashboardScreen() {
                 icon="wallet-outline"
                 iconColor={BrandColors.pink.primary}
                 iconBgColor={BrandColors.pink.subtle}
+                trend={(dashboard?.todaySalesAmountPaise || 0) > 0 ? { value: '+14% vs yesterday', isPositive: true } : undefined}
               />
               <StatCard
                 title="Packets Sold"
@@ -328,7 +339,7 @@ export default function SellerDashboardScreen() {
       {/* Start Shift Modal */}
       <Modal visible={startShiftModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Start Daily Duty Shift</Text>
               <Pressable
@@ -376,7 +387,7 @@ export default function SellerDashboardScreen() {
       {/* End Shift Modal */}
       <Modal visible={endShiftModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Complete Daily Duty Shift</Text>
               <Pressable

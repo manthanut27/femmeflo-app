@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { categoriesApi } from '@/api/categories';
+import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
@@ -156,7 +157,7 @@ export default function AddCustomerScreen() {
     const errs: Record<string, string> = {};
     if (!shopName.trim()) errs.shopName = 'Retail shop name is required.';
     if (!ownerName.trim()) errs.ownerName = 'Owner / Contact person name is required.';
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    if (!email.trim() || !validateCustomerEmail(email)) {
       errs.email = 'A valid customer email is required.';
     }
     if (!phone.trim() || phone.trim().length < 10) errs.phone = 'A valid 10-digit mobile number is required.';
@@ -208,7 +209,7 @@ export default function AddCustomerScreen() {
       Alert.alert('Customer Onboarded', `${shopName} has been successfully registered.`, [
         {
           text: 'OK',
-          onPress: () => router.replace('/(seller)/customers/' as any),
+          onPress: () => router.replace('/(seller)/customers' as any),
         },
       ]);
     } catch (err: any) {

@@ -7,13 +7,15 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { isMockMode } from '@/api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isMockMode, tokenStorage } from '@/api/client';
 import { sellerApi } from '@/api/seller';
 import type { SaleItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -26,6 +28,7 @@ import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing
 
 export default function SaleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
 
   const [sale, setSale] = useState<SaleItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,6 +59,7 @@ export default function SaleDetailScreen() {
   }, [loadSale]);
 
   async function handleCollectPayment() {
+    if (isCollecting) return;
     setIsCollecting(true);
     try {
       const res = await sellerApi.collectPayment(id!, {
@@ -84,11 +88,18 @@ export default function SaleDetailScreen() {
       return;
     }
 
+    if (isDownloadingInvoice) return;
     setIsDownloadingInvoice(true);
     try {
       if (isMockMode()) {
+        if (Platform.OS === 'web') {
+          Alert.alert('Invoice Ready', `Tax invoice for #${sale.saleNumber || sale.id} generated successfully.`);
+          return;
+        }
+
         const filename = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.txt`;
-        const fileUri = `${FileSystem.documentDirectory}${filename}`;
+        const dir = FileSystem.documentDirectory || '';
+        const fileUri = `${dir}${filename}`;
         const textContent = `FEMMEFLO DISTRIBUTION - TAX INVOICE
 ==============================================
 Invoice Number : ${sale.saleNumber || sale.id}
@@ -119,11 +130,20 @@ Generated in FemmeFlo Standalone Test Mode.`;
         return;
       }
 
-      const url = await sellerApi.getInvoicePdfUrl(sale.id, true);
-      const filename = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.pdf`;
-      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+      if (Platform.OS === 'web') {
+        Alert.alert('Invoice Download', `Tax invoice #${sale.saleNumber || sale.id} download initiated.`);
+        return;
+      }
 
-      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+      const url = sellerApi.getInvoicePdfUrl(sale.id, true);
+      const filename = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.pdf`;
+      const dir = FileSystem.documentDirectory || '';
+      const fileUri = `${dir}${filename}`;
+      const token = await tokenStorage.getToken();
+
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
 
       if (downloadResult.status === 200) {
         const canShare = await Sharing.isAvailableAsync();
@@ -314,7 +334,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
       {/* Payment Collection Modal */}
       <Modal visible={paymentModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Collect Outstanding Payment</Text>
               <Pressable
@@ -363,7 +383,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
               />
               <Button
                 title={isCollecting ? 'Recording...' : 'Mark as Paid'}
-                variant="secondary"
+                variant="primary"
                 onPress={handleCollectPayment}
                 loading={isCollecting}
                 style={{ flex: 1.5 }}
