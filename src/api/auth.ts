@@ -3,13 +3,17 @@ import type { LoginPayload, LoginResponseData, PublicUser } from './types';
 
 export const authApi = {
   /**
-   * Unified login with role context
+   * Unified single login endpoint via POST /api/v1/auth/login
    */
-  async login(payload: LoginPayload, roleHint?: 'admin' | 'manager' | 'seller'): Promise<LoginResponseData> {
-    const endpoint = roleHint ? `${roleHint}/auth/login` : 'auth/login';
-    return apiRequest<LoginResponseData>(endpoint, {
+  async login(payload: LoginPayload): Promise<LoginResponseData> {
+    const loginValue = payload.identifier || (payload as any).login || '';
+    return apiRequest<LoginResponseData>('auth/login', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        login: loginValue,
+        identifier: loginValue,
+        password: payload.password,
+      }),
       skipAuth: true,
     });
   },

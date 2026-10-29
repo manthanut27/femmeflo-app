@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, tokenStorage, isMockMode } from './client';
+import { apiRequest, API_BASE_URL, isMockMode } from './client';
 import type {
   CheckInPayload,
   CheckOutPayload,
@@ -177,9 +177,26 @@ export const sellerApi = {
   // Sales & POS
   // ----------------------------------------------------
   async createSale(payload: CreateSalePayload): Promise<{ sale: SaleItem }> {
+    const headers: Record<string, string> = {};
+    const key = payload.requestKey || payload.idempotencyKey;
+    if (key) {
+      headers['X-Idempotency-Key'] = key;
+    }
+
+    // Server createSaleSchema is z.strictObject({ customerId, items, paymentMode, requestKey })
+    const body: Record<string, any> = {
+      customerId: payload.customerId,
+      items: payload.items,
+      paymentMode: payload.paymentMode,
+    };
+    if (key) {
+      body.requestKey = key;
+    }
+
     return apiRequest<{ sale: SaleItem }>('seller/sales', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify(body),
     });
   },
 
@@ -215,9 +232,8 @@ export const sellerApi = {
     });
   },
 
-  async getInvoicePdfUrl(id: string, download = true): Promise<string> {
-    const token = await tokenStorage.getToken();
-    return `${API_BASE_URL}/invoices/${id}/pdf?download=${download ? 'true' : 'false'}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+  getInvoicePdfUrl(id: string, download = true): string {
+    return `${API_BASE_URL}/invoices/${id}/pdf?download=${download ? 'true' : 'false'}`;
   },
 
   // ----------------------------------------------------

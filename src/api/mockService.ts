@@ -1,5 +1,4 @@
 import type { PendingApprovalItem } from './admin';
-import type { RequestOptions } from './client';
 import type { ManagerSellerItem } from './manager';
 import {
   MOCK_ADMIN_DASHBOARD,
@@ -20,26 +19,28 @@ import {
   MOCK_USERS,
   MOCK_WAREHOUSES,
 } from './mockData';
-import type {
-  AdminDashboardData,
-  BusinessSettings,
-  CategoryItem,
-  CheckInPayload,
-  CheckOutPayload,
-  CustomerItem,
-  EndShiftPayload,
-  ManagerDashboardData,
-  NotificationItem,
-  PincodeLookupResponse,
-  ProductItem,
-  PublicUser,
-  SaleItem,
-  SellerDashboardData,
-  Shift,
-  ShiftVisit,
-  StartShiftPayload,
-  StockTransactionItem,
-  WarehouseItem,
+import {
+  ApiError,
+  type AdminDashboardData,
+  type BusinessSettings,
+  type CategoryItem,
+  type CheckInPayload,
+  type CheckOutPayload,
+  type CustomerItem,
+  type EndShiftPayload,
+  type ManagerDashboardData,
+  type NotificationItem,
+  type PincodeLookupResponse,
+  type ProductItem,
+  type PublicUser,
+  type RequestOptions,
+  type SaleItem,
+  type SellerDashboardData,
+  type Shift,
+  type ShiftVisit,
+  type StartShiftPayload,
+  type StockTransactionItem,
+  type WarehouseItem,
 } from './types';
 
 // ====================================================
@@ -61,6 +62,7 @@ class MockDatabase {
   incentives = JSON.parse(JSON.stringify(MOCK_SELLER_INCENTIVES));
   notifications: NotificationItem[] = JSON.parse(JSON.stringify(MOCK_NOTIFICATIONS));
   settings: BusinessSettings = JSON.parse(JSON.stringify(MOCK_SETTINGS));
+  processedIdempotencyKeys = new Map<string, SaleItem>();
 
   setCurrentUser(user: PublicUser) {
     this.currentUser = user;
@@ -85,6 +87,19 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   const cleanEndpoint = endpoint.replace(/^\/+/, '').split('?')[0];
   const method = (options.method || 'GET').toUpperCase();
   const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {};
+
+  // Role-Based Access Control (RBAC) in mock service
+  if (cleanEndpoint.startsWith('admin/') && !cleanEndpoint.endsWith('auth/login')) {
+    if (mockDb.currentUser.role !== 'SUPER_ADMIN') {
+      throw new ApiError('Forbidden: Action requires Super Admin authority.', 403);
+    }
+  }
+
+  if (cleanEndpoint.startsWith('manager/') && !cleanEndpoint.endsWith('auth/login')) {
+    if (mockDb.currentUser.role !== 'MANAGER' && mockDb.currentUser.role !== 'SUPER_ADMIN') {
+      throw new ApiError('Forbidden: Action requires Manager or Super Admin authority.', 403);
+    }
+  }
 
   // ----------------------------------------------------
   // Auth endpoints
@@ -245,6 +260,17 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'seller/sales' && method === 'POST') {
+    const rawHeaders = (options.headers || {}) as any;
+    const idempotencyKey =
+      (typeof rawHeaders.get === 'function' ? rawHeaders.get('X-Idempotency-Key') : null) ||
+      rawHeaders['X-Idempotency-Key'] ||
+      rawHeaders['x-idempotency-key'] ||
+      body.idempotencyKey;
+
+    if (idempotencyKey && mockDb.processedIdempotencyKeys.has(idempotencyKey)) {
+      return { sale: mockDb.processedIdempotencyKeys.get(idempotencyKey)! } as unknown as T;
+    }
+
     const customer = mockDb.customers.find((c) => c.id === body.customerId) || mockDb.customers[0];
     const items = body.items || [];
     let totalAmountPaise = 0;
@@ -292,6 +318,10 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     };
 
     mockDb.sales.unshift(newSale);
+
+    if (idempotencyKey) {
+      mockDb.processedIdempotencyKeys.set(idempotencyKey, newSale);
+    }
 
     // If confirmed, update stock
     if (status === 'CONFIRMED') {

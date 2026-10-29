@@ -1,7 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { handleMockRequest } from './mockService';
-import type { PublicUser } from './types';
+import { ApiError, type PublicUser, type RequestOptions } from './types';
+
+export { ApiError, type RequestOptions };
 
 // Determine Base URL (defaults to local inventory server on port 5000)
 const rawApiUrl = (
@@ -96,22 +98,6 @@ export const tokenStorage = {
   },
 };
 
-export class ApiError extends Error {
-  statusCode: number;
-  status: number;
-  data?: unknown;
-  isNetworkError: boolean;
-
-  constructor(message: string, statusCode = 500, data?: unknown, isNetworkError = false) {
-    super(message);
-    this.name = 'ApiError';
-    this.statusCode = statusCode;
-    this.status = statusCode;
-    this.data = data;
-    this.isNetworkError = isNetworkError;
-  }
-}
-
 let onSessionExpiredCallback: (() => void) | null = null;
 
 export function setSessionExpiredHandler(handler: () => void) {
@@ -126,12 +112,6 @@ export function isMockMode(): boolean {
 
 export function setMockMode(enabled: boolean): void {
   mockModeEnabled = enabled;
-}
-
-export interface RequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | undefined | null>;
-  skipAuth?: boolean;
-  timeoutMs?: number;
 }
 
 export async function apiRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {

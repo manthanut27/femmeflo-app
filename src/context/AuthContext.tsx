@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authApi } from '../api/auth';
 import { setSessionExpiredHandler, tokenStorage } from '../api/client';
 import type { AuthRole, PublicUser } from '../api/types';
+import { draftStorage } from '../utils/draftStorage';
 
 interface AuthContextType {
   user: PublicUser | null;
@@ -76,10 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     restoreSession();
   }, []);
 
-  async function login(identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') {
+  async function login(identifier: string, password: string) {
     setIsLoading(true);
     try {
-      const res = await authApi.login({ identifier, password }, roleHint);
+      const res = await authApi.login({ identifier, password });
       await tokenStorage.setToken(res.token);
       await tokenStorage.setCachedUser(res.user);
       setToken(res.token);
@@ -93,6 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function logout() {
     setIsLoading(true);
     try {
+      if (user?.id) {
+        await draftStorage.clearUserStorage(user.id);
+      }
       await tokenStorage.clearToken();
       setToken(null);
       setUser(null);

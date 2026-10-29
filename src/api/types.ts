@@ -10,6 +10,7 @@ export interface PublicUser {
   email: string;
   phone?: string | null;
   role: AuthRole;
+  isSeller?: boolean;
   active: boolean;
   state?: string | null;
   district?: string | null;
@@ -163,24 +164,35 @@ export interface WarehouseItem {
 export type SaleStatus = 'PENDING' | 'APPROVED' | 'CONFIRMED' | 'REJECTED';
 export type PaymentMode = 'CASH' | 'BANK' | 'PENDING';
 
+export interface InvoiceSummary {
+  id: string;
+  number: string;
+  snapshot?: Record<string, unknown> | null;
+}
+
 export interface SaleLineItem {
   id?: string;
   productId: string;
   productName?: string;
+  product?: { id: string; name: string; sku?: string | null };
   quantity: number;
   unitPricePaise: number;
   totalPricePaise?: number;
+  totalPaise?: number;
 }
 
 export interface SaleItem {
   id: string;
   saleNumber?: string;
   customerId: string;
-  customer?: CustomerItem;
+  customer?: CustomerItem & { contactName?: string };
   sellerId: string;
-  seller?: { id: string; name: string };
+  seller?: { id: string; name: string; phone?: string | null };
   totalAmountPaise: number;
+  totalPaise?: number;
   packetCount: number;
+  quantity?: number;
+  unitPricePaise?: number;
   status: SaleStatus;
   paymentMode: PaymentMode;
   paymentReference?: string | null;
@@ -188,6 +200,10 @@ export interface SaleItem {
   approvalReason?: string | null;
   rejectionReason?: string | null;
   items?: SaleLineItem[];
+  lineItems?: SaleLineItem[];
+  invoice?: InvoiceSummary | null;
+  payments?: Array<{ id: string; amountPaise: number; mode: string; reference?: string | null }>;
+  requestKey?: string | null;
   createdAt: string;
   confirmedAt?: string | null;
 }
@@ -196,6 +212,8 @@ export interface CreateSalePayload {
   customerId: string;
   paymentMode: PaymentMode;
   paymentReference?: string;
+  idempotencyKey?: string;
+  requestKey?: string;
   items: Array<{
     productId: string;
     quantity: number;
@@ -224,6 +242,7 @@ export interface ShiftVisit {
   longitude?: number | null;
   orderPlaced?: boolean;
   summary?: string | null;
+  notes?: string | null;
 }
 
 export interface Shift {
@@ -245,24 +264,31 @@ export interface StartShiftPayload {
   startOdometerKm: number;
   startLatitude?: number;
   startLongitude?: number;
+  notes?: string;
+  remarks?: string;
 }
 
 export interface CheckInPayload {
   customerId: string;
   latitude?: number;
   longitude?: number;
+  notes?: string;
+  summary?: string;
 }
 
 export interface CheckOutPayload {
   visitId: string;
   summary?: string;
+  notes?: string;
   orderPlaced?: boolean;
+  outcome?: string;
 }
 
 export interface EndShiftPayload {
   endOdometerKm: number;
   endLatitude?: number;
   endLongitude?: number;
+  notes?: string;
   remarks?: string;
 }
 
@@ -327,4 +353,84 @@ export interface AdminDashboardData {
 export interface BusinessSettings {
   minimumSalePricePaise: number;
   lowStockThreshold?: number;
+  companyName?: string;
+  companyGst?: string;
+  companyPan?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  invoiceTerms?: string;
+}
+
+export interface InvoiceCompanyInfo {
+  name: string;
+  gst?: string | null;
+  pan?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  terms?: string | null;
+}
+
+export interface InvoiceSnapshot {
+  invoiceNumber: string;
+  saleId: string;
+  date: string;
+  company?: InvoiceCompanyInfo;
+  customer: {
+    shopName: string;
+    contactName: string;
+    phone: string;
+    state?: string | null;
+    district?: string | null;
+    village?: string | null;
+  };
+  seller: {
+    name: string;
+    phone: string;
+  };
+  quantity: number;
+  unitPricePaise: number;
+  totalPaise: number;
+  paymentMode: string;
+  lineItems?: Array<{
+    productName: string;
+    productSku?: string | null;
+    quantity: number;
+    unitPricePaise: number;
+    totalPaise: number;
+  }>;
+}
+
+export interface PendingApprovalItem extends SaleItem {
+  requestedUnitPricePaise?: number;
+  minimumPricePaise?: number;
+}
+
+export interface ManagerSellerItem extends PublicUser {
+  sellerId?: string;
+  customersCount?: number;
+  totalSalesPaise?: number;
+}
+
+export class ApiError extends Error {
+  statusCode: number;
+  status: number;
+  data?: unknown;
+  isNetworkError: boolean;
+
+  constructor(message: string, statusCode = 500, data?: unknown, isNetworkError = false) {
+    super(message);
+    this.name = 'ApiError';
+    this.statusCode = statusCode;
+    this.status = statusCode;
+    this.data = data;
+    this.isNetworkError = isNetworkError;
+  }
+}
+
+export interface RequestOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | undefined | null>;
+  skipAuth?: boolean;
+  timeoutMs?: number;
 }
