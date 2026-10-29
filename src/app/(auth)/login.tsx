@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,45 +11,25 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { AuthRole } from '@/api/types';
+import { isMockMode } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
-type RoleOption = 'seller' | 'manager' | 'admin';
-
-const ROLE_TABS = [
-  { label: 'Seller', value: 'seller' as RoleOption, icon: 'person-outline' as const },
-  { label: 'Manager', value: 'manager' as RoleOption, icon: 'briefcase-outline' as const },
-  { label: 'Super Admin', value: 'admin' as RoleOption, icon: 'shield-checkmark-outline' as const },
-];
-
 export default function LoginScreen() {
-  const [roleHint, setRoleHint] = useState<RoleOption>('seller');
-  const [identifier, setIdentifier] = useState('seller@femmeflo.com');
-  const [password, setPassword] = useState('demo123');
+  const showDevQuickFill = __DEV__ && isMockMode();
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [infoNotice, setInfoNotice] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
-
-  function selectRole(role: RoleOption | null) {
-    if (!role) return;
-    setRoleHint(role);
+  function fillDemoAccount(role: 'seller' | 'manager' | 'admin') {
+    if (!__DEV__) return;
     if (role === 'seller') {
       setIdentifier('seller@femmeflo.com');
       setPassword('demo123');
@@ -65,11 +45,10 @@ export default function LoginScreen() {
   async function handleLogin() {
     if (isSubmitting) return;
     setError(null);
-    setInfoNotice(null);
 
     const trimmedId = identifier.trim();
     if (!trimmedId) {
-      setError('Please enter your email address or mobile number.');
+      setError('Please enter your registered email address or mobile number.');
       return;
     }
     if (!password) {
@@ -79,34 +58,18 @@ export default function LoginScreen() {
 
     setIsSubmitting(true);
     try {
-      const { user } = await login(trimmedId, password, roleHint);
-      const serverRole = user.role;
+      const { user } = await login(trimmedId, password);
+      const role = user.role;
 
-      // Handle role matching
-      const targetRole: AuthRole =
-        roleHint === 'admin' ? 'SUPER_ADMIN' : roleHint === 'manager' ? 'MANAGER' : 'SELLER';
-
-      if (serverRole !== targetRole) {
-        setInfoNotice(
-          `Signed in as authorized ${serverRole.replace('_', ' ')}. Redirecting to your workspace...`
-        );
-        timerRef.current = setTimeout(() => {
-          if (serverRole === 'SELLER') {
-            router.replace('/(seller)' as any);
-          } else if (serverRole === 'MANAGER') {
-            router.replace('/(manager)' as any);
-          } else if (serverRole === 'SUPER_ADMIN') {
-            router.replace('/(admin)' as any);
-          }
-        }, 350);
+      // Single login routing by returned role
+      if (role === 'SELLER') {
+        router.replace('/(seller)' as any);
+      } else if (role === 'MANAGER') {
+        router.replace('/(manager)' as any);
+      } else if (role === 'SUPER_ADMIN') {
+        router.replace('/(admin)' as any);
       } else {
-        if (serverRole === 'SELLER') {
-          router.replace('/(seller)' as any);
-        } else if (serverRole === 'MANAGER') {
-          router.replace('/(manager)' as any);
-        } else if (serverRole === 'SUPER_ADMIN') {
-          router.replace('/(admin)' as any);
-        }
+        router.replace('/(seller)' as any);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in. Please verify your credentials.');
@@ -114,13 +77,6 @@ export default function LoginScreen() {
       setIsSubmitting(false);
     }
   }
-
-  const roleActiveColor =
-    roleHint === 'manager'
-      ? BrandColors.green.primary
-      : roleHint === 'admin'
-      ? BrandColors.pink.dark
-      : BrandColors.pink.primary;
 
   return (
     <KeyboardAvoidingView
@@ -135,37 +91,17 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.containerBox}>
-          {/* Header */}
+          {/* Brand Header */}
           <View style={styles.header}>
             <View style={styles.logoBadge}>
               <Ionicons name="flower-outline" size={32} color={BrandColors.pink.primary} />
             </View>
             <Text style={styles.title}>FemmeFlo</Text>
-            <Text style={styles.subtitle}>Sign in to your operational account</Text>
-          </View>
-
-          {/* Offline / UI Test Mode Pill */}
-          <View style={styles.demoBadge}>
-            <View style={styles.demoBadgeIconWrapper}>
-              <Ionicons name="flash" size={16} color={BrandColors.green.primary} />
+            <Text style={styles.subtitle}>FMCG & Hygiene Distribution Field Operations</Text>
+            <View style={styles.accessBadge}>
+              <Ionicons name="shield-checkmark" size={12} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.accessBadgeText}>Unified Field-Force Access</Text>
             </View>
-            <View style={styles.demoBadgeTextContainer}>
-              <Text style={styles.demoBadgeTitle}>Offline Demonstration Mode</Text>
-              <Text style={styles.demoBadgeSubtitle}>
-                Tap any role to pre-populate credentials and test its interface.
-              </Text>
-            </View>
-          </View>
-
-          {/* Role Selector Tabs */}
-          <View style={styles.roleTabsWrapper}>
-            <SegmentedTabs
-              tabs={ROLE_TABS}
-              selectedTab={roleHint}
-              onSelect={selectRole}
-              activeColor={roleActiveColor}
-              accessibilityLabel="Select operational role"
-            />
           </View>
 
           {/* Login Card */}
@@ -177,13 +113,6 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {infoNotice ? (
-              <View style={styles.infoBanner} accessibilityRole="alert">
-                <Ionicons name="information-circle" size={16} color={Colors.light.info} style={{ marginRight: 6 }} />
-                <Text style={styles.infoBannerText}>{infoNotice}</Text>
-              </View>
-            ) : null}
-
             <Input
               label="Email or Mobile"
               placeholder="e.g. seller@femmeflo.com"
@@ -192,12 +121,12 @@ export default function LoginScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}
-              leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.light.textMuted} />}
+              leftIcon={<Ionicons name="person-outline" size={18} color={Colors.light.textMuted} />}
             />
 
             <Input
               label="Password"
-              placeholder="Enter your password"
+              placeholder="Enter your account password"
               value={password}
               onChangeText={setPassword}
               isPassword
@@ -215,19 +144,60 @@ export default function LoginScreen() {
             </Pressable>
 
             <Button
-              title={isSubmitting ? 'Verifying...' : `Sign In as ${roleHint === 'admin' ? 'Super Admin' : roleHint === 'manager' ? 'Manager' : 'Seller'}`}
+              title={isSubmitting ? 'Verifying Credentials...' : 'Sign In'}
               onPress={handleLogin}
               loading={isSubmitting}
               size="lg"
-              variant={roleHint === 'manager' ? 'secondary' : 'primary'}
+              variant="primary"
               style={styles.submitButton}
             />
+          </View>
+
+          {/* Mock Mode Quick-Fill Assistant (DEV only, excluded from production builds) */}
+          {showDevQuickFill ? (
+            <View style={styles.demoBox}>
+              <View style={styles.demoHeader}>
+                <Ionicons name="flash-outline" size={14} color={BrandColors.green.primary} style={{ marginRight: 4 }} />
+                <Text style={styles.demoTitle}>Demo Quick-Fill</Text>
+              </View>
+              <View style={styles.demoChipsRow}>
+                <Pressable
+                  style={styles.demoChip}
+                  onPress={() => fillDemoAccount('seller')}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.demoChipText}>Field Seller</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.demoChip}
+                  onPress={() => fillDemoAccount('manager')}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.demoChipText}>Territory Manager</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.demoChip}
+                  onPress={() => fillDemoAccount('admin')}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.demoChipText}>Super Admin</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Hub Support Card */}
+          <View style={styles.supportCard}>
+            <Ionicons name="headset-outline" size={16} color={Colors.light.textSecondary} style={{ marginRight: 8 }} />
+            <Text style={styles.supportText}>
+              Need access credentials or beat assignment? Contact Territory Hub Admin
+            </Text>
           </View>
 
           {/* Footer info */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              FemmeFlo FMCG Operations System • v1.0.0
+              FemmeFlo FMCG Operations System • Single Sign-On
             </Text>
           </View>
         </View>
@@ -277,43 +247,24 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontSize: 13,
     color: Colors.light.textSecondary,
+    textAlign: 'center',
   },
-  demoBadge: {
+  accessBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.successBg,
+    backgroundColor: BrandColors.pink.subtle,
     borderWidth: 1,
-    borderColor: Colors.light.successBorder,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+    borderColor: BrandColors.pink.tint,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    marginTop: 8,
   },
-  demoBadgeIconWrapper: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: BrandColors.green.light,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  demoBadgeTextContainer: {
-    flex: 1,
-  },
-  demoBadgeTitle: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
-    color: BrandColors.green.primary,
-    marginBottom: 2,
-  },
-  demoBadgeSubtitle: {
-    ...Typography.caption,
+  accessBadgeText: {
     fontSize: 11,
-    color: BrandColors.green.primary,
-    lineHeight: 15,
-  },
-  roleTabsWrapper: {
-    marginBottom: Spacing.lg,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
+    letterSpacing: 0.3,
   },
   card: {
     backgroundColor: Colors.light.surface,
@@ -339,22 +290,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
   },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.infoBg,
-    borderWidth: 1,
-    borderColor: Colors.light.infoBorder,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  infoBannerText: {
-    ...Typography.bodySmall,
-    color: Colors.light.info,
-    flex: 1,
-    fontWeight: '500',
-  },
   forgotPasswordLink: {
     alignSelf: 'flex-end',
     marginBottom: Spacing.lg,
@@ -367,10 +302,63 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     width: '100%',
+    minHeight: 54,
+  },
+  demoBox: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+  },
+  demoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  demoTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.green.primary,
+  },
+  demoChipsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  demoChip: {
+    flex: 1,
+    backgroundColor: Colors.light.backgroundElement,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  demoChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  supportCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.surfaceMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.md,
+    width: '100%',
+  },
+  supportText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    flex: 1,
   },
   footer: {
     alignItems: 'center',
-    marginTop: Spacing.xxl,
+    marginTop: Spacing.xl,
   },
   footerText: {
     ...Typography.caption,

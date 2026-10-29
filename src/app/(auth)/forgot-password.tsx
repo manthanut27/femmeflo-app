@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/auth';
+import { validateCustomerEmail } from '@/api/domainRules';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -26,11 +27,12 @@ export default function ForgotPasswordScreen() {
   const insets = useSafeAreaInsets();
 
   async function handleSend() {
+    if (isSubmitting) return;
     setError(null);
     setSuccessMessage(null);
 
     const trimmed = email.trim();
-    if (!trimmed || !trimmed.includes('@')) {
+    if (!trimmed || !validateCustomerEmail(trimmed)) {
       setError('Please provide a valid registered email address.');
       return;
     }

@@ -28,6 +28,7 @@ export default function ResetPasswordScreen() {
   const insets = useSafeAreaInsets();
 
   async function handleReset() {
+    if (isSubmitting) return;
     setError(null);
 
     if (!token.trim()) {
