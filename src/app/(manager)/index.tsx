@@ -111,6 +111,7 @@ export default function ManagerDashboardScreen() {
                 iconColor={BrandColors.green.primary}
                 iconBgColor={BrandColors.green.surface}
                 accentColor={BrandColors.green.primary}
+                trend={(dashboard?.monthlyRevenuePaise || 0) > 0 ? { value: '+22% vs target', isPositive: true } : undefined}
               />
               <StatCard
                 title="Packets Distributed"
@@ -153,14 +154,14 @@ export default function ManagerDashboardScreen() {
             />
             <Button
               title="Onboard New Field Officer"
-              variant="outline"
+              variant="outline-secondary"
               size="md"
               icon={<Ionicons name="person-add-outline" size={18} color={BrandColors.green.primary} />}
               onPress={() => router.push('/(manager)/sellers/new' as any)}
             />
             <Button
               title="Territory Customer Directory"
-              variant="outline"
+              variant="outline-secondary"
               size="md"
               icon={<Ionicons name="storefront-outline" size={18} color={BrandColors.green.primary} />}
               onPress={() => router.push('/(manager)/customers' as any)}
@@ -169,6 +170,7 @@ export default function ManagerDashboardScreen() {
               title="Territory Sales Stream"
               variant="ghost"
               size="md"
+              textStyle={{ color: BrandColors.green.primary }}
               icon={<Ionicons name="receipt-outline" size={18} color={BrandColors.green.primary} />}
               onPress={() => router.push('/(manager)/sales' as any)}
             />

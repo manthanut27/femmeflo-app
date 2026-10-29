@@ -24,6 +24,7 @@ export default function ManagerSellersScreen() {
 
   const [sellers, setSellers] = useState<ManagerSellerItem[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
     pageSize: 20,
@@ -33,12 +34,19 @@ export default function ManagerSellersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const loadSellers = useCallback(async () => {
     try {
       const res = await managerApi.listSellers({
         page: 1,
         pageSize: 50,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
       setSellers(res.items);
       setPagination(res.pagination);
@@ -48,7 +56,7 @@ export default function ManagerSellersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [search]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     loadSellers();
@@ -141,7 +149,11 @@ export default function ManagerSellersScreen() {
               ? 'No sellers match your search query.'
               : 'No field officers assigned to your territory yet.'
           }
+          iconColor={BrandColors.green.primary}
+          iconBgColor={BrandColors.green.surface}
+          iconBorderColor={BrandColors.green.light}
           actionTitle="Onboard First Officer"
+          buttonVariant="secondary"
           onAction={() => router.push('/(manager)/sellers/new' as any)}
         />
       ) : (

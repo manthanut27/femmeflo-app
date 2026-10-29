@@ -33,6 +33,7 @@ export default function ChangePasswordScreen() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
+    if (isSubmitting) return;
     setError(null);
 
     if (!currentPassword) {

@@ -61,6 +61,7 @@ export default function AdminApprovalsScreen() {
         {
           text: 'Confirm Approval',
           onPress: async () => {
+            if (actionId) return;
             setActionId(sale.id);
             try {
               await adminApi.approveSale(sale.id);
@@ -87,6 +88,7 @@ export default function AdminApprovalsScreen() {
           text: 'Reject Sale',
           style: 'destructive',
           onPress: async () => {
+            if (actionId) return;
             setActionId(sale.id);
             try {
               await adminApi.rejectSale(sale.id, 'Price below threshold rejected by Super Admin');
@@ -136,7 +138,7 @@ export default function AdminApprovalsScreen() {
         <View style={styles.thresholdNotice}>
           <Ionicons name="alert-circle-outline" size={16} color={Colors.light.warning} />
           <Text style={styles.thresholdText}>
-            Priced at {formatRupees(effectivePricePerPktPaise)}/pkt (Below ₹25.00 min threshold)
+            Priced at {formatRupees(effectivePricePerPktPaise)}/pkt (Below {formatRupees(item.minimumPricePaise ?? 2500)} min threshold)
           </Text>
         </View>
 
@@ -162,16 +164,16 @@ export default function AdminApprovalsScreen() {
         <View style={styles.actionsRow}>
           <Button
             title="Reject"
-            variant="outline"
+            variant="danger"
             size="sm"
             onPress={() => handleReject(item)}
             disabled={isProcessing}
-            icon={<Ionicons name="close-circle-outline" size={16} color={BrandColors.pink.primary} />}
+            icon={<Ionicons name="close-circle-outline" size={16} color="#FFFFFF" />}
             style={styles.rejectBtn}
           />
           <Button
             title={isProcessing ? 'Authorizing...' : 'Approve Sale'}
-            variant="secondary"
+            variant="admin"
             size="sm"
             onPress={() => handleApprove(item)}
             loading={isProcessing}
@@ -183,6 +185,8 @@ export default function AdminApprovalsScreen() {
     );
   };
 
+  const totalFlaggedPaise = approvals.reduce((sum, a) => sum + (a.totalAmountPaise || 0), 0);
+
   return (
     <View style={styles.container}>
       <Header
@@ -192,6 +196,23 @@ export default function AdminApprovalsScreen() {
       />
 
       <View style={styles.innerContainer}>
+        {approvals.length > 0 ? (
+          <View style={styles.kpiRow}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Pending</Text>
+              <Text style={styles.kpiValue}>{approvals.length} Orders</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Flagged Value</Text>
+              <Text style={styles.kpiValue}>{formatRupees(totalFlaggedPaise)}</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Policy Floor</Text>
+              <Text style={[styles.kpiValue, { color: Colors.light.warning }]}>₹25.00/pkt</Text>
+            </View>
+          </View>
+        ) : null}
+
         {loading ? (
           <View style={styles.loadingContainer}>
             <CardSkeleton />
@@ -202,6 +223,9 @@ export default function AdminApprovalsScreen() {
             icon="checkmark-done-circle-outline"
             title="All Requests Reviewed"
             description="There are currently no below-minimum price sales awaiting approval."
+            iconColor={BrandColors.pink.dark}
+            iconBgColor={BrandColors.pink.subtle}
+            iconBorderColor={BrandColors.pink.tint}
           />
         ) : (
           <FlatList
@@ -233,6 +257,34 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: Colors.light.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: 'center',
+  },
+  kpiLabel: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.light.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    ...Typography.bodyMedium,
+    color: Colors.light.heading,
+    fontWeight: '800',
+    marginTop: 2,
   },
   loadingContainer: {
     padding: Spacing.lg,

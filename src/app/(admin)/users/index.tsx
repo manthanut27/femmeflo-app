@@ -2,11 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
@@ -22,6 +22,7 @@ import {
   BrandColors,
   Colors,
   Elevation,
+  HitSlop,
   MaxContentWidth,
   Spacing,
   Typography,
@@ -33,17 +34,25 @@ export default function AdminUsersScreen() {
   const [tab, setTab] = useState<UserTab>('MANAGERS');
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadUsers = useCallback(async () => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const loadUsers = useCallback(async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
       if (tab === 'MANAGERS') {
-        const res = await adminApi.listManagers({ pageSize: 50, search: search.trim() || undefined });
+        const res = await adminApi.listManagers({ pageSize: 50, search: debouncedSearch.trim() || undefined });
         setUsers(res.items);
       } else {
-        const res = await adminApi.listSellers({ pageSize: 50, search: search.trim() || undefined });
+        const res = await adminApi.listSellers({ pageSize: 50, search: debouncedSearch.trim() || undefined });
         setUsers(res.items);
       }
     } catch (err) {
@@ -52,15 +61,15 @@ export default function AdminUsersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tab, search]);
+  }, [tab, debouncedSearch]);
 
   useEffect(() => {
-    loadUsers();
+    loadUsers(false);
   }, [loadUsers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadUsers();
+    loadUsers(false);
   }, [loadUsers]);
 
   const tabs = [
@@ -135,7 +144,11 @@ export default function AdminUsersScreen() {
           <SegmentedTabs
             tabs={tabs}
             activeTab={tab}
-            onTabChange={(selected) => setTab(selected as UserTab)}
+            activeColor={BrandColors.pink.dark}
+            onTabChange={(selected) => {
+              setLoading(true);
+              setTab(selected as UserTab);
+            }}
           />
         </View>
 
@@ -153,13 +166,14 @@ export default function AdminUsersScreen() {
               accessibilityLabel={`Search ${tab.toLowerCase()}`}
             />
             {search.length > 0 && (
-              <TouchableOpacity
+              <Pressable
                 onPress={() => setSearch('')}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={HitSlop.md}
+                accessibilityRole="button"
                 accessibilityLabel="Clear search"
               >
                 <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
         </View>
@@ -175,6 +189,9 @@ export default function AdminUsersScreen() {
             icon="people-circle-outline"
             title={`No ${tab.toLowerCase()} found`}
             description="Try adjusting your search criteria."
+            iconColor={BrandColors.pink.dark}
+            iconBgColor={BrandColors.pink.subtle}
+            iconBorderColor={BrandColors.pink.tint}
           />
         ) : (
           <FlatList

@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { categoriesApi } from '@/api/categories';
 import type { CategoryItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -30,6 +31,7 @@ import {
 } from '@/constants/theme';
 
 export default function AdminCategoriesScreen() {
+  const insets = useSafeAreaInsets();
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,6 +64,7 @@ export default function AdminCategoriesScreen() {
   }, [loadCategories]);
 
   async function handleCreateCategory() {
+    if (isSubmitting) return;
     if (!name.trim()) {
       Alert.alert('Required Field', 'Please enter a category name.');
       return;
@@ -153,7 +156,7 @@ export default function AdminCategoriesScreen() {
       {/* Add Modal */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>New Customer Category</Text>
               <Pressable
@@ -195,7 +198,7 @@ export default function AdminCategoriesScreen() {
               />
               <Button
                 title={isSubmitting ? 'Creating...' : 'Create Category'}
-                variant="primary"
+                variant="admin"
                 onPress={handleCreateCategory}
                 loading={isSubmitting}
                 style={{ flex: 1.5 }}

@@ -1,10 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminTabsLayout() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      if (!user) {
+        router.replace('/(auth)/login' as any);
+      } else if (user.role === 'MANAGER') {
+        router.replace('/(manager)' as any);
+      } else {
+        router.replace('/(seller)' as any);
+      }
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user || user.role !== 'SUPER_ADMIN') {
+    return (
+      <View style={styles.authLoadingContainer}>
+        <ActivityIndicator size="large" color={BrandColors.pink.dark} />
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -93,6 +118,12 @@ export default function AdminTabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  authLoadingContainer: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabBar: {
     backgroundColor: Colors.light.surface,
     borderTopWidth: 1,

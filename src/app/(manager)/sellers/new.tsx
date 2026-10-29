@@ -63,7 +63,7 @@ export default function OnboardSellerScreen() {
         [
           {
             text: 'OK',
-            onPress: () => router.replace('/(manager)/sellers/' as any),
+            onPress: () => router.replace('/(manager)/sellers' as any),
           },
         ]
       );

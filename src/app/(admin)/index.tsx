@@ -125,8 +125,8 @@ export default function AdminDashboardScreen() {
                 <Button
                   title="Review Queue"
                   size="sm"
-                  variant="primary"
-                  onPress={() => router.push('/(admin)/approvals/' as any)}
+                  variant="admin"
+                  onPress={() => router.push('/(admin)/approvals' as any)}
                 />
               </View>
             </Card>
@@ -216,10 +216,10 @@ export default function AdminDashboardScreen() {
           <View style={styles.actionsCol}>
             <Button
               title="Price Approvals Queue"
-              variant="primary"
+              variant="admin"
               size="lg"
               icon={<Ionicons name="checkmark-done-circle-outline" size={20} color="#FFFFFF" />}
-              onPress={() => router.push('/(admin)/approvals/' as any)}
+              onPress={() => router.push('/(admin)/approvals' as any)}
             />
             <Button
               title="Inward Factory Stock & Warehouse Transfers"
@@ -230,24 +230,25 @@ export default function AdminDashboardScreen() {
             />
             <Button
               title="Manage Managers & Sellers Directory"
-              variant="outline"
+              variant="outline-admin"
               size="md"
-              icon={<Ionicons name="people-outline" size={18} color={BrandColors.pink.primary} />}
-              onPress={() => router.push('/(admin)/users/' as any)}
+              icon={<Ionicons name="people-outline" size={18} color={BrandColors.pink.dark} />}
+              onPress={() => router.push('/(admin)/users' as any)}
             />
             <Button
               title="Customer Categories Configuration"
-              variant="outline"
+              variant="outline-admin"
               size="md"
-              icon={<Ionicons name="pricetags-outline" size={18} color={BrandColors.pink.primary} />}
-              onPress={() => router.push('/(admin)/categories/' as any)}
+              icon={<Ionicons name="pricetags-outline" size={18} color={BrandColors.pink.dark} />}
+              onPress={() => router.push('/(admin)/categories' as any)}
             />
             <Button
               title="Configure Minimum Sale Price & Invariants"
               variant="ghost"
               size="md"
-              icon={<Ionicons name="settings-outline" size={18} color={BrandColors.pink.primary} />}
-              onPress={() => router.push('/(admin)/settings/' as any)}
+              textStyle={{ color: BrandColors.pink.dark }}
+              icon={<Ionicons name="settings-outline" size={18} color={BrandColors.pink.dark} />}
+              onPress={() => router.push('/(admin)/settings' as any)}
             />
           </View>
         </View>

@@ -2,11 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { managerApi } from '@/api/manager';
@@ -22,6 +22,7 @@ import {
   BrandColors,
   Colors,
   Elevation,
+  HitSlop,
   MaxContentWidth,
   Spacing,
   Typography,
@@ -172,13 +173,14 @@ export default function ManagerSalesScreen() {
               accessibilityLabel="Search sales orders"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity
+              <Pressable
                 onPress={() => setSearchQuery('')}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={HitSlop.md}
+                accessibilityRole="button"
                 accessibilityLabel="Clear search query"
               >
                 <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
         </View>
@@ -188,6 +190,7 @@ export default function ManagerSalesScreen() {
           <SegmentedTabs
             tabs={filterTabs}
             activeTab={statusFilter}
+            activeColor={BrandColors.green.primary}
             onTabChange={(tab) => setStatusFilter(tab as StatusFilter)}
           />
         </View>
@@ -207,6 +210,9 @@ export default function ManagerSalesScreen() {
                 ? 'Try adjusting your filters or search terms.'
                 : 'No sales orders submitted in your territory yet.'
             }
+            iconColor={BrandColors.green.primary}
+            iconBgColor={BrandColors.green.surface}
+            iconBorderColor={BrandColors.green.light}
           />
         ) : (
           <FlatList

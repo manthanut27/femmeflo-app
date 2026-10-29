@@ -149,6 +149,7 @@ export default function StockTransferScreen() {
             <SegmentedTabs
               tabs={modeTabs}
               activeTab={mode}
+              activeColor={BrandColors.pink.dark}
               onTabChange={(tab) => setMode(tab as TransferMode)}
             />
           </View>
@@ -304,7 +305,7 @@ export default function StockTransferScreen() {
                 ? 'Confirm Factory Inward Receipt'
                 : 'Dispatch Stock Transfer'
             }
-            variant="primary"
+            variant="admin"
             size="lg"
             onPress={handleSubmit}
             loading={isSubmitting}

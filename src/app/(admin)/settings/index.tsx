@@ -154,7 +154,7 @@ export default function AdminSettingsScreen() {
                 title={saving ? 'Saving...' : 'Save Configuration'}
                 onPress={handleSaveSettings}
                 loading={saving}
-                variant="primary"
+                variant="admin"
                 size="lg"
                 icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}
                 style={{ marginTop: Spacing.sm }}
@@ -168,7 +168,7 @@ export default function AdminSettingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Manage Customer Categories"
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => router.push('/(admin)/categories/' as any)}
+                onPress={() => router.push('/(admin)/categories' as any)}
               >
                 <View style={styles.menuLeft}>
                   <View style={styles.menuIconCircle}>

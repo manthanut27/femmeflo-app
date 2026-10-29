@@ -20,6 +20,7 @@ import { BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/con
 export default function ManagerCustomersScreen() {
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
     pageSize: 20,
@@ -29,12 +30,19 @@ export default function ManagerCustomersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const loadCustomers = useCallback(async () => {
     try {
       const res = await managerApi.listCustomers({
         page: 1,
         pageSize: 50,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
       setCustomers(res.items);
       setPagination(res.pagination);
@@ -44,7 +52,7 @@ export default function ManagerCustomersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [search]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     loadCustomers();
@@ -108,6 +116,9 @@ export default function ManagerCustomersScreen() {
           icon="storefront-outline"
           title="No Customers Found"
           description="No retail stores onboarded in this territory yet."
+          iconColor={BrandColors.green.primary}
+          iconBgColor={BrandColors.green.surface}
+          iconBorderColor={BrandColors.green.light}
         />
       ) : (
         <FlatList

@@ -30,6 +30,7 @@ export default function NotificationsScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isMarkingAll, setIsMarkingAll] = useState(false);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -54,12 +55,16 @@ export default function NotificationsScreen() {
   }, [loadNotifications]);
 
   async function handleMarkAllAsRead() {
+    if (isMarkingAll) return;
+    setIsMarkingAll(true);
     try {
       await notificationsApi.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (err) {
       console.warn('Failed to mark all read', err);
+    } finally {
+      setIsMarkingAll(false);
     }
   }
 
