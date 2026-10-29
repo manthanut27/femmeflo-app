@@ -1,56 +1,148 @@
-# Welcome to your Expo app 👋
+# FemmeFlo Mobile App (React Native / Expo Android)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Production-ready Android mobile application for the **FemmeFlo Seller, Manager & Super Admin Management System**, built with React Native, Expo SDK 58, and TypeScript.
 
-## Get started
+---
 
-1. Install dependencies
+## 📱 Features by Role
 
-   ```bash
-   npm install
-   ```
+### 1. 🛍️ Seller Role (`/seller`)
+- **Dashboard**: Real-time sales metrics, available van stock balance, quick POS access, and Duty Shift manager (Start/End shift with vehicle odometer KM tracking & foreground GPS).
+- **Customer Directory**: Searchable list with category filters and pagination.
+- **Customer Onboarding**: Foreground GPS coordinate capture with manual retry fallback, 6-digit PIN code auto-fill, category selection, required customer email validation, and optional storefront photo capture via camera/gallery.
+- **Customer Details**: Store ledger, past order history, phone call, email, and Google Maps direction shortcuts.
+- **POS / Sale Creation**: SKU selection, live van stock verification, price validation against configured minimum price (e.g. ₹25), amber badge warning for below-minimum price sales requiring Super Admin approval, payment mode selection (exactly `CASH`, `BANK`, `PENDING`), and idempotency protection against duplicate submissions.
+- **Order Details & Tax Invoices**: Order status timeline (`PENDING`, `APPROVED`, `CONFIRMED`, `REJECTED`), outstanding payment collection for pending orders, and tax invoice PDF download & native Android share sheet via `expo-sharing`.
+- **Inventory Ledger**: Van stock balances by product SKU and inventory movement transaction history.
+- **Incentives & Commissions**: Monthly commission earnings, per-packet rates, and immutable historical ledger preserving past rates.
+- **Profile & Shifts**: Duty shift history (odometer KM logs, timestamps) and session sign-out.
 
-2. Start the app
+### 2. 👔 Manager Role (`/manager`)
+- **Executive Territory Dashboard**: Supervised field sellers count, monthly territory revenue, customer store count, and sanitary packet volume.
+- **Seller Management**: Directory of field officers in the manager's assigned territory with active status, performance stats, and onboarding new sellers.
+- **Territory Customer Directory**: Master store accounts across the territory.
+- **Territory Sales Stream**: Territory-wide order feed with status badges and collection tracking.
 
-   ```bash
-   npx expo start
-   ```
+### 3. 🛡️ Super Admin Role (`/admin`)
+- **Executive Overview**: Total revenue, packets sold, central warehouse stock, active field force count, and pending approvals counter.
+- **Low-Price Sale Approvals Queue**: Live queue of sales submitted below the minimum price. Side-by-side comparison of requested price vs minimum price with one-tap Approve / Reject actions enforced authoritatively on the backend.
+- **HQ Warehouse Inventory**: Central warehouse balances, stock ledger, factory inward stock receipt form, and warehouse-to-seller stock transfer dispatch.
+- **User Lifecycle Management**: Central directory of Managers and Sellers with status management and access administration.
+- **Global Settings & Price Thresholds**: Real-time configuration of the system minimum sale price (e.g. ₹25) and low stock alert thresholds.
+- **Category Management**: Customer store category creation, activation, and management.
 
-In the output, you'll find options to open the app in a
+### 4. 🔔 Shared Features (`/shared`)
+- **Unified Login**: Single entry point with role-selection pills (`Seller`, `Manager`, `Super Admin`), secure hardware-backed token storage via `expo-secure-store`, role mismatch detection, and session auto-restoration.
+- **In-App Notification Center**: Unread indicators, mark-as-read, and mark-all-read.
+- **Change Password**: In-app password rotation.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## 🛠️ Tech Stack & Architecture
 
-## Get a fresh project
+- **Framework**: React Native 0.88, Expo SDK 58, Expo Router (file-based routing)
+- **Language**: TypeScript with strict mode
+- **State & Auth**: `AuthContext` with hardware-backed native persistence via `expo-secure-store`
+- **Network / API**: Centralized typed client with Render 45s cold-start timeout handling, session expiration hooks, and idempotency headers
+- **Styling**: Vanilla React Native StyleSheet using FemmeFlo design tokens (`#E61C5D` Berry Pink, `#156035` Forest Green, `#FAF8F5` Warm Canvas)
+- **Testing**: Built-in Node test runner (`node --test`) covering 15 business-critical scenarios
 
-When you're ready, run:
+---
 
+## 🚀 Running the App Locally
+
+### Prerequisites
+- Node.js v20+ or v24+
+- Android Studio / Android Emulator OR a physical Android phone with Expo Go
+
+### 1. Install Dependencies
 ```bash
-npm run reset-project
+cd femmeflo-app
+npm install
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+### 2. Environment Configuration
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+Default API Base URL points to the live backend:
+```env
+EXPO_PUBLIC_API_URL=https://femmeflo-inventory.onrender.com/api/v1
+```
 
-### Other setup steps
+### 3. Start Development Server
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+**For Android (Target Platform):**
+```bash
+npm run android
+```
+- Or run `npm start` and press `a` to open in Android Emulator, or scan the QR code with **Expo Go** on a physical Android device. Native Android network requests are not subject to browser CORS.
 
-## Learn more
+**For Web Browser Preview (Port 3000):**
+```bash
+npm run web
+```
+> **Note on Web CORS**: The backend at `femmeflo-inventory.onrender.com` is configured with a CORS whitelist that explicitly permits `http://localhost:3000`. Using `npm run web` runs Expo on port 3000 so browser requests succeed without CORS preflight blocks.
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 🧪 Testing & Verification
 
-## Join the community
+### 1. Run All Automated Unit & Scenario Tests
+Executes the comprehensive test suite covering all 15 business-critical scenarios (Master Prompt Section 12):
+```bash
+npm test
+```
 
-Join our community of developers creating universal apps.
+### 2. TypeScript Typecheck
+Verifies zero TypeScript compilation errors across all screens, layouts, and components:
+```bash
+npm run typecheck
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## 📦 Building an Internal APK (Android)
+
+### Prerequisites for EAS Build
+Install the EAS CLI:
+```bash
+npm install -g eas-cli
+eas login
+```
+
+### 1. Configure EAS Build
+```bash
+eas build:configure
+```
+
+### 2. Generate Internal Preview APK
+Add the preview profile to `eas.json`:
+```json
+{
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {}
+  }
+}
+```
+Run the APK build:
+```bash
+eas build -p android --profile preview
+```
+Once complete, EAS provides a direct download link for the internal `.apk` file ready to install on Android devices.
+
+### 3. Local Native Build (Alternative without Cloud EAS)
+Generate native Android Gradle project:
+```bash
+npx expo prebuild --platform android
+cd android
+./gradlew assembleRelease
+```
+The resulting APK will be located at:
+`android/app/build/outputs/apk/release/app-release.apk`

@@ -1,98 +1,94 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { BrandColors, Colors, Radius, Spacing, Typography } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function StartupScreen() {
+  const { user, role, isLoading } = useAuth();
+  const router = useRouter();
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!user || !role) {
+      router.replace('/(auth)/login' as any);
+      return;
+    }
+
+    if (role === 'SELLER') {
+      router.replace('/(seller)' as any);
+    } else if (role === 'MANAGER') {
+      router.replace('/(manager)' as any);
+    } else if (role === 'SUPER_ADMIN') {
+      router.replace('/(admin)' as any);
+    } else {
+      router.replace('/(auth)/login' as any);
+    }
+  }, [user, role, isLoading, router]);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <View
+          style={styles.logoBadge}
+          accessibilityRole="image"
+          accessibilityLabel="FemmeFlo logo"
+        >
+          <Ionicons name="flower-outline" size={42} color={BrandColors.pink.primary} />
+        </View>
+        <Text style={styles.brandTitle}>FemmeFlo</Text>
+        <Text style={styles.brandSubtitle}>Operations & Field Distribution</Text>
+        <ActivityIndicator
+          size="large"
+          color={BrandColors.pink.primary}
+          style={styles.spinner}
+        />
+        <Text style={styles.loadingStatus}>Verifying secure session...</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
+    backgroundColor: Colors.light.background,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
   },
-  title: {
-    textAlign: 'center',
+  content: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xxl,
   },
-  code: {
-    textTransform: 'uppercase',
+  logoBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: Radius.full,
+    backgroundColor: BrandColors.pink.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
+    borderWidth: 1.5,
+    borderColor: BrandColors.pink.tint,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  brandTitle: {
+    ...Typography.display,
+    color: Colors.light.heading,
+    marginBottom: Spacing.xxs,
+  },
+  brandSubtitle: {
+    ...Typography.bodyMedium,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.xxxl,
+  },
+  spinner: {
+    marginBottom: Spacing.lg,
+  },
+  loadingStatus: {
+    ...Typography.caption,
+    color: Colors.light.textMuted,
+    fontWeight: '600',
   },
 });
