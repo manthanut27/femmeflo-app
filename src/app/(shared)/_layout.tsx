@@ -6,6 +6,7 @@ export default function SharedLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_bottom' }}>
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="change-password" options={{ headerShown: false }} />
+      <Stack.Screen name="empty" options={{ headerShown: false }} />
     </Stack>
   );
 }

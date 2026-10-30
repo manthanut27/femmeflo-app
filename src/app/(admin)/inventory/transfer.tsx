@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -15,6 +15,7 @@ import { adminApi } from '@/api/admin';
 import type { ProductItem, PublicUser, WarehouseItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
@@ -46,6 +47,7 @@ export default function StockTransferScreen() {
   const [reference, setReference] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -80,14 +82,17 @@ export default function StockTransferScreen() {
     }
 
     if (!selectedProductId) {
+      setFeedback({ type: 'error', message: 'Please select a product SKU.' });
       Alert.alert('Missing Product', 'Please select a product SKU.');
       return;
     }
 
+    setFeedback(null);
     setIsSubmitting(true);
     try {
       if (mode === 'RECEIPT') {
         if (!sourceWarehouseId) {
+          setFeedback({ type: 'error', message: 'Please select receiving warehouse.' });
           Alert.alert('Missing Warehouse', 'Please select receiving warehouse.');
           setIsSubmitting(false);
           return;
@@ -101,11 +106,14 @@ export default function StockTransferScreen() {
           notes: notes.trim() || undefined,
         });
 
+        setFeedback({ type: 'success', message: `Stock Inward Recorded: Received ${qty} packets into warehouse.` });
         Alert.alert('Stock Inward Recorded', `Received ${qty} packets into warehouse.`, [
           { text: 'OK', onPress: () => router.back() },
         ]);
+        setTimeout(() => router.back(), 1500);
       } else {
         if (!sourceWarehouseId || !targetLocationId) {
+          setFeedback({ type: 'error', message: 'Please select source warehouse and destination location.' });
           Alert.alert('Missing Details', 'Please select source warehouse and destination location.');
           setIsSubmitting(false);
           return;
@@ -119,12 +127,16 @@ export default function StockTransferScreen() {
           reference: reference.trim() || undefined,
         });
 
+        setFeedback({ type: 'success', message: `Stock Transfer Dispatched: Transferred ${qty} packets successfully.` });
         Alert.alert('Stock Transfer Dispatched', `Transferred ${qty} packets successfully.`, [
           { text: 'OK', onPress: () => router.back() },
         ]);
+        setTimeout(() => router.back(), 1500);
       }
     } catch (err: any) {
-      Alert.alert('Operation Failed', err.message || 'Failed to complete stock movement.');
+      const msg = err.message || 'Failed to complete stock movement.';
+      setFeedback({ type: 'error', message: msg });
+      Alert.alert('Operation Failed', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -144,6 +156,15 @@ export default function StockTransferScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrapper}>
+          {feedback && (
+            <FeedbackBanner
+              type={feedback.type}
+              message={feedback.message}
+              onDismiss={() => setFeedback(null)}
+              style={{ marginBottom: Spacing.md }}
+            />
+          )}
+
           {/* Mode Selector */}
           <View style={styles.modeTabsWrap}>
             <SegmentedTabs

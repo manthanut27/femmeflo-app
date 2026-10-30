@@ -200,4 +200,4 @@ All 10 core business requirements from Master Prompt A Section 12 were validated
 7. **GPS Permissions & Fallback:** If GPS location permission is denied by the user, onboarding gracefully prompts for manual address, city, and pincode entry without crashing or blocking form completion.
 8. **Offline Form State Preservation:** Network errors during submission retain user inputs, allowing retry without losing entered information.
 9. **Authentication & Token Expiry:** 401/403 responses immediately clear SecureStore credentials, reset authentication context, and redirect to the login screen.
-10. **Role-Based Access Control:** Separate layouts and guards enforce that Sellers, Managers, and Super Admins cannot access each other's workspaces or executive actions.
+10. **Role-Based Access Control:** Separate layouts and route guards enforce that unauthorized roles are strictly blocked from accessing other workspaces or executive actions, while eligible managers with dual-role permissions (`isSeller === true`) may switch between manager and seller views.

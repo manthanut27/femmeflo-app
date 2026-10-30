@@ -66,7 +66,10 @@ if (Test-Path $Path -PathType Container) {
 }
 
 try {
-    $results = Get-ChildItem -Path $Path -Recurse -File -ErrorAction SilentlyContinue |
+    if (-not (Test-Path $Path)) {
+        throw "Path '$Path' does not exist."
+    }
+    $results = Get-ChildItem -Path $Path -Recurse -File -ErrorAction Stop |
     Where-Object { 
         if ($FileType) { 
             $_.Extension -eq ".$FileType" 
@@ -82,7 +85,7 @@ try {
             $relativePath = $_.Path
             $lineNum = $_.LineNumber
             $line = $_.Line
-            Write-Host "${relativePath}:${lineNum}:${line}"
+            Write-Output "${relativePath}:${lineNum}:${line}"
         }
     }
     else {

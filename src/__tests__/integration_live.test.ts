@@ -1,5 +1,27 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Load project .env file before reading process.env.EXPO_PUBLIC_API_URL
+try {
+  const envPath = path.resolve(__dirname, '../../.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx !== -1) {
+        const key = trimmed.slice(0, idx).trim();
+        const val = trimmed.slice(idx + 1).trim();
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    }
+  }
+} catch {}
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -57,14 +79,24 @@ describe('FemmeFlo Local Backend Integration Suite', async () => {
   });
 
   it('5. POST /api/v1/auth/login succeeds with seeded Super Admin credentials', { skip: !backendOnline }, async () => {
-    const res = await fetch(`${BACKEND_URL}/auth/login`, {
+    let res = await fetch(`${BACKEND_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         login: 'admin@femmeflo.in',
-        password: 'femmeflo@2026',
+        password: 'demo123',
       }),
     });
+    if (res.status === 401) {
+      res = await fetch(`${BACKEND_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          login: 'admin@femmeflo.in',
+          password: 'femmeflo@2026',
+        }),
+      });
+    }
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.success, true);

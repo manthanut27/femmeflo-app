@@ -9,14 +9,14 @@ This document tracks functional parity between the web frontend (`femmeflo-websi
 | Category | Total Tracked | Done | Partial | Not Started / Blocker |
 | :--- | :---: | :---: | :---: | :---: |
 | **Authentication & Session** | 5 | 5 | 0 | 0 |
-| **Seller Suite (Field Sales POS & Attendance)** | 14 | 14 | 0 | 0 |
+| **Seller Suite (Field Sales POS & Attendance)** | 19 | 19 | 0 | 0 |
 | **Manager Suite (Territory Supervision)** | 7 | 6 | 0 | 1 |
-| **Admin Suite (Super Admin Governance)** | 5 | 2 | 3 | 0 |
-| **Total Features** | **31** | **27** | **3** | **1** |
+| **Admin Suite (Super Admin Governance)** | 6 | 3 | 3 | 0 |
+| **Total Features** | **37** | **33** | **3** | **1** |
 
-- **Done**: 27 (87.1%)
-- **Partial**: 3 (9.7%)
-- **Not Started / Backend Blocker**: 1 (3.2%)
+- **Done**: 33 (89.2%)
+- **Partial**: 3 (8.1%)
+- **Not Started / Backend Blocker**: 1 (2.7%)
 
 ---
 

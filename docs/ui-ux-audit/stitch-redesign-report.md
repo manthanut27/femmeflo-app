@@ -13,9 +13,9 @@
 ## Deliverable A: Complete Repository Analysis
 
 ### 1. Technology Stack & Frameworks
-- **Framework:** Expo SDK `~58.0.19` with React Native `0.88.0` and React `19.3.0`
-- **Routing Engine:** Expo Router `~58.0.26` (file-based navigation under `src/app/`)
-- **Language & Type System:** TypeScript `~6.0.3` (`strict: true`, `noEmit: true`)
+- **Framework:** Expo SDK `~58.0.21` (installed in package.json) with React Native `0.88.1` and React `19.3.0`
+- **Routing Engine:** Expo Router `~58.0.28` (installed in package.json, file-based navigation under `src/app/`)
+- **Language & Type System:** TypeScript `~6.0.3` (`strict: true`, `noEmit: true`) installed in package.json
 - **Design Tokens & Theme:** Centralized TypeScript tokens in `src/constants/theme.ts`
 - **Component Primitives:** Native React Native primitives (`View`, `Text`, `Pressable`, `ScrollView`, `FlatList`) with `react-native-safe-area-context`
 - **Iconography:** `@expo/vector-icons` (Ionicons)

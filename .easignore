@@ -1,0 +1,29 @@
+# EAS Ignore Configuration for FemmeFlo
+
+# Documentation and design assets
+/docs/
+/design-system/
+/stitch-output/
+
+# Agent and developer tools
+/.agents/
+/.gemini/
+/.agent/
+/.gsd/
+/scripts/
+
+# Test directories and artifacts
+/src/__tests__/
+/dist*/
+/temp_export*/
+/*.log
+/coverage/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+

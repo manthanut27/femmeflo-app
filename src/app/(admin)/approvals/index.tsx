@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -30,11 +30,18 @@ export default function AdminApprovalsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [minPricePaise, setMinPricePaise] = useState<number>(2500);
 
   const loadApprovals = useCallback(async () => {
     try {
-      const res = await adminApi.listApprovals({ pageSize: 50 });
+      const [res, settings] = await Promise.all([
+        adminApi.listApprovals({ pageSize: 50 }),
+        adminApi.getBusinessSettings().catch(() => null),
+      ]);
       setApprovals(res.items);
+      if (settings?.minimumSalePricePaise) {
+        setMinPricePaise(settings.minimumSalePricePaise);
+      }
     } catch (err) {
       console.warn('Failed to load approvals', err);
     } finally {
@@ -203,12 +210,14 @@ export default function AdminApprovalsScreen() {
               <Text style={styles.kpiValue}>{approvals.length} Orders</Text>
             </View>
             <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Flagged Value</Text>
+              <Text style={styles.kpiLabel}>Shown Value</Text>
               <Text style={styles.kpiValue}>{formatRupees(totalFlaggedPaise)}</Text>
             </View>
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Policy Floor</Text>
-              <Text style={[styles.kpiValue, { color: Colors.light.warning }]}>₹25.00/pkt</Text>
+              <Text style={[styles.kpiValue, { color: Colors.light.warning }]}>
+                ₹{(minPricePaise / 100).toFixed(2)}/pkt
+              </Text>
             </View>
           </View>
         ) : null}

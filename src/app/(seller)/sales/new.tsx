@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -16,6 +16,7 @@ import { sellerApi } from '@/api/seller';
 import type { CustomerItem, PaymentMode, ProductItem, ProductStockItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
@@ -54,6 +55,13 @@ export default function NewSaleScreen() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState<{
+    type: FeedbackType;
+    title?: string;
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  } | null>(null);
 
   useEffect(() => {
     async function initScreen() {
@@ -81,7 +89,11 @@ export default function NewSaleScreen() {
           setIdempotencyKey(savedDraft.idempotencyKey);
           setBoundPayloadHash(savedDraft.payloadHash || '');
           setWasSubmitted(Boolean(savedDraft.submitted));
-          if (savedDraft.customerId) setSelectedCustomerId(savedDraft.customerId);
+          if (params.customerId) {
+            setSelectedCustomerId(params.customerId);
+          } else if (savedDraft.customerId) {
+            setSelectedCustomerId(savedDraft.customerId);
+          }
           if (savedDraft.items && savedDraft.items.length > 0) {
             const first = savedDraft.items[0];
             setSelectedProductId(first.productId);
@@ -217,6 +229,11 @@ export default function NewSaleScreen() {
     if (!validate()) return;
 
     if (quantity > currentStock) {
+      setFeedback({
+        type: 'error',
+        title: 'Insufficient Van Stock',
+        message: `You have ${currentStock} packets in your inventory, but requested ${quantity}. Please adjust quantity.`,
+      });
       Alert.alert(
         'Insufficient Van Stock',
         `You have ${currentStock} packets in your inventory, but requested ${quantity}. Please adjust quantity.`
@@ -226,6 +243,7 @@ export default function NewSaleScreen() {
 
     setIsSubmitting(true);
     setWasSubmitted(true);
+    setFeedback(null);
     try {
       const res = await sellerApi.createSale({
         customerId: selectedCustomerId,
@@ -247,6 +265,16 @@ export default function NewSaleScreen() {
       const sale = res.sale;
       const isPending = sale.status === 'PENDING';
 
+      setFeedback({
+        type: isPending ? 'warning' : 'success',
+        title: isPending ? 'Order Sent for Super Admin Approval' : 'Sale Confirmed & Stock Deducted!',
+        message: isPending
+          ? `Order #${sale.id.slice(0, 8)} is priced below minimum (₹${minimumPricePaise / 100}) and has been sent to Super Admin for approval.`
+          : `Order #${sale.id.slice(0, 8)} for ₹${(sale.totalAmountPaise / 100).toFixed(2)} confirmed successfully.`,
+        actionLabel: 'View Order Details',
+        onAction: () => router.replace(`/(seller)/sales/${sale.id}` as any),
+      });
+
       Alert.alert(
         isPending ? 'Sale Submitted for Approval' : 'Sale Confirmed!',
         isPending
@@ -260,6 +288,11 @@ export default function NewSaleScreen() {
         ]
       );
     } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        title: 'Sale Creation Failed',
+        message: err.message || 'Unable to record sale. Please try again.',
+      });
       Alert.alert('Sale Creation Failed', err.message || 'Unable to record sale. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -273,8 +306,13 @@ export default function NewSaleScreen() {
         text: 'Discard',
         style: 'destructive',
         onPress: async () => {
-          await draftStorage.clearOrderDraft();
+          await draftStorage.clearOrderDraft(userId);
           setIdempotencyKey(generateIdempotencyKey());
+          setWasSubmitted(false);
+          setBoundPayloadHash('');
+          setSelectedCustomerId(params.customerId || (customers.length > 0 ? customers[0].id : ''));
+          setPaymentMode('CASH');
+          setPaymentReference('');
           setQuantityStr('10');
           setIsDraftRestored(false);
           if (products.length > 0) {
@@ -303,6 +341,18 @@ export default function NewSaleScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrapper}>
+          {feedback ? (
+            <FeedbackBanner
+              type={feedback.type}
+              title={feedback.title}
+              message={feedback.message}
+              actionLabel={feedback.actionLabel}
+              onAction={feedback.onAction}
+              onDismiss={() => setFeedback(null)}
+              style={{ marginBottom: Spacing.md }}
+            />
+          ) : null}
+
           {/* Draft Autosave & Idempotency Key Status */}
           <View style={styles.draftBadgeRow}>
             <View style={styles.draftBadge}>
@@ -362,11 +412,13 @@ export default function NewSaleScreen() {
                     >
                       {c.ownerName}
                     </Text>
-                    <View style={[styles.tierPill, isSelected && styles.tierPillActive]}>
-                      <Text style={[styles.tierPillText, isSelected && styles.tierPillTextActive]}>
-                        Tier A • 15d Credit
-                      </Text>
-                    </View>
+                    {(c as any).tier || (c as any).creditTerms ? (
+                      <View style={[styles.tierPill, isSelected && styles.tierPillActive]}>
+                        <Text style={[styles.tierPillText, isSelected && styles.tierPillTextActive]}>
+                          {[(c as any).tier, (c as any).creditTerms].filter(Boolean).join(' • ')}
+                        </Text>
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -423,7 +475,7 @@ export default function NewSaleScreen() {
 
             {/* Quantity & Unit Price inputs */}
             <View style={styles.qtyPriceRow}>
-              <View style={{ flex: 1, marginRight: Spacing.md }}>
+              <View style={styles.qtyCol}>
                 <Input
                   label="Packets Quantity *"
                   placeholder="e.g. 10"
@@ -454,7 +506,7 @@ export default function NewSaleScreen() {
                 </View>
               </View>
 
-              <View style={{ flex: 1 }}>
+              <View style={styles.priceCol}>
                 <Input
                   label="Unit Price (₹) *"
                   placeholder="e.g. 35"
@@ -794,6 +846,16 @@ const styles = StyleSheet.create({
   },
   qtyPriceRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
+  },
+  qtyCol: {
+    flex: 1,
+    minWidth: 140,
+  },
+  priceCol: {
+    flex: 1,
+    minWidth: 140,
   },
   rupeeSymbol: {
     fontSize: 16,

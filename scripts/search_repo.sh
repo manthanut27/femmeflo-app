@@ -11,8 +11,14 @@
 set -e
 
 PATTERN="${1:-}"
-SEARCH_PATH="${2:-.}"
-shift 2 2>/dev/null || true
+shift || true
+
+if [[ "${1:-}" == -* ]] || [[ -z "${1:-}" ]]; then
+    SEARCH_PATH="."
+else
+    SEARCH_PATH="$1"
+    shift || true
+fi
 EXTRA_ARGS="$@"
 
 if [[ -z "$PATTERN" ]]; then
@@ -52,7 +58,16 @@ for arg in $EXTRA_ARGS; do
     esac
 done
 
-grep -rn "$PATTERN" "$SEARCH_PATH" $GREP_ARGS --color=always 2>/dev/null || {
+set +e
+grep -rnE "$PATTERN" "$SEARCH_PATH" $GREP_ARGS --color=always
+GREP_STATUS=$?
+set -e
+
+if [[ $GREP_STATUS -eq 0 ]]; then
+    exit 0
+elif [[ $GREP_STATUS -eq 1 ]]; then
     echo "No matches found for: $PATTERN"
     exit 0
-}
+else
+    exit $GREP_STATUS
+fi

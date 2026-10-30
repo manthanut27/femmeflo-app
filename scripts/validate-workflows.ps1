@@ -1,4 +1,4 @@
-﻿# GSD Workflow Validation Script
+# GSD Workflow Validation Script
 # Validates all workflow files for required structure
 
 $ErrorCount = 0
@@ -10,6 +10,11 @@ Write-Host " GSD ► VALIDATING WORKFLOWS" -ForegroundColor Cyan
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
 Write-Host ""
 
+if (-not (Test-Path ".agent/workflows") -or @(Get-ChildItem ".agent/workflows/*.md" -ErrorAction SilentlyContinue).Count -eq 0) {
+    Write-Host "❌ Missing or empty .agent/workflows directory" -ForegroundColor Red
+    exit 1
+}
+
 $workflows = Get-ChildItem ".agent/workflows/*.md"
 
 foreach ($file in $workflows) {
@@ -17,16 +22,16 @@ foreach ($file in $workflows) {
     $content = Get-Content $file.FullName -Raw
     $hasErrors = $false
     
-    # Check for frontmatter
-    if ($content -notmatch "^---") {
+    # Check for frontmatter and description in frontmatter
+    if ($content -match "^---\r?\n([\s\S]*?)\r?\n---") {
+        $frontmatter = $matches[1]
+        if ($frontmatter -notmatch "(?m)^description:") {
+            Write-Host "❌ $($file.Name): Missing description in frontmatter" -ForegroundColor Red
+            $ErrorCount++
+            $hasErrors = $true
+        }
+    } else {
         Write-Host "❌ $($file.Name): Missing frontmatter" -ForegroundColor Red
-        $ErrorCount++
-        $hasErrors = $true
-    }
-    
-    # Check for description
-    if ($content -notmatch "description:") {
-        Write-Host "❌ $($file.Name): Missing description in frontmatter" -ForegroundColor Red
         $ErrorCount++
         $hasErrors = $true
     }
@@ -50,7 +55,7 @@ Write-Host "Errors: $ErrorCount" -ForegroundColor $(if ($ErrorCount -gt 0) { "Re
 Write-Host "Warnings: $WarningCount" -ForegroundColor $(if ($WarningCount -gt 0) { "Yellow" } else { "Green" })
 Write-Host ""
 
-if ($ErrorCount -eq 0) {
+if ($WorkflowsChecked -gt 0 -and $ErrorCount -eq 0) {
     Write-Host "✅ All workflows valid!" -ForegroundColor Green
     exit 0
 } else {

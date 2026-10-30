@@ -60,12 +60,13 @@ export function computePayloadHash(payload: {
   customerId?: string;
   items: Array<{ productId: string; quantity: number; unitPricePaise: number }>;
   paymentMode?: string;
+  paymentReference?: string;
 }): string {
   const normItems = [...(payload.items || [])]
     .map((i) => `${i.productId}:${i.quantity}:${i.unitPricePaise}`)
     .sort()
     .join('|');
-  return `${payload.customerId || ''}#${payload.paymentMode || ''}#${normItems}`;
+  return `${payload.customerId || ''}#${payload.paymentMode || ''}#${payload.paymentReference || ''}#${normItems}`;
 }
 
 // Determine if the key should rotate (when payload changes after a submission attempt)
@@ -160,28 +161,15 @@ function resolveDefaultStorage(): StorageBackend {
     const mod = require('@react-native-async-storage/async-storage');
     const asyncStorage = mod?.default ?? mod;
     if (asyncStorage && typeof asyncStorage.getItem === 'function') {
-      const memory = new Map<string, string>();
       return {
         async getItem(key: string) {
-          try {
-            return await asyncStorage.getItem(key);
-          } catch {
-            return memory.get(key) ?? null;
-          }
+          return await asyncStorage.getItem(key);
         },
         async setItem(key: string, value: string) {
-          try {
-            await asyncStorage.setItem(key, value);
-          } catch {
-            memory.set(key, value);
-          }
+          await asyncStorage.setItem(key, value);
         },
         async removeItem(key: string) {
-          try {
-            await asyncStorage.removeItem(key);
-          } catch {
-            memory.delete(key);
-          }
+          await asyncStorage.removeItem(key);
         },
       };
     }

@@ -127,16 +127,30 @@ export const adminApi = {
 
   async createManager(payload: {
     name: string;
-    email: string;
+    email?: string;
     password?: string;
     phone?: string;
     state?: string;
     district?: string;
+    village?: string;
   }): Promise<{ manager: PublicUser }> {
-    return apiRequest<{ manager: PublicUser }>('admin/managers', {
+    const rawPhone = (payload.phone || '').trim();
+    const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
+    const body: Record<string, any> = {
+      name: payload.name.trim(),
+      phone,
+      password: payload.password || 'FemmeFlo@2026',
+    };
+    if (payload.email?.trim()) body.email = payload.email.trim();
+    if (payload.state?.trim()) body.state = payload.state.trim();
+    if (payload.district?.trim()) body.district = payload.district.trim();
+    if (payload.village?.trim()) body.village = payload.village.trim();
+
+    const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>('admin/managers', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
+    return { manager: (res.manager ?? res.user)! };
   },
 
   async listSellers(params?: { page?: number; pageSize?: number; search?: string }): Promise<{ items: PublicUser[]; pagination: PaginationMeta }> {
@@ -156,33 +170,63 @@ export const adminApi = {
 
   async createSeller(payload: {
     name: string;
-    email: string;
-    managerId?: string;
+    email?: string;
+    managerId: string;
     password?: string;
     phone?: string;
     state?: string;
     district?: string;
+    village?: string;
   }): Promise<{ seller: PublicUser }> {
-    return apiRequest<{ seller: PublicUser }>('admin/sellers', {
+    const rawPhone = (payload.phone || '').trim();
+    const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
+    const body: Record<string, any> = {
+      name: payload.name.trim(),
+      phone,
+      password: payload.password || 'FemmeFlo@2026',
+      managerId: payload.managerId,
+    };
+    if (payload.email?.trim()) body.email = payload.email.trim();
+    if (payload.state?.trim()) body.state = payload.state.trim();
+    if (payload.district?.trim()) body.district = payload.district.trim();
+    if (payload.village?.trim()) body.village = payload.village.trim();
+
+    const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>('admin/sellers', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
+    return { seller: (res.seller ?? res.user)! };
   },
 
   // ----------------------------------------------------
   // Business Settings
   // ----------------------------------------------------
   async getBusinessSettings(): Promise<BusinessSettings> {
-    return apiRequest<BusinessSettings>('admin/settings', {
-      method: 'GET',
-    });
+    try {
+      const res = await apiRequest<{ settings?: BusinessSettings } | BusinessSettings>('admin/incentives/settings', {
+        method: 'GET',
+      });
+      return ((res as any)?.settings ?? res) as BusinessSettings;
+    } catch {
+      return apiRequest<BusinessSettings>('admin/settings', {
+        method: 'GET',
+      });
+    }
   },
 
   async updateBusinessSettings(payload: Partial<BusinessSettings>): Promise<BusinessSettings> {
-    return apiRequest<BusinessSettings>('admin/settings', {
-      method: 'PATCH',
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await apiRequest<{ settings?: BusinessSettings } | BusinessSettings>('admin/incentives/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      return ((res as any)?.settings ?? res) as BusinessSettings;
+    } catch {
+      return apiRequest<BusinessSettings>('admin/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+    }
   },
 
   async listProducts(): Promise<{ items: ProductItem[] }> {

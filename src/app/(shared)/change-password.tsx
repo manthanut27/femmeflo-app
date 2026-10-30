@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -13,6 +13,7 @@ import {
 import { authApi } from '@/api/auth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import {
@@ -31,10 +32,12 @@ export default function ChangePasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   async function handleSubmit() {
     if (isSubmitting) return;
     setError(null);
+    setSuccessMsg(null);
 
     if (!currentPassword) {
       setError('Please enter your current password.');
@@ -52,6 +55,7 @@ export default function ChangePasswordScreen() {
     setIsSubmitting(true);
     try {
       await authApi.changePassword({ currentPassword, newPassword });
+      setSuccessMsg('Your password has been successfully updated.');
       Alert.alert('Password Changed', 'Your password has been successfully updated.', [
         { text: 'OK', onPress: () => router.back() },
       ]);
@@ -78,6 +82,24 @@ export default function ChangePasswordScreen() {
               Choose a strong password containing at least 6 characters. Do not share your login credentials with others.
             </Text>
           </View>
+
+          {error ? (
+            <FeedbackBanner
+              type="error"
+              message={error}
+              onDismiss={() => setError(null)}
+              style={{ marginBottom: Spacing.md }}
+            />
+          ) : null}
+
+          {successMsg ? (
+            <FeedbackBanner
+              type="success"
+              message={successMsg}
+              onDismiss={() => setSuccessMsg(null)}
+              style={{ marginBottom: Spacing.md }}
+            />
+          ) : null}
 
           <Card style={styles.card}>
             <Input

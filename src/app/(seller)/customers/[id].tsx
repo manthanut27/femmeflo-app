@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -17,6 +17,7 @@ import type { CustomerItem, SaleItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
@@ -81,9 +82,17 @@ export default function CustomerDetailScreen() {
 
   if (!customer) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={styles.container}>
         <Header title="Customer Details" showBack />
-        <Text style={styles.errorText}>Customer record not found.</Text>
+        <View style={styles.centerContainer}>
+          <EmptyState
+            icon="storefront-outline"
+            title="Customer Not Found"
+            description="The requested retailer outlet record could not be found."
+            actionTitle="Back to Customers"
+            onAction={() => router.replace('/(seller)/customers' as any)}
+          />
+        </View>
       </View>
     );
   }
@@ -192,9 +201,13 @@ export default function CustomerDetailScreen() {
           {/* Order History */}
           <Text style={styles.sectionHeading}>Order History</Text>
           {sales.length === 0 ? (
-            <Card variant="flat" style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No orders recorded yet for this customer.</Text>
-            </Card>
+            <EmptyState
+              icon="receipt-outline"
+              title="No Orders Recorded"
+              description="No past orders found for this customer. Create their first POS sale now."
+              actionTitle="New Store Sale"
+              onAction={() => router.push(`/(seller)/sales/new?customerId=${customer.id}` as any)}
+            />
           ) : (
             sales.map((sale) => (
               <Card
@@ -285,6 +298,7 @@ const styles = StyleSheet.create({
   },
   contactRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.sm,
     marginVertical: Spacing.xs,
   },

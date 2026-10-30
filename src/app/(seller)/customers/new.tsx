@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
@@ -21,6 +21,7 @@ import { sellerApi } from '@/api/seller';
 import type { CategoryItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -55,6 +56,13 @@ export default function AddCustomerScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState<{
+    type: FeedbackType;
+    title?: string;
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  } | null>(null);
 
   useEffect(() => {
     // 1. Fetch categories
@@ -157,7 +165,8 @@ export default function AddCustomerScreen() {
     const errs: Record<string, string> = {};
     if (!shopName.trim()) errs.shopName = 'Retail shop name is required.';
     if (!ownerName.trim()) errs.ownerName = 'Owner / Contact person name is required.';
-    if (!email.trim() || !validateCustomerEmail(email)) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !validateCustomerEmail(trimmedEmail)) {
       errs.email = 'A valid customer email is required.';
     }
     if (!phone.trim() || phone.trim().length < 10) errs.phone = 'A valid 10-digit mobile number is required.';
@@ -174,11 +183,17 @@ export default function AddCustomerScreen() {
   async function handleSubmit() {
     if (isSubmitting) return;
     if (!validate()) {
+      setFeedback({
+        type: 'error',
+        title: 'Validation Error',
+        message: 'Please complete all required fields highlighted in red.',
+      });
       Alert.alert('Validation Error', 'Please complete all required fields highlighted in red.');
       return;
     }
 
     setIsSubmitting(true);
+    setFeedback(null);
     try {
       const res = await sellerApi.createCustomer({
         shopName: shopName.trim(),
@@ -206,6 +221,14 @@ export default function AddCustomerScreen() {
         }
       }
 
+      setFeedback({
+        type: 'success',
+        title: 'Customer Onboarded Successfully',
+        message: `${shopName} has been registered and added to your retail beat.`,
+        actionLabel: 'Return to Customer Directory',
+        onAction: () => router.replace('/(seller)/customers' as any),
+      });
+
       Alert.alert('Customer Onboarded', `${shopName} has been successfully registered.`, [
         {
           text: 'OK',
@@ -213,6 +236,11 @@ export default function AddCustomerScreen() {
         },
       ]);
     } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        title: 'Submission Failed',
+        message: err.message || 'Failed to save customer. Your entered details have been preserved.',
+      });
       Alert.alert('Submission Error', err.message || 'Failed to save customer. Your entered details have been preserved.');
     } finally {
       setIsSubmitting(false);
@@ -228,6 +256,18 @@ export default function AddCustomerScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrapper}>
+          {feedback ? (
+            <FeedbackBanner
+              type={feedback.type}
+              title={feedback.title}
+              message={feedback.message}
+              actionLabel={feedback.actionLabel}
+              onAction={feedback.onAction}
+              onDismiss={() => setFeedback(null)}
+              style={{ marginBottom: Spacing.md }}
+            />
+          ) : null}
+
           {/* GPS Location Status Banner */}
           <Card variant="outlined" style={styles.gpsCard}>
             <View style={styles.gpsRow}>

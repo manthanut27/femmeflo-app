@@ -25,9 +25,25 @@ export const sellerApi = {
   // Dashboard
   // ----------------------------------------------------
   async getDashboard(): Promise<SellerDashboardData> {
-    return apiRequest<SellerDashboardData>('seller/dashboard', {
+    const raw = await apiRequest<any>('seller/dashboard', {
       method: 'GET',
     });
+    const metrics = raw?.metrics;
+    const remainingPackets = metrics?.remainingPackets ?? raw?.stockBalance ?? 0;
+    const soldPackets = metrics?.soldPackets ?? 0;
+    const totalIncentivePaise = metrics?.totalIncentivePaise ?? 0;
+
+    return {
+      todaySalesPaise: raw?.todaySalesPaise ?? totalIncentivePaise,
+      todayOrdersCount: raw?.todayOrdersCount ?? (raw?.recentSales?.length ?? 0),
+      monthSalesPaise: raw?.monthSalesPaise ?? (soldPackets * 4500),
+      lowStockCount: raw?.lowStockCount ?? (remainingPackets < 20 ? 1 : 0),
+      stockBalance: remainingPackets,
+      metrics: metrics,
+      recentSales: raw?.recentSales ?? [],
+      pendingApprovalsCount: raw?.pendingApprovalsCount ?? 0,
+      activeShift: raw?.activeShift ?? null,
+    };
   },
 
   // ----------------------------------------------------
@@ -63,9 +79,26 @@ export const sellerApi = {
   },
 
   async createCustomer(payload: CreateCustomerPayload): Promise<{ customer: CustomerItem }> {
+    const rawPhone = (payload.phone || '').trim();
+    const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
+    const body: Record<string, any> = {
+      shopName: payload.shopName.trim(),
+      contactName: (payload as any).contactName || payload.ownerName?.trim() || payload.shopName.trim(),
+      phone,
+      categoryId: payload.categoryId,
+      address: payload.address,
+      pincode: payload.pincode,
+      state: payload.state,
+      district: payload.district,
+      village: payload.village || 'Default',
+    };
+    if (payload.email) body.email = payload.email.trim();
+    if (payload.latitude != null) body.latitude = payload.latitude;
+    if (payload.longitude != null) body.longitude = payload.longitude;
+
     return apiRequest<{ customer: CustomerItem }>('seller/customers', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 
@@ -192,6 +225,9 @@ export const sellerApi = {
     if (key) {
       body.requestKey = key;
     }
+    if (payload.paymentReference) {
+      body.paymentReference = payload.paymentReference;
+    }
 
     return apiRequest<{ sale: SaleItem }>('seller/sales', {
       method: 'POST',
@@ -255,30 +291,54 @@ export const sellerApi = {
   },
 
   async startShift(payload: StartShiftPayload): Promise<{ shift: Shift }> {
+    const body: Record<string, any> = {
+      latitude: payload.latitude ?? payload.startLatitude ?? 0,
+      longitude: payload.longitude ?? payload.startLongitude ?? 0,
+    };
+    if (payload.address) body.address = payload.address;
     return apiRequest<{ shift: Shift }>('seller/shifts/start', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 
   async checkIn(payload: CheckInPayload): Promise<{ visit: ShiftVisit }> {
+    const body: Record<string, any> = {
+      latitude: payload.latitude ?? 0,
+      longitude: payload.longitude ?? 0,
+      shopName: (payload as any).shopName || (payload as any).customer?.shopName || 'Retail Customer',
+    };
+    if (payload.customerId) body.customerId = payload.customerId;
+    if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-in', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 
   async checkOut(payload: CheckOutPayload): Promise<{ visit: ShiftVisit }> {
+    const body: Record<string, any> = {
+      visitId: payload.visitId,
+      latitude: (payload as any).latitude ?? 0,
+      longitude: (payload as any).longitude ?? 0,
+    };
+    if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-out', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 
   async endShift(payload: EndShiftPayload): Promise<{ shift: Shift }> {
+    const body: Record<string, any> = {
+      latitude: payload.latitude ?? payload.endLatitude ?? 0,
+      longitude: payload.longitude ?? payload.endLongitude ?? 0,
+    };
+    if (payload.address) body.address = payload.address;
+    if (payload.notes || payload.remarks) body.notes = payload.notes || payload.remarks;
     return apiRequest<{ shift: Shift }>('seller/shifts/end', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 

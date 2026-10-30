@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -21,6 +21,7 @@ import type { SaleItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
@@ -28,6 +29,7 @@ import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing
 
 export default function SaleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [sale, setSale] = useState<SaleItem | null>(null);
@@ -91,12 +93,42 @@ export default function SaleDetailScreen() {
     if (isDownloadingInvoice) return;
     setIsDownloadingInvoice(true);
     try {
-      if (isMockMode()) {
-        if (Platform.OS === 'web') {
-          Alert.alert('Invoice Ready', `Tax invoice for #${sale.saleNumber || sale.id} generated successfully.`);
+      if (Platform.OS === 'web') {
+        if (isMockMode()) {
+          const textContent = `FEMMEFLO DISTRIBUTION - TAX INVOICE\n==============================================\nInvoice Number : ${sale.saleNumber || sale.id}\nDate           : ${new Date(sale.createdAt).toLocaleDateString()}\nStatus         : ${sale.status}\nCustomer Shop  : ${sale.customer?.shopName || 'Retail Customer'}\nOwner Name     : ${sale.customer?.ownerName || '-'}\nAddress        : ${sale.customer?.address || '-'}\nPayment Mode   : ${sale.paymentMode}\n\nITEMS:\n${(sale.items || []).map((it) => `- ${it.productName}: ${it.quantity} pkts @ ₹${(it.unitPricePaise / 100).toFixed(2)} = ₹${((it.totalPricePaise || 0) / 100).toFixed(2)}`).join('\n')}\n\nTOTAL AMOUNT   : ₹${((sale.totalAmountPaise || 0) / 100).toFixed(2)}\n==============================================\nGenerated in FemmeFlo Standalone Test Mode.`;
+          const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.txt`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
           return;
         }
 
+        const url = sellerApi.getInvoicePdfUrl(sale.id, true);
+        const token = await tokenStorage.getToken();
+        const response = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!response.ok) {
+          throw new Error('Server returned an error while downloading invoice PDF.');
+        }
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+        return;
+      }
+
+      if (isMockMode()) {
         const filename = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.txt`;
         const dir = FileSystem.documentDirectory || '';
         const fileUri = `${dir}${filename}`;
@@ -127,11 +159,6 @@ Generated in FemmeFlo Standalone Test Mode.`;
         } else {
           Alert.alert('Invoice Saved', `Invoice saved to ${fileUri}`);
         }
-        return;
-      }
-
-      if (Platform.OS === 'web') {
-        Alert.alert('Invoice Download', `Tax invoice #${sale.saleNumber || sale.id} download initiated.`);
         return;
       }
 
@@ -182,9 +209,17 @@ Generated in FemmeFlo Standalone Test Mode.`;
 
   if (!sale) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={styles.container}>
         <Header title="Sale Order" showBack />
-        <Text style={styles.errorText}>Sale record not found.</Text>
+        <View style={styles.centerContainer}>
+          <EmptyState
+            icon="receipt-outline"
+            title="Sale Record Not Found"
+            description="The requested order could not be located in your history."
+            actionTitle="Back to Sales List"
+            onAction={() => router.replace('/(seller)/sales' as any)}
+          />
+        </View>
       </View>
     );
   }
@@ -487,11 +522,14 @@ const styles = StyleSheet.create({
   metaLabel: {
     ...Typography.bodySmall,
     color: Colors.light.textSecondary,
+    marginRight: Spacing.sm,
   },
   metaVal: {
     ...Typography.bodySmall,
     color: Colors.light.heading,
     fontWeight: '500',
+    flexShrink: 1,
+    textAlign: 'right',
   },
   refText: {
     ...Typography.caption,

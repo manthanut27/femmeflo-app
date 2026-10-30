@@ -1,6 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +18,8 @@ import type { CustomerItem, Shift, ShiftVisit } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -26,7 +27,6 @@ import { useAuth } from '@/context/AuthContext';
 import { draftStorage } from '@/utils/draftStorage';
 
 export default function ShiftScreen() {
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const userId = user?.id || 'anonymous';
@@ -36,6 +36,13 @@ export default function ShiftScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
+  const [feedback, setFeedback] = useState<{
+    type: FeedbackType;
+    title?: string;
+    message: string;
+    actionLabel?: string;
+    onAction?: () => void;
+  } | null>(null);
 
   // Start Shift Modal
   const [startModalVisible, setStartModalVisible] = useState(false);
@@ -73,14 +80,14 @@ export default function ShiftScreen() {
       await draftStorage.saveActiveShift(userId, active);
 
       setCustomers(custRes.items);
-      if (custRes.items.length > 0 && !selectedCustomerId) {
-        setSelectedCustomerId(custRes.items[0].id);
+      if (custRes.items.length > 0) {
+        setSelectedCustomerId((prev) => prev || custRes.items[0].id);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCustomerId, userId]);
+  }, [userId]);
 
   useEffect(() => {
     loadShiftData();
@@ -155,8 +162,18 @@ export default function ShiftScreen() {
       setStartModalVisible(false);
       setStartOdometer('');
       setStartNotes('');
+      setFeedback({
+        type: 'success',
+        title: 'Shift Started',
+        message: `Field beat shift initialized at ${km} km.`,
+      });
       Alert.alert('Shift Started', `Field beat shift initialized at ${km} km.`);
     } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        title: 'Shift Start Failed',
+        message: err.message || 'Unable to start shift.',
+      });
       Alert.alert('Shift Start Failed', err.message || 'Unable to start shift.');
     } finally {
       setIsStartingShift(false);
@@ -195,9 +212,19 @@ export default function ShiftScreen() {
 
       setCheckInModalVisible(false);
       setVisitNotes('');
+      setFeedback({
+        type: 'success',
+        title: 'Visit Checked In',
+        message: 'GPS location captured and store visit recorded.',
+      });
       Alert.alert('Visit Checked In', 'GPS location captured and store visit recorded.');
       loadShiftData();
     } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        title: 'Check-in Failed',
+        message: err.message || 'Unable to record store visit.',
+      });
       Alert.alert('Check-in Failed', err.message || 'Unable to record store visit.');
     } finally {
       setIsCheckingIn(false);
@@ -243,8 +270,18 @@ export default function ShiftScreen() {
       setEndModalVisible(false);
       setEndOdometer('');
       setEndNotes('');
+      setFeedback({
+        type: 'success',
+        title: 'Shift Ended Successfully',
+        message: `Closing odometer logged at ${km} km. Travel summary preserved.`,
+      });
       Alert.alert('Shift Ended', 'Shift logged and summarized successfully.');
     } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        title: 'End Shift Failed',
+        message: err.message || 'Unable to close duty shift.',
+      });
       Alert.alert('End Shift Failed', err.message || 'Unable to close duty shift.');
     } finally {
       setIsEndingShift(false);
@@ -276,6 +313,18 @@ export default function ShiftScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BrandColors.pink.primary]} />}
       >
         <View style={styles.contentWrapper}>
+          {feedback ? (
+            <FeedbackBanner
+              type={feedback.type}
+              title={feedback.title}
+              message={feedback.message}
+              actionLabel={feedback.actionLabel}
+              onAction={feedback.onAction}
+              onDismiss={() => setFeedback(null)}
+              style={{ marginBottom: Spacing.md }}
+            />
+          ) : null}
+
           {/* Hero Shift Card */}
           <Card style={styles.heroCard}>
             <View style={styles.heroHeader}>
@@ -367,7 +416,7 @@ export default function ShiftScreen() {
           {/* Visits Timeline Section */}
           <View style={styles.timelineSection}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Today's Store Visits</Text>
+              <Text style={styles.sectionTitle}>Today&apos;s Store Visits</Text>
               {isShiftActive && currentShift ? (
                 <Pressable
                   onPress={() => setCheckInModalVisible(true)}
@@ -381,15 +430,23 @@ export default function ShiftScreen() {
             </View>
 
             {visits.length === 0 ? (
-              <Card style={styles.emptyCard}>
-                <Ionicons name="storefront-outline" size={36} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
-                <Text style={styles.emptyTitle}>No store visits recorded yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  {isShiftActive
-                    ? 'Tap "Check-in Store Visit" above when arriving at a retail customer outlet.'
-                    : 'Start your shift to begin logging store visits along your beat.'}
-                </Text>
-              </Card>
+              <EmptyState
+                icon="storefront-outline"
+                title="No Store Visits Recorded"
+                description={
+                  isShiftActive
+                    ? 'Tap "New Visit" above or check in when arriving at a retail customer outlet.'
+                    : 'Start your shift to begin logging store visits along your beat.'
+                }
+                actionTitle={isShiftActive ? 'Check-in Store Visit' : 'Start Duty Shift'}
+                onAction={() => {
+                  if (isShiftActive) {
+                    setCheckInModalVisible(true);
+                  } else {
+                    setStartModalVisible(true);
+                  }
+                }}
+              />
             ) : (
               visits.map((v: ShiftVisit, idx: number) => {
                 const customer = customers.find((c) => c.id === v.customerId);
@@ -422,7 +479,7 @@ export default function ShiftScreen() {
                     </View>
                     {v.notes || v.summary ? (
                       <Text style={styles.visitNotes} numberOfLines={2}>
-                        "{v.notes || v.summary}"
+                        &ldquo;{v.notes || v.summary}&rdquo;
                       </Text>
                     ) : null}
                   </Card>

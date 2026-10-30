@@ -56,14 +56,19 @@
           "cameraPermission": "Allow FemmeFlo to capture retail storefront photos."
         }
       ],
-      "expo-image",
-      "expo-web-browser",
       [
         "expo-build-properties",
         {
           "android": {
             "usesCleartextTraffic": true,
-            "targetSdkVersion": 35
+            "targetSdkVersion": 35,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "useLegacyPackaging": false,
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a"
+            ]
           }
         }
       ]

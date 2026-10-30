@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -67,7 +67,7 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="inventory/index"
+        name="inventory"
         options={{
           title: 'HQ Stock',
           tabBarIcon: ({ color, size, focused }) => (
@@ -104,10 +104,6 @@ export default function AdminTabsLayout() {
             />
           ),
         }}
-      />
-      <Tabs.Screen
-        name="inventory/transfer"
-        options={{ href: null }}
       />
       <Tabs.Screen
         name="categories/index"

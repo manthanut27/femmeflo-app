@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -256,16 +256,20 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Spacing.sm,
   },
   infoLabel: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
+    marginRight: Spacing.sm,
   },
   infoVal: {
     ...Typography.bodySmall,
     fontWeight: '600',
     color: Colors.light.heading,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   sectionHeading: {
     ...Typography.overline,

@@ -57,7 +57,7 @@ for agent_file in .agents/agents/*.md; do
     known_tools="view_file write_to_file replace_file_content multi_replace_file_content list_dir find_by_name grep_search search_web read_url_content run_command manage_task schedule list_permissions ask_permission invoke_subagent define_subagent send_message manage_subagents ask_question generate_image"
 
     # tools: must be declared — the field defaults to an empty list, it does NOT inherit
-    tool_list=$(awk '/^tools:/{flag=1;next} /^[a-zA-Z]/{flag=0} flag && /^[[:space:]]*-/{gsub(/^[[:space:]]*-[[:space:]]*/,"");print}' "$agent_file")
+    tool_list=$(awk 'NR==1 && /^---/{in_fm=1;next} /^---/ && in_fm{exit} in_fm && /^tools:/{flag=1;next} in_fm && /^[a-zA-Z]/{flag=0} in_fm && flag && /^[[:space:]]*-/{gsub(/^[[:space:]]*-[[:space:]]*/,"");print}' "$agent_file")
 
     if [ -z "$tool_list" ]; then
         echo "❌ $agent_name: No tools declared (tools: defaults to empty, it does not inherit)"

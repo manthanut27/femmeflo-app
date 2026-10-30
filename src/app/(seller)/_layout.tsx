@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -9,14 +9,24 @@ export default function SellerTabsLayout() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
+  const isAllowedSeller =
+    user?.role === 'SELLER' ||
+    (user?.role === 'MANAGER' && Boolean((user as any).isSeller));
+
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
       router.replace('/(auth)/login' as any);
+    } else if (!isAllowedSeller) {
+      if (user.role === 'SUPER_ADMIN') {
+        router.replace('/(admin)' as any);
+      } else {
+        router.replace('/(manager)' as any);
+      }
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, isAllowedSeller]);
 
-  if (isLoading || !user) {
+  if (isLoading || !user || !isAllowedSeller) {
     return (
       <View style={styles.authLoadingContainer}>
         <ActivityIndicator size="large" color={BrandColors.pink.primary} />

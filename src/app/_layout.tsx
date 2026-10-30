@@ -24,6 +24,7 @@ export default function RootLayout() {
           <Stack.Screen name="(manager)" options={{ headerShown: false }} />
           <Stack.Screen name="(admin)" options={{ headerShown: false }} />
           <Stack.Screen name="(shared)" options={{ headerShown: false, presentation: 'modal' }} />
+          <Stack.Screen name="+not-found" options={{ headerShown: false }} />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -111,7 +111,6 @@ export default function ManagerDashboardScreen() {
                 iconColor={BrandColors.green.primary}
                 iconBgColor={BrandColors.green.surface}
                 accentColor={BrandColors.green.primary}
-                trend={(dashboard?.monthlyRevenuePaise || 0) > 0 ? { value: '+22% vs target', isPositive: true } : undefined}
               />
               <StatCard
                 title="Packets Distributed"

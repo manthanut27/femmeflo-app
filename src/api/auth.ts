@@ -6,14 +6,11 @@ export const authApi = {
    * Unified single login endpoint via POST /api/v1/auth/login
    */
   async login(payload: LoginPayload): Promise<LoginResponseData> {
-    const loginValue = (payload.identifier || (payload as any).login || '').trim();
     return apiRequest<LoginResponseData>('auth/login', {
       method: 'POST',
       body: JSON.stringify({
-        login: loginValue,
-        identifier: loginValue,
+        login: payload.identifier.trim(),
         password: payload.password,
-        roleHint: payload.roleHint,
       }),
       skipAuth: true,
     });

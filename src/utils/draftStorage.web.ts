@@ -42,12 +42,13 @@ export function computePayloadHash(payload: {
   customerId?: string;
   items: Array<{ productId: string; quantity: number; unitPricePaise: number }>;
   paymentMode?: string;
+  paymentReference?: string;
 }): string {
   const normItems = [...(payload.items || [])]
     .map((i) => `${i.productId}:${i.quantity}:${i.unitPricePaise}`)
     .sort()
     .join('|');
-  return `${payload.customerId || ''}#${payload.paymentMode || ''}#${normItems}`;
+  return `${payload.customerId || ''}#${payload.paymentMode || ''}#${payload.paymentReference || ''}#${normItems}`;
 }
 
 export function shouldRotateIdempotencyKey(
@@ -146,14 +147,10 @@ function resolveWebStorage(): StorageBackend {
         }
       },
       async setItem(key: string, value: string) {
-        try {
-          localStorage.setItem(key, value);
-        } catch {}
+        localStorage.setItem(key, value);
       },
       async removeItem(key: string) {
-        try {
-          localStorage.removeItem(key);
-        } catch {}
+        localStorage.removeItem(key);
       },
     };
   }

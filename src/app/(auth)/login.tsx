@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -89,10 +90,10 @@ export default function LoginScreen() {
       primaryColor: BrandColors.pink.dark,
       subtleBg: '#FFE4E6',
       borderColor: '#FDA4AF',
-      defaultEmail: 'admin@femmeflo.com',
+      defaultEmail: 'admin@femmeflo.in',
       defaultPhone: '9876543230',
       defaultPass: 'demo123',
-      placeholder: 'admin@femmeflo.com or 9876543230',
+      placeholder: 'admin@femmeflo.in or 9876543230',
     },
   };
 
@@ -278,10 +279,12 @@ export default function LoginScreen() {
 
             {/* Error Banner */}
             {error ? (
-              <View style={styles.errorBanner} accessibilityRole="alert">
-                <Ionicons name="alert-circle" size={16} color={Colors.light.danger} style={{ marginRight: 6 }} />
-                <Text style={styles.errorBannerText}>{error}</Text>
-              </View>
+              <FeedbackBanner
+                type="error"
+                message={error}
+                onDismiss={() => setError(null)}
+                style={{ marginBottom: Spacing.md }}
+              />
             ) : null}
 
             {/* Input 1: Email or Mobile */}

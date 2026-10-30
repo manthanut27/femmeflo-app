@@ -1,4 +1,4 @@
-﻿# GSD Subagent Validation Script
+# GSD Subagent Validation Script
 # Validates all subagent definitions in .agents/agents/
 
 $ErrorCount = 0
@@ -9,8 +9,8 @@ Write-Host " GSD ► VALIDATING SUBAGENTS" -ForegroundColor Cyan
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
 Write-Host ""
 
-if (-not (Test-Path ".agents/agents")) {
-    Write-Host "❌ Missing .agents/agents/ directory" -ForegroundColor Red
+if (-not (Test-Path ".agents/agents") -or @(Get-ChildItem ".agents/agents" -Filter "*.md" -File -ErrorAction SilentlyContinue).Count -eq 0) {
+    Write-Host "❌ Missing or empty .agents/agents/ directory" -ForegroundColor Red
     exit 1
 }
 
@@ -115,7 +115,7 @@ Write-Host "Subagents checked: $AgentsChecked"
 Write-Host "Errors: $ErrorCount" -ForegroundColor $(if ($ErrorCount -gt 0) { "Red" } else { "Green" })
 Write-Host ""
 
-if ($ErrorCount -eq 0) {
+if ($AgentsChecked -gt 0 -and $ErrorCount -eq 0) {
     Write-Host "✅ All subagents valid!" -ForegroundColor Green
     exit 0
 } else {

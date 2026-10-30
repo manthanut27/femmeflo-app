@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -230,7 +230,7 @@ export default function SellerDashboardScreen() {
                   size="sm"
                   onPress={() => router.push('/(seller)/shift' as any)}
                   icon={<Ionicons name="time" size={16} color="#FFFFFF" />}
-                  style={styles.shiftBtn}
+                  style={styles.shiftTrackerBtn}
                 />
                 <Button
                   title="End Shift"
@@ -241,7 +241,7 @@ export default function SellerDashboardScreen() {
                     setEndShiftModalVisible(true);
                   }}
                   icon={<Ionicons name="stop-circle-outline" size={16} color={BrandColors.pink.primary} />}
-                  style={styles.shiftBtn}
+                  style={styles.endShiftBtn}
                 />
               </View>
             ) : (
@@ -487,13 +487,24 @@ const styles = StyleSheet.create({
   },
   shiftActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: Spacing.sm,
     marginTop: Spacing.md,
   },
+  shiftTrackerBtn: {
+    flex: 1.4,
+    minWidth: 150,
+    minHeight: 44,
+  },
+  endShiftBtn: {
+    flex: 1,
+    minWidth: 120,
+    minHeight: 44,
+  },
   shiftBtn: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
   },
   startShiftBtn: {
     marginTop: Spacing.md,

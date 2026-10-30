@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
 import {
   Pressable,
@@ -76,7 +76,7 @@ export function StatCard({
         ) : null}
       </View>
 
-      <Text style={styles.value} numberOfLines={1}>
+      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {value}
       </Text>
 

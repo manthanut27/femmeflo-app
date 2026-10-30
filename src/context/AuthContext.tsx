@@ -95,7 +95,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       if (user?.id) {
-        await draftStorage.clearUserStorage(user.id);
+        try {
+          await draftStorage.clearUserStorage(user.id);
+        } catch (storageErr) {
+          console.warn('Failed to clear user draft storage on logout:', storageErr);
+        }
       }
       await tokenStorage.clearToken();
       setToken(null);

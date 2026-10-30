@@ -62,7 +62,7 @@ class MockDatabase {
   incentives = JSON.parse(JSON.stringify(MOCK_SELLER_INCENTIVES));
   notifications: NotificationItem[] = JSON.parse(JSON.stringify(MOCK_NOTIFICATIONS));
   settings: BusinessSettings = JSON.parse(JSON.stringify(MOCK_SETTINGS));
-  processedIdempotencyKeys = new Map<string, SaleItem>();
+  processedIdempotencyKeys = new Map<string, { userId: string; fingerprint: string; sale: SaleItem }>();
 
   setCurrentUser(user: PublicUser) {
     this.currentUser = user;
@@ -105,7 +105,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // Auth endpoints
   // ----------------------------------------------------
   if (cleanEndpoint.endsWith('auth/login')) {
-    const rawId = (body.identifier || body.login || '').trim().toLowerCase();
+    const rawId = (body.login || body.identifier || '').trim().toLowerCase();
     const roleHint = (body.roleHint || '').trim().toLowerCase();
     let selectedUser: PublicUser = mockDb.currentUser;
 
@@ -277,14 +277,27 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
 
   if (cleanEndpoint === 'seller/sales' && method === 'POST') {
     const rawHeaders = (options.headers || {}) as any;
-    const idempotencyKey =
-      (typeof rawHeaders.get === 'function' ? rawHeaders.get('X-Idempotency-Key') : null) ||
-      rawHeaders['X-Idempotency-Key'] ||
-      rawHeaders['x-idempotency-key'] ||
-      body.idempotencyKey;
+    let headerKey: string | null = null;
+    if (typeof rawHeaders.get === 'function') {
+      headerKey = rawHeaders.get('X-Idempotency-Key') || rawHeaders.get('x-idempotency-key');
+    } else if (rawHeaders && typeof rawHeaders === 'object') {
+      const matchKey = Object.keys(rawHeaders).find(
+        (k) => k.toLowerCase() === 'x-idempotency-key'
+      );
+      if (matchKey) {
+        headerKey = rawHeaders[matchKey];
+      }
+    }
+    const idempotencyKey = headerKey || body.requestKey || body.idempotencyKey;
+    const requestingUserId = mockDb.currentUser?.id || 'anonymous';
+    const requestFingerprint = `${body.customerId || ''}#${body.paymentMode || ''}#${body.paymentReference || ''}#${JSON.stringify(body.items || [])}`;
 
     if (idempotencyKey && mockDb.processedIdempotencyKeys.has(idempotencyKey)) {
-      return { sale: mockDb.processedIdempotencyKeys.get(idempotencyKey)! } as unknown as T;
+      const existing = mockDb.processedIdempotencyKeys.get(idempotencyKey)!;
+      if (existing.userId === requestingUserId && existing.fingerprint === requestFingerprint) {
+        return { sale: existing.sale } as unknown as T;
+      }
+      throw new ApiError('Conflict: Idempotency key already used with different request parameters', 409);
     }
 
     const customer = mockDb.customers.find((c) => c.id === body.customerId) || mockDb.customers[0];
@@ -336,7 +349,11 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     mockDb.sales.unshift(newSale);
 
     if (idempotencyKey) {
-      mockDb.processedIdempotencyKeys.set(idempotencyKey, newSale);
+      mockDb.processedIdempotencyKeys.set(idempotencyKey, {
+        userId: requestingUserId,
+        fingerprint: requestFingerprint,
+        sale: newSale,
+      });
     }
 
     // If confirmed, update stock

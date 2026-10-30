@@ -11,7 +11,16 @@ echo " GSD ► VALIDATING WORKFLOWS"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-for file in .agent/workflows/*.md; do
+shopt -s nullglob
+files=(.agent/workflows/*.md)
+shopt -u nullglob
+
+if [ ${#files[@]} -eq 0 ]; then
+    echo "❌ Missing or empty .agent/workflows directory"
+    exit 1
+fi
+
+for file in "${files[@]}"; do
     ((workflows_checked++))
     filename=$(basename "$file")
     has_errors=false
@@ -23,8 +32,9 @@ for file in .agent/workflows/*.md; do
         has_errors=true
     fi
     
-    # Check for description
-    if ! grep -q "description:" "$file"; then
+    # Check for description strictly inside frontmatter
+    frontmatter=$(awk 'NR==1 && /^---/{in_fm=1;next} /^---/ && in_fm{exit} in_fm{print}' "$file")
+    if ! echo "$frontmatter" | grep -q "^description:"; then
         echo "❌ $filename: Missing description in frontmatter"
         ((error_count++))
         has_errors=true
@@ -49,7 +59,7 @@ echo "Errors: $error_count"
 echo "Warnings: $warning_count"
 echo ""
 
-if [ $error_count -eq 0 ]; then
+if [ $workflows_checked -gt 0 ] && [ $error_count -eq 0 ]; then
     echo "✅ All workflows valid!"
     exit 0
 else

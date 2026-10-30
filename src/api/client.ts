@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { handleMockRequest } from './mockService';
@@ -11,16 +12,35 @@ const rawApiUrl = (
 ).trim().replace(/\/+$/, '');
 
 function resolveApiBaseUrl(url: string): string {
-  const withApi = url.endsWith('/api/v1') ? url : `${url}/api/v1`;
-  // In Android emulator, localhost/127.0.0.1 refers to the device itself; map to host machine 10.0.2.2
-  if (Platform.OS === 'android') {
-    if (withApi.includes('://localhost')) {
-      return withApi.replace('://localhost', '://10.0.2.2');
-    }
-    if (withApi.includes('://127.0.0.1')) {
-      return withApi.replace('://127.0.0.1', '://10.0.2.2');
+  let withApi = url.endsWith('/api/v1') ? url : `${url.replace(/\/+$/, '')}/api/v1`;
+
+  // Expo Web in browser
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    if (
+      (withApi.includes('://localhost') || withApi.includes('://127.0.0.1')) &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      withApi = withApi.replace(/:\/\/(localhost|127\.0\.0\.1)/, `://${window.location.hostname}`);
     }
   }
+
+  // Android device / emulator
+  if (Platform.OS === 'android') {
+    if (withApi.includes('://localhost') || withApi.includes('://127.0.0.1')) {
+      // Physical device connected to local development machine via Expo
+      const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+      if (hostUri) {
+        const hostIp = hostUri.split(':')[0];
+        if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+          return withApi.replace(/:\/\/(localhost|127\.0\.0\.1)/, `://${hostIp}`);
+        }
+      }
+      // Standard Android Studio Emulator host loopback
+      return withApi.replace(/:\/\/(localhost|127\.0\.0\.1)/, '://10.0.2.2');
+    }
+  }
+
   return withApi;
 }
 
@@ -104,7 +124,7 @@ export function setSessionExpiredHandler(handler: () => void) {
   onSessionExpiredCallback = handler;
 }
 
-let mockModeEnabled = process.env.EXPO_PUBLIC_USE_MOCK_API !== 'false';
+let mockModeEnabled = process.env.EXPO_PUBLIC_USE_MOCK_API === 'true';
 
 export function isMockMode(): boolean {
   return mockModeEnabled;
@@ -216,8 +236,16 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       error.message?.includes('Failed to fetch') ||
       error.message?.includes('ECONNREFUSED')
     ) {
-      console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from frontend mock engine.`);
-      return handleMockRequest<T>(endpoint, options);
+      if (mockModeEnabled) {
+        console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from frontend mock engine.`);
+        return handleMockRequest<T>(endpoint, options);
+      }
+      throw new ApiError(
+        `Unable to reach backend server at ${API_BASE_URL}. Ensure your server is running and accessible on your local network.`,
+        0,
+        null,
+        true
+      );
     }
 
     throw new ApiError(

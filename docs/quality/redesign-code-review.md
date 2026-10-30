@@ -1,5 +1,9 @@
 # FemmeFlo Mobile Application — Production-Oriented Code Review Report
-**Post-UI/UX Redesign & Pre-Release Independent Assessment**
+**Pre-Fix Architectural Snapshot (Evaluated against Commit `5131941`)**
+
+> [!NOTE]
+> **Historical Baseline / Pre-Fix Assessment Snapshot:**  
+> This document records the initial architectural findings and defect discovery performed on commit `5131941` prior to the remediation suite recorded in `docs/quality/bug-audit-and-fixes.md` and `docs/quality/full-application-verification-report.md`. For current verification status and resolved items, refer to the later reports.
 
 * **Date:** 2026-10-29  
 * **Application:** FemmeFlo Field Force & Distribution Mobile Application  
@@ -16,11 +20,12 @@ An exhaustive, evidence-backed production code review was conducted on the Femme
 The review verified all source code under `src/`, including shared UI components, design tokens, navigation layouts, role workspaces (`(seller)`, `(manager)`, `(admin)`, `(auth)`, `(shared)`), API client infrastructure, mock service data stores, and automated test suites.
 
 ### Summary Metrics:
-* **Overall Assessment:** **CONDITIONAL GO-AHEAD FOR FIXES; NOT PRODUCTION-READY.** The visual presentation, accessibility semantics, and component restructuring are cleanly realized. However, serious architectural defects exist in route authorization, test decoupling, sensitive token transmission, and concurrency controls.
-* **Confirmed Defects:** **8 defects** (2 Critical, 3 High, 3 Medium)
+* **Overall Assessment:** **PRE-FIX SNAPSHOT: CONDITIONAL GO-AHEAD FOR FIXES; NOT PRODUCTION-READY AT COMMIT 5131941.** The visual presentation, accessibility semantics, and component restructuring are cleanly realized. However, serious architectural defects existed in route authorization, test decoupling, sensitive token transmission, and concurrency controls prior to remediation.
+* **Confirmed Defects (Pre-Fix Baseline):** **8 defects** (2 Critical, 3 High, 3 Medium)
 * **Suspected / Potential Defects:** **2 defects** (2 Medium)
 * **Maintainability Concerns:** **4 concerns** (4 Low)
-* **Critical Blockers:**
+* **Status Note:** Findings in this report represent the baseline before fixes were applied. Verified remediations are detailed in `bug-audit-and-fixes.md` and `full-application-verification-report.md`.
+* **Critical Blockers Discovered at Baseline:**
   1. **Zero Route Authorization / Client Guards:** `(admin)` and `(manager)` navigators and screens lack role guards; any authenticated seller or deep-link caller can access admin screens and execute admin actions.
   2. **Deceptive Test Suite (100% Decoupled):** The 20 passing automated tests in `src/__tests__/` test private, inline mock functions declared entirely inside the test files. They do **not** import or execute a single line of application source code.
   3. **Sensitive JWT Bearer Token Exposed in URL Query Strings:** `sellerApi.getInvoicePdfUrl` puts the secret authentication token into an unencrypted URL parameter (`?token=...`), violating API contracts and exposing tokens to web server access logs and browser history.
