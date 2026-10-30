@@ -77,10 +77,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     restoreSession();
   }, []);
 
-  async function login(identifier: string, password: string) {
+  async function login(identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') {
     setIsLoading(true);
     try {
-      const res = await authApi.login({ identifier, password });
+      const res = await authApi.login({ identifier, password, roleHint });
       await tokenStorage.setToken(res.token);
       await tokenStorage.setCachedUser(res.user);
       setToken(res.token);

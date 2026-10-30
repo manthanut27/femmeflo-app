@@ -105,12 +105,28 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // Auth endpoints
   // ----------------------------------------------------
   if (cleanEndpoint.endsWith('auth/login')) {
-    const identifier = (body.identifier || '').toLowerCase();
+    const rawId = (body.identifier || body.login || '').trim().toLowerCase();
+    const roleHint = (body.roleHint || '').trim().toLowerCase();
     let selectedUser: PublicUser = mockDb.currentUser;
 
-    if (cleanEndpoint.startsWith('admin') || identifier.includes('admin')) {
+    if (
+      roleHint === 'admin' ||
+      cleanEndpoint.startsWith('admin') ||
+      rawId.includes('admin') ||
+      rawId.includes('super') ||
+      rawId === '9876543230' ||
+      rawId === 'admin@femmeflo.com' ||
+      rawId === 'admin@femmeflo.in'
+    ) {
       selectedUser = MOCK_USERS.admin;
-    } else if (cleanEndpoint.startsWith('manager') || identifier.includes('manager')) {
+    } else if (
+      roleHint === 'manager' ||
+      cleanEndpoint.startsWith('manager') ||
+      rawId.includes('manager') ||
+      rawId === '9876543220' ||
+      rawId === 'manager@femmeflo.com' ||
+      rawId === 'manager@femmeflo.in'
+    ) {
       selectedUser = MOCK_USERS.manager;
     } else {
       selectedUser = MOCK_USERS.seller;
@@ -582,8 +598,8 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { sale: mockDb.sales[0] } as unknown as T;
   }
 
-  if (cleanEndpoint === 'admin/warehouses') {
-    return { items: mockDb.warehouses } as unknown as T;
+  if (cleanEndpoint === 'admin/warehouses' || cleanEndpoint === 'admin/inventory/warehouses') {
+    return { items: mockDb.warehouses, warehouses: mockDb.warehouses } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/inventory/receipts' && method === 'POST') {

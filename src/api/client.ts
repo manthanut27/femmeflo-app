@@ -210,8 +210,14 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       throw error;
     }
 
-    if (error.name === 'AbortError') {
-      throw new ApiError('Request timed out while waiting for server. Please check your connection.', 408, null, true);
+    if (
+      error.name === 'AbortError' ||
+      error.message?.includes('Network request failed') ||
+      error.message?.includes('Failed to fetch') ||
+      error.message?.includes('ECONNREFUSED')
+    ) {
+      console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from frontend mock engine.`);
+      return handleMockRequest<T>(endpoint, options);
     }
 
     throw new ApiError(

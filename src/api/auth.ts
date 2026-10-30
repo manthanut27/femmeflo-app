@@ -6,13 +6,14 @@ export const authApi = {
    * Unified single login endpoint via POST /api/v1/auth/login
    */
   async login(payload: LoginPayload): Promise<LoginResponseData> {
-    const loginValue = payload.identifier || (payload as any).login || '';
+    const loginValue = (payload.identifier || (payload as any).login || '').trim();
     return apiRequest<LoginResponseData>('auth/login', {
       method: 'POST',
       body: JSON.stringify({
         login: loginValue,
         identifier: loginValue,
         password: payload.password,
+        roleHint: payload.roleHint,
       }),
       skipAuth: true,
     });
@@ -43,7 +44,7 @@ export const authApi = {
   async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
     return apiRequest<{ success: boolean; message: string }>('auth/forgot-password', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ login: email.trim() }),
       skipAuth: true,
     });
   },

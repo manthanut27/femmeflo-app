@@ -15,7 +15,8 @@ export interface StatCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  icon?: keyof typeof Ionicons.glyphMap;
+  changeLabel?: string;
+  icon?: keyof typeof Ionicons.glyphMap | React.ReactNode;
   iconColor?: string;
   iconBgColor?: string;
   iconBg?: string; // Design system alias
@@ -25,14 +26,16 @@ export interface StatCardProps {
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   accentColor?: string;
+  variant?: 'pink' | 'green' | 'default' | 'neutral';
 }
 
 export function StatCard({
   title,
   value,
   subtitle,
+  changeLabel,
   icon,
-  iconColor = BrandColors.pink.primary,
+  iconColor,
   iconBgColor,
   iconBg,
   badge,
@@ -41,19 +44,35 @@ export function StatCard({
   onPress,
   style,
   accentColor,
+  variant,
 }: StatCardProps) {
-  const resolvedBgColor = iconBg || iconBgColor || BrandColors.pink.subtle;
+  const isCustomIcon = React.isValidElement(icon);
+  const resolvedAccentColor =
+    accentColor ||
+    (variant === 'pink' ? BrandColors.pink.primary : variant === 'green' ? BrandColors.green.primary : undefined);
+  const resolvedBgColor =
+    iconBg ||
+    iconBgColor ||
+    (variant === 'green' ? BrandColors.green.subtle : BrandColors.pink.subtle);
+  const resolvedIconColor =
+    iconColor ||
+    (variant === 'green' ? BrandColors.green.primary : BrandColors.pink.primary);
+  const displaySubtitle = subtitle || changeLabel;
 
   const content = (
-    <View style={[styles.card, accentColor ? { borderLeftColor: accentColor, borderLeftWidth: 3.5 } : null, style]}>
+    <View style={[styles.card, resolvedAccentColor ? { borderLeftColor: resolvedAccentColor, borderLeftWidth: 3.5 } : null, style]}>
       <View style={styles.headerRow}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
         {icon ? (
-          <View style={[styles.iconCircle, { backgroundColor: resolvedBgColor }]}>
-            <Ionicons name={icon} size={16} color={iconColor} />
-          </View>
+          isCustomIcon ? (
+            icon
+          ) : (
+            <View style={[styles.iconCircle, { backgroundColor: resolvedBgColor }]}>
+              <Ionicons name={icon as any} size={16} color={resolvedIconColor} />
+            </View>
+          )
         ) : null}
       </View>
 
@@ -77,11 +96,11 @@ export function StatCard({
         </View>
       ) : null}
 
-      {subtitle || badge ? (
+      {displaySubtitle || badge ? (
         <View style={styles.footerRow}>
-          {subtitle ? (
+          {displaySubtitle ? (
             <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
+              {displaySubtitle}
             </Text>
           ) : <View style={{ flex: 1 }} />}
           {badge ? <Badge label={badge} variant={badgeVariant} size="sm" /> : null}

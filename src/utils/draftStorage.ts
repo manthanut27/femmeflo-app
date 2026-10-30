@@ -155,27 +155,35 @@ export function createDraftStorage(backend: StorageBackend) {
 }
 
 function resolveDefaultStorage(): StorageBackend {
-  // Web localStorage
-  if (typeof localStorage !== 'undefined') {
-    return {
-      async getItem(key: string) {
-        return localStorage.getItem(key);
-      },
-      async setItem(key: string, value: string) {
-        localStorage.setItem(key, value);
-      },
-      async removeItem(key: string) {
-        localStorage.removeItem(key);
-      },
-    };
-  }
-
   // React Native / Expo AsyncStorage
   try {
     const mod = require('@react-native-async-storage/async-storage');
     const asyncStorage = mod?.default ?? mod;
     if (asyncStorage && typeof asyncStorage.getItem === 'function') {
-      return asyncStorage;
+      const memory = new Map<string, string>();
+      return {
+        async getItem(key: string) {
+          try {
+            return await asyncStorage.getItem(key);
+          } catch {
+            return memory.get(key) ?? null;
+          }
+        },
+        async setItem(key: string, value: string) {
+          try {
+            await asyncStorage.setItem(key, value);
+          } catch {
+            memory.set(key, value);
+          }
+        },
+        async removeItem(key: string) {
+          try {
+            await asyncStorage.removeItem(key);
+          } catch {
+            memory.delete(key);
+          }
+        },
+      };
     }
   } catch {
     // In-memory fallback if native bindings are not present (e.g. Node test runner)

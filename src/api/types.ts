@@ -23,6 +23,7 @@ export interface PublicUser {
 export interface LoginPayload {
   identifier: string;
   password: string;
+  roleHint?: 'admin' | 'manager' | 'seller';
 }
 
 export interface LoginResponseData {
@@ -264,6 +265,9 @@ export interface StartShiftPayload {
   startOdometerKm: number;
   startLatitude?: number;
   startLongitude?: number;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
   notes?: string;
   remarks?: string;
 }
@@ -288,6 +292,9 @@ export interface EndShiftPayload {
   endOdometerKm: number;
   endLatitude?: number;
   endLongitude?: number;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
   notes?: string;
   remarks?: string;
 }
@@ -326,11 +333,23 @@ export interface NotificationItem {
 // Dashboard Aggregates
 // ----------------------------------------------------
 export interface SellerDashboardData {
-  todaySalesAmountPaise: number;
-  todayPacketsSold: number;
-  stockBalance: number;
-  pendingApprovalsCount: number;
+  todaySalesAmountPaise?: number;
+  todaySalesPaise?: number;
+  todayOrdersCount?: number;
+  todayPacketsSold?: number;
+  monthSalesPaise?: number;
+  lowStockCount?: number;
+  stockBalance?: number;
+  pendingApprovalsCount?: number;
   activeShift?: Shift | null;
+  metrics?: {
+    assignedPackets: number;
+    soldPackets: number;
+    remainingPackets: number;
+    totalIncentivePaise: number;
+    totalIncentiveRupees: number;
+  };
+  recentSales?: SaleItem[];
 }
 
 export interface ManagerDashboardData {

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -12,7 +12,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
 import type { SellerDashboardData, Shift } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -20,17 +19,23 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
-import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
-import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import {
+  BrandColors,
+  Colors,
+  HitSlop,
+  MaxContentWidth,
+  Radius,
+  Shadows,
+  Spacing,
+  Typography,
+} from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function SellerDashboardScreen() {
-  const { user } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-
-  const [dashboard, setDashboard] = useState<SellerDashboardData | null>(null);
+  const { user } = useAuth();
+  const [data, setData] = useState<SellerDashboardData | null>(null);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,22 +47,23 @@ export default function SellerDashboardScreen() {
   const [shiftRemarks, setShiftRemarks] = useState('');
   const [isShiftSubmitting, setIsShiftSubmitting] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       const [dashData, shiftData] = await Promise.all([
         sellerApi.getDashboard().catch(() => ({
-          todaySalesAmountPaise: 0,
-          todayPacketsSold: 0,
-          stockBalance: 0,
-          pendingApprovalsCount: 0,
+          todaySalesPaise: 0,
+          todayOrdersCount: 0,
+          monthSalesPaise: 0,
+          monthOrdersCount: 0,
+          lowStockCount: 0,
         })),
         sellerApi.getCurrentShift().catch(() => ({ shift: null })),
       ]);
 
-      setDashboard(dashData);
+      setData(dashData as SellerDashboardData);
       setCurrentShift(shiftData.shift);
-    } catch (err) {
-      console.warn('Dashboard fetch error', err);
+    } catch (err: any) {
+      console.warn('Failed to load dashboard data', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -65,49 +71,49 @@ export default function SellerDashboardScreen() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadDashboard();
+  }, [loadDashboard]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadData();
-  }, [loadData]);
+    loadDashboard();
+  }, [loadDashboard]);
 
   async function handleStartShift() {
     if (isShiftSubmitting) return;
-    const kmNum = parseFloat(odometerKm);
-    if (isNaN(kmNum) || kmNum < 0) {
-      Alert.alert('Invalid Reading', 'Please enter a valid starting odometer reading in kilometers.');
+    const kmNum = Number(odometerKm);
+    if (!odometerKm || isNaN(kmNum) || kmNum <= 0) {
+      Alert.alert('Invalid Odometer', 'Please enter a valid positive odometer KM reading.');
       return;
     }
 
     setIsShiftSubmitting(true);
     try {
-      let lat: number | undefined;
-      let lon: number | undefined;
+      let latitude: number | undefined;
+      let longitude: number | undefined;
 
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const Location = require('expo-location');
+        const { status } = await Location.getForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lon = loc.coords.longitude;
+          latitude = loc.coords.latitude;
+          longitude = loc.coords.longitude;
         }
       } catch {
-        // Location optional on fallback
+        // Foreground GPS optional fallback
       }
 
       const res = await sellerApi.startShift({
         startOdometerKm: kmNum,
-        startLatitude: lat,
-        startLongitude: lon,
+        latitude,
+        longitude,
       });
 
       setCurrentShift(res.shift);
       setStartShiftModalVisible(false);
       setOdometerKm('');
       Alert.alert('Shift Started', `Duty shift active. Initial reading: ${kmNum} KM`);
-      loadData();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Unable to start shift.');
     } finally {
@@ -117,9 +123,9 @@ export default function SellerDashboardScreen() {
 
   async function handleEndShift() {
     if (isShiftSubmitting) return;
-    const kmNum = parseFloat(odometerKm);
-    if (isNaN(kmNum) || kmNum < 0) {
-      Alert.alert('Invalid Reading', 'Please enter a valid ending odometer reading in kilometers.');
+    const kmNum = Number(odometerKm);
+    if (!odometerKm || isNaN(kmNum) || kmNum <= 0) {
+      Alert.alert('Invalid Odometer', 'Please enter a valid ending odometer KM reading.');
       return;
     }
 
@@ -133,24 +139,25 @@ export default function SellerDashboardScreen() {
 
     setIsShiftSubmitting(true);
     try {
-      let lat: number | undefined;
-      let lon: number | undefined;
+      let latitude: number | undefined;
+      let longitude: number | undefined;
 
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        const Location = require('expo-location');
+        const { status } = await Location.getForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lon = loc.coords.longitude;
+          latitude = loc.coords.latitude;
+          longitude = loc.coords.longitude;
         }
       } catch {
-        // Fallback
+        // Foreground GPS optional fallback
       }
 
       await sellerApi.endShift({
         endOdometerKm: kmNum,
-        endLatitude: lat,
-        endLongitude: lon,
+        latitude,
+        longitude,
         remarks: shiftRemarks,
       });
 
@@ -159,7 +166,7 @@ export default function SellerDashboardScreen() {
       setOdometerKm('');
       setShiftRemarks('');
       Alert.alert('Shift Completed', 'Your duty shift and travel logs have been recorded.');
-      loadData();
+      loadDashboard();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Unable to end shift.');
     } finally {
@@ -223,7 +230,7 @@ export default function SellerDashboardScreen() {
                   size="sm"
                   onPress={() => router.push('/(seller)/shift' as any)}
                   icon={<Ionicons name="time" size={16} color="#FFFFFF" />}
-                  style={[styles.shiftBtn, { marginRight: Spacing.sm }]}
+                  style={styles.shiftBtn}
                 />
                 <Button
                   title="End Shift"
@@ -258,78 +265,76 @@ export default function SellerDashboardScreen() {
           </View>
 
           {loading ? (
-            <View style={styles.metricsGrid}>
-              <CardSkeleton />
-              <CardSkeleton />
-            </View>
+            <ActivityIndicator style={{ marginVertical: 32 }} size="large" color={BrandColors.pink.primary} />
           ) : (
             <View style={styles.metricsGrid}>
               <StatCard
                 title="Today's Revenue"
-                value={formatRupees(dashboard?.todaySalesAmountPaise || 0)}
-                subtitle="Confirmed sales volume"
-                icon="wallet-outline"
-                iconColor={BrandColors.pink.primary}
-                iconBgColor={BrandColors.pink.subtle}
-                trend={(dashboard?.todaySalesAmountPaise || 0) > 0 ? { value: '+14% vs yesterday', isPositive: true } : undefined}
+                value={formatRupees(data?.todaySalesPaise || 0)}
+                icon={<Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />}
+                variant="pink"
+                changeLabel="Recorded sales"
               />
               <StatCard
-                title="Packets Sold"
-                value={(dashboard?.todayPacketsSold || 0).toLocaleString()}
-                subtitle="Feminine hygiene units"
-                icon="cube-outline"
-                iconColor={Colors.light.info}
-                iconBgColor={Colors.light.infoBg}
-              />
-              <StatCard
-                title="Van Stock Balance"
-                value={`${(dashboard?.stockBalance || 0).toLocaleString()} pkts`}
-                subtitle="Available to sell"
-                icon="bus-outline"
-                iconColor={BrandColors.green.primary}
-                iconBgColor={BrandColors.green.surface}
-                accentColor={BrandColors.green.primary}
-                onPress={() => router.push('/(seller)/inventory' as any)}
-              />
-              <StatCard
-                title="Pending Approvals"
-                value={dashboard?.pendingApprovalsCount || 0}
-                subtitle={(dashboard?.pendingApprovalsCount || 0) > 0 ? "Awaiting approval" : "Queue clear"}
-                icon="hourglass-outline"
-                iconColor={(dashboard?.pendingApprovalsCount || 0) > 0 ? Colors.light.warning : Colors.light.textSecondary}
-                iconBgColor={(dashboard?.pendingApprovalsCount || 0) > 0 ? Colors.light.warningBg : Colors.light.backgroundElement}
-                badge={(dashboard?.pendingApprovalsCount || 0) > 0 ? 'PENDING' : undefined}
-                badgeVariant="warning"
-                onPress={() => router.push('/(seller)/sales' as any)}
+                title="Orders Booked"
+                value={String(data?.todayOrdersCount || 0)}
+                icon={<Ionicons name="receipt-outline" size={20} color={BrandColors.green.primary} />}
+                variant="green"
+                changeLabel="In-store visits"
               />
             </View>
           )}
 
-          {/* Quick Actions */}
-          <Text style={styles.sectionHeading}>Quick Actions</Text>
+          {/* Monthly Overview */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeading}>Month-to-Date</Text>
+          </View>
+
+          <View style={styles.metricsGrid}>
+            <StatCard
+              title="Monthly Sales"
+              value={formatRupees(data?.monthSalesPaise || 0)}
+              icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
+              variant="default"
+              changeLabel="Target progress"
+            />
+            <StatCard
+              title="Stock Status"
+              value={data?.lowStockCount ? `${data.lowStockCount} Low` : 'Healthy'}
+              icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
+              variant={data?.lowStockCount ? 'pink' : 'default'}
+              changeLabel="Warehouse inventory"
+            />
+          </View>
+
+          {/* Field Quick Actions */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeading}>Field Work Actions</Text>
+          </View>
+
           <View style={styles.actionButtonsCol}>
             <Button
-              title="Create New Sale (POS)"
-              onPress={() => router.push('/(seller)/sales/new' as any)}
+              title="New Store Sale (POS)"
+              onPress={() => router.push('/(seller)/sales/new')}
               variant="primary"
               size="lg"
-              icon={<Ionicons name="cart-outline" size={20} color="#FFFFFF" />}
+              icon={<Ionicons name="cart" size={20} color="#FFFFFF" />}
               style={styles.actionBtn}
             />
             <Button
-              title="Onboard New Retail Customer"
-              onPress={() => router.push('/(seller)/customers/new' as any)}
+              title="Onboard New Retailer"
+              onPress={() => router.push('/(seller)/customers/new')}
               variant="outline"
-              size="md"
-              icon={<Ionicons name="person-add-outline" size={18} color={BrandColors.pink.primary} />}
+              size="lg"
+              icon={<Ionicons name="person-add-outline" size={20} color={BrandColors.pink.primary} />}
               style={styles.actionBtn}
             />
             <Button
-              title="View Monthly Incentives & Rates"
-              onPress={() => router.push('/(seller)/incentives' as any)}
-              variant="secondary"
+              title="Check Inventory Balance"
+              onPress={() => router.push('/(seller)/inventory')}
+              variant="ghost"
               size="md"
-              icon={<Ionicons name="trending-up-outline" size={18} color="#FFFFFF" />}
+              icon={<Ionicons name="layers-outline" size={18} color={BrandColors.pink.primary} />}
               style={styles.actionBtn}
             />
           </View>
@@ -339,29 +344,24 @@ export default function SellerDashboardScreen() {
       {/* Start Shift Modal */}
       <Modal visible={startShiftModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
+          <View style={styles.modalContent}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Start Daily Duty Shift</Text>
-              <Pressable
-                onPress={() => setStartShiftModalVisible(false)}
-                hitSlop={HitSlop.md}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={24} color={Colors.light.textSecondary} />
+              <Pressable hitSlop={HitSlop.md} onPress={() => setStartShiftModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>
-              {"Enter your vehicle's starting odometer reading. GPS coordinates will be captured to verify presence."}
+              Enter your vehicle odometer starting KM before beginning travel or store visits.
             </Text>
 
             <Input
-              label="Starting Odometer (KM) *"
-              placeholder="e.g. 14250.5"
-              keyboardType="decimal-pad"
+              label="Starting Odometer (KM)"
+              placeholder="e.g. 14250"
+              keyboardType="numeric"
               value={odometerKm}
               onChangeText={setOdometerKm}
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textMuted} />}
+              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
             />
 
             <View style={styles.modalButtonsRow}>
@@ -377,7 +377,7 @@ export default function SellerDashboardScreen() {
                 variant="secondary"
                 onPress={handleStartShift}
                 loading={isShiftSubmitting}
-                style={{ flex: 1.5 }}
+                style={{ flex: 1.4 }}
               />
             </View>
           </View>
@@ -387,37 +387,32 @@ export default function SellerDashboardScreen() {
       {/* End Shift Modal */}
       <Modal visible={endShiftModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
+          <View style={styles.modalContent}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Complete Daily Duty Shift</Text>
-              <Pressable
-                onPress={() => setEndShiftModalVisible(false)}
-                hitSlop={HitSlop.md}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={24} color={Colors.light.textSecondary} />
+              <Pressable hitSlop={HitSlop.md} onPress={() => setEndShiftModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>
-              {"Enter your vehicle's ending odometer reading to calculate total field travel."}
+              Enter your vehicle odometer ending KM to close daily duty and log travel distance.
             </Text>
 
             <Input
-              label="Ending Odometer (KM) *"
-              placeholder="e.g. 14312.0"
-              keyboardType="decimal-pad"
+              label="Ending Odometer (KM)"
+              placeholder="e.g. 14320"
+              keyboardType="numeric"
               value={odometerKm}
               onChangeText={setOdometerKm}
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textMuted} />}
+              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
             />
 
             <Input
-              label="Day Summary / Remarks (Optional)"
-              placeholder="Visited 8 retailers, 4 orders..."
+              label="End of Day Remarks (Optional)"
+              placeholder="e.g. Covered Rau & Pithampur market"
               value={shiftRemarks}
               onChangeText={setShiftRemarks}
-              leftIcon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.light.textMuted} />}
+              leftIcon={<Ionicons name="chatbox-outline" size={18} color={Colors.light.textSecondary} />}
             />
 
             <View style={styles.modalButtonsRow}>
@@ -430,10 +425,10 @@ export default function SellerDashboardScreen() {
               />
               <Button
                 title={isShiftSubmitting ? 'Saving...' : 'End Duty Shift'}
-                variant="danger"
+                variant="primary"
                 onPress={handleEndShift}
                 loading={isShiftSubmitting}
-                style={{ flex: 1.5 }}
+                style={{ flex: 1.4 }}
               />
             </View>
           </View>
@@ -491,11 +486,14 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   shiftActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     marginTop: Spacing.md,
-    alignItems: 'flex-end',
   },
   shiftBtn: {
-    minHeight: 36,
+    flex: 1,
+    minHeight: 40,
   },
   startShiftBtn: {
     marginTop: Spacing.md,

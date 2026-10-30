@@ -21,6 +21,7 @@ export interface InputProps extends TextInputProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   isPassword?: boolean;
+  inputRef?: React.Ref<any>;
 }
 
 export function Input({
@@ -33,6 +34,7 @@ export function Input({
   rightIcon,
   isPassword = false,
   secureTextEntry,
+  inputRef,
   ...rest
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
@@ -58,6 +60,7 @@ export function Input({
       >
         {leftIcon ? <View style={styles.leftIconContainer}>{leftIcon}</View> : null}
         <TextInput
+          ref={inputRef}
           style={[styles.input, inputStyle]}
           placeholderTextColor="#94A3B8"
           secureTextEntry={isSecure}
@@ -135,11 +138,6 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: BrandColors.pink.primary,
     backgroundColor: '#FFFFFF',
-    shadowColor: BrandColors.pink.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
   inputError: {
     borderColor: BrandColors.pink.deep,

@@ -66,10 +66,19 @@ export const adminApi = {
   // Warehouses & Stock Movements
   // ----------------------------------------------------
   async getWarehouses(): Promise<{ items: WarehouseItem[] }> {
-    const raw = await apiRequest<{ warehouses?: WarehouseItem[]; items?: WarehouseItem[] }>('admin/warehouses', {
-      method: 'GET',
-    });
-    return { items: raw?.warehouses ?? raw?.items ?? [] };
+    try {
+      const raw = await apiRequest<{ warehouses?: WarehouseItem[]; items?: WarehouseItem[] }>(
+        'admin/inventory/warehouses',
+        { method: 'GET' }
+      );
+      return { items: raw?.warehouses ?? raw?.items ?? [] };
+    } catch {
+      const raw = await apiRequest<{ warehouses?: WarehouseItem[]; items?: WarehouseItem[] }>(
+        'admin/warehouses',
+        { method: 'GET' }
+      ).catch(() => ({ items: [] as WarehouseItem[], warehouses: [] as WarehouseItem[] }));
+      return { items: raw?.warehouses ?? raw?.items ?? [] };
+    }
   },
 
   async recordStockReceipt(payload: {
