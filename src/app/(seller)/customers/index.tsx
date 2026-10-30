@@ -158,15 +158,26 @@ export default function CustomerListScreen() {
         title="Store Directory"
         subtitle={`${pagination.total} retail partners`}
         rightAction={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Onboard new customer"
-            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            onPress={() => router.push('/(seller)/customers/new' as any)}
-            hitSlop={HitSlop.md}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Batch onboard customers"
+              style={({ pressed }) => [styles.batchButton, pressed && styles.addButtonPressed]}
+              onPress={() => router.push('/(seller)/customers/bulk' as any)}
+              hitSlop={HitSlop.md}
+            >
+              <Ionicons name="layers-outline" size={18} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Onboard new customer"
+              style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+              onPress={() => router.push('/(seller)/customers/new' as any)}
+              hitSlop={HitSlop.md}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </Pressable>
+          </View>
         }
       />
 
@@ -283,6 +294,15 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: BrandColors.pink.primary,
+    width: 38,
+    height: 38,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+  batchButton: {
+    backgroundColor: '#0F172A',
     width: 38,
     height: 38,
     borderRadius: Radius.full,

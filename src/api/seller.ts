@@ -1,8 +1,10 @@
 import { apiRequest, API_BASE_URL, isMockMode } from './client';
 import type {
+  BulkCustomerResponse,
   CheckInPayload,
   CheckOutPayload,
   CollectPaymentPayload,
+  CreateBulkCustomersPayload,
   CreateCustomerPayload,
   CreateSalePayload,
   CustomerItem,
@@ -18,6 +20,7 @@ import type {
   ShiftVisit,
   StartShiftPayload,
   StockTransactionItem,
+  UpdateSalePayload,
 } from './types';
 
 export const sellerApi = {
@@ -95,10 +98,21 @@ export const sellerApi = {
     if (payload.email) body.email = payload.email.trim();
     if (payload.latitude != null) body.latitude = payload.latitude;
     if (payload.longitude != null) body.longitude = payload.longitude;
+    if (payload.accuracy != null) body.accuracy = payload.accuracy;
+    const noPhotoReason = payload.noPhotoReason || payload.photoSkipReason;
+    if (noPhotoReason) body.noPhotoReason = noPhotoReason;
+    if (payload.photoPath) body.photoPath = payload.photoPath;
 
     return apiRequest<{ customer: CustomerItem }>('seller/customers', {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  },
+
+  async createBulkCustomers(payload: CreateBulkCustomersPayload): Promise<BulkCustomerResponse> {
+    return apiRequest<BulkCustomerResponse>('seller/customers/bulk', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 
@@ -228,6 +242,9 @@ export const sellerApi = {
     if (payload.paymentReference) {
       body.paymentReference = payload.paymentReference;
     }
+    if (payload.customerFeedback) {
+      body.customerFeedback = payload.customerFeedback;
+    }
 
     return apiRequest<{ sale: SaleItem }>('seller/sales', {
       method: 'POST',
@@ -243,6 +260,9 @@ export const sellerApi = {
     paymentMode?: string;
     customerId?: string;
     search?: string;
+    period?: string;
+    from?: string;
+    to?: string;
   }): Promise<{ items: SaleItem[]; pagination: PaginationMeta }> {
     const raw = await apiRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination: PaginationMeta }>('seller/sales', {
       method: 'GET',
@@ -258,6 +278,13 @@ export const sellerApi = {
   async getSale(id: string): Promise<{ sale: SaleItem }> {
     return apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
       method: 'GET',
+    });
+  },
+
+  async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
+    return apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
   },
 
@@ -296,6 +323,10 @@ export const sellerApi = {
       longitude: payload.longitude ?? payload.startLongitude ?? 0,
     };
     if (payload.address) body.address = payload.address;
+    if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
+    if (payload.facePhoto) body.facePhoto = payload.facePhoto;
+    if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
+    if (payload.faceMethod) body.faceMethod = payload.faceMethod;
     return apiRequest<{ shift: Shift }>('seller/shifts/start', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -306,7 +337,7 @@ export const sellerApi = {
     const body: Record<string, any> = {
       latitude: payload.latitude ?? 0,
       longitude: payload.longitude ?? 0,
-      shopName: (payload as any).shopName || (payload as any).customer?.shopName || 'Retail Customer',
+      shopName: payload.shopName || (payload as any).customer?.shopName || 'Retail Customer',
     };
     if (payload.customerId) body.customerId = payload.customerId;
     if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
@@ -319,10 +350,13 @@ export const sellerApi = {
   async checkOut(payload: CheckOutPayload): Promise<{ visit: ShiftVisit }> {
     const body: Record<string, any> = {
       visitId: payload.visitId,
-      latitude: (payload as any).latitude ?? 0,
-      longitude: (payload as any).longitude ?? 0,
+      latitude: payload.latitude ?? 0,
+      longitude: payload.longitude ?? 0,
     };
     if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
+    if (payload.saleDone !== undefined) body.saleDone = payload.saleDone;
+    if (payload.customerFeedback) body.customerFeedback = payload.customerFeedback;
+    if (payload.saleId) body.saleId = payload.saleId;
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-out', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -336,6 +370,10 @@ export const sellerApi = {
     };
     if (payload.address) body.address = payload.address;
     if (payload.notes || payload.remarks) body.notes = payload.notes || payload.remarks;
+    if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
+    if (payload.facePhoto) body.facePhoto = payload.facePhoto;
+    if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
+    if (payload.faceMethod) body.faceMethod = payload.faceMethod;
     return apiRequest<{ shift: Shift }>('seller/shifts/end', {
       method: 'POST',
       body: JSON.stringify(body),

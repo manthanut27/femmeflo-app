@@ -10,6 +10,7 @@ export interface HeaderProps {
   subtitle?: string;
   showBack?: boolean;
   onBack?: () => void;
+  leftAction?: React.ReactNode;
   rightAction?: React.ReactNode;
   showNotificationBell?: boolean;
   unreadCount?: number;
@@ -21,6 +22,7 @@ export function Header({
   subtitle,
   showBack = false,
   onBack,
+  leftAction,
   rightAction,
   showNotificationBell = false,
   unreadCount = 0,
@@ -45,7 +47,9 @@ export function Header({
     <View style={[styles.outerContainer, { paddingTop: insets.top + Spacing.sm }, style]}>
       <View style={styles.innerContainer}>
         <View style={styles.leftContainer}>
-          {showBack ? (
+          {leftAction ? (
+            leftAction
+          ) : showBack ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Go back"

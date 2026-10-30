@@ -103,6 +103,18 @@ export default function ManagerTabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="inventory/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="shifts/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="incentives/index"
+        options={{ href: null }}
+      />
     </Tabs>
   );
 }

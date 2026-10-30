@@ -2,9 +2,17 @@ import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { handleMockRequest } from './mockService';
-import { ApiError, type PublicUser, type RequestOptions } from './types';
+import { ApiError, type PublicUser } from './types';
 
-export { ApiError, type RequestOptions };
+export interface RequestOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | undefined | null>;
+  skipAuth?: boolean;
+  timeoutMs?: number;
+  responseType?: 'json' | 'blob' | 'text' | 'arrayBuffer';
+  retries?: number;
+}
+
+export { ApiError };
 
 // Determine Base URL (defaults to local inventory server on port 5000)
 const rawApiUrl = (
@@ -139,7 +147,15 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     return handleMockRequest<T>(endpoint, options);
   }
 
-  const { params, skipAuth = false, timeoutMs = 45000, headers: customHeaders, ...rest } = options;
+  const {
+    params,
+    skipAuth = false,
+    timeoutMs = 45000,
+    headers: customHeaders,
+    responseType,
+    retries = 0,
+    ...rest
+  } = options;
 
   let url = `${API_BASE_URL}/${endpoint.replace(/^\/+/, '')}`;
 
@@ -157,7 +173,11 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
   }
 
   const headers = new Headers(customHeaders);
-  headers.set('Accept', 'application/json');
+  if (responseType === 'blob' || responseType === 'arrayBuffer') {
+    headers.set('Accept', 'application/pdf, application/octet-stream, */*');
+  } else {
+    headers.set('Accept', 'application/json');
+  }
 
   if (!skipAuth) {
     const token = await tokenStorage.getToken();
@@ -171,88 +191,128 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     headers.set('Content-Type', 'application/json');
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const method = (rest.method || 'GET').toUpperCase();
+  const isIdempotent = method === 'GET' || method === 'HEAD';
+  let attempts = 0;
+  const maxAttempts = isIdempotent ? Math.max(1, 1 + retries) : 1;
 
-  try {
-    const response = await fetch(url, {
-      ...rest,
-      headers,
-      signal: controller.signal,
-    });
+  while (attempts < maxAttempts) {
+    attempts++;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-    clearTimeout(timer);
+    try {
+      const response = await fetch(url, {
+        ...rest,
+        headers,
+        signal: controller.signal,
+      });
 
-    if (response.status === 401 && !skipAuth) {
-      await tokenStorage.clearToken();
-      if (onSessionExpiredCallback) {
-        onSessionExpiredCallback();
+      clearTimeout(timer);
+
+      if (response.status === 401 && !skipAuth) {
+        await tokenStorage.clearToken();
+        if (onSessionExpiredCallback) {
+          onSessionExpiredCallback();
+        }
+        throw new ApiError('Your session has expired. Please sign in again.', 401);
       }
-      throw new ApiError('Your session has expired. Please sign in again.', 401);
-    }
 
-    const contentType = response.headers.get('content-type') || '';
-    let responseData: any = null;
+      const contentType = response.headers.get('content-type') || '';
+      let responseData: any = null;
 
-    if (contentType.includes('application/json')) {
-      responseData = await response.json();
-    } else {
-      const text = await response.text();
-      try {
-        responseData = JSON.parse(text);
-      } catch {
-        responseData = text;
+      if (responseType === 'blob' || (!responseType && (contentType.includes('application/pdf') || contentType.includes('application/octet-stream')))) {
+        responseData = await response.blob();
+        if (!response.ok) {
+          throw new ApiError(`Server returned status ${response.status}`, response.status);
+        }
+        return responseData as T;
       }
-    }
 
-    if (!response.ok) {
-      let errorMessage = 'An error occurred while connecting to server.';
-      if (responseData && typeof responseData === 'object') {
-        errorMessage =
-          responseData.message ||
-          responseData.error?.message ||
-          (typeof responseData.error === 'string' ? responseData.error : null) ||
-          `Server returned status ${response.status}`;
+      if (responseType === 'arrayBuffer') {
+        responseData = await response.arrayBuffer();
+        if (!response.ok) {
+          throw new ApiError(`Server returned status ${response.status}`, response.status);
+        }
+        return responseData as T;
       }
-      throw new ApiError(errorMessage, response.status, responseData);
-    }
 
-    // Support responses structured as { success: true, data: T } or directly T
-    if (responseData && typeof responseData === 'object' && 'data' in responseData) {
-      return responseData.data as T;
-    }
-
-    return responseData as T;
-  } catch (error: any) {
-    clearTimeout(timer);
-
-    if (error instanceof ApiError) {
-      throw error;
-    }
-
-    if (
-      error.name === 'AbortError' ||
-      error.message?.includes('Network request failed') ||
-      error.message?.includes('Failed to fetch') ||
-      error.message?.includes('ECONNREFUSED')
-    ) {
-      if (mockModeEnabled) {
-        console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from frontend mock engine.`);
-        return handleMockRequest<T>(endpoint, options);
+      if (responseType === 'text') {
+        responseData = await response.text();
+        if (!response.ok) {
+          throw new ApiError(responseData || `Server returned status ${response.status}`, response.status);
+        }
+        return responseData as T;
       }
+
+      if (contentType.includes('application/json')) {
+        responseData = await response.json();
+      } else {
+        const text = await response.text();
+        try {
+          responseData = JSON.parse(text);
+        } catch {
+          responseData = text;
+        }
+      }
+
+      if (!response.ok) {
+        let errorMessage = 'An error occurred while connecting to server.';
+        if (responseData && typeof responseData === 'object') {
+          errorMessage =
+            responseData.message ||
+            responseData.error?.message ||
+            (typeof responseData.error === 'string' ? responseData.error : null) ||
+            `Server returned status ${response.status}`;
+        }
+        throw new ApiError(errorMessage, response.status, responseData);
+      }
+
+      // Support responses structured as { success: true, data: T } or directly T
+      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
+        return responseData.data as T;
+      }
+
+      return responseData as T;
+    } catch (error: any) {
+      clearTimeout(timer);
+
+      if (error instanceof ApiError) {
+        throw error;
+      }
+
+      const isNetworkOrAbort =
+        error.name === 'AbortError' ||
+        error.message?.includes('Network request failed') ||
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('ECONNREFUSED');
+
+      if (isNetworkOrAbort && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempts));
+        continue;
+      }
+
+      if (isNetworkOrAbort) {
+        if (mockModeEnabled) {
+          console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from frontend mock engine.`);
+          return handleMockRequest<T>(endpoint, options);
+        }
+        throw new ApiError(
+          `Unable to reach backend server at ${API_BASE_URL}. Ensure your server is running and accessible on your local network.`,
+          0,
+          null,
+          true
+        );
+      }
+
       throw new ApiError(
-        `Unable to reach backend server at ${API_BASE_URL}. Ensure your server is running and accessible on your local network.`,
+        error.message || 'Network request failed. Please check your internet connection.',
         0,
         null,
         true
       );
     }
-
-    throw new ApiError(
-      error.message || 'Network request failed. Please check your internet connection.',
-      0,
-      null,
-      true
-    );
   }
+
+  throw new ApiError('Request failed after maximum retry attempts.', 0, null, true);
 }

@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { authApi } from '@/api/auth';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -33,48 +34,130 @@ export default function AdminSettingsScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
 
+  // Price Invariants
   const [minPriceRupees, setMinPriceRupees] = useState('25');
   const [lowStockThreshold, setLowStockThreshold] = useState('50');
+
+  // Company Legal Settings
+  const [companyName, setCompanyName] = useState('');
+  const [companyGst, setCompanyGst] = useState('');
+  const [companyPan, setCompanyPan] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [invoiceTerms, setInvoiceTerms] = useState('');
+
+  // Password Change
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
-    adminApi
-      .getBusinessSettings()
-      .then((res) => {
-        if (res.minimumSalePricePaise) {
-          setMinPriceRupees(String(res.minimumSalePricePaise / 100));
-        }
-        if (res.lowStockThreshold) {
-          setLowStockThreshold(String(res.lowStockThreshold));
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    loadSettings();
   }, []);
 
+  async function loadSettings() {
+    setLoading(true);
+    try {
+      const res = await adminApi.getBusinessSettings();
+      if (res.minimumSalePricePaise) {
+        setMinPriceRupees(String(res.minimumSalePricePaise / 100));
+      } else if (res.minimumPricePaise) {
+        setMinPriceRupees(String(res.minimumPricePaise / 100));
+      }
+      if (res.lowStockThreshold !== undefined) {
+        setLowStockThreshold(String(res.lowStockThreshold));
+      }
+      if (res.companyName) setCompanyName(res.companyName);
+      if (res.companyGst) setCompanyGst(res.companyGst);
+      if (res.companyPan) setCompanyPan(res.companyPan);
+      if (res.companyAddress) setCompanyAddress(res.companyAddress);
+      if (res.companyPhone) setCompanyPhone(res.companyPhone);
+      if (res.companyEmail) setCompanyEmail(res.companyEmail);
+      if (res.invoiceTerms) setInvoiceTerms(res.invoiceTerms);
+    } catch {
+      // Mock / fallback defaults handled gracefully
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSaveSettings() {
-    if (saving) return;
+    if (savingSettings) return;
+
     const priceNum = parseFloat(minPriceRupees);
     if (isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert('Invalid Price', 'Minimum sale price must be a positive number.');
+      Alert.alert('Invalid Price', 'Authoritative minimum sale price must be a positive number.');
       return;
     }
 
     const thresholdNum = parseInt(lowStockThreshold, 10);
 
-    setSaving(true);
+    setSavingSettings(true);
     try {
       await adminApi.updateBusinessSettings({
         minimumSalePricePaise: Math.round(priceNum * 100),
         lowStockThreshold: isNaN(thresholdNum) ? undefined : thresholdNum,
+        companyName: companyName.trim() || undefined,
+        companyGst: companyGst.trim().toUpperCase() || undefined,
+        companyPan: companyPan.trim().toUpperCase() || undefined,
+        companyAddress: companyAddress.trim() || undefined,
+        companyPhone: companyPhone.trim() || undefined,
+        companyEmail: companyEmail.trim() || undefined,
+        invoiceTerms: invoiceTerms.trim() || undefined,
       });
 
-      Alert.alert('Settings Updated', `Global minimum sale price set to ₹${priceNum.toFixed(2)}.`);
+      Alert.alert(
+        'Settings Saved',
+        'Company legal information and pricing invariants have been updated successfully.'
+      );
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update settings.');
+      Alert.alert('Error', err.message || 'Failed to update company configuration.');
     } finally {
-      setSaving(false);
+      setSavingSettings(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!currentPassword) {
+      Alert.alert('Required Field', 'Please enter your current password.');
+      return;
+    }
+    if (newPassword.length < 12) {
+      Alert.alert('Password Too Short', 'New password must be at least 12 characters long.');
+      return;
+    }
+    const byteLength = new TextEncoder().encode(newPassword).length;
+    if (byteLength > 72) {
+      Alert.alert('Password Too Long', 'New password exceeds the 72-byte limit.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Mismatch', 'New passwords do not match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await authApi.changePassword({
+        currentPassword,
+        newPassword,
+      });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Password Updated', 'Your security credentials have been updated successfully.');
+    } catch (err: any) {
+      Alert.alert('Password Change Failed', err.message || 'Could not update password. Please check your current password.');
+    } finally {
+      setIsChangingPassword(false);
     }
   }
 
@@ -97,7 +180,7 @@ export default function AdminSettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <Header title="Business Configuration" subtitle="Global Governance & Price Invariants" />
+      <Header title="Company & Legal Settings" subtitle="Global Governance & Invoice Configuration" />
 
       {loading ? (
         <View style={styles.centerContainer}>
@@ -120,7 +203,99 @@ export default function AdminSettingsScreen() {
               </View>
             </Card>
 
-            {/* Pricing Invariants Card */}
+            {/* Legal Entity & Invoice Details */}
+            <Text style={styles.sectionHeading}>Legal Entity & Invoice Details</Text>
+            <Card style={styles.card}>
+              <View style={styles.ruleNotice}>
+                <Ionicons name="document-text-outline" size={18} color={BrandColors.pink.dark} />
+                <Text style={styles.ruleNoticeText}>
+                  These legal details appear on all generated PDF tax invoices shared with retailers and customers.
+                </Text>
+              </View>
+
+              <Input
+                label="Legal Company Name *"
+                placeholder="e.g. MASAKO ENTERPRISES PRIVATE LIMITED"
+                value={companyName}
+                onChangeText={setCompanyName}
+                autoCapitalize="words"
+                helperText="Official registered entity name for tax invoices"
+                leftIcon={<Ionicons name="business-outline" size={18} color={Colors.light.textTertiary} />}
+              />
+
+              <View style={styles.row}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Input
+                    label="Company GSTIN"
+                    placeholder="e.g. 09AAECM1234F1Z5"
+                    value={companyGst}
+                    onChangeText={(val) => setCompanyGst(val.toUpperCase())}
+                    autoCapitalize="characters"
+                    helperText="15-character GST identification"
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Input
+                    label="Company PAN"
+                    placeholder="e.g. AAECM1234F"
+                    value={companyPan}
+                    onChangeText={(val) => setCompanyPan(val.toUpperCase())}
+                    autoCapitalize="characters"
+                    helperText="10-character PAN number"
+                  />
+                </View>
+              </View>
+
+              <Input
+                label="Registered Corporate Address"
+                placeholder="e.g. Plot 42, Industrial Area Phase II, Lucknow, UP 226012"
+                value={companyAddress}
+                onChangeText={setCompanyAddress}
+                multiline
+                numberOfLines={2}
+                helperText="Printed on invoice header"
+                leftIcon={<Ionicons name="location-outline" size={18} color={Colors.light.textTertiary} />}
+              />
+
+              <View style={styles.row}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Input
+                    label="Official Phone"
+                    placeholder="+91 9876543210"
+                    value={companyPhone}
+                    onChangeText={setCompanyPhone}
+                    keyboardType="phone-pad"
+                    helperText="Billing support phone"
+                    leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Input
+                    label="Official Email"
+                    placeholder="billing@masako.co.in"
+                    value={companyEmail}
+                    onChangeText={setCompanyEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    helperText="Billing correspondence"
+                    leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.light.textTertiary} />}
+                  />
+                </View>
+              </View>
+
+              <Input
+                label="Invoice Terms & Conditions"
+                placeholder="e.g. 1. Goods once sold will not be returned.\n2. Payment due on delivery."
+                value={invoiceTerms}
+                onChangeText={setInvoiceTerms}
+                multiline
+                numberOfLines={3}
+                helperText="Standard terms printed at the bottom of all customer invoices"
+                leftIcon={<Ionicons name="list-outline" size={18} color={Colors.light.textTertiary} />}
+              />
+            </Card>
+
+            {/* Pricing Rules & System Invariants */}
             <Text style={styles.sectionHeading}>Pricing Rules & System Invariants</Text>
             <Card style={styles.card}>
               <View style={styles.ruleNotice}>
@@ -151,9 +326,9 @@ export default function AdminSettingsScreen() {
               />
 
               <Button
-                title={saving ? 'Saving...' : 'Save Configuration'}
+                title={savingSettings ? 'Saving Settings...' : 'Save Legal & Pricing Configuration'}
                 onPress={handleSaveSettings}
-                loading={saving}
+                loading={savingSettings}
                 variant="admin"
                 size="lg"
                 icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}
@@ -161,9 +336,112 @@ export default function AdminSettingsScreen() {
               />
             </Card>
 
-            {/* Navigation to Categories & Shared Features */}
+            {/* Account Security / Change Password */}
+            <Text style={styles.sectionHeading}>Account Security</Text>
+            <Card style={styles.card}>
+              <Text style={styles.cardSubtext}>
+                Ensure your Super Admin account uses a strong, unique password of at least 12 characters.
+              </Text>
+
+              <Input
+                label="Current Password *"
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry={!showCurrentPassword}
+                autoCapitalize="none"
+                leftIcon={<Ionicons name="lock-closed-outline" size={18} color={Colors.light.textTertiary} />}
+                rightIcon={
+                  <Pressable onPress={() => setShowCurrentPassword(!showCurrentPassword)}>
+                    <Ionicons
+                      name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={18}
+                      color={Colors.light.textTertiary}
+                    />
+                  </Pressable>
+                }
+              />
+
+              <Input
+                label="New Password (min 12 characters) *"
+                placeholder="Enter new strong password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={!showNewPassword}
+                autoCapitalize="none"
+                helperText={
+                  newPassword.length > 0 && newPassword.length < 12
+                    ? 'Password is too short (min 12 chars required)'
+                    : undefined
+                }
+                leftIcon={<Ionicons name="key-outline" size={18} color={Colors.light.textTertiary} />}
+                rightIcon={
+                  <Pressable onPress={() => setShowNewPassword(!showNewPassword)}>
+                    <Ionicons
+                      name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={18}
+                      color={Colors.light.textTertiary}
+                    />
+                  </Pressable>
+                }
+              />
+
+              <Input
+                label="Confirm New Password *"
+                placeholder="Re-enter new password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                helperText={
+                  confirmPassword.length > 0 && confirmPassword !== newPassword
+                    ? 'Passwords do not match'
+                    : undefined
+                }
+                leftIcon={<Ionicons name="checkmark-done-outline" size={18} color={Colors.light.textTertiary} />}
+                rightIcon={
+                  <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    <Ionicons
+                      name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={18}
+                      color={Colors.light.textTertiary}
+                    />
+                  </Pressable>
+                }
+              />
+
+              <Button
+                title={isChangingPassword ? 'Updating Password...' : 'Change Password'}
+                onPress={handleChangePassword}
+                loading={isChangingPassword}
+                variant="outline"
+                size="md"
+                disabled={!currentPassword || newPassword.length < 12 || newPassword !== confirmPassword}
+                icon={<Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.primary} />}
+                style={{ marginTop: Spacing.sm }}
+              />
+            </Card>
+
+            {/* Navigation to Invoices, Categories & Shared Features */}
             <Text style={styles.sectionHeading}>Catalog & Administration</Text>
             <Card style={styles.menuCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Central Invoice Directory"
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => router.push('/(admin)/invoices' as any)}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.menuIconCircle}>
+                    <Ionicons name="receipt-outline" size={18} color={BrandColors.pink.dark} />
+                  </View>
+                  <Text style={styles.menuText}>Central Invoices Directory</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
+              </Pressable>
+
+              <View style={styles.menuDivider} />
+
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Manage Customer Categories"
@@ -241,6 +519,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     ...Elevation.low,
   },
+  cardSubtext: {
+    ...Typography.bodySmall,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.md,
+  },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -249,12 +532,12 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: BrandColors.pink.subtle,
+    backgroundColor: BrandColors.pink.tint,
+    borderWidth: 2,
+    borderColor: BrandColors.pink.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
-    borderWidth: 1.5,
-    borderColor: BrandColors.pink.tint,
   },
   avatarText: {
     ...Typography.h2,
@@ -262,8 +545,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   userName: {
-    ...Typography.h2,
-    color: Colors.light.textPrimary,
+    ...Typography.h3,
+    color: Colors.light.text,
   },
   userEmail: {
     ...Typography.bodySmall,
@@ -271,27 +554,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionHeading: {
-    ...Typography.overline,
-    color: Colors.light.textSecondary,
+    ...Typography.h3,
+    color: Colors.light.text,
     marginBottom: Spacing.sm,
     marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.xs,
   },
   ruleNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: BrandColors.pink.subtle,
+    backgroundColor: BrandColors.pink.tint,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: BrandColors.pink.tint,
   },
   ruleNoticeText: {
-    flex: 1,
     ...Typography.bodySmall,
     color: BrandColors.pink.dark,
+    marginLeft: Spacing.sm,
+    flex: 1,
     lineHeight: 18,
   },
   rupeeSymbol: {
@@ -299,11 +579,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.textSecondary,
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   menuCard: {
-    padding: 0,
-    overflow: 'hidden',
     backgroundColor: Colors.light.card,
     borderRadius: BorderRadius.lg,
+    padding: 0,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.light.border,
     marginBottom: Spacing.lg,
@@ -313,37 +597,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing.lg,
-    minHeight: 56,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
   },
   menuItemPressed: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.light.surfaceSecondary,
   },
   menuLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
   },
   menuIconCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: BrandColors.pink.subtle,
+    backgroundColor: BrandColors.pink.tint,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: Spacing.md,
   },
   menuText: {
-    ...Typography.bodyMedium,
+    ...Typography.body,
     fontWeight: '600',
-    color: Colors.light.textPrimary,
+    color: Colors.light.text,
   },
   menuDivider: {
     height: 1,
     backgroundColor: Colors.light.border,
-    marginHorizontal: Spacing.lg,
+    marginLeft: 68,
   },
   logoutBtn: {
     marginTop: Spacing.sm,
-    marginBottom: Spacing.xxl,
+    borderColor: BrandColors.pink.tint,
   },
 });

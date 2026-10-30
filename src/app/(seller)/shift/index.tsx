@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,7 +15,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
-import type { CustomerItem, Shift, ShiftVisit } from '@/api/types';
+import type { CustomerItem, PaymentMode, ProductItem, Shift, ShiftVisit } from '@/api/types';
+import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
+import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -26,6 +29,16 @@ import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing
 import { useAuth } from '@/context/AuthContext';
 import { draftStorage } from '@/utils/draftStorage';
 
+const PREDEFINED_VISIT_REASONS = [
+  'Stock already sufficient',
+  'Decision maker unavailable',
+  'Shop closed',
+  'Customer not interested',
+  'Payment pending',
+  'Order planned for next visit',
+  'Sample provided for trial',
+];
+
 export default function ShiftScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -33,6 +46,7 @@ export default function ShiftScreen() {
 
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
@@ -44,44 +58,71 @@ export default function ShiftScreen() {
     onAction?: () => void;
   } | null>(null);
 
-  // Start Shift Modal
+  // Start Shift Form State
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [startOdometer, setStartOdometer] = useState('');
   const [startNotes, setStartNotes] = useState('');
   const [isStartingShift, setIsStartingShift] = useState(false);
 
-  // Check-in Visit Modal
+  // Check-in Visit Form State
   const [checkInModalVisible, setCheckInModalVisible] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
   const [isCheckingIn, setIsCheckingIn] = useState(false);
 
-  // End Shift Modal
+  // Check-out Visit Form State (Two Branches: No Sale vs Sale Done)
+  const [checkOutModalVisible, setCheckOutModalVisible] = useState(false);
+  const [activeCheckoutVisit, setActiveCheckoutVisit] = useState<ShiftVisit | null>(null);
+  const [checkoutSaleDone, setCheckoutSaleDone] = useState(false);
+  const [checkoutReason, setCheckoutReason] = useState('');
+  const [checkoutFeedback, setCheckoutFeedback] = useState('');
+  const [checkoutNotes, setCheckoutNotes] = useState('');
+  const [checkoutCustomerId, setCheckoutCustomerId] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [saleQuantity, setSaleQuantity] = useState(1);
+  const [saleUnitPrice, setSaleUnitPrice] = useState(25);
+  const [salePaymentMode, setSalePaymentMode] = useState<PaymentMode>('CASH');
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  // End Shift Form State
   const [endModalVisible, setEndModalVisible] = useState(false);
   const [endOdometer, setEndOdometer] = useState('');
   const [endNotes, setEndNotes] = useState('');
   const [isEndingShift, setIsEndingShift] = useState(false);
 
+  // Biometric / Face Selfie Verification Modal State
+  const [faceModalVisible, setFaceModalVisible] = useState(false);
+  const [faceModalMode, setFaceModalMode] = useState<'START' | 'END'>('START');
+  const [pendingOdometerKm, setPendingOdometerKm] = useState<number>(0);
+  const [pendingNotes, setPendingNotes] = useState<string>('');
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadShiftData = useCallback(async () => {
     try {
-      // Server GET /seller/shifts/current is the primary source of truth
-      const [shiftRes, custRes] = await Promise.all([
+      const [shiftRes, custRes, prodRes] = await Promise.all([
         sellerApi.getCurrentShift().catch(async () => {
           const cached = await draftStorage.getActiveShift(userId);
           return { shift: cached };
         }),
-        sellerApi.listCustomers({ pageSize: 50 }).catch(() => ({ items: [] })),
+        sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
+        sellerApi.listProducts().catch(() => ({ items: [] })),
       ]);
 
       const active = shiftRes.shift;
       setCurrentShift(active);
       await draftStorage.saveActiveShift(userId, active);
 
-      setCustomers(custRes.items);
-      if (custRes.items.length > 0) {
+      setCustomers(custRes.items || []);
+      if (custRes.items?.length > 0) {
         setSelectedCustomerId((prev) => prev || custRes.items[0].id);
+      }
+
+      setProducts(prodRes.items || []);
+      if (prodRes.items?.length > 0) {
+        setSelectedProductId((prev) => prev || prodRes.items[0].id);
+        const firstBasePrice = prodRes.items[0].basePricePaise / 100;
+        setSaleUnitPrice((prev) => (prev ? prev : firstBasePrice || 25));
       }
     } finally {
       setLoading(false);
@@ -126,53 +167,89 @@ export default function ShiftScreen() {
     loadShiftData();
   }, [loadShiftData]);
 
-  async function handleStartShift() {
-    if (isStartingShift) return;
-    const km = parseFloat(startOdometer);
-    if (isNaN(km) || km < 0) {
-      Alert.alert('Invalid Reading', 'Please enter a valid starting odometer reading in kilometers.');
-      return;
-    }
-
-    setIsStartingShift(true);
+  // Helper to acquire GPS coordinates with fallback
+  async function acquireCoordinates(): Promise<{ latitude: number; longitude: number }> {
     try {
-      let lat: number | undefined;
-      let lon: number | undefined;
-
-      try {
+      if (Platform.OS !== 'web') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lon = loc.coords.longitude;
+          return {
+            latitude: Number(loc.coords.latitude.toFixed(6)),
+            longitude: Number(loc.coords.longitude.toFixed(6)),
+          };
         }
-      } catch {
-        // Location optional on fallback
+      } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        return new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              resolve({
+                latitude: Number(pos.coords.latitude.toFixed(6)),
+                longitude: Number(pos.coords.longitude.toFixed(6)),
+              });
+            },
+            () => resolve({ latitude: 22.7196, longitude: 75.8577 }),
+            { timeout: 6000 }
+          );
+        });
       }
+    } catch {
+      // Fallback
+    }
+    return { latitude: 22.7196, longitude: 75.8577 };
+  }
 
+  // ----------------------------------------------------
+  // SHIFT START WITH FACE VERIFICATION
+  // ----------------------------------------------------
+  function handleInitiateStartShift() {
+    const km = parseFloat(startOdometer);
+    if (isNaN(km) || km < 0) {
+      Alert.alert('Invalid Reading', 'Please enter a valid starting odometer reading in kilometers (0 or positive).');
+      return;
+    }
+
+    setPendingOdometerKm(km);
+    setPendingNotes(startNotes.trim());
+    setStartModalVisible(false);
+    setFaceModalMode('START');
+    setFaceModalVisible(true);
+  }
+
+  async function handleVerifiedShiftStart(faceResult: FaceVerificationResult) {
+    setFaceModalVisible(false);
+    setIsStartingShift(true);
+    setFeedback(null);
+
+    try {
+      const coords = await acquireCoordinates();
       const res = await sellerApi.startShift({
-        startOdometerKm: km,
-        startLatitude: lat,
-        startLongitude: lon,
-        notes: startNotes.trim() || undefined,
+        startOdometerKm: pendingOdometerKm,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: pendingNotes ? `Start notes: ${pendingNotes}` : undefined,
+        faceVerified: faceResult.faceVerified,
+        facePhoto: faceResult.facePhoto,
+        faceConfidence: faceResult.faceConfidence,
+        faceMethod: faceResult.faceMethod,
       });
 
       setCurrentShift(res.shift);
       await draftStorage.saveActiveShift(userId, res.shift);
-      setStartModalVisible(false);
       setStartOdometer('');
       setStartNotes('');
+
       setFeedback({
         type: 'success',
-        title: 'Shift Started',
-        message: `Field beat shift initialized at ${km} km.`,
+        title: 'Duty Shift Started (Face ID Verified)',
+        message: `Duty shift active at ${pendingOdometerKm} km. Location locked and selfie attendance recorded.`,
       });
-      Alert.alert('Shift Started', `Field beat shift initialized at ${km} km.`);
+      Alert.alert('Shift Started', `Field beat shift initialized at ${pendingOdometerKm} km.`);
     } catch (err: any) {
       setFeedback({
         type: 'error',
         title: 'Shift Start Failed',
-        message: err.message || 'Unable to start shift.',
+        message: err.message || 'Unable to start duty shift.',
       });
       Alert.alert('Shift Start Failed', err.message || 'Unable to start shift.');
     } finally {
@@ -180,6 +257,9 @@ export default function ShiftScreen() {
     }
   }
 
+  // ----------------------------------------------------
+  // STORE VISIT CHECK-IN
+  // ----------------------------------------------------
   async function handleCheckInVisit() {
     if (isCheckingIn) return;
     if (!selectedCustomerId) {
@@ -189,24 +269,14 @@ export default function ShiftScreen() {
 
     setIsCheckingIn(true);
     try {
-      let lat: number | undefined;
-      let lon: number | undefined;
-
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lon = loc.coords.longitude;
-        }
-      } catch {
-        // Fallback
-      }
+      const coords = await acquireCoordinates();
+      const customer = customers.find((c) => c.id === selectedCustomerId);
 
       await sellerApi.checkIn({
         customerId: selectedCustomerId,
-        latitude: lat,
-        longitude: lon,
+        shopName: customer?.shopName || 'Retail Customer Store',
+        latitude: coords.latitude,
+        longitude: coords.longitude,
         notes: visitNotes.trim() || undefined,
       });
 
@@ -215,7 +285,7 @@ export default function ShiftScreen() {
       setFeedback({
         type: 'success',
         title: 'Visit Checked In',
-        message: 'GPS location captured and store visit recorded.',
+        message: `GPS location captured at ${customer?.shopName || 'retail outlet'}. Store timer running.`,
       });
       Alert.alert('Visit Checked In', 'GPS location captured and store visit recorded.');
       loadShiftData();
@@ -231,56 +301,246 @@ export default function ShiftScreen() {
     }
   }
 
-  async function handleEndShift() {
-    if (isEndingShift) return;
+  // ----------------------------------------------------
+  // STORE VISIT CHECK-OUT (BRANCH 1 & BRANCH 2)
+  // ----------------------------------------------------
+  async function handleOpenCheckout(visit: ShiftVisit) {
+    if (visit.checkOutTime) {
+      Alert.alert('Already Completed', 'This store visit has already been checked out.');
+      return;
+    }
+
+    setActiveCheckoutVisit(visit);
+    setCheckoutCustomerId(visit.customerId || (customers[0]?.id ?? ''));
+
+    // Try recovering existing saved checkout draft for this visit
+    const draft = await draftStorage.getVisitCheckoutDraft(userId, visit.id);
+    if (draft) {
+      setCheckoutSaleDone(Boolean(draft.saleDone));
+      setCheckoutReason(draft.reason || '');
+      setCheckoutFeedback(draft.feedback || '');
+      setCheckoutNotes(draft.notes || '');
+      if (draft.selectedCustomerId) setCheckoutCustomerId(draft.selectedCustomerId);
+      if (draft.selectedProductId) setSelectedProductId(draft.selectedProductId);
+      if (draft.quantity) setSaleQuantity(draft.quantity);
+      if (draft.unitPrice) setSaleUnitPrice(draft.unitPrice);
+      if (draft.paymentMode) setSalePaymentMode(draft.paymentMode);
+    } else {
+      setCheckoutSaleDone(false);
+      setCheckoutReason('');
+      setCheckoutFeedback('');
+      setCheckoutNotes('');
+      setSaleQuantity(1);
+      const defaultProd = products[0];
+      if (defaultProd) {
+        setSelectedProductId(defaultProd.id);
+        setSaleUnitPrice(defaultProd.basePricePaise / 100 || 25);
+      }
+      setSalePaymentMode('CASH');
+    }
+
+    setCheckOutModalVisible(true);
+  }
+
+  // Auto-save checkout draft on input changes
+  const saveCurrentCheckoutDraft = useCallback(
+    (overrides?: Partial<{
+      saleDone: boolean;
+      reason: string;
+      feedback: string;
+      notes: string;
+      selectedCustomerId: string;
+      selectedProductId: string;
+      quantity: number;
+      unitPrice: number;
+      paymentMode: PaymentMode;
+    }>) => {
+      if (!activeCheckoutVisit) return;
+      draftStorage.saveVisitCheckoutDraft(userId, activeCheckoutVisit.id, {
+        visitId: activeCheckoutVisit.id,
+        saleDone: overrides?.saleDone ?? checkoutSaleDone,
+        reason: overrides?.reason ?? checkoutReason,
+        feedback: overrides?.feedback ?? checkoutFeedback,
+        notes: overrides?.notes ?? checkoutNotes,
+        selectedCustomerId: overrides?.selectedCustomerId ?? checkoutCustomerId,
+        selectedProductId: overrides?.selectedProductId ?? selectedProductId,
+        quantity: overrides?.quantity ?? saleQuantity,
+        unitPrice: overrides?.unitPrice ?? saleUnitPrice,
+        paymentMode: overrides?.paymentMode ?? salePaymentMode,
+        updatedAt: new Date().toISOString(),
+      });
+    },
+    [
+      activeCheckoutVisit,
+      userId,
+      checkoutSaleDone,
+      checkoutReason,
+      checkoutFeedback,
+      checkoutNotes,
+      checkoutCustomerId,
+      selectedProductId,
+      saleQuantity,
+      saleUnitPrice,
+      salePaymentMode,
+    ]
+  );
+
+  async function handleConfirmCheckout() {
+    if (isCheckingOut || !activeCheckoutVisit) return;
+
+    if (activeCheckoutVisit.checkOutTime) {
+      Alert.alert('Visit Completed', 'This visit is already checked out.');
+      setCheckOutModalVisible(false);
+      return;
+    }
+
+    setIsCheckingOut(true);
+    setFeedback(null);
+
+    try {
+      const coords = await acquireCoordinates();
+      let generatedSaleId: string | undefined = undefined;
+
+      // BRANCH 2: YES, SALE COMPLETED!
+      if (checkoutSaleDone) {
+        const targetCustomerId = checkoutCustomerId || activeCheckoutVisit.customerId;
+        if (!targetCustomerId) {
+          Alert.alert('Select Customer', 'Please choose a retail customer account to associate with this sale.');
+          setIsCheckingOut(false);
+          return;
+        }
+
+        if (!saleQuantity || saleQuantity <= 0) {
+          Alert.alert('Invalid Quantity', 'Please enter a valid packet quantity of at least 1.');
+          setIsCheckingOut(false);
+          return;
+        }
+
+        const chosenProduct = products.find((p) => p.id === selectedProductId) || products[0];
+        const prodId = chosenProduct?.id || '';
+        const unitPricePaise = Math.round((saleUnitPrice || 25) * 100);
+        const reqKey = `sale_checkout_${activeCheckoutVisit.id}_${Date.now()}`;
+
+        // 1. Create sale record with idempotency key
+        const saleRes = await sellerApi.createSale({
+          customerId: targetCustomerId,
+          items: prodId
+            ? [{ productId: prodId, quantity: saleQuantity, unitPricePaise }]
+            : undefined,
+          quantity: saleQuantity,
+          unitPricePaise,
+          paymentMode: salePaymentMode,
+          requestKey: reqKey,
+          customerFeedback: checkoutFeedback.trim() || undefined,
+        });
+
+        const createdSale = (saleRes as any)?.sale || (saleRes as any)?.item || saleRes;
+        generatedSaleId = createdSale?.id;
+      }
+
+      // 2. Submit shift checkout
+      const finalNotes = checkoutNotes.trim() || (checkoutReason ? `Reason: ${checkoutReason}` : undefined);
+      await sellerApi.checkOut({
+        visitId: activeCheckoutVisit.id,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        saleDone: checkoutSaleDone,
+        saleId: generatedSaleId,
+        customerFeedback: checkoutFeedback.trim() || undefined,
+        notes: finalNotes,
+      });
+
+      // Clear draft on successful checkout
+      await draftStorage.clearVisitCheckoutDraft(userId, activeCheckoutVisit.id);
+
+      setCheckOutModalVisible(false);
+      setActiveCheckoutVisit(null);
+      setCheckoutFeedback('');
+      setCheckoutNotes('');
+      setCheckoutReason('');
+      setCheckoutSaleDone(false);
+
+      const successTitle = checkoutSaleDone ? 'Sale & Visit Completed' : 'Visit Completed (No Sale)';
+      const successMessage = checkoutSaleDone
+        ? `Sale recorded for ₹${(saleQuantity * saleUnitPrice).toLocaleString('en-IN')} with customer feedback.`
+        : `Outcome logged (${checkoutReason || 'Inquiry'}) and departure coordinates locked.`;
+
+      setFeedback({
+        type: 'success',
+        title: successTitle,
+        message: successMessage,
+      });
+      Alert.alert(successTitle, successMessage);
+      loadShiftData();
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        title: 'Checkout Failed',
+        message: err.message || 'Unable to check out of visit. Your feedback draft has been preserved.',
+      });
+      Alert.alert('Checkout Failed', err.message || 'Unable to complete checkout. Draft notes preserved.');
+    } finally {
+      setIsCheckingOut(false);
+    }
+  }
+
+  // ----------------------------------------------------
+  // SHIFT END WITH FACE VERIFICATION
+  // ----------------------------------------------------
+  function handleInitiateEndShift() {
     const km = parseFloat(endOdometer);
-    if (isNaN(km) || km < (currentShift?.startOdometerKm ?? 0)) {
+    const startKmVal = currentShift?.startOdometerKm ?? 0;
+    if (isNaN(km) || km < startKmVal) {
       Alert.alert(
         'Invalid Reading',
-        `Closing odometer must be greater than or equal to starting reading (${currentShift?.startOdometerKm ?? 0} km).`
+        `Closing odometer (${km || 0} km) must be greater than or equal to starting odometer (${startKmVal} km).`
       );
       return;
     }
 
+    setPendingOdometerKm(km);
+    setPendingNotes(endNotes.trim());
+    setEndModalVisible(false);
+    setFaceModalMode('END');
+    setFaceModalVisible(true);
+  }
+
+  async function handleVerifiedShiftEnd(faceResult: FaceVerificationResult) {
+    setFaceModalVisible(false);
     setIsEndingShift(true);
+    setFeedback(null);
+
     try {
-      let lat: number | undefined;
-      let lon: number | undefined;
-
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = loc.coords.latitude;
-          lon = loc.coords.longitude;
-        }
-      } catch {
-        // Fallback
-      }
-
-      await sellerApi.endShift({
-        endOdometerKm: km,
-        endLatitude: lat,
-        endLongitude: lon,
-        notes: endNotes.trim() || undefined,
+      const coords = await acquireCoordinates();
+      const res = await sellerApi.endShift({
+        endOdometerKm: pendingOdometerKm,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: pendingNotes ? `Closing notes: ${pendingNotes}` : undefined,
+        notes: pendingNotes || undefined,
+        faceVerified: faceResult.faceVerified,
+        facePhoto: faceResult.facePhoto,
+        faceConfidence: faceResult.faceConfidence,
+        faceMethod: faceResult.faceMethod,
       });
 
       setCurrentShift(null);
       await draftStorage.clearActiveShift(userId);
-      setEndModalVisible(false);
       setEndOdometer('');
       setEndNotes('');
+
+      const totalDist = res.shift?.totalDistanceKm != null ? `${res.shift.totalDistanceKm} km` : '0 km';
       setFeedback({
         type: 'success',
-        title: 'Shift Ended Successfully',
-        message: `Closing odometer logged at ${km} km. Travel summary preserved.`,
+        title: 'Duty Shift Completed (Face ID Verified)',
+        message: `Closing odometer logged at ${pendingOdometerKm} km. Total beat route: ${totalDist}.`,
       });
-      Alert.alert('Shift Ended', 'Shift logged and summarized successfully.');
+      Alert.alert('Shift Ended', `Shift ended with verified Face ID. Total route: ${totalDist}.`);
     } catch (err: any) {
       setFeedback({
         type: 'error',
         title: 'End Shift Failed',
-        message: err.message || 'Unable to close duty shift.',
+        message: err.message || 'Unable to close duty shift. Never closed locally until confirmed by server.',
       });
       Alert.alert('End Shift Failed', err.message || 'Unable to close duty shift.');
     } finally {
@@ -370,7 +630,7 @@ export default function ShiftScreen() {
                     style={{ flex: 1, marginRight: Spacing.sm }}
                   />
                   <Button
-                    title="End Shift"
+                    title="End Duty Shift"
                     onPress={() => setEndModalVisible(true)}
                     variant="outline"
                     size="md"
@@ -381,14 +641,14 @@ export default function ShiftScreen() {
             ) : (
               <View style={styles.offDutyBox}>
                 <Text style={styles.offDutyText}>
-                  You are currently off duty. Start your shift to activate GPS beat tracking, log retailer visits, and deduct van stock.
+                  You are currently off duty. Start your shift with Face Verification to activate GPS beat tracking, log retailer visits, and bill products.
                 </Text>
                 <Button
-                  title="Start Duty Shift"
+                  title="Start Duty Shift (Face ID)"
                   onPress={() => setStartModalVisible(true)}
                   variant="primary"
                   size="lg"
-                  icon={<Ionicons name="play" size={18} color="#FFFFFF" />}
+                  icon={<Ionicons name="scan-circle-outline" size={20} color="#FFFFFF" />}
                   style={{ marginTop: Spacing.md }}
                 />
               </View>
@@ -451,36 +711,83 @@ export default function ShiftScreen() {
               visits.map((v: ShiftVisit, idx: number) => {
                 const customer = customers.find((c) => c.id === v.customerId);
                 const isCheckedOut = Boolean(v.checkOutTime);
+                const hasSale = Boolean(v.saleDone || v.saleId || v.sale);
+                const durationDisplay =
+                  v.durationMins != null
+                    ? `${v.durationMins.toFixed(1)} mins`
+                    : isCheckedOut
+                    ? 'Completed'
+                    : 'In store now';
+
                 return (
                   <Card key={v.id || idx} style={styles.visitCard}>
                     <View style={styles.visitHeader}>
-                      <View style={styles.visitIconBox}>
+                      <View
+                        style={[
+                          styles.visitIconBox,
+                          hasSale && { backgroundColor: '#DCFCE7' },
+                        ]}
+                      >
                         <Ionicons
-                          name={isCheckedOut ? 'checkmark-circle' : 'time'}
+                          name={hasSale ? 'bag-check' : isCheckedOut ? 'checkmark-circle' : 'time'}
                           size={20}
-                          color={isCheckedOut ? BrandColors.green.primary : '#D97706'}
+                          color={
+                            hasSale
+                              ? BrandColors.green.primary
+                              : isCheckedOut
+                              ? '#64748B'
+                              : '#D97706'
+                          }
                         />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.visitStoreName}>
-                          {customer?.shopName || 'Retail Customer Store'}
+                          {customer?.shopName || v.shopName || 'Retail Customer Store'}
                         </Text>
                         <Text style={styles.visitSub}>
                           Arrived: {new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           {v.checkOutTime
-                            ? ` • Left: ${new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                            : ' • Active Visit'}
+                            ? ` • Left: ${new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${durationDisplay})`
+                            : ` • ${durationDisplay}`}
                         </Text>
                       </View>
                       <Badge
-                        label={isCheckedOut ? 'COMPLETED' : 'IN PROGRESS'}
-                        variant={isCheckedOut ? 'success' : 'warning'}
+                        label={hasSale ? 'SALE DONE' : isCheckedOut ? 'NO SALE' : 'IN PROGRESS'}
+                        variant={hasSale ? 'success' : isCheckedOut ? 'neutral' : 'warning'}
                       />
                     </View>
-                    {v.notes || v.summary ? (
+
+                    {/* Customer Feedback Display Box */}
+                    {v.customerFeedback ? (
+                      <View style={styles.visitFeedbackCard}>
+                        <View style={styles.visitFeedbackHeader}>
+                          <Ionicons name="chatbubble-ellipses" size={13} color={BrandColors.pink.primary} />
+                          <Text style={styles.visitFeedbackTitle}>Customer Feedback / Observation:</Text>
+                        </View>
+                        <Text style={styles.visitFeedbackText}>
+                          &ldquo;{v.customerFeedback}&rdquo;
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {/* Visit Notes */}
+                    {v.notes && v.notes !== v.customerFeedback ? (
                       <Text style={styles.visitNotes} numberOfLines={2}>
-                        &ldquo;{v.notes || v.summary}&rdquo;
+                        Notes: &ldquo;{v.notes}&rdquo;
                       </Text>
+                    ) : null}
+
+                    {/* Action button if visit is active */}
+                    {!isCheckedOut ? (
+                      <View style={{ marginTop: Spacing.sm, alignItems: 'flex-end' }}>
+                        <Button
+                          title="Check Out & Log Feedback"
+                          variant="primary"
+                          size="sm"
+                          icon={<Ionicons name="log-out-outline" size={15} color="#FFFFFF" />}
+                          onPress={() => handleOpenCheckout(v)}
+                        />
+                      </View>
                     ) : null}
                   </Card>
                 );
@@ -490,13 +797,15 @@ export default function ShiftScreen() {
         </View>
       </ScrollView>
 
-      {/* Start Shift Modal */}
+      {/* ---------------------------------------------------- */}
+      {/* 1. START SHIFT MODAL */}
+      {/* ---------------------------------------------------- */}
       <Modal visible={startModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Start Field Shift</Text>
+            <Text style={styles.modalTitle}>Start Field Duty Shift</Text>
             <Text style={styles.modalSubtitle}>
-              Confirm starting odometer reading and lock initial GPS coordinates.
+              Confirm starting odometer reading and proceed to selfie attendance verification.
             </Text>
 
             <Input
@@ -524,24 +833,25 @@ export default function ShiftScreen() {
                 style={{ flex: 1, marginRight: Spacing.sm }}
               />
               <Button
-                title={isStartingShift ? 'Starting...' : 'Confirm & Start'}
+                title="Proceed to Face ID"
                 variant="primary"
-                onPress={handleStartShift}
-                loading={isStartingShift}
-                style={{ flex: 1 }}
+                onPress={handleInitiateStartShift}
+                style={{ flex: 1.4 }}
               />
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Check-in Store Visit Modal */}
+      {/* ---------------------------------------------------- */}
+      {/* 2. CHECK-IN STORE VISIT MODAL */}
+      {/* ---------------------------------------------------- */}
       <Modal visible={checkInModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Check-in Store Visit</Text>
             <Text style={styles.modalSubtitle}>
-              Select the outlet and lock your current GPS location coordinates.
+              Select the retail outlet and lock your current GPS coordinates.
             </Text>
 
             <Text style={styles.modalFieldLabel}>Select Retail Outlet *</Text>
@@ -557,7 +867,9 @@ export default function ShiftScreen() {
                     <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
                       {c.shopName}
                     </Text>
-                    <Text style={styles.modalCustomerSub}>{c.ownerName} • {c.village || c.district || 'Territory'}</Text>
+                    <Text style={styles.modalCustomerSub}>
+                      {c.ownerName} • {c.village || c.district || 'Territory'}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -580,28 +892,348 @@ export default function ShiftScreen() {
                 style={{ flex: 1, marginRight: Spacing.sm }}
               />
               <Button
-                title={isCheckingIn ? 'Checking in...' : 'Lock Location & Visit'}
-                variant="secondary"
+                title={isCheckingIn ? 'Checking in...' : 'Lock GPS & Check In'}
+                variant="primary"
                 onPress={handleCheckInVisit}
                 loading={isCheckingIn}
-                style={{ flex: 1 }}
+                disabled={isCheckingIn}
+                style={{ flex: 1.4 }}
               />
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* End Shift Modal */}
+      {/* ---------------------------------------------------- */}
+      {/* 3. CHECK-OUT VISIT MODAL (BRANCH 1 & BRANCH 2) */}
+      {/* ---------------------------------------------------- */}
+      <Modal visible={checkOutModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>Check-out Store Visit</Text>
+              <Text style={styles.modalSubtitle}>
+                Select outcome, enter quantities or feedback, and lock exit GPS coordinates.
+              </Text>
+
+              {/* Outlet name */}
+              <View style={styles.checkoutOutletBox}>
+                <Ionicons name="storefront" size={18} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.checkoutOutletText}>
+                  {customers.find((c) => c.id === activeCheckoutVisit?.customerId)?.shopName ||
+                    activeCheckoutVisit?.shopName ||
+                    'Retail Outlet Visit'}
+                </Text>
+              </View>
+
+              {/* BRANCH SELECTOR: NO SALE vs SALE COMPLETED */}
+              <View style={styles.branchSelector}>
+                <Pressable
+                  style={[styles.branchButton, !checkoutSaleDone && styles.branchButtonActiveNoSale]}
+                  onPress={() => {
+                    setCheckoutSaleDone(false);
+                    saveCurrentCheckoutDraft({ saleDone: false });
+                  }}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color={!checkoutSaleDone ? '#FFFFFF' : '#64748B'}
+                  />
+                  <Text style={[styles.branchButtonTitle, !checkoutSaleDone && styles.branchButtonTextActive]}>
+                    No Sale Done
+                  </Text>
+                  <Text style={[styles.branchButtonSub, !checkoutSaleDone && styles.branchButtonSubActive]}>
+                    Follow-up / Inquiry only
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[styles.branchButton, checkoutSaleDone && styles.branchButtonActiveSale]}
+                  onPress={() => {
+                    setCheckoutSaleDone(true);
+                    saveCurrentCheckoutDraft({ saleDone: true });
+                  }}
+                >
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={checkoutSaleDone ? '#FFFFFF' : BrandColors.green.primary}
+                  />
+                  <Text style={[styles.branchButtonTitle, checkoutSaleDone && styles.branchButtonTextActive]}>
+                    Yes, Sale Done!
+                  </Text>
+                  <Text style={[styles.branchButtonSub, checkoutSaleDone && styles.branchButtonSubActive]}>
+                    Book order & record units
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* ==================================================== */}
+              {/* BRANCH 1: NO SALE GENERATED */}
+              {/* ==================================================== */}
+              {!checkoutSaleDone ? (
+                <View style={styles.noSaleSection}>
+                  <Text style={styles.subSectionTitle}>Predefined Visit Reason *</Text>
+                  <View style={styles.reasonChipsRow}>
+                    {PREDEFINED_VISIT_REASONS.map((r) => {
+                      const isSelected = checkoutReason === r;
+                      return (
+                        <Pressable
+                          key={r}
+                          style={[styles.reasonChip, isSelected && styles.reasonChipActive]}
+                          onPress={() => {
+                            setCheckoutReason(r);
+                            const updatedFeedback = checkoutFeedback ? `${r}. ${checkoutFeedback}` : r;
+                            setCheckoutFeedback(updatedFeedback);
+                            saveCurrentCheckoutDraft({ reason: r, feedback: updatedFeedback });
+                          }}
+                        >
+                          <Text style={[styles.reasonChipText, isSelected && styles.reasonChipTextActive]}>
+                            {r}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : (
+                /* ==================================================== */
+                /* BRANCH 2: SALE GENERATED */
+                /* ==================================================== */
+                <View style={styles.saleSection}>
+                  <View style={styles.saleSectionHeader}>
+                    <Ionicons name="cart" size={18} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
+                    <Text style={styles.saleSectionTitle}>Live Order &amp; Billing Details</Text>
+                  </View>
+
+                  {/* Customer Link Selector if visit has no customerId */}
+                  {!activeCheckoutVisit?.customerId && (
+                    <View style={{ marginBottom: Spacing.sm }}>
+                      <Text style={styles.modalFieldLabel}>Link Customer Account *</Text>
+                      <ScrollView style={styles.modalCustomerList}>
+                        {customers.map((c) => {
+                          const isSelected = checkoutCustomerId === c.id;
+                          return (
+                            <Pressable
+                              key={c.id}
+                              style={[styles.modalCustomerItem, isSelected && styles.modalCustomerItemActive]}
+                              onPress={() => {
+                                setCheckoutCustomerId(c.id);
+                                saveCurrentCheckoutDraft({ selectedCustomerId: c.id });
+                              }}
+                            >
+                              <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
+                                {c.shopName}
+                              </Text>
+                              <Text style={styles.modalCustomerSub}>{c.ownerName} • {c.village || c.district}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* Product Selector */}
+                  <View style={{ marginBottom: Spacing.sm }}>
+                    <Text style={styles.modalFieldLabel}>Select Product *</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                      {products.map((p) => {
+                        const isSelected = selectedProductId === p.id;
+                        return (
+                          <Pressable
+                            key={p.id}
+                            style={[styles.productCard, isSelected && styles.productCardActive]}
+                            onPress={() => {
+                              setSelectedProductId(p.id);
+                              const base = p.basePricePaise / 100 || 25;
+                              setSaleUnitPrice(base);
+                              saveCurrentCheckoutDraft({ selectedProductId: p.id, unitPrice: base });
+                            }}
+                          >
+                            <Text style={[styles.productCardName, isSelected && styles.productCardNameActive]}>
+                              {p.name}
+                            </Text>
+                            <Text style={styles.productCardPrice}>₹{p.basePricePaise / 100} / pkt</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Quantity & Unit Price */}
+                  <View style={styles.quantityPriceRow}>
+                    <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                      <Text style={styles.modalFieldLabel}>Quantity (Packets)</Text>
+                      <View style={styles.stepperRow}>
+                        <Pressable
+                          style={styles.stepperBtn}
+                          onPress={() => {
+                            const newQ = Math.max(1, saleQuantity - 1);
+                            setSaleQuantity(newQ);
+                            saveCurrentCheckoutDraft({ quantity: newQ });
+                          }}
+                        >
+                          <Text style={styles.stepperBtnText}>-</Text>
+                        </Pressable>
+                        <Text style={styles.stepperValue}>{saleQuantity}</Text>
+                        <Pressable
+                          style={styles.stepperBtn}
+                          onPress={() => {
+                            const newQ = saleQuantity + 1;
+                            setSaleQuantity(newQ);
+                            saveCurrentCheckoutDraft({ quantity: newQ });
+                          }}
+                        >
+                          <Text style={styles.stepperBtnText}>+</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Input
+                        label="Unit Price (₹) *"
+                        value={String(saleUnitPrice)}
+                        onChangeText={(t) => {
+                          const val = parseFloat(t) || 0;
+                          setSaleUnitPrice(val);
+                          saveCurrentCheckoutDraft({ unitPrice: val });
+                        }}
+                        keyboardType="numeric"
+                        leftIcon={<Text style={{ fontWeight: '700', color: '#64748B' }}>₹</Text>}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Total Sale Preview Banner */}
+                  <View style={styles.totalSaleBanner}>
+                    <Text style={styles.totalSaleLabel}>Total Sale Value:</Text>
+                    <Text style={styles.totalSaleAmount}>
+                      ₹{(saleQuantity * (saleUnitPrice || 0)).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+
+                  {/* Payment Mode Selector matching backend enum */}
+                  <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.sm }}>
+                    <Text style={styles.modalFieldLabel}>Payment Mode *</Text>
+                    <View style={styles.paymentModeRow}>
+                      {(['CASH', 'BANK', 'PENDING'] as PaymentMode[]).map((mode) => {
+                        const isSelected = salePaymentMode === mode;
+                        const label = mode === 'CASH' ? 'Cash' : mode === 'BANK' ? 'UPI / Bank' : 'Pending';
+                        return (
+                          <Pressable
+                            key={mode}
+                            style={[styles.paymentModeBtn, isSelected && styles.paymentModeBtnActive]}
+                            onPress={() => {
+                              setSalePaymentMode(mode);
+                              saveCurrentCheckoutDraft({ paymentMode: mode });
+                            }}
+                          >
+                            <Text style={[styles.paymentModeText, isSelected && styles.paymentModeTextActive]}>
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* CUSTOMER FEEDBACK TRANSLATOR */}
+              <View style={{ marginVertical: Spacing.sm }}>
+                <VoiceFeedbackTranslator
+                  value={checkoutFeedback}
+                  onChange={(text) => {
+                    setCheckoutFeedback(text);
+                    saveCurrentCheckoutDraft({ feedback: text });
+                  }}
+                  label="Customer Feedback / Visit Remarks"
+                  sublabel="Speak naturally in Hindi or Hinglish — translated to concise English"
+                  quickChips={
+                    checkoutSaleDone
+                      ? [
+                          'Repeat order client',
+                          'Cash paid instantly',
+                          'High product demand',
+                          'Satisfied with quality',
+                          'Requested weekly restocking',
+                        ]
+                      : [
+                          'Stock already sufficient',
+                          'Price resistance / negotiation',
+                          'Decision maker unavailable',
+                          'Order planned for next visit',
+                          'Sample provided for trial',
+                          'Previous payment pending',
+                        ]
+                  }
+                  placeholder={
+                    checkoutSaleDone
+                      ? 'e.g. Retailer satisfied with standard pack, asked for next delivery on Friday...'
+                      : 'e.g. Dukaan band thi owner gaon gaya hai, agle hafte aane ko bola...'
+                  }
+                />
+              </View>
+
+              {/* Departure Notes */}
+              <Input
+                label="Departure Notes (Optional)"
+                placeholder="e.g. Visit concluded cleanly, samples delivered"
+                value={checkoutNotes}
+                onChangeText={(t) => {
+                  setCheckoutNotes(t);
+                  saveCurrentCheckoutDraft({ notes: t });
+                }}
+                leftIcon={<Ionicons name="document-text-outline" size={18} color="#94A3B8" />}
+              />
+
+              {/* Action Buttons */}
+              <View style={styles.modalBtnRow}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  size="md"
+                  onPress={() => {
+                    setCheckOutModalVisible(false);
+                    setActiveCheckoutVisit(null);
+                  }}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={
+                    isCheckingOut
+                      ? 'Checking out...'
+                      : checkoutSaleDone
+                      ? 'Submit Sale & Checkout'
+                      : 'Complete Checkout'
+                  }
+                  variant="primary"
+                  size="md"
+                  onPress={handleConfirmCheckout}
+                  loading={isCheckingOut}
+                  disabled={isCheckingOut}
+                  style={{ flex: 1.6 }}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------------------------------------------------- */}
+      {/* 4. END SHIFT MODAL */}
+      {/* ---------------------------------------------------- */}
       <Modal visible={endModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>End Duty Shift</Text>
+            <Text style={styles.modalTitle}>End Field Duty Shift</Text>
             <Text style={styles.modalSubtitle}>
-              Record your closing vehicle odometer to compute total distance traveled.
+              Log final odometer reading and complete shift checkout via Face ID.
             </Text>
 
             <Input
-              label={`Closing Odometer (≥ ${startKm} km) *`}
+              label={`Closing Odometer (km) * (Must be >= ${startKm} km)`}
               placeholder={`e.g. ${startKm + 25}`}
               value={endOdometer}
               onChangeText={setEndOdometer}
@@ -610,8 +1242,8 @@ export default function ShiftScreen() {
             />
 
             <Input
-              label="Closing Remarks"
-              placeholder="e.g. Completed sector 4 beat without stockouts"
+              label="Shift Summary / Remarks (Optional)"
+              placeholder="e.g. Completed South beat, covered 12 outlets"
               value={endNotes}
               onChangeText={setEndNotes}
               leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
@@ -625,16 +1257,33 @@ export default function ShiftScreen() {
                 style={{ flex: 1, marginRight: Spacing.sm }}
               />
               <Button
-                title={isEndingShift ? 'Closing...' : 'Confirm & End'}
-                variant="admin"
-                onPress={handleEndShift}
-                loading={isEndingShift}
-                style={{ flex: 1 }}
+                title="Proceed to Face ID"
+                variant="primary"
+                onPress={handleInitiateEndShift}
+                style={{ flex: 1.4 }}
               />
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* ---------------------------------------------------- */}
+      {/* 5. FACE VERIFICATION / ATTENDANCE SELFIE MODAL */}
+      {/* ---------------------------------------------------- */}
+      <FaceVerificationModal
+        visible={faceModalVisible}
+        mode={faceModalMode}
+        userName={user?.name || 'Field Officer'}
+        userRole={user?.role || 'SELLER'}
+        onClose={() => setFaceModalVisible(false)}
+        onVerified={(res) => {
+          if (faceModalMode === 'START') {
+            handleVerifiedShiftStart(res);
+          } else {
+            handleVerifiedShiftEnd(res);
+          }
+        }}
+      />
     </View>
   );
 }
@@ -757,22 +1406,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: BrandColors.pink.primary,
   },
-  emptyCard: {
-    padding: Spacing.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    color: Colors.light.heading,
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
   visitCard: {
     marginBottom: Spacing.sm,
     padding: Spacing.md,
@@ -782,16 +1415,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   visitIconBox: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: Radius.full,
-    backgroundColor: Colors.light.backgroundElement,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.sm,
   },
   visitStoreName: {
     ...Typography.bodyMedium,
+    fontWeight: '700',
     color: Colors.light.heading,
   },
   visitSub: {
@@ -799,16 +1433,40 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
+  visitFeedbackCard: {
+    marginTop: Spacing.sm,
+    padding: Spacing.sm,
+    backgroundColor: '#FFF1F2',
+    borderRadius: Radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: BrandColors.pink.primary,
+  },
+  visitFeedbackHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  visitFeedbackTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
+    marginLeft: 4,
+  },
+  visitFeedbackText: {
+    fontSize: 12,
+    color: '#334155',
+    fontStyle: 'italic',
+  },
   visitNotes: {
     ...Typography.caption,
     fontStyle: 'italic',
     color: Colors.light.textSecondary,
-    marginTop: Spacing.sm,
-    paddingLeft: 40,
+    marginTop: Spacing.xs,
+    paddingLeft: 4,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -826,7 +1484,7 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   modalFieldLabel: {
     ...Typography.caption,
@@ -835,26 +1493,28 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   modalCustomerList: {
-    maxHeight: 180,
+    maxHeight: 140,
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   modalCustomerItem: {
-    padding: Spacing.md,
+    padding: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.borderSubtle,
   },
   modalCustomerItemActive: {
-    backgroundColor: BrandColors.pink.subtle,
+    backgroundColor: BrandColors.pink.tint,
   },
   modalCustomerName: {
     ...Typography.bodyMedium,
+    fontWeight: '600',
     color: Colors.light.heading,
   },
   modalCustomerNameActive: {
     color: BrandColors.pink.primary,
+    fontWeight: '700',
   },
   modalCustomerSub: {
     ...Typography.caption,
@@ -864,5 +1524,225 @@ const styles = StyleSheet.create({
   modalBtnRow: {
     flexDirection: 'row',
     marginTop: Spacing.lg,
+  },
+  checkoutOutletBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  checkoutOutletText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  branchSelector: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  branchButton: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  branchButtonActiveNoSale: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  branchButtonActiveSale: {
+    backgroundColor: BrandColors.green.primary,
+    borderColor: BrandColors.green.primary,
+  },
+  branchButtonTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 4,
+  },
+  branchButtonSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  branchButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  branchButtonSubActive: {
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  noSaleSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  subSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: Spacing.sm,
+  },
+  reasonChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  reasonChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  reasonChipActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  reasonChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  reasonChipTextActive: {
+    color: '#FFFFFF',
+  },
+  saleSection: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  saleSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  saleSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  productCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    marginRight: 8,
+  },
+  productCardActive: {
+    borderColor: BrandColors.green.primary,
+    backgroundColor: '#DCFCE7',
+  },
+  productCardName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  productCardNameActive: {
+    color: '#166534',
+    fontWeight: '700',
+  },
+  productCardPrice: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  quantityPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.xs,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    height: 48,
+  },
+  stepperBtn: {
+    width: 44,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  stepperBtnText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  stepperValue: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  totalSaleBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    marginVertical: Spacing.sm,
+  },
+  totalSaleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  totalSaleAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  paymentModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  paymentModeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentModeBtnActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  paymentModeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  paymentModeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

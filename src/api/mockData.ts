@@ -729,4 +729,11 @@ export const MOCK_ADMIN_DASHBOARD: AdminDashboardData = {
 export const MOCK_SETTINGS: BusinessSettings = {
   minimumSalePricePaise: 2500, // ₹25.00 minimum
   lowStockThreshold: 50,
+  companyName: 'MASAKO ENTERPRISES PRIVATE LIMITED',
+  companyGst: '09AAECM1234F1Z5',
+  companyPan: 'AAECM1234F',
+  companyAddress: 'Plot 42, Industrial Area Phase II, Lucknow, Uttar Pradesh 226012',
+  companyPhone: '+91 9876543210',
+  companyEmail: 'billing@masako.co.in',
+  invoiceTerms: '1. Goods once sold will not be taken back or exchanged.\n2. Payment due immediately upon delivery.\n3. Subject to Lucknow jurisdiction only.',
 };

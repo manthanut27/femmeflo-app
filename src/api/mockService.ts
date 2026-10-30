@@ -1,5 +1,6 @@
 import type { PendingApprovalItem } from './admin';
 import type { ManagerSellerItem } from './manager';
+import { ALL_BACKEND_PERMISSIONS } from '../utils/permissions';
 import {
   MOCK_ADMIN_DASHBOARD,
   MOCK_ALL_MANAGERS,
@@ -309,7 +310,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const lineItems = items.map((it: any, idx: number) => {
       const prod = mockDb.products.find((p) => p.id === it.productId);
       const unitPrice = it.unitPricePaise;
-      const minPrice = prod?.minimumPricePaise || mockDb.settings.minimumSalePricePaise;
+      const minPrice = prod?.minimumPricePaise || mockDb.settings.minimumSalePricePaise || 2500;
       if (unitPrice < minPrice) {
         isBelowMinimum = true;
       }
@@ -415,7 +416,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       sellerId: mockDb.currentUser.id,
       status: 'ACTIVE',
       startTime: new Date().toISOString(),
-      startOdometerKm: payload.startOdometerKm,
+      startOdometerKm: payload.startOdometerKm ?? 0,
       startLatitude: payload.startLatitude || 22.7196,
       startLongitude: payload.startLongitude || 75.8577,
       visits: [],
@@ -430,11 +431,11 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const visit: ShiftVisit = {
       id: `visit_${Date.now()}`,
       shiftId: mockDb.currentShift?.id || 'shift_active',
-      customerId: payload.customerId,
-      customer: { shopName: customer.shopName, ownerName: customer.ownerName },
+      customerId: payload.customerId || customer?.id || 'c_default',
+      customer: customer ? { shopName: customer.shopName, ownerName: customer.ownerName } : undefined,
       checkInTime: new Date().toISOString(),
-      latitude: payload.latitude || customer.latitude,
-      longitude: payload.longitude || customer.longitude,
+      latitude: payload.latitude || customer?.latitude,
+      longitude: payload.longitude || customer?.longitude,
       orderPlaced: false,
     };
     if (mockDb.currentShift) {
@@ -463,7 +464,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     if (mockDb.currentShift) {
       mockDb.currentShift.status = 'COMPLETED';
       mockDb.currentShift.endTime = new Date().toISOString();
-      mockDb.currentShift.endOdometerKm = payload.endOdometerKm;
+      mockDb.currentShift.endOdometerKm = payload.endOdometerKm ?? 0;
       mockDb.currentShift.endLatitude = payload.endLatitude || 22.7196;
       mockDb.currentShift.endLongitude = payload.endLongitude || 75.8577;
       mockDb.shiftHistory.unshift(mockDb.currentShift);
@@ -554,14 +555,96 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // Admin Endpoints
   // ----------------------------------------------------
   if (cleanEndpoint === 'admin/dashboard') {
+    let sales = mockDb.sales.filter((s) => s.status === 'CONFIRMED');
+    if (options.params?.sellerId) {
+      sales = sales.filter((s) => s.sellerId === options.params?.sellerId);
+    }
+    if (options.params?.district) {
+      sales = sales.filter((s) => s.customer?.district?.toLowerCase() === String(options.params?.district).toLowerCase());
+    }
+    if (options.params?.state) {
+      sales = sales.filter((s) => s.customer?.state?.toLowerCase() === String(options.params?.state).toLowerCase());
+    }
+
+    const totalRevenuePaise = sales.reduce((acc, s) => acc + (s.totalAmountPaise || s.totalPaise || 0), 0);
+    const totalPacketsSold = sales.reduce((acc, s) => acc + (s.packetCount || s.quantity || 0), 0);
     const pendingCount = mockDb.sales.filter((s) => s.status === 'PENDING').length;
+
     const adminDash: AdminDashboardData = {
-      ...MOCK_ADMIN_DASHBOARD,
+      totalRevenuePaise: totalRevenuePaise || MOCK_ADMIN_DASHBOARD.totalRevenuePaise,
+      totalPacketsSold: totalPacketsSold || MOCK_ADMIN_DASHBOARD.totalPacketsSold,
       totalCustomers: mockDb.customers.length,
       activeSellers: mockDb.sellers.length,
       pendingApprovalsCount: pendingCount,
+      warehouseStockBalance: MOCK_ADMIN_DASHBOARD.warehouseStockBalance,
+      metrics: {
+        totalPacketsSold: totalPacketsSold || MOCK_ADMIN_DASHBOARD.totalPacketsSold,
+        totalEarningsPaise: totalRevenuePaise || MOCK_ADMIN_DASHBOARD.totalRevenuePaise,
+        totalEarningsRupees: (totalRevenuePaise || MOCK_ADMIN_DASHBOARD.totalRevenuePaise) / 100,
+        totalStates: 4,
+        totalShops: mockDb.customers.length,
+        totalManagers: mockDb.managers.length,
+        totalSellers: mockDb.sellers.length,
+        totalInventory: 15000,
+        hqStock: 10000,
+        warehouseStock: 3500,
+        sellerStock: 1500,
+      },
     };
     return adminDash as unknown as T;
+  }
+
+  if (cleanEndpoint === 'admin/dashboard/filters') {
+    return {
+      categories: mockDb.categories,
+      customerLocations: [
+        { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
+        { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
+        { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
+        { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
+      ],
+      managers: mockDb.managers,
+      sellers: mockDb.sellers,
+      states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
+      districts: ['Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
+      villages: ['Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === 'admin/invoices' && method === 'GET') {
+    const list = mockDb.sales.map((s) => ({
+      id: `inv_${s.id}`,
+      number: s.saleNumber || `INV-${s.id.slice(0, 8).toUpperCase()}`,
+      saleId: s.id,
+      createdAt: s.createdAt,
+      sale: {
+        id: s.id,
+        quantity: s.packetCount || s.quantity || 0,
+        totalPaise: s.totalAmountPaise || s.totalPaise || 0,
+        paymentMode: s.paymentMode,
+        customer: s.customer,
+        seller: s.seller,
+      },
+    }));
+    return {
+      items: list,
+      invoices: list,
+      pagination: { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/invoices/') && method === 'GET') {
+    const id = cleanEndpoint.replace('admin/invoices/', '');
+    const sale = mockDb.sales[0];
+    return {
+      invoice: {
+        id,
+        number: `INV-${id.slice(0, 8).toUpperCase()}`,
+        saleId: sale.id,
+        createdAt: sale.createdAt,
+        sale,
+      },
+    } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/approvals' && method === 'GET') {
@@ -678,13 +761,224 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { seller: newSeller } as unknown as T;
   }
 
-  if (cleanEndpoint === 'admin/settings' && method === 'GET') {
-    return mockDb.settings as unknown as T;
+  if ((cleanEndpoint === 'admin/settings' || cleanEndpoint === 'admin/incentives/settings') && method === 'GET') {
+    return { settings: mockDb.settings, ...mockDb.settings } as unknown as T;
   }
 
-  if (cleanEndpoint === 'admin/settings' && method === 'PATCH') {
+  if ((cleanEndpoint === 'admin/settings' || cleanEndpoint === 'admin/incentives/settings') && method === 'PATCH') {
     mockDb.settings = { ...mockDb.settings, ...body };
-    return mockDb.settings as unknown as T;
+    return { settings: mockDb.settings, ...mockDb.settings } as unknown as T;
+  }
+
+  // ----------------------------------------------------
+  // Admin: Products
+  // ----------------------------------------------------
+  if (cleanEndpoint === 'admin/products' && method === 'POST') {
+    const newProduct: ProductItem = {
+      id: `prod_${Date.now()}`,
+      name: body.name,
+      sku: body.sku || `FF-SKU-${Math.floor(100 + Math.random() * 900)}`,
+      basePricePaise: body.basePricePaise || 3500,
+      minimumPricePaise: body.minimumPricePaise || body.basePricePaise || 2500,
+      active: body.active !== undefined ? body.active : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    mockDb.products.unshift(newProduct);
+    return { product: newProduct } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/products/') && cleanEndpoint.endsWith('/toggle') && method === 'PATCH') {
+    const id = cleanEndpoint.replace('admin/products/', '').replace('/toggle', '');
+    const product = mockDb.products.find((p) => p.id === id);
+    if (product) {
+      product.active = !product.active;
+      return { product } as unknown as T;
+    }
+    return { product: mockDb.products[0] } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/products/') && method === 'PATCH') {
+    const id = cleanEndpoint.replace('admin/products/', '');
+    const product = mockDb.products.find((p) => p.id === id);
+    if (product) {
+      Object.assign(product, body);
+      return { product } as unknown as T;
+    }
+    return { product: mockDb.products[0] } as unknown as T;
+  }
+
+  // ----------------------------------------------------
+  // Admin: Permissions
+  // ----------------------------------------------------
+  if (cleanEndpoint === 'admin/permissions' && method === 'GET') {
+    return { permissions: ALL_BACKEND_PERMISSIONS } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/permissions/managers/') && cleanEndpoint.endsWith('/permissions') && method === 'PATCH') {
+    const managerId = cleanEndpoint.replace('admin/permissions/managers/', '').replace('/permissions', '');
+    const manager = mockDb.managers.find((m) => m.id === managerId);
+    if (manager) {
+      manager.permissions = body.permissions || [];
+      return { manager } as unknown as T;
+    }
+    return { manager: mockDb.managers[0] } as unknown as T;
+  }
+
+  if ((cleanEndpoint === 'admin/permissions/overall' || cleanEndpoint === 'admin/permissions/managers/all/permissions') && method === 'PATCH') {
+    for (const m of mockDb.managers) {
+      m.permissions = body.permissions || [];
+    }
+    return {
+      count: mockDb.managers.length,
+      message: `Permissions updated across all ${mockDb.managers.length} managers successfully`,
+    } as unknown as T;
+  }
+
+  // ----------------------------------------------------
+  // Admin: Shifts
+  // ----------------------------------------------------
+  if (cleanEndpoint === 'admin/shifts' && method === 'GET') {
+    let list = [...mockDb.shiftHistory];
+    if (options.params?.status && options.params.status !== 'ALL') {
+      list = list.filter((s) => s.status === options.params?.status);
+    }
+    if (options.params?.sellerId) {
+      list = list.filter((s) => s.sellerId === options.params?.sellerId);
+    }
+    return {
+      items: list,
+      shifts: list,
+      pagination: { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+    } as unknown as T;
+  }
+
+  // ----------------------------------------------------
+  // Admin: Incentives
+  // ----------------------------------------------------
+  if (cleanEndpoint === 'admin/incentives' && method === 'GET') {
+    return {
+      summary: {
+        totalEarnedPaise: 4500000,
+        totalPaidPaise: 3800000,
+        totalPendingPaise: 700000,
+        totalAdditionsPaise: 50000,
+        totalDeductionsPaise: 20000,
+        pendingEmployeesCount: 2,
+        currentMonth: {
+          year: 2026,
+          month: 10,
+          earnedPaise: 150000,
+          paidPaise: 120000,
+          pendingPaise: 30000,
+        },
+      },
+      sellers: mockDb.sellers.map((s) => ({
+        id: s.id,
+        sellerId: s.id,
+        name: s.name,
+        phone: s.phone,
+        totalEarnedPaise: 150000,
+        totalPaidPaise: 120000,
+        netPayablePaise: 30000,
+        outstandingPaise: 30000,
+        ratePerPacketRupees: 15,
+        status: 'PARTIALLY_PAID',
+        currentMonth: { salesIncentivePaise: 50000, allocatedPaidPaise: 40000, outstandingPaise: 10000 },
+        previousMonth: { salesIncentivePaise: 60000, allocatedPaidPaise: 50000, outstandingPaise: 10000 },
+      })),
+      managers: mockDb.managers.map((m) => ({
+        id: m.id,
+        sellerId: m.id,
+        name: m.name,
+        phone: m.phone,
+        totalEarnedPaise: 300000,
+        totalPaidPaise: 260000,
+        netPayablePaise: 40000,
+        outstandingPaise: 40000,
+        ratePerPacketRupees: 20,
+        status: 'PARTIALLY_PAID',
+        currentMonth: { salesIncentivePaise: 100000, allocatedPaidPaise: 80000, outstandingPaise: 20000 },
+        previousMonth: { salesIncentivePaise: 120000, allocatedPaidPaise: 100000, outstandingPaise: 20000 },
+      })),
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/incentives/users/') && cleanEndpoint.endsWith('/rate') && method === 'PATCH') {
+    return { success: true, message: 'Incentive rate updated successfully' } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/incentives/users/') && cleanEndpoint.endsWith('/adjustments') && method === 'POST') {
+    return { success: true, message: 'Adjustment recorded successfully' } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/incentives/users/') && cleanEndpoint.endsWith('/payouts') && method === 'POST') {
+    return { success: true, message: 'Payout recorded successfully' } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/incentives/users/') && method === 'GET') {
+    const userId = cleanEndpoint.replace('admin/incentives/users/', '');
+    const user = mockDb.sellers.find((s) => s.id === userId) || mockDb.managers.find((m) => m.id === userId) || mockDb.currentUser;
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        effectiveRatePaise: 1500,
+        effectiveRateRupees: 15,
+        isCustomRate: false,
+      },
+      summary: {
+        earnedPaise: 150000,
+        paidPaise: 120000,
+        outstandingPaise: 30000,
+      },
+      rateHistory: [],
+      adjustments: [],
+      payouts: [],
+      sales: [],
+    } as unknown as T;
+  }
+
+  // ----------------------------------------------------
+  // Admin: Sales
+  // ----------------------------------------------------
+  if (cleanEndpoint === 'admin/sales' && method === 'GET') {
+    let list = [...mockDb.sales];
+    if (options.params?.status) {
+      list = list.filter((s) => s.status === options.params?.status);
+    }
+    if (options.params?.paymentMode) {
+      list = list.filter((s) => s.paymentMode === options.params?.paymentMode);
+    }
+    if (options.params?.search) {
+      const q = String(options.params.search).toLowerCase();
+      list = list.filter((s) =>
+        s.customer?.shopName?.toLowerCase().includes(q) ||
+        s.seller?.name?.toLowerCase().includes(q) ||
+        s.id.toLowerCase().includes(q)
+      );
+    }
+    return {
+      items: list,
+      sales: list,
+      pagination: { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/sales/') && method === 'GET') {
+    const id = cleanEndpoint.replace('admin/sales/', '');
+    const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
+    return { sale } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/sales/') && method === 'PATCH') {
+    const id = cleanEndpoint.replace('admin/sales/', '');
+    const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
+    Object.assign(sale, body);
+    return { sale } as unknown as T;
   }
 
   // ----------------------------------------------------

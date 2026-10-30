@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,24 +10,43 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
 import type { CustomerItem, PaymentMode, ProductItem, ProductStockItem } from '@/api/types';
+import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
-import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
-import { BrandColors, Colors, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import {
+  BrandColors,
+  Colors,
+  HitSlop,
+  MaxContentWidth,
+  Radius,
+  Shadows,
+  Spacing,
+  Typography,
+} from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import {
+  computePayloadHash,
   draftStorage,
   generateIdempotencyKey,
-  computePayloadHash,
   shouldRotateIdempotencyKey,
+  type OrderDraftLineItem,
 } from '@/utils/draftStorage';
+
+interface CartLineItem {
+  key: string;
+  productId: string;
+  quantity: number;
+  unitPriceRupees: number;
+}
 
 export default function NewSaleScreen() {
   const params = useLocalSearchParams<{ customerId?: string; customerName?: string }>();
@@ -35,24 +54,28 @@ export default function NewSaleScreen() {
   const { user } = useAuth();
   const userId = user?.id || 'anonymous';
 
-  // Data states
+  // Catalog & Inventory Data
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [stockMap, setStockMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  // Form states & Persistent Draft
+  // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState(params.customerId || '');
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [quantityStr, setQuantityStr] = useState('10');
-  const [unitPriceRupees, setUnitPriceRupees] = useState('35');
+  const [cartItems, setCartItems] = useState<CartLineItem[]>([
+    { key: 'line_1', productId: '', quantity: 10, unitPriceRupees: 35 },
+  ]);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('CASH');
   const [paymentReference, setPaymentReference] = useState('');
+  const [customerFeedback, setCustomerFeedback] = useState('');
+
+  // Offline Draft & Idempotency
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateIdempotencyKey());
   const [boundPayloadHash, setBoundPayloadHash] = useState<string>('');
   const [wasSubmitted, setWasSubmitted] = useState<boolean>(false);
   const [isDraftRestored, setIsDraftRestored] = useState(false);
 
+  // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{
@@ -63,20 +86,25 @@ export default function NewSaleScreen() {
     onAction?: () => void;
   } | null>(null);
 
+  // ----------------------------------------------------
+  // Initialize Data & Restore Draft
+  // ----------------------------------------------------
   useEffect(() => {
     async function initScreen() {
       try {
         const [custRes, prodRes, invRes, savedDraft] = await Promise.all([
-          sellerApi.listCustomers({ pageSize: 50 }).catch(() => ({ items: [] })),
+          sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
           sellerApi.listProducts().catch(() => ({ items: [] })),
           sellerApi.getInventory().catch(() => ({ balance: 0, products: [] })),
           draftStorage.getOrderDraft(userId).catch(() => null),
         ]);
 
-        setCustomers(custRes.items);
-        setProducts(prodRes.items);
+        const loadedCustomers = custRes.items || [];
+        const loadedProducts = prodRes.items || [];
+        setCustomers(loadedCustomers);
+        setProducts(loadedProducts);
 
-        // Map stock by product ID
+        // Build stock map
         const map: Record<string, number> = {};
         if (invRes.products) {
           invRes.products.forEach((p: ProductStockItem) => {
@@ -85,36 +113,62 @@ export default function NewSaleScreen() {
         }
         setStockMap(map);
 
+        // Restore draft if available
         if (savedDraft) {
           setIdempotencyKey(savedDraft.idempotencyKey);
           setBoundPayloadHash(savedDraft.payloadHash || '');
           setWasSubmitted(Boolean(savedDraft.submitted));
+
           if (params.customerId) {
             setSelectedCustomerId(params.customerId);
           } else if (savedDraft.customerId) {
             setSelectedCustomerId(savedDraft.customerId);
           }
+
           if (savedDraft.items && savedDraft.items.length > 0) {
-            const first = savedDraft.items[0];
-            setSelectedProductId(first.productId);
-            setQuantityStr(String(first.quantity || 10));
-            setUnitPriceRupees(String((first.unitPricePaise || 3500) / 100));
+            setCartItems(
+              savedDraft.items.map((item, idx) => ({
+                key: `line_${idx + 1}_${Date.now()}`,
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPriceRupees: (item.unitPricePaise || 3500) / 100,
+              }))
+            );
+          } else if (loadedProducts.length > 0) {
+            setCartItems([
+              {
+                key: `line_init_${Date.now()}`,
+                productId: loadedProducts[0].id,
+                quantity: 10,
+                unitPriceRupees: (loadedProducts[0].basePricePaise || 3500) / 100,
+              },
+            ]);
           }
+
           if (savedDraft.paymentMode) setPaymentMode(savedDraft.paymentMode);
           if (savedDraft.paymentReference) setPaymentReference(savedDraft.paymentReference);
+          if (savedDraft.customerFeedback) setCustomerFeedback(savedDraft.customerFeedback);
           setIsDraftRestored(true);
         } else {
-          if (prodRes.items.length > 0) {
-            const first = prodRes.items[0];
-            setSelectedProductId(first.id);
-            setUnitPriceRupees(String((first.basePricePaise || 3500) / 100));
+          // Initialize defaults
+          if (loadedProducts.length > 0) {
+            setCartItems([
+              {
+                key: `line_init_${Date.now()}`,
+                productId: loadedProducts[0].id,
+                quantity: 10,
+                unitPriceRupees: (loadedProducts[0].basePricePaise || 3500) / 100,
+              },
+            ]);
           }
           if (params.customerId) {
             setSelectedCustomerId(params.customerId);
-          } else if (custRes.items.length > 0) {
-            setSelectedCustomerId(custRes.items[0].id);
+          } else if (loadedCustomers.length > 0) {
+            setSelectedCustomerId(loadedCustomers[0].id);
           }
         }
+      } catch (err) {
+        console.warn('Failed to initialize POS screen', err);
       } finally {
         setLoading(false);
       }
@@ -123,33 +177,40 @@ export default function NewSaleScreen() {
     initScreen();
   }, [params.customerId, userId]);
 
-  // Autosave draft on any field change and rotate idempotency key if modified after submit attempt
+  // ----------------------------------------------------
+  // Autosave Draft & Rotate Idempotency Key on Edit
+  // ----------------------------------------------------
   useEffect(() => {
     if (loading || !idempotencyKey) return;
-    const qty = parseInt(quantityStr, 10) || 0;
-    const pricePaise = Math.round((parseFloat(unitPriceRupees) || 0) * 100);
 
-    const items = selectedProductId
-      ? [
-          {
-            productId: selectedProductId,
-            productName: products.find((p) => p.id === selectedProductId)?.name || 'Product',
-            quantity: qty,
-            unitPricePaise: pricePaise,
-          },
-        ]
-      : [];
+    const draftItems: OrderDraftLineItem[] = cartItems.map((item) => {
+      const prod = products.find((p) => p.id === item.productId);
+      return {
+        productId: item.productId,
+        productName: prod?.name || 'Product',
+        sku: prod?.sku || undefined,
+        quantity: item.quantity,
+        unitPricePaise: Math.round(item.unitPriceRupees * 100),
+        minPricePaise: prod?.minimumPricePaise,
+      };
+    });
 
     const currentHash = computePayloadHash({
       customerId: selectedCustomerId,
-      items,
+      items: draftItems.map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        unitPricePaise: i.unitPricePaise,
+      })),
       paymentMode,
+      paymentReference,
+      customerFeedback,
     });
 
     let activeKey = idempotencyKey;
     let submittedFlag = wasSubmitted;
 
-    // Rotate idempotency key if draft changes after a submit attempt
+    // Rotate idempotency key if payload changes after a submit attempt
     if (shouldRotateIdempotencyKey(currentHash, boundPayloadHash, wasSubmitted)) {
       activeKey = generateIdempotencyKey();
       setIdempotencyKey(activeKey);
@@ -165,60 +226,164 @@ export default function NewSaleScreen() {
       payloadHash: currentHash,
       submitted: submittedFlag,
       customerId: selectedCustomerId,
-      items,
+      items: draftItems,
       paymentMode,
       paymentReference,
+      customerFeedback,
       updatedAt: new Date().toISOString(),
     });
   }, [
+    loading,
     idempotencyKey,
     selectedCustomerId,
-    selectedProductId,
-    quantityStr,
-    unitPriceRupees,
+    cartItems,
     paymentMode,
     paymentReference,
-    loading,
+    customerFeedback,
     products,
     userId,
     wasSubmitted,
     boundPayloadHash,
   ]);
 
-  const selectedProduct = products.find((p) => p.id === selectedProductId);
-  const currentStock = selectedProductId ? stockMap[selectedProductId] ?? 0 : 0;
-  const quantity = parseInt(quantityStr, 10) || 0;
-  const unitPrice = parseFloat(unitPriceRupees) || 0;
-  const unitPricePaise = Math.round(unitPrice * 100);
-  const minimumPricePaise = selectedProduct?.minimumPricePaise ?? 2500;
-  const isBelowMinimum = unitPricePaise < minimumPricePaise;
-  const totalAmountRupees = (quantity * unitPrice).toFixed(2);
+  // ----------------------------------------------------
+  // Computed Order Totals & Validation Checks
+  // ----------------------------------------------------
+  const grandTotalRupees = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.quantity * item.unitPriceRupees, 0);
+  }, [cartItems]);
 
-  function handleProductSelect(prod: ProductItem) {
-    setSelectedProductId(prod.id);
-    setUnitPriceRupees(String((prod.basePricePaise || 3500) / 100));
-  }
+  const totalPackets = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  }, [cartItems]);
 
-  function handleIncrementQuantity() {
-    const current = parseInt(quantityStr, 10) || 0;
-    setQuantityStr(String(current + 5));
-  }
+  // Check if any product is priced below minimum threshold
+  const hasLowPriceWarning = useMemo(() => {
+    return cartItems.some((item) => {
+      const prod = products.find((p) => p.id === item.productId);
+      if (!prod) return false;
+      const minPaise = prod.minimumPricePaise ?? 2500;
+      return Math.round(item.unitPriceRupees * 100) < minPaise;
+    });
+  }, [cartItems, products]);
 
-  function handleDecrementQuantity() {
-    const current = parseInt(quantityStr, 10) || 0;
-    if (current > 5) {
-      setQuantityStr(String(current - 5));
-    } else if (current > 1) {
-      setQuantityStr(String(current - 1));
+  // Stock check errors per product
+  const stockErrors = useMemo(() => {
+    const productRequestedMap: Record<string, number> = {};
+    for (const item of cartItems) {
+      if (item.productId) {
+        productRequestedMap[item.productId] =
+          (productRequestedMap[item.productId] || 0) + item.quantity;
+      }
     }
-  }
 
+    const errorsMap: Record<string, string> = {};
+    for (const [prodId, reqQty] of Object.entries(productRequestedMap)) {
+      const avail = stockMap[prodId] ?? 0;
+      if (reqQty > avail) {
+        const prod = products.find((p) => p.id === prodId);
+        errorsMap[prodId] = `Van stock has ${avail} pkts, but ${reqQty} pkts in cart.`;
+      }
+    }
+    return errorsMap;
+  }, [cartItems, stockMap, products]);
+
+  const hasStockError = Object.keys(stockErrors).length > 0;
+
+  // ----------------------------------------------------
+  // Cart Actions
+  // ----------------------------------------------------
+  const handleAddLineItem = () => {
+    // Find first product not yet in cart, or first product
+    const unusedProduct =
+      products.find((p) => !cartItems.some((item) => item.productId === p.id)) || products[0];
+
+    setCartItems((prev) => [
+      ...prev,
+      {
+        key: `line_${Date.now()}_${prev.length + 1}`,
+        productId: unusedProduct?.id || '',
+        quantity: 5,
+        unitPriceRupees: (unusedProduct?.basePricePaise || 3500) / 100,
+      },
+    ]);
+  };
+
+  const handleRemoveLineItem = (key: string) => {
+    if (cartItems.length <= 1) {
+      Alert.alert('Cart Limit', 'A sale must have at least one product.');
+      return;
+    }
+    setCartItems((prev) => prev.filter((item) => item.key !== key));
+  };
+
+  const handleUpdateProduct = (key: string, newProductId: string) => {
+    const prod = products.find((p) => p.id === newProductId);
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        return {
+          ...item,
+          productId: newProductId,
+          unitPriceRupees: prod ? (prod.basePricePaise || 3500) / 100 : item.unitPriceRupees,
+        };
+      })
+    );
+  };
+
+  const handleUpdateQuantity = (key: string, delta: number) => {
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        const newQty = Math.max(1, item.quantity + delta);
+        return { ...item, quantity: newQty };
+      })
+    );
+  };
+
+  const handleSetQuantity = (key: string, val: string) => {
+    const parsed = parseInt(val, 10);
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        return { ...item, quantity: isNaN(parsed) || parsed < 1 ? 1 : parsed };
+      })
+    );
+  };
+
+  const handleSetUnitPrice = (key: string, val: string) => {
+    const parsed = parseFloat(val);
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        return { ...item, unitPriceRupees: isNaN(parsed) || parsed < 0 ? 0 : parsed };
+      })
+    );
+  };
+
+  // ----------------------------------------------------
+  // Validation & Submission
+  // ----------------------------------------------------
   function validate() {
     const errs: Record<string, string> = {};
     if (!selectedCustomerId) errs.customer = 'Please select a customer.';
-    if (!selectedProductId) errs.product = 'Please select a product SKU.';
-    if (quantity <= 0) errs.quantity = 'Quantity must be at least 1 packet.';
-    if (unitPrice <= 0) errs.price = 'Unit price must be greater than zero.';
+
+    const validLines = cartItems.filter((i) => i.productId && i.quantity > 0);
+    if (validLines.length === 0) {
+      errs.cart = 'Please add at least one product with quantity.';
+    }
+
+    cartItems.forEach((item, idx) => {
+      if (!item.productId) {
+        errs[`line_${idx}_product`] = 'Product selection is required.';
+      }
+      if (item.quantity <= 0) {
+        errs[`line_${idx}_qty`] = 'Quantity must be > 0.';
+      }
+      if (item.unitPriceRupees <= 0) {
+        errs[`line_${idx}_price`] = 'Price must be > 0.';
+      }
+    });
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -226,17 +391,15 @@ export default function NewSaleScreen() {
 
   async function handleConfirmSale() {
     if (isSubmitting) return;
-    if (!validate()) return;
+    if (!validate()) {
+      Alert.alert('Incomplete Sale', 'Please review highlighted fields in your cart.');
+      return;
+    }
 
-    if (quantity > currentStock) {
-      setFeedback({
-        type: 'error',
-        title: 'Insufficient Van Stock',
-        message: `You have ${currentStock} packets in your inventory, but requested ${quantity}. Please adjust quantity.`,
-      });
+    if (hasStockError) {
       Alert.alert(
         'Insufficient Van Stock',
-        `You have ${currentStock} packets in your inventory, but requested ${quantity}. Please adjust quantity.`
+        'One or more products in your cart exceed available van inventory. Please adjust quantities before submitting.'
       );
       return;
     }
@@ -244,90 +407,60 @@ export default function NewSaleScreen() {
     setIsSubmitting(true);
     setWasSubmitted(true);
     setFeedback(null);
+
     try {
+      const payloadItems = cartItems.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPricePaise: Math.round(item.unitPriceRupees * 100),
+      }));
+
       const res = await sellerApi.createSale({
         customerId: selectedCustomerId,
+        items: payloadItems,
         paymentMode,
-        paymentReference: paymentReference.trim() || undefined,
-        idempotencyKey,
-        items: [
-          {
-            productId: selectedProductId,
-            quantity,
-            unitPricePaise,
-          },
-        ],
+        paymentReference: paymentMode === 'BANK' ? paymentReference.trim() : undefined,
+        requestKey: idempotencyKey,
+        customerFeedback: customerFeedback.trim() || undefined,
       });
 
-      // Clear draft upon successful order submission
-      await draftStorage.clearOrderDraft(userId);
+      // Clear draft on successful confirmation
+      await draftStorage.clearOrderDraft(userId).catch(() => {});
 
-      const sale = res.sale;
-      const isPending = sale.status === 'PENDING';
-
-      setFeedback({
-        type: isPending ? 'warning' : 'success',
-        title: isPending ? 'Order Sent for Super Admin Approval' : 'Sale Confirmed & Stock Deducted!',
-        message: isPending
-          ? `Order #${sale.id.slice(0, 8)} is priced below minimum (₹${minimumPricePaise / 100}) and has been sent to Super Admin for approval.`
-          : `Order #${sale.id.slice(0, 8)} for ₹${(sale.totalAmountPaise / 100).toFixed(2)} confirmed successfully.`,
-        actionLabel: 'View Order Details',
-        onAction: () => router.replace(`/(seller)/sales/${sale.id}` as any),
-      });
+      const isPendingApproval = res.sale.status === 'PENDING_APPROVAL';
 
       Alert.alert(
-        isPending ? 'Sale Submitted for Approval' : 'Sale Confirmed!',
-        isPending
-          ? `Order #${sale.id.slice(0, 8)} is priced below minimum (₹${minimumPricePaise / 100}) and has been sent to Super Admin for approval. Stock has not been deducted.`
-          : `Order #${sale.id.slice(0, 8)} for ₹${(sale.totalAmountPaise / 100).toFixed(2)} confirmed. Stock deducted.`,
+        isPendingApproval ? 'Sale Submitted for Approval' : 'Sale Confirmed!',
+        isPendingApproval
+          ? `Order #${res.sale.saleNumber || ''} created with below-minimum price. It has been routed to the Super Admin queue for authorization.`
+          : `Order #${res.sale.saleNumber || ''} recorded successfully. Total: ₹${grandTotalRupees.toFixed(2)} (${totalPackets} pkts).`,
         [
           {
-            text: 'View Order',
-            onPress: () => router.replace(`/(seller)/sales/${sale.id}` as any),
+            text: 'View Sales Stream',
+            onPress: () => router.replace('/(seller)/sales' as any),
           },
         ]
       );
     } catch (err: any) {
+      const msg = err.message || 'Failed to submit sale. Please retry.';
       setFeedback({
         type: 'error',
-        title: 'Sale Creation Failed',
-        message: err.message || 'Unable to record sale. Please try again.',
+        title: 'Submission Error',
+        message: msg,
       });
-      Alert.alert('Sale Creation Failed', err.message || 'Unable to record sale. Please try again.');
+      Alert.alert('Submission Error', msg);
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function handleDiscardDraft() {
-    Alert.alert('Discard Draft', 'Are you sure you want to reset this order draft?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: async () => {
-          await draftStorage.clearOrderDraft(userId);
-          setIdempotencyKey(generateIdempotencyKey());
-          setWasSubmitted(false);
-          setBoundPayloadHash('');
-          setSelectedCustomerId(params.customerId || (customers.length > 0 ? customers[0].id : ''));
-          setPaymentMode('CASH');
-          setPaymentReference('');
-          setQuantityStr('10');
-          setIsDraftRestored(false);
-          if (products.length > 0) {
-            setSelectedProductId(products[0].id);
-            setUnitPriceRupees(String((products[0].basePricePaise || 3500) / 100));
-          }
-        },
-      },
-    ]);
-  }
+  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
   if (loading) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={BrandColors.pink.primary} />
+        <Text style={styles.loadingText}>Loading POS Cart & Van Inventory...</Text>
       </View>
     );
   }
@@ -335,287 +468,334 @@ export default function NewSaleScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={styles.keyboardContainer}
     >
-      <Header title="Point of Sale (POS)" subtitle="Direct Van Distribution Order" showBack />
+      <Header
+        title="Point of Sale (POS)"
+        subtitle="Multi-SKU Cart • In-Field Delivery"
+        showBack
+      />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.contentWrapper}>
-          {feedback ? (
+          {feedback && (
             <FeedbackBanner
               type={feedback.type}
               title={feedback.title}
               message={feedback.message}
               actionLabel={feedback.actionLabel}
               onAction={feedback.onAction}
-              onDismiss={() => setFeedback(null)}
-              style={{ marginBottom: Spacing.md }}
             />
-          ) : null}
+          )}
 
-          {/* Draft Autosave & Idempotency Key Status */}
-          <View style={styles.draftBadgeRow}>
-            <View style={styles.draftBadge}>
-              <Ionicons name="cloud-done-outline" size={14} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
-              <Text style={styles.draftBadgeText}>
-                {isDraftRestored ? 'Draft restored' : 'Draft autosaved'} • #{idempotencyKey.slice(0, 14)}
+          {isDraftRestored && (
+            <View style={styles.draftRestoredNotice}>
+              <Ionicons name="cloud-done-outline" size={16} color={BrandColors.green.dark} />
+              <Text style={styles.draftRestoredText}>
+                Restored unfinished order draft from device storage.
               </Text>
             </View>
-            <Pressable
-              onPress={handleDiscardDraft}
-              style={styles.discardDraftBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Reset order draft"
-            >
-              <Text style={styles.discardDraftText}>Reset</Text>
-            </Pressable>
-          </View>
+          )}
 
-          {/* Customer Selector */}
-          <Text style={styles.sectionHeading}>1. Retail Store</Text>
-          <Card style={styles.card}>
-            <Text style={styles.fieldLabel}>Select Retail Store *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+          {/* CUSTOMER SELECTION CARD */}
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>1. Select Retail Customer</Text>
+            <Text style={styles.sectionSubtitle}>
+              Customer must be assigned to your field route.
+            </Text>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
               {customers.map((c) => {
-                const isSelected = selectedCustomerId === c.id;
+                const isSelected = c.id === selectedCustomerId;
                 return (
                   <Pressable
                     key={c.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`Select ${c.shopName}`}
-                    style={[
-                      styles.customerChip,
-                      isSelected && styles.customerChipActive,
-                    ]}
                     onPress={() => setSelectedCustomerId(c.id)}
+                    style={[styles.customerChip, isSelected && styles.customerChipActive]}
+                    hitSlop={HitSlop.sm}
                   >
-                    <View style={styles.customerChipRow}>
-                      <Text
-                        style={[
-                          styles.customerChipText,
-                          isSelected && styles.customerChipTextActive,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {c.shopName}
-                      </Text>
-                      {isSelected ? (
-                        <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
-                      ) : null}
-                    </View>
+                    <Ionicons
+                      name="storefront-outline"
+                      size={14}
+                      color={isSelected ? '#FFFFFF' : Colors.light.textSecondary}
+                    />
                     <Text
                       style={[
-                        styles.customerChipSub,
-                        isSelected && styles.customerChipSubActive,
+                        styles.customerChipText,
+                        isSelected && styles.customerChipTextActive,
                       ]}
+                      numberOfLines={1}
                     >
-                      {c.ownerName}
+                      {c.shopName}
                     </Text>
-                    {(c as any).tier || (c as any).creditTerms ? (
-                      <View style={[styles.tierPill, isSelected && styles.tierPillActive]}>
-                        <Text style={[styles.tierPillText, isSelected && styles.tierPillTextActive]}>
-                          {[(c as any).tier, (c as any).creditTerms].filter(Boolean).join(' • ')}
-                        </Text>
-                      </View>
-                    ) : null}
                   </Pressable>
                 );
               })}
             </ScrollView>
-            {errors.customer ? (
-              <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
-                <Text style={styles.errorText}>{errors.customer}</Text>
-              </View>
-            ) : null}
-          </Card>
 
-          {/* Product SKU Selector */}
-          <Text style={styles.sectionHeading}>2. Product & Van Stock</Text>
-          <Card style={styles.card}>
-            <Text style={styles.fieldLabel}>Select Product SKU *</Text>
-            <View style={styles.productGrid}>
-              {products.map((p) => {
-                const stock = stockMap[p.id] ?? 0;
-                const isSelected = selectedProductId === p.id;
-                return (
-                  <Pressable
-                    key={p.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`Product ${p.name}, ${stock} packets available`}
-                    style={[styles.productCard, isSelected && styles.productCardActive]}
-                    onPress={() => handleProductSelect(p)}
-                  >
-                    <View style={styles.productCardHeader}>
-                      <Text style={[styles.productName, isSelected && styles.productNameActive]}>
-                        {p.name}
-                      </Text>
-                      {isSelected ? (
-                        <Ionicons name="checkmark-circle" size={18} color={BrandColors.pink.primary} />
-                      ) : null}
-                    </View>
-                    <Text style={styles.skuText}>SKU: {p.sku || 'STD-PKT'}</Text>
-                    <View style={[styles.stockBadge, stock === 0 && styles.stockBadgeEmpty]}>
-                      <Text style={[styles.stockText, stock === 0 && styles.stockTextEmpty]}>
-                        Stock: {stock} pkts
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {errors.product ? (
-              <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
-                <Text style={styles.errorText}>{errors.product}</Text>
-              </View>
-            ) : null}
-
-            {/* Quantity & Unit Price inputs */}
-            <View style={styles.qtyPriceRow}>
-              <View style={styles.qtyCol}>
-                <Input
-                  label="Packets Quantity *"
-                  placeholder="e.g. 10"
-                  value={quantityStr}
-                  onChangeText={setQuantityStr}
-                  keyboardType="number-pad"
-                  error={errors.quantity}
-                  leftIcon={<Ionicons name="cube-outline" size={18} color="#94A3B8" />}
-                />
-                <View style={styles.stepperRow}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Decrease quantity by 5"
-                    style={styles.stepperBtn}
-                    onPress={handleDecrementQuantity}
-                  >
-                    <Ionicons name="remove" size={16} color={BrandColors.pink.primary} />
-                  </Pressable>
-                  <Text style={styles.stepperHint}>±5 Quick Step</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Increase quantity by 5"
-                    style={styles.stepperBtn}
-                    onPress={handleIncrementQuantity}
-                  >
-                    <Ionicons name="add" size={16} color={BrandColors.pink.primary} />
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.priceCol}>
-                <Input
-                  label="Unit Price (₹) *"
-                  placeholder="e.g. 35"
-                  value={unitPriceRupees}
-                  onChangeText={setUnitPriceRupees}
-                  keyboardType="decimal-pad"
-                  error={errors.price}
-                  leftIcon={<Text style={styles.rupeeSymbol}>₹</Text>}
-                />
-              </View>
-            </View>
-
-            {/* Minimum Price Amber Warning */}
-            {isBelowMinimum ? (
-              <View style={styles.warningBanner} accessibilityRole="alert">
-                <Ionicons name="alert-circle" size={20} color="#D97706" style={{ marginRight: 8, marginTop: 1 }} />
+            {selectedCustomer && (
+              <View style={styles.selectedCustomerDetail}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.warningTitle}>Special Price Approval Required</Text>
-                  <Text style={styles.warningDesc}>
-                    Entered price (₹{unitPrice}) is below the minimum floor threshold of ₹
-                    {(minimumPricePaise / 100).toFixed(2)}. This sale will be submitted as PENDING to Super Admin.
-                    No stock will be deducted until confirmed.
+                  <Text style={styles.customerName}>{selectedCustomer.shopName}</Text>
+                  <Text style={styles.customerSub}>
+                    Owner: {selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'} •{' '}
+                    {selectedCustomer.district}
                   </Text>
                 </View>
+                <Badge label="ASSIGNED" variant="ACTIVE" />
               </View>
-            ) : (
-              <View style={styles.priceNormalNotice}>
-                <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 6 }} />
-                <Text style={styles.priceNormalText}>
-                  Standard price (≥ ₹{(minimumPricePaise / 100).toFixed(2)}). Immediate stock deduction.
-                </Text>
+            )}
+            {errors.customer && <Text style={styles.errorText}>{errors.customer}</Text>}
+          </Card>
+
+          {/* MULTI-SKU CART CARD */}
+          <Card style={styles.sectionCard}>
+            <View style={styles.cartHeaderRow}>
+              <View>
+                <Text style={styles.sectionTitle}>2. Multi-SKU Cart</Text>
+                <Text style={styles.sectionSubtitle}>Add products and adjust quantities.</Text>
+              </View>
+              <Button
+                title="+ Add SKU"
+                variant="outline"
+                size="sm"
+                onPress={handleAddLineItem}
+              />
+            </View>
+
+            {cartItems.map((item, index) => {
+              const prod = products.find((p) => p.id === item.productId);
+              const availStock = item.productId ? stockMap[item.productId] ?? 0 : 0;
+              const minPricePaise = prod?.minimumPricePaise ?? 2500;
+              const isBelowFloor = Math.round(item.unitPriceRupees * 100) < minPricePaise;
+              const lineTotal = (item.quantity * item.unitPriceRupees).toFixed(2);
+              const isExceedingStock = item.quantity > availStock;
+
+              return (
+                <View key={item.key} style={styles.lineItemBox}>
+                  {/* Line Item Header: Product Picker & Delete */}
+                  <View style={styles.lineItemHeader}>
+                    <Text style={styles.itemNumberBadge}>Item #{index + 1}</Text>
+                    {cartItems.length > 1 && (
+                      <Pressable
+                        onPress={() => handleRemoveLineItem(item.key)}
+                        hitSlop={HitSlop.md}
+                        style={styles.deleteButton}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={Colors.light.danger} />
+                        <Text style={styles.deleteText}>Remove</Text>
+                      </Pressable>
+                    )}
+                  </View>
+
+                  {/* SKU Selector Chips */}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.skuScroll}
+                  >
+                    {products.map((p) => {
+                      const isSelected = p.id === item.productId;
+                      return (
+                        <Pressable
+                          key={p.id}
+                          onPress={() => handleUpdateProduct(item.key, p.id)}
+                          style={[styles.skuChip, isSelected && styles.skuChipActive]}
+                        >
+                          <Text
+                            style={[
+                              styles.skuChipText,
+                              isSelected && styles.skuChipTextActive,
+                            ]}
+                          >
+                            {p.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Product Metadata & Van Stock */}
+                  <View style={styles.productMetaRow}>
+                    <View style={styles.stockBadgeContainer}>
+                      <Ionicons
+                        name="cube-outline"
+                        size={14}
+                        color={isExceedingStock ? Colors.light.danger : BrandColors.green.dark}
+                      />
+                      <Text
+                        style={[
+                          styles.stockBadgeText,
+                          isExceedingStock && { color: Colors.light.danger },
+                        ]}
+                      >
+                        Van Stock: {availStock} pkts available
+                      </Text>
+                    </View>
+
+                    <Text style={styles.lineTotalText}>
+                      Subtotal: <Text style={{ fontWeight: '800' }}>₹{lineTotal}</Text>
+                    </Text>
+                  </View>
+
+                  {/* Quantity and Price Inputs */}
+                  <View style={styles.controlsRow}>
+                    {/* Quantity Stepper */}
+                    <View style={styles.qtyContainer}>
+                      <Text style={styles.inputLabel}>Quantity (Packets)</Text>
+                      <View style={styles.stepperBox}>
+                        <Pressable
+                          onPress={() => handleUpdateQuantity(item.key, -5)}
+                          style={styles.stepperBtn}
+                          hitSlop={HitSlop.sm}
+                        >
+                          <Ionicons name="remove" size={16} color={BrandColors.pink.dark} />
+                        </Pressable>
+
+                        <TextInput
+                          keyboardType="numeric"
+                          value={String(item.quantity)}
+                          onChangeText={(val) => handleSetQuantity(item.key, val)}
+                          style={styles.qtyInput}
+                        />
+
+                        <Pressable
+                          onPress={() => handleUpdateQuantity(item.key, 5)}
+                          style={styles.stepperBtn}
+                          hitSlop={HitSlop.sm}
+                        >
+                          <Ionicons name="add" size={16} color={BrandColors.pink.dark} />
+                        </Pressable>
+                      </View>
+                    </View>
+
+                    {/* Unit Price */}
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.inputLabel}>Unit Price (₹)</Text>
+                      <View style={styles.priceInputBox}>
+                        <Text style={styles.rupeePrefix}>₹</Text>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={String(item.unitPriceRupees)}
+                          onChangeText={(val) => handleSetUnitPrice(item.key, val)}
+                          style={styles.priceInput}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Below Minimum Price Warning */}
+                  {isBelowFloor && (
+                    <View style={styles.warningBox}>
+                      <Ionicons name="warning-outline" size={16} color="#D97706" />
+                      <Text style={styles.warningText}>
+                        Below ₹{(minPricePaise / 100).toFixed(2)} price floor. Sale will require
+                        Super Admin approval.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Stock Exceeded Error */}
+                  {isExceedingStock && (
+                    <Text style={styles.errorText}>
+                      Quantity ({item.quantity} pkts) exceeds available stock ({availStock} pkts).
+                    </Text>
+                  )}
+                </View>
+              );
+            })}
+          </Card>
+
+          {/* ORDER FINANCIAL SUMMARY */}
+          <Card style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Order Summary</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Packets:</Text>
+              <Text style={styles.summaryValue}>{totalPackets.toLocaleString('en-IN')} pkts</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Order Value:</Text>
+              <Text style={styles.summaryGrandTotal}>₹{grandTotalRupees.toFixed(2)}</Text>
+            </View>
+
+            <View style={styles.approvalStatusRow}>
+              <Badge
+                label={
+                  hasLowPriceWarning
+                    ? 'PRICE APPROVAL REQUIRED'
+                    : 'CONFIRMED DIRECT STOCK DEDUCTION'
+                }
+                variant={hasLowPriceWarning ? 'PENDING' : 'CONFIRMED'}
+              />
+            </View>
+          </Card>
+
+          {/* PAYMENT MODE SELECTION */}
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>3. Payment Mode</Text>
+            <SegmentedTabs
+              tabs={[
+                { label: 'Cash', value: 'CASH' },
+                { label: 'Bank / UPI', value: 'BANK' },
+                { label: 'Pending Credit', value: 'PENDING' },
+              ]}
+              selectedTab={paymentMode}
+              onSelect={(val) => setPaymentMode(val as PaymentMode)}
+            />
+
+            {paymentMode === 'BANK' && (
+              <View style={styles.bankInputBox}>
+                <Text style={styles.inputLabel}>UPI / Bank Transaction Reference</Text>
+                <TextInput
+                  placeholder="e.g. UPI/1234567890/HDFC"
+                  value={paymentReference}
+                  onChangeText={setPaymentReference}
+                  style={styles.textInput}
+                />
               </View>
             )}
           </Card>
 
-          {/* Payment Mode Selector */}
-          <Text style={styles.sectionHeading}>3. Payment Collection Mode</Text>
-          <Card style={styles.card}>
-            <SegmentedTabs
-              tabs={[
-                { label: 'CASH', value: 'CASH', icon: 'cash-outline' },
-                { label: 'BANK / UPI', value: 'BANK', icon: 'card-outline' },
-                { label: 'PAY LATER', value: 'PENDING', icon: 'time-outline' },
-              ]}
-              selectedTab={paymentMode}
-              onSelect={(val) => val && setPaymentMode(val as PaymentMode)}
-              activeColor={BrandColors.pink.primary}
-              accessibilityLabel="Select payment mode"
+          {/* CUSTOMER FEEDBACK & VOICE TRANSLATOR */}
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>4. Customer Feedback Observation</Text>
+            <Text style={styles.sectionSubtitle}>
+              Record verbal feedback in Hindi, Hinglish, or English.
+            </Text>
+
+            <TextInput
+              placeholder="e.g. Owner requested 50 more packets next week due to festival demand."
+              value={customerFeedback}
+              onChangeText={setCustomerFeedback}
+              multiline
+              numberOfLines={3}
+              style={styles.feedbackInput}
             />
 
-            {paymentMode === 'BANK' ? (
-              <Input
-                label="Transaction Reference / UPI ID"
-                placeholder="e.g. UPI/1234567890"
-                value={paymentReference}
-                onChangeText={setPaymentReference}
-                containerStyle={{ marginTop: Spacing.md }}
-                leftIcon={<Ionicons name="barcode-outline" size={18} color="#94A3B8" />}
-              />
-            ) : null}
-
-            {paymentMode === 'PENDING' ? (
-              <View style={styles.pendingNoticeBox}>
-                <Ionicons name="information-circle-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
-                <Text style={styles.pendingNotice}>
-                  Outstanding payment can be collected and marked received later from the sale details.
-                </Text>
-              </View>
-            ) : null}
+            <VoiceFeedbackTranslator
+              value={customerFeedback}
+              onChange={setCustomerFeedback}
+            />
           </Card>
 
-          {/* Order Summary & Submit Button */}
-          <Card style={styles.summaryCard}>
-            <Text style={styles.summaryCardTitle}>Order Invoice Summary</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Units</Text>
-              <Text style={styles.summaryValue}>{quantity} Packets</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Unit Rate</Text>
-              <Text style={styles.summaryValue}>₹{unitPrice.toFixed(2)}</Text>
-            </View>
-            <View style={[styles.summaryRow, styles.summaryTotalRow]}>
-              <Text style={styles.totalLabel}>Total Payable</Text>
-              <Text style={styles.totalAmount}>₹{totalAmountRupees}</Text>
-            </View>
-
+          {/* SUBMIT BUTTON */}
+          <View style={styles.submitSection}>
             <Button
               title={
                 isSubmitting
-                  ? 'Processing Sale...'
-                  : isBelowMinimum
-                  ? 'Submit for Super Admin Approval'
-                  : 'Confirm & Record Sale'
+                  ? 'Submitting Sale...'
+                  : `Submit Sale • ₹${grandTotalRupees.toFixed(2)}`
               }
-              onPress={handleConfirmSale}
-              loading={isSubmitting}
-              variant={isBelowMinimum ? 'secondary' : 'primary'}
+              variant="primary"
               size="lg"
-              icon={
-                isBelowMinimum ? (
-                  <Ionicons name="arrow-up-circle-outline" size={20} color="#FFFFFF" />
-                ) : (
-                  <Ionicons name="checkmark-done-outline" size={20} color="#FFFFFF" />
-                )
-              }
-              style={{ marginTop: Spacing.lg }}
+              loading={isSubmitting}
+              disabled={isSubmitting || hasStockError}
+              onPress={handleConfirmSale}
             />
-          </Card>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -623,308 +803,294 @@ export default function NewSaleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  keyboardContainer: {
     flex: 1,
     backgroundColor: Colors.light.background,
-  },
-  centerContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   scrollContent: {
-    padding: Spacing.lg,
     paddingBottom: Spacing.huge,
   },
   contentWrapper: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
   },
-  draftBadgeRow: {
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.light.background,
+  },
+  loadingText: {
+    ...Typography.bodyMedium,
+    color: Colors.light.textSecondary,
+    marginTop: Spacing.md,
+  },
+  draftRestoredNotice: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: BrandColors.green.subtle,
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
     borderWidth: 1,
-    borderColor: BrandColors.green.light,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     marginBottom: Spacing.md,
+    gap: 8,
   },
-  draftBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  draftRestoredText: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: BrandColors.green.dark,
     flex: 1,
   },
-  draftBadgeText: {
-    ...Typography.caption,
-    fontWeight: '700',
-    color: BrandColors.green.primary,
-  },
-  discardDraftBtn: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radius.xs,
-  },
-  discardDraftText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.light.danger,
-  },
-  sectionHeading: {
-    ...Typography.overline,
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.xs,
-    marginTop: Spacing.xs,
-  },
-  card: {
+  sectionCard: {
     marginBottom: Spacing.md,
+    padding: Spacing.md,
   },
-  fieldLabel: {
+  sectionTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '800',
+    color: Colors.light.textPrimary,
+  },
+  sectionSubtitle: {
     ...Typography.caption,
-    fontWeight: '700',
-    color: Colors.light.text,
+    color: Colors.light.textTertiary,
+    marginTop: 2,
     marginBottom: Spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  chipScroll: {
+  chipRow: {
     flexDirection: 'row',
+    marginVertical: Spacing.xs,
   },
   customerChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.light.surfaceMuted,
-    borderRadius: Radius.md,
-    marginRight: Spacing.sm,
-    borderWidth: 1.5,
-    borderColor: Colors.light.border,
-    minWidth: 140,
-    minHeight: 48,
-    justifyContent: 'center',
-  },
-  customerChipActive: {
-    backgroundColor: BrandColors.pink.primary,
-    borderColor: BrandColors.pink.primary,
-  },
-  customerChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.light.surface,
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    marginRight: Spacing.xs,
+    gap: 6,
+  },
+  customerChipActive: {
+    backgroundColor: BrandColors.pink.dark,
+    borderColor: BrandColors.pink.dark,
   },
   customerChipText: {
-    ...Typography.bodyMedium,
-    color: Colors.light.text,
-    flex: 1,
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
   },
   customerChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
-  customerChipSub: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
-  },
-  customerChipSubActive: {
-    color: '#FFF5F7',
-  },
-  tierPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#EDF7F0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.xs,
-    marginTop: 4,
-  },
-  tierPillActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  tierPillText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#156035',
-  },
-  tierPillTextActive: {
-    color: '#FFFFFF',
-  },
-  stepperRow: {
+  selectedCustomerDetail: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.light.surfaceMuted,
-    borderRadius: Radius.sm,
+    backgroundColor: '#FFF5F8',
+    borderColor: '#FCE7F3',
     borderWidth: 1,
-    borderColor: Colors.light.border,
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-    marginTop: 4,
-  },
-  stepperBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.xs,
-    backgroundColor: Colors.light.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  stepperHint: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  productGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  productCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: Colors.light.surfaceMuted,
-    borderWidth: 1.5,
-    borderColor: Colors.light.border,
     borderRadius: Radius.md,
-    padding: Spacing.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.sm,
   },
-  productCardActive: {
-    borderColor: BrandColors.pink.primary,
-    backgroundColor: BrandColors.pink.surface,
-  },
-  productCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  productName: {
+  customerName: {
     ...Typography.bodyMedium,
-    color: Colors.light.heading,
-    flex: 1,
-  },
-  productNameActive: {
-    color: BrandColors.pink.primary,
     fontWeight: '700',
+    color: BrandColors.pink.dark,
   },
-  skuText: {
+  customerSub: {
     ...Typography.caption,
-    fontSize: 11,
     color: Colors.light.textSecondary,
-    marginVertical: 2,
+    marginTop: 1,
   },
-  stockBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.light.successBg,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.xs,
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: Colors.light.successBorder,
-  },
-  stockBadgeEmpty: {
-    backgroundColor: Colors.light.dangerBg,
-    borderColor: Colors.light.dangerBorder,
-  },
-  stockText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.light.success,
-  },
-  stockTextEmpty: {
-    color: Colors.light.danger,
-  },
-  qtyPriceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
-  },
-  qtyCol: {
-    flex: 1,
-    minWidth: 140,
-  },
-  priceCol: {
-    flex: 1,
-    minWidth: 140,
-  },
-  rupeeSymbol: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.textSecondary,
-  },
-  warningBanner: {
+  cartHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: Colors.light.warningBg,
-    borderWidth: 1.5,
-    borderColor: Colors.light.warningBorder,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  lineItemBox: {
+    backgroundColor: '#F8FAFC',
+    borderColor: Colors.light.border,
+    borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    marginTop: Spacing.xs,
+    marginBottom: Spacing.md,
   },
-  warningTitle: {
-    ...Typography.bodySmall,
+  lineItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  itemNumberBadge: {
+    ...Typography.caption,
+    fontWeight: '800',
+    color: BrandColors.pink.dark,
+    textTransform: 'uppercase',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deleteText: {
+    ...Typography.caption,
     fontWeight: '700',
-    color: Colors.light.warning,
-    marginBottom: 2,
+    color: Colors.light.danger,
   },
-  warningDesc: {
-    ...Typography.caption,
-    color: Colors.light.warning,
-    lineHeight: 16,
+  skuScroll: {
+    marginVertical: Spacing.xs,
   },
-  priceNormalNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.successBg,
-    padding: Spacing.sm,
+  skuChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
     borderRadius: Radius.sm,
-    marginTop: Spacing.xs,
+    backgroundColor: '#FFFFFF',
+    borderColor: Colors.light.border,
     borderWidth: 1,
-    borderColor: Colors.light.successBorder,
+    marginRight: Spacing.xs,
   },
-  priceNormalText: {
+  skuChipActive: {
+    backgroundColor: '#FCE7F3',
+    borderColor: BrandColors.pink.primary,
+  },
+  skuChipText: {
     ...Typography.caption,
-    color: Colors.light.success,
     fontWeight: '600',
+    color: Colors.light.textPrimary,
   },
-  pendingNoticeBox: {
+  skuChipTextActive: {
+    color: BrandColors.pink.dark,
+    fontWeight: '800',
+  },
+  productMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing.md,
-    backgroundColor: Colors.light.surfaceMuted,
-    padding: Spacing.sm,
-    borderRadius: Radius.sm,
+    justifyContent: 'space-between',
+    marginVertical: Spacing.xs,
   },
-  pendingNotice: {
+  stockBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stockBadgeText: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: BrandColors.green.dark,
+  },
+  lineTotalText: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  qtyContainer: {
+    flex: 1,
+  },
+  priceContainer: {
+    flex: 1,
+  },
+  inputLabel: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    marginBottom: 4,
+  },
+  stepperBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  stepperBtn: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  qtyInput: {
+    flex: 1,
+    textAlign: 'center',
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    paddingVertical: 6,
+  },
+  priceInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+  },
+  rupeePrefix: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    marginRight: 4,
+  },
+  priceInput: {
+    flex: 1,
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    paddingVertical: 8,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: Radius.sm,
+    padding: Spacing.xs,
+    marginTop: Spacing.sm,
+    gap: 6,
+  },
+  warningText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
     flex: 1,
   },
   summaryCard: {
-    backgroundColor: Colors.light.surface,
-    marginBottom: Spacing.xl,
-    ...Shadows.md,
-  },
-  summaryCardTitle: {
-    ...Typography.overline,
-    color: Colors.light.textSecondary,
+    backgroundColor: '#F8FAFC',
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
+  },
+  summaryTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '800',
+    color: Colors.light.textPrimary,
+    marginBottom: Spacing.sm,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    alignItems: 'center',
+    paddingVertical: 4,
   },
   summaryLabel: {
     ...Typography.bodySmall,
@@ -932,32 +1098,55 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     ...Typography.bodyMedium,
-    color: Colors.light.text,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
   },
-  summaryTotalRow: {
+  summaryGrandTotal: {
+    ...Typography.h3,
+    fontSize: 22,
+    fontWeight: '900',
+    color: BrandColors.green.dark,
+  },
+  approvalStatusRow: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.light.borderSubtle,
-    paddingTop: Spacing.md,
-    marginTop: Spacing.xs,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  totalLabel: {
-    ...Typography.h3,
-    color: Colors.light.heading,
+  bankInputBox: {
+    marginTop: Spacing.md,
   },
-  totalAmount: {
-    ...Typography.display,
-    fontSize: 24,
-    color: BrandColors.pink.primary,
+  textInput: {
+    backgroundColor: '#FFFFFF',
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    ...Typography.bodyMedium,
+    color: Colors.light.textPrimary,
   },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.xs,
+  feedbackInput: {
+    backgroundColor: '#FAFAFA',
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    ...Typography.bodyMedium,
+    color: Colors.light.textPrimary,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    marginBottom: Spacing.sm,
+  },
+  submitSection: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xl,
   },
   errorText: {
     ...Typography.caption,
     color: Colors.light.danger,
+    marginTop: 4,
     fontWeight: '600',
   },
 });

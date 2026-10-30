@@ -16,6 +16,7 @@ export interface PublicUser {
   district?: string | null;
   village?: string | null;
   managerId?: string | null;
+  permissions?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -62,6 +63,8 @@ export interface CategoryItem {
 
 export interface CustomerItem {
   id: string;
+  name?: string;
+  contactName?: string;
   shopName: string;
   ownerName: string;
   email: string;
@@ -86,7 +89,7 @@ export interface CustomerItem {
 export interface CreateCustomerPayload {
   shopName: string;
   ownerName: string;
-  email: string;
+  email?: string;
   phone: string;
   categoryId: string;
   address: string;
@@ -96,6 +99,52 @@ export interface CreateCustomerPayload {
   village?: string;
   latitude?: number;
   longitude?: number;
+  accuracy?: number;
+  noPhotoReason?: string;
+  photoSkipReason?: string;
+  photoPath?: string;
+}
+
+export interface BulkCustomerRow {
+  shopName: string;
+  contactName: string;
+  phone: string;
+  email?: string;
+  categoryId?: string;
+  sellerId?: string;
+  shopNumber?: string;
+  streetName?: string;
+  pincode?: string;
+  address?: string;
+  state?: string;
+  district?: string;
+  village?: string;
+  noPhotoReason?: string;
+  photoPath?: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  accuracy?: number;
+  createdAt?: string;
+}
+
+export interface CreateBulkCustomersPayload {
+  customers: BulkCustomerRow[];
+  defaultSellerId?: string;
+  defaultCategoryId?: string;
+  defaultState?: string;
+  defaultDistrict?: string;
+  defaultVillage?: string;
+  defaultNoPhotoReason?: string;
+}
+
+export interface BulkCustomerResponse {
+  success?: boolean;
+  message?: string;
+  count?: number;
+  customers?: CustomerItem[];
+  insertedCount?: number;
+  failedCount?: number;
+  errors?: Array<{ row: number; error: string }>;
 }
 
 export interface PincodeLookupResponse {
@@ -117,6 +166,8 @@ export interface ProductItem {
   minimumPricePaise: number;
   description?: string | null;
   active?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProductStockItem {
@@ -162,7 +213,7 @@ export interface WarehouseItem {
 // ----------------------------------------------------
 // Sale & POS Types
 // ----------------------------------------------------
-export type SaleStatus = 'PENDING' | 'APPROVED' | 'CONFIRMED' | 'REJECTED';
+export type SaleStatus = 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'CONFIRMED' | 'REJECTED';
 export type PaymentMode = 'CASH' | 'BANK' | 'PENDING';
 
 export interface InvoiceSummary {
@@ -205,7 +256,9 @@ export interface SaleItem {
   invoice?: InvoiceSummary | null;
   payments?: Array<{ id: string; amountPaise: number; mode: string; reference?: string | null }>;
   requestKey?: string | null;
+  customerFeedback?: string | null;
   createdAt: string;
+  requestedAt?: string;
   confirmedAt?: string | null;
 }
 
@@ -215,11 +268,22 @@ export interface CreateSalePayload {
   paymentReference?: string;
   idempotencyKey?: string;
   requestKey?: string;
-  items: Array<{
+  customerFeedback?: string;
+  quantity?: number;
+  unitPricePaise?: number;
+  items?: Array<{
     productId: string;
     quantity: number;
     unitPricePaise: number;
   }>;
+}
+
+export interface UpdateSalePayload {
+  customerId?: string;
+  quantity?: number;
+  unitPricePaise?: number;
+  paymentMode?: PaymentMode;
+  customerFeedback?: string;
 }
 
 export interface CollectPaymentPayload {
@@ -230,39 +294,64 @@ export interface CollectPaymentPayload {
 // ----------------------------------------------------
 // Shift & Duty Attendance Types
 // ----------------------------------------------------
-export type ShiftStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+export type ShiftStatus = 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'OPEN' | 'CLOSED';
 
 export interface ShiftVisit {
   id: string;
   shiftId: string;
-  customerId: string;
-  customer?: { shopName: string; ownerName: string };
+  customerId?: string | null;
+  customer?: { id?: string; shopName: string; ownerName?: string; phone?: string } | null;
+  shopName?: string;
   checkInTime: string;
   checkOutTime?: string | null;
+  durationMins?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  accuracy?: number | null;
+  visitReason?: string | null;
+  feedback?: string | null;
   orderPlaced?: boolean;
+  saleDone?: boolean | null;
+  customerFeedback?: string | null;
+  saleId?: string | null;
+  sale?: { id: string; totalPaise: number; quantity: number; paymentMode: string; status: string } | null;
   summary?: string | null;
   notes?: string | null;
+  createdAt?: string;
 }
 
 export interface Shift {
   id: string;
   sellerId: string;
+  seller?: { id: string; name: string; phone?: string | null; employeeCode?: string | null };
   status: ShiftStatus;
   startTime: string;
   endTime?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationMins?: number | null;
   startOdometerKm: number;
   endOdometerKm?: number | null;
+  startOdometer?: number | null;
+  endOdometer?: number | null;
   startLatitude?: number | null;
   startLongitude?: number | null;
+  startAddress?: string | null;
+  startFaceVerified?: boolean | null;
+  startFacePhoto?: string | null;
   endLatitude?: number | null;
   endLongitude?: number | null;
+  endAddress?: string | null;
+  endFaceVerified?: boolean | null;
+  endFacePhoto?: string | null;
+  totalDistanceKm?: number;
+  territory?: string | null;
+  notes?: string | null;
   visits?: ShiftVisit[];
 }
 
 export interface StartShiftPayload {
-  startOdometerKm: number;
+  startOdometerKm?: number;
   startLatitude?: number;
   startLongitude?: number;
   latitude?: number;
@@ -270,10 +359,15 @@ export interface StartShiftPayload {
   address?: string;
   notes?: string;
   remarks?: string;
+  faceVerified?: boolean;
+  facePhoto?: string;
+  faceConfidence?: number;
+  faceMethod?: string;
 }
 
 export interface CheckInPayload {
-  customerId: string;
+  customerId?: string;
+  shopName?: string;
   latitude?: number;
   longitude?: number;
   notes?: string;
@@ -282,14 +376,19 @@ export interface CheckInPayload {
 
 export interface CheckOutPayload {
   visitId: string;
+  latitude?: number;
+  longitude?: number;
   summary?: string;
   notes?: string;
   orderPlaced?: boolean;
+  saleDone?: boolean;
+  customerFeedback?: string;
+  saleId?: string;
   outcome?: string;
 }
 
 export interface EndShiftPayload {
-  endOdometerKm: number;
+  endOdometerKm?: number;
   endLatitude?: number;
   endLongitude?: number;
   latitude?: number;
@@ -297,6 +396,10 @@ export interface EndShiftPayload {
   address?: string;
   notes?: string;
   remarks?: string;
+  faceVerified?: boolean;
+  facePhoto?: string;
+  faceConfidence?: number;
+  faceMethod?: string;
 }
 
 // ----------------------------------------------------
@@ -352,12 +455,56 @@ export interface SellerDashboardData {
   recentSales?: SaleItem[];
 }
 
+export interface SalesReportQuery {
+  startDate?: string;
+  endDate?: string;
+  from?: string;
+  to?: string;
+  state?: string;
+  district?: string;
+  village?: string;
+  managerId?: string;
+  sellerId?: string;
+  paymentMode?: PaymentMode;
+  status?: string;
+  groupBy?: 'date' | 'seller' | 'manager' | 'state' | 'district' | 'village';
+  format?: 'json' | 'csv' | 'xlsx';
+}
+
+export interface SalesReportGroupItem {
+  label: string;
+  count: number;
+  quantity: number;
+  totalPaise: number;
+}
+
+export interface SalesReportData {
+  summary: {
+    totalSalesCount: number;
+    totalQuantitySold: number;
+    grossSalesPaise: number;
+    grossSalesRupees: number;
+    netSalesPaise: number;
+    netSalesRupees: number;
+    averageOrderValueRupees: number;
+  };
+  groups?: SalesReportGroupItem[];
+  items: SaleItem[];
+}
+
 export interface ManagerDashboardData {
   totalSellers: number;
   activeSellersCount: number;
   monthlyRevenuePaise: number;
   monthlyPacketsSold: number;
   totalCustomers: number;
+  metrics?: {
+    totalSellers?: number;
+    activeSellersCount?: number;
+    monthlyRevenuePaise?: number;
+    monthlyPacketsSold?: number;
+    totalCustomers?: number;
+  };
 }
 
 export interface AdminDashboardData {
@@ -367,10 +514,28 @@ export interface AdminDashboardData {
   activeSellers: number;
   pendingApprovalsCount: number;
   warehouseStockBalance: number;
+  metrics?: {
+    totalPacketsSold: number;
+    totalEarningsPaise: number;
+    totalEarningsRupees?: number;
+    totalStates?: number;
+    totalShops?: number;
+    totalManagers?: number;
+    totalSellers?: number;
+    totalInventory?: number;
+    hqStock?: number;
+    warehouseStock?: number;
+    sellerStock?: number;
+    totalIncentivePaise?: number;
+    totalIncentiveRupees?: number;
+  };
+  appliedFilters?: Record<string, unknown>;
 }
 
 export interface BusinessSettings {
-  minimumSalePricePaise: number;
+  minimumPricePaise?: number;
+  minimumSalePricePaise?: number;
+  incentiveRatePaise?: number | null;
   lowStockThreshold?: number;
   companyName?: string;
   companyGst?: string;
@@ -379,6 +544,177 @@ export interface BusinessSettings {
   companyPhone?: string;
   companyEmail?: string;
   invoiceTerms?: string;
+}
+
+export interface StockLocationItem {
+  id: string;
+  name: string;
+  type: 'HQ' | 'WAREHOUSE' | 'SELLER';
+  balance: number;
+  sellerId?: string | null;
+  seller?: { id: string; name: string; phone?: string | null } | null;
+  productBalances?: Array<{ productId: string; productName: string; balance: number }>;
+}
+
+export interface InventorySummaryData {
+  totalStock: number;
+  hqStock: number;
+  warehouseStock: number;
+  sellerStock: number;
+  totalReceived: number;
+  totalTransferred: number;
+  totalSold: number;
+  products: Array<{ id: string; name: string; sku?: string | null; balance: number }>;
+  locations: StockLocationItem[];
+  warehouses: StockLocationItem[];
+  sellers: StockLocationItem[];
+}
+
+export interface ManagerInventoryData {
+  summary?: {
+    totalSellers?: number;
+    totalAssigned?: number;
+    totalSold?: number;
+    totalRemaining?: number;
+  };
+  sellers?: Array<{
+    seller: {
+      id: string;
+      name: string;
+      phone?: string | null;
+      state?: string | null;
+      district?: string | null;
+      village?: string | null;
+    };
+    assigned: number;
+    sold: number;
+    remaining: number;
+  }> | StockLocationItem[];
+  locations?: StockLocationItem[];
+  warehouses?: StockLocationItem[];
+  totalStock?: number;
+}
+
+export interface IncentiveItem {
+  id: string;
+  userId: string;
+  userName?: string;
+  userRole?: string;
+  periodYear: number;
+  periodMonth: number;
+  earnedPaise: number;
+  adjustedPaise: number;
+  paidPaise: number;
+  netPayablePaise: number;
+  status: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
+  updatedAt?: string;
+}
+
+export interface IncentiveSummaryItem {
+  id: string;
+  sellerId: string;
+  sellerName?: string;
+  name?: string;
+  phone?: string | null;
+  role?: string;
+  ratePerPacketRupees?: number;
+  effectiveRatePaise?: number;
+  totalEarnedPaise: number;
+  totalPaidPaise: number;
+  outstandingPaise: number;
+  netPayablePaise?: number;
+  status: string;
+  currentMonth?: any;
+  previousMonth?: any;
+}
+
+export interface AdminIncentiveListResponse {
+  summary?: {
+    totalEarnedPaise: number;
+    totalEarnedRupees?: number;
+    totalPaidPaise: number;
+    totalPaidRupees?: number;
+    totalPendingPaise: number;
+    totalPendingRupees?: number;
+    totalAdditionsPaise?: number;
+    totalDeductionsPaise?: number;
+    pendingEmployeesCount?: number;
+    currentMonth?: any;
+    previousMonth?: any;
+  };
+  sellers?: IncentiveSummaryItem[];
+  managers?: IncentiveSummaryItem[];
+  items?: IncentiveSummaryItem[];
+  pagination?: PaginationMeta;
+}
+
+export interface ManagerIncentiveData {
+  summary: {
+    totalEarnedPaise: number;
+    totalPaidPaise: number;
+    totalPendingPaise: number;
+    sellerCount: number;
+  };
+  sellers: Array<{
+    id: string;
+    name: string;
+    phone?: string;
+    totalEarnedPaise: number;
+    totalPaidPaise: number;
+    netPayablePaise: number;
+    status: string;
+  }>;
+}
+
+export interface UpdateUserRatePayload {
+  ratePaise: number;
+  effectiveDate?: string;
+  reason?: string;
+}
+
+export interface CreateAdjustmentPayload {
+  type: 'ADD' | 'DEDUCT';
+  amountPaise: number;
+  reason: string;
+  adjustmentDate?: string;
+}
+
+export interface CreatePayoutPayload {
+  amountPaise: number;
+  paymentMethod?: string;
+  referenceId?: string;
+  remarks?: string;
+  paymentDate?: string;
+  requestKey?: string;
+  periodYear?: number;
+  periodMonth?: number;
+}
+
+export interface CreateProductPayload {
+  name: string;
+  sku?: string;
+  basePricePaise: number;
+  minimumPricePaise: number;
+  active?: boolean;
+}
+
+export interface UpdateProductPayload {
+  name?: string;
+  sku?: string | null;
+  basePricePaise?: number;
+  minimumPricePaise?: number;
+  active?: boolean;
+}
+
+export interface ReverseGeocodeResult {
+  latitude: number;
+  longitude: number;
+  formattedAddress: string;
+  state: string | null;
+  district: string | null;
+  sublocality: string | null;
+  pincode: string | null;
+  locationType?: string;
 }
 
 export interface InvoiceCompanyInfo {
@@ -421,9 +757,81 @@ export interface InvoiceSnapshot {
   }>;
 }
 
+export interface InvoiceItem {
+  id: string;
+  number: string;
+  saleId: string;
+  pdfPath?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  sale?: {
+    id: string;
+    saleNumber?: string;
+    quantity: number;
+    packetCount?: number;
+    totalPaise: number;
+    totalAmountPaise?: number;
+    paymentMode: string;
+    customer?: {
+      id: string;
+      shopName: string;
+      contactName?: string;
+      phone?: string;
+      email?: string;
+    } | null;
+    seller?: {
+      id: string;
+      name: string;
+      phone?: string | null;
+    } | null;
+  } | null;
+  deliveries?: Array<{ channel: string; status: string; sentAt?: string }>;
+}
+
 export interface PendingApprovalItem extends SaleItem {
   requestedUnitPricePaise?: number;
   minimumPricePaise?: number;
+}
+
+export interface ManagerItem extends PublicUser {
+  sellersCount?: number;
+  customersCount?: number;
+}
+
+export interface ListSalesParams {
+  page?: number;
+  pageSize?: number;
+  status?: 'PENDING_APPROVAL' | 'CONFIRMED' | 'REJECTED';
+  paymentMode?: 'CASH' | 'BANK' | 'PENDING';
+  period?: 'all' | 'this_month' | 'last_month';
+  customerId?: string;
+  sellerId?: string;
+  search?: string;
+}
+
+export interface UserIncentiveDetails {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    role: string;
+    employeeCode?: string;
+    designation?: string;
+    state?: string | null;
+    district?: string | null;
+    village?: string | null;
+    manager?: { id: string; name: string; phone?: string | null } | null;
+    incentiveRatePaise?: number | null;
+    effectiveRatePaise: number;
+    effectiveRateRupees: number;
+    isCustomRate: boolean;
+  };
+  summary: any;
+  rateHistory?: any[];
+  adjustments?: any[];
+  payouts?: any[];
+  sales?: any[];
 }
 
 export interface ManagerSellerItem extends PublicUser {
@@ -431,6 +839,8 @@ export interface ManagerSellerItem extends PublicUser {
   customersCount?: number;
   totalSalesPaise?: number;
 }
+
+export type SellerItem = ManagerSellerItem;
 
 export class ApiError extends Error {
   statusCode: number;

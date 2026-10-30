@@ -142,28 +142,42 @@ export default function ManagerDashboardScreen() {
           )}
 
           {/* Quick Links */}
-          <Text style={styles.sectionHeading}>Territory Operations</Text>
+          <Text style={styles.sectionHeading}>Territory Operations & Supervision</Text>
           <View style={styles.actionsCol}>
             <Button
-              title="Manage Field Officers (Sellers)"
+              title="Van Stock Supervision"
               variant="secondary"
               size="lg"
-              icon={<Ionicons name="people-outline" size={20} color="#FFFFFF" />}
-              onPress={() => router.push('/(manager)/sellers' as any)}
+              icon={<Ionicons name="cube-outline" size={20} color="#FFFFFF" />}
+              onPress={() => router.push('/(manager)/inventory' as any)}
             />
             <Button
-              title="Onboard New Field Officer"
+              title="Field Shift Attendance & Route Tracking"
               variant="outline-secondary"
               size="md"
-              icon={<Ionicons name="person-add-outline" size={18} color={BrandColors.green.primary} />}
-              onPress={() => router.push('/(manager)/sellers/new' as any)}
+              icon={<Ionicons name="time-outline" size={18} color={BrandColors.green.primary} />}
+              onPress={() => router.push('/(manager)/shifts' as any)}
             />
             <Button
-              title="Territory Customer Directory"
+              title="Team Performance & Incentives Audit"
+              variant="outline-secondary"
+              size="md"
+              icon={<Ionicons name="gift-outline" size={18} color={BrandColors.green.primary} />}
+              onPress={() => router.push('/(manager)/incentives' as any)}
+            />
+            <Button
+              title="Onboard Customer Store (Single / Batch)"
               variant="outline-secondary"
               size="md"
               icon={<Ionicons name="storefront-outline" size={18} color={BrandColors.green.primary} />}
-              onPress={() => router.push('/(manager)/customers' as any)}
+              onPress={() => router.push('/(manager)/customers/new' as any)}
+            />
+            <Button
+              title="Manage Field Officers (Sellers)"
+              variant="outline-secondary"
+              size="md"
+              icon={<Ionicons name="people-outline" size={18} color={BrandColors.green.primary} />}
+              onPress={() => router.push('/(manager)/sellers' as any)}
             />
             <Button
               title="Territory Sales Stream"

@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
@@ -43,6 +44,11 @@ export default function SaleDetailScreen() {
 
   // Invoice Download State
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
+
+  // Customer Feedback Voice Modal State
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [editFeedbackText, setEditFeedbackText] = useState('');
+  const [isUpdatingFeedback, setIsUpdatingFeedback] = useState(false);
 
   const loadSale = useCallback(async () => {
     if (!id) return;
@@ -76,6 +82,24 @@ export default function SaleDetailScreen() {
       Alert.alert('Payment Error', err.message || 'Unable to update payment status.');
     } finally {
       setIsCollecting(false);
+    }
+  }
+
+  async function handleUpdateFeedback() {
+    if (isUpdatingFeedback || !id) return;
+    setIsUpdatingFeedback(true);
+    try {
+      const res = await sellerApi.updateSale(id, {
+        customerFeedback: editFeedbackText.trim() || undefined,
+      });
+
+      setSale(res.sale);
+      setFeedbackModalVisible(false);
+      Alert.alert('Feedback Updated', 'Visit observation and voice feedback saved successfully.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Unable to update customer feedback.');
+    } finally {
+      setIsUpdatingFeedback(false);
     }
   }
 
@@ -346,6 +370,38 @@ Generated in FemmeFlo Standalone Test Mode.`;
             ))}
           </Card>
 
+          {/* Customer Feedback & Spoken Observations */}
+          <View style={styles.feedbackSectionHeader}>
+            <Text style={styles.sectionHeading}>Customer Visit Feedback</Text>
+            <Button
+              title={sale.customerFeedback ? 'Edit Feedback' : 'Add Voice Feedback'}
+              variant="ghost"
+              size="sm"
+              icon={<Ionicons name="mic-outline" size={15} color={BrandColors.pink.primary} />}
+              onPress={() => {
+                setEditFeedbackText(sale.customerFeedback || '');
+                setFeedbackModalVisible(true);
+              }}
+            />
+          </View>
+          <Card style={styles.card}>
+            {sale.customerFeedback ? (
+              <View style={styles.feedbackContentBox}>
+                <Ionicons name="chatbubbles-outline" size={20} color={BrandColors.pink.primary} style={{ marginRight: 8, marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.feedbackText}>"{sale.customerFeedback}"</Text>
+                  <Text style={styles.feedbackTag}>Translated Hindi/Hinglish Observation</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.emptyFeedbackBox}>
+                <Text style={styles.emptyFeedbackText}>
+                  No feedback recorded yet. Tap "Add Voice Feedback" to speak retailer feedback in Hindi or Hinglish.
+                </Text>
+              </View>
+            )}
+          </Card>
+
           {/* Tax Invoice Download & Share */}
           <Button
             title={isDownloadingInvoice ? 'Downloading Tax Invoice...' : 'Download & Share Tax Invoice (PDF)'}
@@ -424,6 +480,57 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 style={{ flex: 1.5 }}
               />
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Voice Feedback Edit Modal */}
+      <Modal visible={feedbackModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Retailer Voice Feedback</Text>
+                <Pressable
+                  onPress={() => setFeedbackModalVisible(false)}
+                  hitSlop={HitSlop.md}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={24} color="#64748B" />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Speak naturally in Hindi or Hinglish. Observations are translated to professional English and attached to this order.
+              </Text>
+
+              <VoiceFeedbackTranslator
+                value={editFeedbackText}
+                onChange={setEditFeedbackText}
+                label="Observation Notes"
+                sublabel="Tap mic to speak — review and accept before saving"
+                placeholder="e.g. Dukaan par stock khatam tha, agle hafte 20 packets ka order chahiye..."
+              />
+
+              <View style={styles.modalBtnRow}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  size="md"
+                  onPress={() => setFeedbackModalVisible(false)}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={isUpdatingFeedback ? 'Saving...' : 'Save Feedback'}
+                  variant="primary"
+                  size="md"
+                  onPress={handleUpdateFeedback}
+                  loading={isUpdatingFeedback}
+                  disabled={isUpdatingFeedback}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -624,5 +731,39 @@ const styles = StyleSheet.create({
   modalButtonsRow: {
     flexDirection: 'row',
     marginTop: Spacing.md,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    marginTop: Spacing.md,
+  },
+  feedbackSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  feedbackContentBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  feedbackText: {
+    ...Typography.bodyMedium,
+    color: '#0F172A',
+    lineHeight: 22,
+    fontStyle: 'italic',
+  },
+  feedbackTag: {
+    ...Typography.caption,
+    color: '#64748B',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  emptyFeedbackBox: {
+    paddingVertical: 6,
+  },
+  emptyFeedbackText: {
+    ...Typography.bodySmall,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
 });

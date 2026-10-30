@@ -57,6 +57,13 @@
         }
       ],
       [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow FemmeFlo to record spoken Hindi/Hinglish customer feedback.",
+          "speechRecognitionPermission": "Allow FemmeFlo to translate customer feedback into English."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

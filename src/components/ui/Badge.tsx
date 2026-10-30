@@ -9,6 +9,7 @@ export type BadgeVariant =
   | 'info'
   | 'neutral'
   | 'PENDING'
+  | 'PENDING_APPROVAL'
   | 'APPROVED'
   | 'CONFIRMED'
   | 'REJECTED'
@@ -66,6 +67,7 @@ function getNormalizedVariant(v: BadgeVariant): 'success' | 'warning' | 'danger'
     case 'CASH':
       return 'success';
     case 'PENDING':
+    case 'PENDING_APPROVAL':
     case 'BANK':
       return 'warning';
     case 'REJECTED':

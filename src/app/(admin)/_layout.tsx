@@ -54,6 +54,19 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="reports/index"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? 'bar-chart' : 'bar-chart-outline'}
+              size={size}
+              color={typeof color === 'string' ? color : undefined}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="approvals/index"
         options={{
           title: 'Approvals',
@@ -107,6 +120,34 @@ export default function AdminTabsLayout() {
       />
       <Tabs.Screen
         name="categories/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="customers"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="products/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="incentives/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="shifts/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="permissions/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="sales/index"
+        options={{ href: null }}
+      />
+      <Tabs.Screen
+        name="invoices/index"
         options={{ href: null }}
       />
     </Tabs>

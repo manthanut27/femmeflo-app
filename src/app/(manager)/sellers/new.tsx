@@ -36,7 +36,7 @@ export default function OnboardSellerScreen() {
       errs.email = 'Valid email is required.';
     }
     if (!phone.trim() || phone.trim().length < 10) errs.phone = '10-digit mobile number is required.';
-    if (password && password.length < 6) errs.password = 'Initial password must be at least 6 characters.';
+    if (password && password.length < 12) errs.password = 'Initial password must be at least 12 characters (or leave blank for FemmeFlo@2026).';
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -52,7 +52,7 @@ export default function OnboardSellerScreen() {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
-        password: password || undefined,
+        password: password.trim() || 'FemmeFlo@2026',
         district: user?.district || undefined,
         state: user?.state || undefined,
       });
@@ -118,7 +118,7 @@ export default function OnboardSellerScreen() {
 
             <Input
               label="Initial Password (Optional)"
-              placeholder="Default generated if blank"
+              placeholder="Leave blank for default (FemmeFlo@2026)"
               value={password}
               onChangeText={setPassword}
               isPassword

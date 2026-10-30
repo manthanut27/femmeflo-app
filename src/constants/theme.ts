@@ -11,6 +11,7 @@ export const BrandColors = {
     surface: '#FFF8FA',
     subtle: '#FFF5F7',
     tint: '#FCE7F3',
+    border: '#FECDD3',
   },
   // Brand Green / Forest (Supply Chain & Positive Balance)
   green: {
@@ -21,6 +22,7 @@ export const BrandColors = {
     light: '#D1FAE5',
     subtle: '#EBF6EF',
     tint: '#D1FAE5',
+    border: '#A7F3D0',
   },
   // Accents
   accent: {
@@ -61,6 +63,9 @@ export const Colors = {
     danger: '#B4234D',
     dangerBg: '#FFF1F2',
     dangerBorder: '#FECDD3',
+    error: '#DC2626',
+    errorBg: '#FFF1F2',
+    surfaceSecondary: '#F1F5F9',
     info: '#0284C7',
     infoBg: '#F0F9FF',
     infoBorder: '#BAE6FD',
@@ -104,7 +109,7 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light;
 
-export const Typography = {
+const baseTypography = {
   display: {
     fontSize: 28,
     lineHeight: 34,
@@ -129,7 +134,30 @@ export const Typography = {
     fontWeight: '600' as const,
     letterSpacing: 0,
   },
+  headingLg: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700' as const,
+    letterSpacing: -0.3,
+  },
+  headingMd: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700' as const,
+    letterSpacing: -0.2,
+  },
+  headingSm: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600' as const,
+    letterSpacing: 0,
+  },
   bodyLarge: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '400' as const,
+  },
+  bodyLg: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '400' as const,
@@ -144,7 +172,17 @@ export const Typography = {
     lineHeight: 20,
     fontWeight: '600' as const,
   },
+  bodyMd: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600' as const,
+  },
   bodySmall: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400' as const,
+  },
+  bodySm: {
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '400' as const,
@@ -154,13 +192,52 @@ export const Typography = {
     lineHeight: 16,
     fontWeight: '500' as const,
   },
+  captionSm: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '500' as const,
+  },
   overline: {
     fontSize: 11,
     lineHeight: 14,
     fontWeight: '700' as const,
     letterSpacing: 0.8,
   },
+  title: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700' as const,
+    letterSpacing: -0.2,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600' as const,
+  },
 } as const;
+
+export interface TypographyToken {
+  fontSize: number;
+  lineHeight: number;
+  fontWeight: '400' | '500' | '600' | '700' | '800';
+  letterSpacing?: number;
+}
+
+export type TypographyScale = typeof baseTypography & Record<string, TypographyToken>;
+
+export const Typography: TypographyScale = new Proxy(baseTypography as any, {
+  get(target, prop: string | symbol) {
+    if (typeof prop === 'string' && prop in target) {
+      return target[prop];
+    }
+    // Safe fallback token preventing undefined.fontSize runtime crashes
+    return {
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '400',
+    };
+  },
+});
 
 export const Spacing = {
   none: 0,

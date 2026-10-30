@@ -1,7 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -18,6 +20,7 @@ import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
 
 export default function ManagerCustomersScreen() {
+  const router = useRouter();
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -92,6 +95,26 @@ export default function ManagerCustomersScreen() {
       <Header
         title="Territory Customers"
         subtitle={`${pagination.total} registered stores across sellers`}
+        rightAction={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Batch onboard customers"
+              style={styles.batchBtn}
+              onPress={() => router.push('/(manager)/customers/bulk' as any)}
+            >
+              <Ionicons name="layers-outline" size={18} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Onboard new customer"
+              style={styles.addBtn}
+              onPress={() => router.push('/(manager)/customers/new' as any)}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        }
       />
 
       <View style={styles.searchBarOuter}>
@@ -143,6 +166,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  batchBtn: {
+    backgroundColor: '#0F172A',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtn: {
+    backgroundColor: BrandColors.pink.primary,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchBarOuter: {
     backgroundColor: Colors.light.surface,

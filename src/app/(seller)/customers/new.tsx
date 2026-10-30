@@ -1,6 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -18,13 +17,28 @@ import {
 import { categoriesApi } from '@/api/categories';
 import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
-import type { CategoryItem } from '@/api/types';
+import type { CategoryItem, CustomerItem } from '@/api/types';
+import { ISTClock } from '@/components/common/ISTClock';
+import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
-import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import {
+  BorderRadius,
+  BrandColors,
+  Colors,
+  HitSlop,
+  MaxContentWidth,
+  Radius,
+  Shadows,
+  Spacing,
+  Typography,
+} from '@/constants/theme';
+import { draftStorage } from '@/utils/draftStorage';
+import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
+import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
 
 export default function AddCustomerScreen() {
   const router = useRouter();
@@ -37,14 +51,16 @@ export default function AddCustomerScreen() {
   const [categoryId, setCategoryId] = useState('');
   const [address, setAddress] = useState('');
   const [pincode, setPincode] = useState('');
-  const [stateName, setStateName] = useState('');
+  const [stateName, setStateName] = useState('Maharashtra');
   const [district, setDistrict] = useState('');
   const [village, setVillage] = useState('');
+  const [noPhotoReason, setNoPhotoReason] = useState('');
 
   // GPS Location State
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<'idle' | 'acquiring' | 'acquired' | 'denied' | 'failed'>('idle');
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<GpsAcquisitionStatus>('idle');
 
   // Photo State
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -52,7 +68,7 @@ export default function AddCustomerScreen() {
   // Categories
   const [categories, setCategories] = useState<CategoryItem[]>([]);
 
-  // Submission State
+  // Submission & Confirmation State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -64,40 +80,78 @@ export default function AddCustomerScreen() {
     onAction?: () => void;
   } | null>(null);
 
+  const [savedCustomer, setSavedCustomer] = useState<CustomerItem | null>(null);
+
   useEffect(() => {
     // 1. Fetch categories
     categoriesApi
       .listCategories()
       .then((res) => {
         setCategories(res.items);
-        if (res.items.length > 0) {
+        if (res.items.length > 0 && !categoryId) {
           setCategoryId(res.items[0].id);
         }
       })
       .catch(() => {});
 
-    // 2. Automatically request foreground location
-    acquireLocation();
+    // 2. Automatically request foreground location with high accuracy & fallback
+    startGpsAcquisition();
+
+    // 3. Restore customer draft if present
+    draftStorage.getCustomerDraft().then((draft) => {
+      if (draft && !shopName) {
+        if (draft.shopName) setShopName(draft.shopName);
+        if (draft.ownerName) setOwnerName(draft.ownerName);
+        if (draft.email) setEmail(draft.email);
+        if (draft.phone) setPhone(draft.phone);
+        if (draft.categoryId) setCategoryId(draft.categoryId);
+        if (draft.address) setAddress(draft.address);
+        if (draft.pincode) setPincode(draft.pincode);
+        if (draft.state) setStateName(draft.state);
+        if (draft.district) setDistrict(draft.district);
+        if (draft.village) setVillage(draft.village);
+        if (draft.noPhotoReason) setNoPhotoReason(draft.noPhotoReason);
+        if (draft.photoUri) setPhotoUri(draft.photoUri);
+      }
+    });
   }, []);
 
-  async function acquireLocation() {
-    setGpsStatus('acquiring');
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setGpsStatus('denied');
-        return;
-      }
+  // Auto-save form draft on meaningful edits
+  useEffect(() => {
+    if (shopName || phone || ownerName) {
+      const timer = setTimeout(() => {
+        draftStorage.saveCustomerDraft(undefined, {
+          shopName,
+          ownerName,
+          email,
+          phone,
+          categoryId,
+          address,
+          pincode,
+          state: stateName,
+          district,
+          village,
+          noPhotoReason,
+          photoUri: photoUri || undefined,
+          updatedAt: new Date().toISOString(),
+        });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [shopName, ownerName, email, phone, categoryId, address, pincode, stateName, district, village, noPhotoReason, photoUri]);
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      setLatitude(loc.coords.latitude);
-      setLongitude(loc.coords.longitude);
-      setGpsStatus('acquired');
-    } catch {
-      setGpsStatus('failed');
+  async function startGpsAcquisition() {
+    setGpsStatus('acquiring_high');
+    const res = await acquireGpsCoordinates({
+      highAccuracyTimeoutMs: 6000,
+      fallbackTimeoutMs: 4000,
+      onStatusChange: setGpsStatus,
+    });
+    setGpsStatus(res.status);
+    if (res.status === 'acquired' && res.latitude !== null && res.longitude !== null) {
+      setLatitude(res.latitude);
+      setLongitude(res.longitude);
+      setGpsAccuracy(res.accuracy);
     }
   }
 
@@ -129,13 +183,10 @@ export default function AddCustomerScreen() {
             Alert.alert('Permission Denied', 'Camera permission is required to capture store photo.');
             return;
           }
-          const res = await ImagePicker.launchCameraAsync({
-            quality: 0.7,
-            allowsEditing: true,
-            aspect: [4, 3],
-          });
+          const res = await ImagePicker.launchCameraAsync(DEFAULT_IMAGE_PICKER_OPTIONS);
           if (!res.canceled && res.assets[0]?.uri) {
-            setPhotoUri(res.assets[0].uri);
+            const compressed = await compressImage(res.assets[0].uri);
+            setPhotoUri(compressed.uri);
           }
         },
       },
@@ -147,13 +198,10 @@ export default function AddCustomerScreen() {
             Alert.alert('Permission Denied', 'Gallery access is required to choose a photo.');
             return;
           }
-          const res = await ImagePicker.launchImageLibraryAsync({
-            quality: 0.7,
-            allowsEditing: true,
-            aspect: [4, 3],
-          });
+          const res = await ImagePicker.launchImageLibraryAsync(DEFAULT_IMAGE_PICKER_OPTIONS);
           if (!res.canceled && res.assets[0]?.uri) {
-            setPhotoUri(res.assets[0].uri);
+            const compressed = await compressImage(res.assets[0].uri);
+            setPhotoUri(compressed.uri);
           }
         },
       },
@@ -169,12 +217,20 @@ export default function AddCustomerScreen() {
     if (!trimmedEmail || !validateCustomerEmail(trimmedEmail)) {
       errs.email = 'A valid customer email is required.';
     }
-    if (!phone.trim() || phone.trim().length < 10) errs.phone = 'A valid 10-digit mobile number is required.';
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      errs.phone = 'A valid 10-digit Indian mobile number is required.';
+    }
     if (!categoryId) errs.categoryId = 'Please select a customer category.';
     if (!address.trim()) errs.address = 'Street address is required.';
     if (!pincode.trim() || pincode.trim().length !== 6) errs.pincode = 'A valid 6-digit PIN code is required.';
     if (!stateName.trim()) errs.stateName = 'State is required.';
     if (!district.trim()) errs.district = 'District is required.';
+
+    // Business Rule: Photo Exemption Reason is mandatory if storefront photo is not uploaded
+    if (!photoUri && !noPhotoReason.trim()) {
+      errs.noPhotoReason = 'Photo exemption reason is mandatory when storefront photo is omitted.';
+    }
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -208,6 +264,7 @@ export default function AddCustomerScreen() {
         village: village.trim() || undefined,
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
+        noPhotoReason: photoUri ? undefined : noPhotoReason.trim(),
       });
 
       const customerId = res.customer.id;
@@ -221,20 +278,9 @@ export default function AddCustomerScreen() {
         }
       }
 
-      setFeedback({
-        type: 'success',
-        title: 'Customer Onboarded Successfully',
-        message: `${shopName} has been registered and added to your retail beat.`,
-        actionLabel: 'Return to Customer Directory',
-        onAction: () => router.replace('/(seller)/customers' as any),
-      });
-
-      Alert.alert('Customer Onboarded', `${shopName} has been successfully registered.`, [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/(seller)/customers' as any),
-        },
-      ]);
+      // Clear draft on success
+      await draftStorage.clearCustomerDraft();
+      setSavedCustomer(res.customer);
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -247,15 +293,73 @@ export default function AddCustomerScreen() {
     }
   }
 
+  // If saved confirmation is active, show the confirmation screen
+  if (savedCustomer) {
+    return (
+      <View style={styles.container}>
+        <Header title="Customer Onboarding" subtitle="Retail Outlet Registered" />
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.contentWrapper}>
+            <SaveConfirmationCard
+              count={1}
+              customers={[savedCustomer]}
+              serverCreatedAt={savedCustomer.createdAt}
+              hasPhoto={Boolean(photoUri)}
+              photoReason={noPhotoReason || 'Storefront Photo Captured'}
+              hasGps={Boolean(latitude && longitude)}
+              latitude={latitude}
+              longitude={longitude}
+              onReset={() => {
+                setSavedCustomer(null);
+                setShopName('');
+                setOwnerName('');
+                setEmail('');
+                setPhone('');
+                setAddress('');
+                setPincode('');
+                setVillage('');
+                setNoPhotoReason('');
+                setPhotoUri(null);
+                startGpsAcquisition();
+              }}
+              onDone={() => {
+                router.replace('/(seller)/customers' as any);
+              }}
+            />
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <Header title="Onboard Customer" subtitle="Register New Retail Outlet" showBack />
+      <Header
+        title="Onboard Customer"
+        subtitle="Register New Retail Outlet"
+        showBack
+        rightAction={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Switch to batch customer onboarding"
+            style={styles.batchSwitchBtn}
+            onPress={() => router.push('/(seller)/customers/bulk' as any)}
+            hitSlop={HitSlop.md}
+          >
+            <Ionicons name="layers-outline" size={16} color={BrandColors.pink.dark} />
+            <Text style={styles.batchSwitchText}>Batch Entry</Text>
+          </Pressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrapper}>
+          {/* Live IST Clock Header */}
+          <ISTClock />
+
           {feedback ? (
             <FeedbackBanner
               type={feedback.type}
@@ -281,11 +385,14 @@ export default function AddCustomerScreen() {
                   />
                   <Text style={styles.gpsTitle}>Retail GPS Coordinates</Text>
                 </View>
-                {gpsStatus === 'acquiring' ? (
+                {gpsStatus === 'acquiring_high' ? (
                   <Text style={styles.gpsDesc}>Acquiring high-accuracy foreground location...</Text>
+                ) : gpsStatus === 'acquiring_fallback' ? (
+                  <Text style={styles.gpsDesc}>Refining position with balanced accuracy...</Text>
                 ) : gpsStatus === 'acquired' ? (
                   <Text style={[styles.gpsDesc, { color: BrandColors.green.primary, fontWeight: '600' }]}>
                     Lat: {latitude?.toFixed(5)}, Lon: {longitude?.toFixed(5)}
+                    {gpsAccuracy ? ` (±${Math.round(gpsAccuracy)}m)` : ''}
                   </Text>
                 ) : gpsStatus === 'denied' ? (
                   <Text style={[styles.gpsDesc, { color: '#B4234D' }]}>
@@ -297,28 +404,80 @@ export default function AddCustomerScreen() {
               </View>
 
               <Pressable
-                onPress={acquireLocation}
-                disabled={gpsStatus === 'acquiring'}
+                onPress={startGpsAcquisition}
+                style={({ pressed }) => [styles.gpsRetryBtn, pressed && { opacity: 0.7 }]}
                 accessibilityRole="button"
-                accessibilityLabel="Retry acquiring GPS location"
-                hitSlop={HitSlop.md}
-                style={({ pressed }) => [styles.gpsRetryBtn, pressed && styles.gpsRetryBtnPressed]}
+                accessibilityLabel="Retry GPS location acquisition"
               >
-                {gpsStatus === 'acquiring' ? (
-                  <ActivityIndicator size="small" color={BrandColors.pink.primary} />
-                ) : (
-                  <Ionicons name="refresh" size={20} color={BrandColors.pink.primary} />
-                )}
+                <Ionicons name="refresh" size={18} color={BrandColors.pink.primary} />
               </Pressable>
             </View>
           </Card>
 
-          {/* Store Information */}
-          <Text style={styles.sectionHeading}>Business Details</Text>
-          <Card style={styles.formCard}>
+          {/* Storefront Photograph */}
+          <Text style={styles.sectionHeading}>Store Photograph</Text>
+          <Card style={styles.card}>
+            {photoUri ? (
+              <View style={styles.photoPreviewContainer}>
+                <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
+                <View style={styles.photoActions}>
+                  <Button
+                    title="Change Photo"
+                    variant="secondary"
+                    size="sm"
+                    onPress={pickPhoto}
+                    icon={<Ionicons name="camera-outline" size={16} color={BrandColors.pink.primary} />}
+                  />
+                  <Button
+                    title="Remove"
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => setPhotoUri(null)}
+                    icon={<Ionicons name="trash-outline" size={16} color={Colors.light.danger} />}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.photoPlaceholder}
+                onPress={pickPhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Take or upload storefront photo"
+              >
+                <View style={styles.cameraIconCircle}>
+                  <Ionicons name="camera" size={28} color={BrandColors.pink.primary} />
+                </View>
+                <Text style={styles.photoPlaceholderTitle}>Take Storefront Photo</Text>
+                <Text style={styles.photoPlaceholderSub}>
+                  Upload store entrance/signboard or provide mandatory exemption reason below.
+                </Text>
+              </Pressable>
+            )}
+
+            {/* Mandatory Exemption Reason if Photo is missing */}
+            {!photoUri && (
+              <View style={styles.exemptionBox}>
+                <Input
+                  label="Mandatory Photo Exemption Reason *"
+                  placeholder="e.g. Remote rural location, Owner unavailable, Device camera error"
+                  value={noPhotoReason}
+                  onChangeText={setNoPhotoReason}
+                  error={errors.noPhotoReason}
+                  leftIcon={<Ionicons name="document-text-outline" size={18} color="#94A3B8" />}
+                />
+                <Text style={styles.exemptionHint}>
+                  Required by company policy whenever a storefront photograph is not attached.
+                </Text>
+              </View>
+            )}
+          </Card>
+
+          {/* Outlet Business Details */}
+          <Text style={styles.sectionHeading}>Outlet Information</Text>
+          <Card style={styles.card}>
             <Input
-              label="Shop / Business Name *"
-              placeholder="e.g. Balaji Medical & General Store"
+              label="Shop / Store Name *"
+              placeholder="e.g. Shree Ganesh General Stores"
               value={shopName}
               onChangeText={setShopName}
               error={errors.shopName}
@@ -326,7 +485,7 @@ export default function AddCustomerScreen() {
             />
 
             <Input
-              label="Proprietor / Owner Name *"
+              label="Contact Person / Owner Name *"
               placeholder="e.g. Ramesh Patel"
               value={ownerName}
               onChangeText={setOwnerName}
@@ -335,19 +494,7 @@ export default function AddCustomerScreen() {
             />
 
             <Input
-              label="Customer Email Address * (Mandatory)"
-              placeholder="e.g. balajimedical@gmail.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={errors.email}
-              helperText="Required for invoicing and sales confirmation notifications"
-              leftIcon={<Ionicons name="mail-outline" size={18} color="#94A3B8" />}
-            />
-
-            <Input
-              label="Primary Contact Mobile *"
+              label="Mobile Number *"
               placeholder="e.g. 9876543210"
               value={phone}
               onChangeText={setPhone}
@@ -357,141 +504,109 @@ export default function AddCustomerScreen() {
               leftIcon={<Ionicons name="call-outline" size={18} color="#94A3B8" />}
             />
 
-            {/* Category Picker */}
-            <Text style={styles.pickerLabel}>Customer Category *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+            <Input
+              label="Customer Email Address *"
+              placeholder="e.g. ramesh@example.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+              leftIcon={<Ionicons name="mail-outline" size={18} color="#94A3B8" />}
+            />
+          </Card>
+
+          {/* Category Selection */}
+          <Text style={styles.sectionHeading}>Trade Category</Text>
+          <Card style={styles.card}>
+            <Text style={styles.inputLabel}>Select Category *</Text>
+            {errors.categoryId ? <Text style={styles.errorText}>{errors.categoryId}</Text> : null}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
               {categories.map((cat) => {
                 const isSelected = categoryId === cat.id;
                 return (
                   <Pressable
                     key={cat.id}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${cat.name} category`}
-                    style={[
-                      styles.categoryChip,
-                      isSelected && styles.categoryChipActive,
-                    ]}
                     onPress={() => setCategoryId(cat.id)}
+                    style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
                   >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        isSelected && styles.categoryChipTextActive,
-                      ]}
-                    >
+                    <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextSelected]}>
                       {cat.name}
                     </Text>
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
-                    ) : null}
                   </Pressable>
                 );
               })}
             </ScrollView>
-            {errors.categoryId ? (
-              <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
-                <Text style={styles.errorText}>{errors.categoryId}</Text>
-              </View>
-            ) : null}
           </Card>
 
-          {/* Address Information */}
-          <Text style={styles.sectionHeading}>Geographic Location</Text>
-          <Card style={styles.formCard}>
+          {/* Location & Address */}
+          <Text style={styles.sectionHeading}>Address & Territory</Text>
+          <Card style={styles.card}>
             <Input
               label="PIN Code *"
-              placeholder="e.g. 380001"
+              placeholder="e.g. 452001"
               value={pincode}
               onChangeText={handlePincodeChange}
-              keyboardType="number-pad"
+              keyboardType="numeric"
               maxLength={6}
               error={errors.pincode}
-              leftIcon={<Ionicons name="navigate-outline" size={18} color="#94A3B8" />}
-              rightIcon={
+              leftIcon={
                 pincodeLoading ? (
                   <ActivityIndicator size="small" color={BrandColors.pink.primary} />
-                ) : null
+                ) : (
+                  <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                )
               }
             />
 
             <Input
+              label="Street Address / Shop No. *"
+              placeholder="e.g. Shop 4, Main Market Road"
+              value={address}
+              onChangeText={setAddress}
+              error={errors.address}
+              leftIcon={<Ionicons name="home-outline" size={18} color="#94A3B8" />}
+            />
+
+            <View style={styles.twoColumn}>
+              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <Input
+                  label="Village / Ward"
+                  placeholder="e.g. Rau"
+                  value={village}
+                  onChangeText={setVillage}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="District *"
+                  placeholder="e.g. Indore"
+                  value={district}
+                  onChangeText={setDistrict}
+                  error={errors.district}
+                />
+              </View>
+            </View>
+
+            <Input
               label="State *"
-              placeholder="e.g. Gujarat"
+              placeholder="e.g. Madhya Pradesh"
               value={stateName}
               onChangeText={setStateName}
               error={errors.stateName}
             />
-
-            <Input
-              label="District *"
-              placeholder="e.g. Ahmedabad"
-              value={district}
-              onChangeText={setDistrict}
-              error={errors.district}
-            />
-
-            <Input
-              label="Village / Ward / Area (Optional)"
-              placeholder="e.g. Navrangpura"
-              value={village}
-              onChangeText={setVillage}
-            />
-
-            <Input
-              label="Shop Address / Landmark *"
-              placeholder="Shop No. 4, Opposite Bus Stand..."
-              value={address}
-              onChangeText={setAddress}
-              multiline
-              numberOfLines={2}
-              error={errors.address}
-            />
           </Card>
 
-          {/* Storefront Photograph (Optional) */}
-          <Text style={styles.sectionHeading}>Storefront Photo (Optional)</Text>
-          <Card style={styles.formCard}>
-            {photoUri ? (
-              <View style={styles.photoPreviewContainer}>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Change storefront photograph"
-                  style={styles.changePhotoBtn}
-                  onPress={pickPhoto}
-                  hitSlop={HitSlop.md}
-                >
-                  <Ionicons name="camera-reverse-outline" size={16} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.changePhotoText}>Change Photo</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Capture or upload store photo"
-                style={({ pressed }) => [styles.photoUploadBox, pressed && styles.photoUploadBoxPressed]}
-                onPress={pickPhoto}
-              >
-                <View style={styles.photoIconCircle}>
-                  <Ionicons name="camera-outline" size={28} color={BrandColors.pink.primary} />
-                </View>
-                <Text style={styles.photoUploadText}>Tap to Capture or Upload Store Photo</Text>
-                <Text style={styles.photoUploadHint}>Camera capture or gallery selection</Text>
-              </Pressable>
-            )}
-          </Card>
-
-          {/* Submit Button */}
-          <Button
-            title={isSubmitting ? 'Registering Customer...' : 'Save & Onboard Customer'}
-            onPress={handleSubmit}
-            loading={isSubmitting}
-            size="lg"
-            icon={<Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />}
-            style={styles.submitBtn}
-          />
+          {/* Submit Action */}
+          <View style={styles.submitContainer}>
+            <Button
+              title="Register Customer"
+              variant="primary"
+              size="lg"
+              loading={isSubmitting}
+              onPress={handleSubmit}
+            />
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -504,18 +619,49 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   scrollContent: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.huge,
+    paddingBottom: Spacing.xxl * 2,
   },
   contentWrapper: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  batchSwitchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: Spacing.sm + 4,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  batchSwitchText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+    marginLeft: 4,
+  },
+  sectionHeading: {
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  card: {
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   gpsCard: {
-    backgroundColor: Colors.light.surfaceMuted,
+    padding: Spacing.md,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.light.card,
     borderColor: Colors.light.border,
-    marginBottom: Spacing.md,
   },
   gpsRow: {
     flexDirection: 'row',
@@ -524,91 +670,57 @@ const styles = StyleSheet.create({
   },
   gpsInfo: {
     flex: 1,
-    marginRight: Spacing.md,
+    marginRight: Spacing.sm,
   },
   gpsTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   gpsTitle: {
-    ...Typography.bodyMedium,
-    color: Colors.light.heading,
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
   },
   gpsDesc: {
-    ...Typography.caption,
+    fontSize: Typography.caption.fontSize,
     color: Colors.light.textSecondary,
-    lineHeight: 16,
   },
   gpsRetryBtn: {
-    width: 38,
-    height: 38,
+    padding: Spacing.sm,
     borderRadius: Radius.full,
-    backgroundColor: Colors.light.surface,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    backgroundColor: BrandColors.pink.tint,
+  },
+  photoPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: BrandColors.pink.primary,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
+    backgroundColor: BrandColors.pink.tint,
+  },
+  cameraIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
     ...Shadows.sm,
   },
-  gpsRetryBtnPressed: {
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  sectionHeading: {
-    ...Typography.overline,
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.xs,
-    marginTop: Spacing.xs,
-  },
-  formCard: {
-    marginBottom: Spacing.md,
-  },
-  pickerLabel: {
-    ...Typography.caption,
+  photoPlaceholderTitle: {
+    fontSize: Typography.bodySmall.fontSize,
     fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: Spacing.xs,
-    marginTop: Spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: BrandColors.pink.dark,
   },
-  categoryScroll: {
-    flexDirection: 'row',
-    marginBottom: Spacing.xs,
-  },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 7,
-    backgroundColor: Colors.light.backgroundElement,
-    borderRadius: Radius.full,
-    marginRight: Spacing.xs,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  categoryChipActive: {
-    backgroundColor: BrandColors.pink.primary,
-    borderColor: BrandColors.pink.primary,
-  },
-  categoryChipText: {
-    ...Typography.caption,
-    fontWeight: '600',
+  photoPlaceholderSub: {
+    fontSize: Typography.caption.fontSize,
     color: Colors.light.textSecondary,
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.xs,
-  },
-  errorText: {
-    ...Typography.caption,
-    color: Colors.light.danger,
-    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 2,
   },
   photoPreviewContainer: {
     alignItems: 'center',
@@ -617,55 +729,64 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 180,
     borderRadius: Radius.md,
-    marginBottom: Spacing.md,
-  },
-  changePhotoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: BrandColors.pink.primary,
-  },
-  changePhotoText: {
-    ...Typography.bodySmall,
-    color: BrandColors.pink.primary,
-    fontWeight: '600',
-  },
-  photoUploadBox: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: Colors.light.border,
-    borderRadius: Radius.md,
-    padding: Spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.light.surfaceMuted,
-  },
-  photoUploadBoxPressed: {
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  photoIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.full,
-    backgroundColor: BrandColors.pink.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: Spacing.sm,
   },
-  photoUploadText: {
-    ...Typography.bodyMedium,
-    color: Colors.light.heading,
-    marginBottom: 2,
+  photoActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  photoUploadHint: {
-    ...Typography.caption,
-    color: Colors.light.textMuted,
+  exemptionBox: {
+    marginTop: Spacing.md,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
-  submitBtn: {
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xxl,
+  exemptionHint: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  inputLabel: {
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '600',
+    color: Colors.light.textPrimary,
+    marginBottom: Spacing.xs,
+  },
+  errorText: {
+    fontSize: Typography.caption.fontSize,
+    color: Colors.light.danger,
+    marginBottom: Spacing.xs,
+  },
+  chipsScroll: {
+    flexDirection: 'row',
+    marginTop: Spacing.xs,
+  },
+  categoryChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs + 2,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+    marginRight: Spacing.xs,
+  },
+  categoryChipSelected: {
+    backgroundColor: BrandColors.pink.primary,
+    borderColor: BrandColors.pink.primary,
+  },
+  categoryChipText: {
+    fontSize: Typography.bodySmall.fontSize,
+    color: Colors.light.textPrimary,
+  },
+  categoryChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  twoColumn: {
+    flexDirection: 'row',
+  },
+  submitContainer: {
+    marginTop: Spacing.md,
   },
 });
