@@ -30,12 +30,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Purge any legacy mock test tokens from storage
+      if (storedToken.startsWith('mock_jwt_token_')) {
+        await tokenStorage.clearToken();
+        setToken(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
       setToken(storedToken);
 
-      // Verify token with backend
+      // Verify token with live backend
       try {
         const res = await authApi.me();
-        if (res && res.user) {
+        if (res && res.user && res.user.id && res.user.role) {
           setUser(res.user);
           await tokenStorage.setCachedUser(res.user);
         } else {
@@ -52,8 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null);
         } else {
           // Pure network / offline error: allow offline session restoration from cache
+          // ONLY if cached user is a genuine backend user record
           const cached = await tokenStorage.getCachedUser();
-          if (cached) {
+          if (cached && cached.id && cached.role && !cached.id.startsWith('mock_') && cached.id !== 'usr_seller_01') {
             setUser(cached);
           } else {
             await tokenStorage.clearToken();

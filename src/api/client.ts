@@ -14,9 +14,11 @@ export interface RequestOptions extends RequestInit {
 
 export { ApiError };
 
-// Determine Base URL (defaults to local inventory server on port 5000)
+// Determine Base URL (defaults to production Render backend)
+export const DEFAULT_PRODUCTION_API_URL = 'https://femmeflo-inventory.onrender.com/api/v1';
+
 const rawApiUrl = (
-  process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api/v1'
+  process.env.EXPO_PUBLIC_API_URL || DEFAULT_PRODUCTION_API_URL
 ).trim().replace(/\/+$/, '');
 
 let customApiBaseUrl: string | null = null;
@@ -81,11 +83,11 @@ export async function testBackendHealth(targetUrl?: string): Promise<{ ok: boole
   const healthUrl = `${currentBase.replace(/\/+$/, '')}/health`;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(healthUrl, { signal: controller.signal });
     clearTimeout(timer);
     if (res.ok) {
-      return { ok: true, status: 'Connected to live backend (port 5000)', url: currentBase };
+      return { ok: true, status: 'Connected to live backend', url: currentBase };
     }
     return { ok: false, status: `HTTP ${res.status} from server`, url: currentBase };
   } catch (err: any) {
@@ -343,6 +345,18 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       }
 
       if (isNetworkOrAbort) {
+        // Critical: Auth endpoints MUST NEVER silently fall back to mock data!
+        const cleanEndpoint = endpoint.replace(/^\/+/, '').toLowerCase();
+        const isAuthEndpoint = cleanEndpoint.startsWith('auth/') || cleanEndpoint === 'auth';
+        if (isAuthEndpoint) {
+          throw new ApiError(
+            `Unable to reach authentication server. Please check your internet connection.`,
+            0,
+            null,
+            true
+          );
+        }
+
         console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from resilient mock engine.`);
         try {
           return await handleMockRequest<T>(endpoint, options);
