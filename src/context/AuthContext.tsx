@@ -1,14 +1,24 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authApi } from '../api/auth';
 import { setSessionExpiredHandler, tokenStorage } from '../api/client';
+import { syncMockServiceUser } from '../api/mockService';
 import type { AuthRole, PublicUser } from '../api/types';
 import { draftStorage } from '../utils/draftStorage';
+
+export type AuthState =
+  | 'INITIALIZING'
+  | 'AUTHENTICATED'
+  | 'OFFLINE_AUTHENTICATED'
+  | 'UNAUTHENTICATED'
+  | 'SESSION_EXPIRED';
 
 interface AuthContextType {
   user: PublicUser | null;
   token: string | null;
   role: AuthRole | null;
+  state: AuthState;
   isLoading: boolean;
+  isOffline: boolean;
   login: (identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') => Promise<{ user: PublicUser; token: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<PublicUser | null>;
@@ -19,14 +29,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [state, setAuthState] = useState<AuthState>('INITIALIZING');
+  const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
 
   async function restoreSession() {
     try {
-      setIsLoading(true);
+      setAuthState('INITIALIZING');
+      setIsActionLoading(true);
+
       const storedToken = await tokenStorage.getToken();
       if (!storedToken) {
-        setIsLoading(false);
+        setToken(null);
+        setUser(null);
+        setAuthState('UNAUTHENTICATED');
         return;
       }
 
@@ -35,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await tokenStorage.clearToken();
         setToken(null);
         setUser(null);
-        setIsLoading(false);
+        setAuthState('UNAUTHENTICATED');
         return;
       }
 
@@ -47,62 +62,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (res && res.user && res.user.id && res.user.role) {
           setUser(res.user);
           await tokenStorage.setCachedUser(res.user);
+          syncMockServiceUser(res.user);
+          setAuthState('AUTHENTICATED');
         } else {
           await tokenStorage.clearToken();
           setToken(null);
           setUser(null);
+          setAuthState('UNAUTHENTICATED');
         }
       } catch (err: any) {
-        // If server explicitly rejected token (401 Unauthorized or 403 Forbidden), do NOT restore cached user
+        // Distinguish explicit backend rejection from network/offline errors
         const statusCode = err?.statusCode ?? err?.status;
+        const isNetworkErr = Boolean(err?.isNetworkError) || statusCode === 0;
+
         if (statusCode === 401 || statusCode === 403) {
+          // Token is explicitly expired or revoked by backend
+          console.warn('[AuthContext] Backend session revoked or expired (401/403). Clearing session.');
           await tokenStorage.clearToken();
           setToken(null);
           setUser(null);
-        } else {
-          // Pure network / offline error: allow offline session restoration from cache
-          // ONLY if cached user is a genuine backend user record
+          setAuthState('SESSION_EXPIRED');
+        } else if (isNetworkErr || statusCode >= 500) {
+          // Network failure, timeout, host unreachable, or temporary 5xx gateway error
+          // Restore previously authenticated profile from cache without changing user role
           const cached = await tokenStorage.getCachedUser();
-          if (cached && cached.id && cached.role && !cached.id.startsWith('mock_') && cached.id !== 'usr_seller_01') {
+          if (cached && cached.id && cached.role && !cached.id.startsWith('mock_')) {
+            console.info(`[AuthContext] Backend unreachable. Restoring cached session for ${cached.role} (${cached.email || cached.name}).`);
             setUser(cached);
+            syncMockServiceUser(cached);
+            setAuthState('OFFLINE_AUTHENTICATED');
+          } else {
+            // No valid cached user to restore
+            console.warn('[AuthContext] Network unreachable and no valid cached profile found.');
+            await tokenStorage.clearToken();
+            setToken(null);
+            setUser(null);
+            setAuthState('UNAUTHENTICATED');
+          }
+        } else {
+          // Other unexpected error (e.g. malformed response)
+          const cached = await tokenStorage.getCachedUser();
+          if (cached && cached.id && cached.role && !cached.id.startsWith('mock_')) {
+            setUser(cached);
+            syncMockServiceUser(cached);
+            setAuthState('OFFLINE_AUTHENTICATED');
           } else {
             await tokenStorage.clearToken();
             setToken(null);
             setUser(null);
+            setAuthState('UNAUTHENTICATED');
           }
         }
       }
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }
 
   useEffect(() => {
-    // Set up session expiry hook to wipe local state
+    // Set up session expiry hook to wipe local state and update state machine
     setSessionExpiredHandler(() => {
+      tokenStorage.clearToken().catch(() => {});
       setUser(null);
       setToken(null);
+      setAuthState('SESSION_EXPIRED');
     });
 
     restoreSession();
   }, []);
 
   async function login(identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') {
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       const res = await authApi.login({ identifier, password, roleHint });
+      if (!res.user || !res.user.role || !res.token) {
+        throw new Error('Authentication succeeded but returned invalid user data.');
+      }
       await tokenStorage.setToken(res.token);
       await tokenStorage.setCachedUser(res.user);
       setToken(res.token);
       setUser(res.user);
+      syncMockServiceUser(res.user);
+      setAuthState('AUTHENTICATED');
       return res;
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }
 
   async function logout() {
-    setIsLoading(true);
+    setIsActionLoading(true);
     try {
       if (user?.id) {
         try {
@@ -114,8 +163,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await tokenStorage.clearToken();
       setToken(null);
       setUser(null);
+      setAuthState('UNAUTHENTICATED');
     } finally {
-      setIsLoading(false);
+      setIsActionLoading(false);
     }
   }
 
@@ -125,6 +175,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res && res.user) {
         setUser(res.user);
         await tokenStorage.setCachedUser(res.user);
+        syncMockServiceUser(res.user);
+        setAuthState('AUTHENTICATED');
         return res.user;
       }
       return null;
@@ -134,6 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const role = user?.role ?? null;
+  const isLoading = state === 'INITIALIZING' || isActionLoading;
+  const isOffline = state === 'OFFLINE_AUTHENTICATED';
 
   return (
     <AuthContext.Provider
@@ -141,7 +195,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         role,
+        state,
         isLoading,
+        isOffline,
         login,
         logout,
         refreshUser,

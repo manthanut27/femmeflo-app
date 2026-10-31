@@ -98,7 +98,72 @@ export async function testBackendHealth(targetUrl?: string): Promise<{ ok: boole
 const TOKEN_KEY = 'femmeflo_mobile_auth_token';
 const USER_KEY = 'femmeflo_mobile_auth_user';
 
-// Native Secure Storage
+function getAsyncStorageBackend() {
+  if (Platform.OS === 'web') {
+    return {
+      async getItem(key: string) { return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null; },
+      async setItem(key: string, val: string) { if (typeof localStorage !== 'undefined') localStorage.setItem(key, val); },
+      async removeItem(key: string) { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); },
+    };
+  }
+  try {
+    const mod = require('@react-native-async-storage/async-storage');
+    const asyncStorage = mod?.default ?? mod;
+    if (asyncStorage && typeof asyncStorage.getItem === 'function') {
+      return asyncStorage;
+    }
+  } catch {
+    // In-memory or native fallback
+  }
+  const memoryStore = new Map<string, string>();
+  return {
+    async getItem(key: string) { return memoryStore.get(key) ?? null; },
+    async setItem(key: string, val: string) { memoryStore.set(key, val); },
+    async removeItem(key: string) { memoryStore.delete(key); },
+  };
+}
+
+const asyncProfileBackend = getAsyncStorageBackend();
+
+/**
+ * Non-sensitive profile storage using AsyncStorage.
+ * Keeps user metadata separate from sensitive tokens in SecureStore.
+ */
+export const userProfileStorage = {
+  async getCachedUser(): Promise<PublicUser | null> {
+    try {
+      const raw = await asyncProfileBackend.getItem(USER_KEY);
+      if (raw) {
+        const user = JSON.parse(raw);
+        if (user && typeof user === 'object' && user.id && user.role) {
+          return user;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async setCachedUser(user: PublicUser): Promise<void> {
+    try {
+      if (!user || !user.id || !user.role) return;
+      await asyncProfileBackend.setItem(USER_KEY, JSON.stringify(user));
+    } catch (err) {
+      console.warn('Failed to cache user profile in AsyncStorage', err);
+    }
+  },
+
+  async clearCachedUser(): Promise<void> {
+    try {
+      await asyncProfileBackend.removeItem(USER_KEY);
+    } catch (err) {
+      console.warn('Failed to clear cached user profile', err);
+    }
+  },
+};
+
+// Native Secure Storage for authentication tokens
 export const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
@@ -134,12 +199,18 @@ export const tokenStorage = {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         await SecureStore.deleteItemAsync(USER_KEY);
       }
+      await userProfileStorage.clearCachedUser();
     } catch (err) {
       console.warn('Failed to clear auth token', err);
     }
   },
 
   async getCachedUser(): Promise<PublicUser | null> {
+    // 1. Check separate non-sensitive profile storage (AsyncStorage)
+    const profile = await userProfileStorage.getCachedUser();
+    if (profile && profile.id && profile.role) return profile;
+
+    // 2. Fall back to SecureStore migration check
     try {
       let raw: string | null = null;
       if (Platform.OS === 'web') {
@@ -147,22 +218,29 @@ export const tokenStorage = {
       } else {
         raw = await SecureStore.getItemAsync(USER_KEY);
       }
-      return raw ? JSON.parse(raw) : null;
+      if (raw) {
+        const legacyUser = JSON.parse(raw);
+        if (legacyUser && legacyUser.id && legacyUser.role) {
+          await userProfileStorage.setCachedUser(legacyUser);
+          return legacyUser;
+        }
+      }
     } catch {
-      return null;
+      // ignore
     }
+    return null;
   },
 
   async setCachedUser(user: PublicUser): Promise<void> {
+    await userProfileStorage.setCachedUser(user);
     try {
-      const data = JSON.stringify(user);
       if (Platform.OS === 'web') {
-        if (typeof localStorage !== 'undefined') localStorage.setItem(USER_KEY, data);
+        if (typeof localStorage !== 'undefined') localStorage.setItem(USER_KEY, JSON.stringify(user));
       } else {
-        await SecureStore.setItemAsync(USER_KEY, data);
+        await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
       }
-    } catch (err) {
-      console.warn('Failed to cache user record', err);
+    } catch {
+      // ignore SecureStore size limit if thrown
     }
   },
 };
@@ -347,7 +425,10 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       if (isNetworkOrAbort) {
         // Critical: Auth endpoints MUST NEVER silently fall back to mock data!
         const cleanEndpoint = endpoint.replace(/^\/+/, '').toLowerCase();
-        const isAuthEndpoint = cleanEndpoint.startsWith('auth/') || cleanEndpoint === 'auth';
+        const isAuthEndpoint =
+          cleanEndpoint.startsWith('auth/') ||
+          cleanEndpoint === 'auth' ||
+          cleanEndpoint.includes('/auth/');
         if (isAuthEndpoint) {
           throw new ApiError(
             `Unable to reach authentication server. Please check your internet connection.`,

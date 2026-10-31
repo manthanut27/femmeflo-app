@@ -73,6 +73,16 @@ class MockDatabase {
 export const mockDb = new MockDatabase();
 
 /**
+ * Synchronize authenticated user identity into mock database
+ * so fallback responses strictly match the user's authentic role and permissions.
+ */
+export function syncMockServiceUser(user: PublicUser | null): void {
+  if (user && user.id && user.role) {
+    mockDb.setCurrentUser(user);
+  }
+}
+
+/**
  * Helper to simulate realistic slight latency (50-150ms) for UI responsiveness
  */
 function sleep(ms = 80): Promise<void> {
@@ -108,7 +118,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   if (cleanEndpoint.endsWith('auth/login')) {
     const rawId = (body.login || body.identifier || '').trim().toLowerCase();
     const roleHint = (body.roleHint || '').trim().toLowerCase();
-    let selectedUser: PublicUser = mockDb.currentUser;
+    let selectedUser: PublicUser | null = null;
 
     if (
       roleHint === 'admin' ||
@@ -129,8 +139,17 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       rawId === 'manager@femmeflo.in'
     ) {
       selectedUser = MOCK_USERS.manager;
-    } else {
+    } else if (
+      roleHint === 'seller' ||
+      cleanEndpoint.startsWith('seller') ||
+      rawId.includes('seller') ||
+      rawId === '9876543210' ||
+      rawId === 'seller@femmeflo.com' ||
+      rawId === 'seller@femmeflo.in'
+    ) {
       selectedUser = MOCK_USERS.seller;
+    } else {
+      throw new ApiError('Invalid login credentials.', 401);
     }
 
     mockDb.setCurrentUser(selectedUser);
@@ -141,6 +160,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'auth/me') {
+    if (!mockDb.currentUser || !mockDb.currentUser.id) {
+      throw new ApiError('Unauthenticated in mock engine', 401);
+    }
     return { user: mockDb.currentUser } as unknown as T;
   }
 

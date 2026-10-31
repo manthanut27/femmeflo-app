@@ -6,21 +6,23 @@ import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ManagerTabsLayout() {
-  const { user, isLoading } = useAuth();
+  const { user, state, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || state === 'INITIALIZING') return;
     if (!user || (user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN')) {
       if (!user) {
         router.replace('/(auth)/login' as any);
-      } else {
+      } else if (user.role === 'SELLER') {
         router.replace('/(seller)' as any);
+      } else {
+        router.replace('/(auth)/login' as any);
       }
     }
-  }, [user, isLoading, router]);
+  }, [user, state, isLoading, router]);
 
-  if (isLoading || !user || (user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN')) {
+  if (isLoading || state === 'INITIALIZING' || !user || (user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN')) {
     return (
       <View style={styles.authLoadingContainer}>
         <ActivityIndicator size="large" color={BrandColors.green.primary} />

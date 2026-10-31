@@ -6,27 +6,27 @@ import { BrandColors, Colors, Radius, Spacing, Typography } from '../constants/t
 import { useAuth } from '../context/AuthContext';
 
 export default function StartupScreen() {
-  const { user, role, isLoading } = useAuth();
+  const { user, role, state, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || state === 'INITIALIZING') return;
 
-    if (!user || !role) {
+    if (state === 'UNAUTHENTICATED' || state === 'SESSION_EXPIRED' || !user || !role) {
       router.replace('/(auth)/login' as any);
       return;
     }
 
-    if (role === 'SELLER') {
-      router.replace('/(seller)' as any);
+    if (role === 'SUPER_ADMIN') {
+      router.replace('/(admin)' as any);
     } else if (role === 'MANAGER') {
       router.replace('/(manager)' as any);
-    } else if (role === 'SUPER_ADMIN') {
-      router.replace('/(admin)' as any);
+    } else if (role === 'SELLER') {
+      router.replace('/(seller)' as any);
     } else {
       router.replace('/(auth)/login' as any);
     }
-  }, [user, role, isLoading, router]);
+  }, [user, role, state, isLoading, router]);
 
   return (
     <View style={styles.container}>

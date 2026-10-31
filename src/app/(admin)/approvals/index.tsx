@@ -24,8 +24,10 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminApprovalsScreen() {
+  const { isOffline } = useAuth();
   const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,6 +62,13 @@ export default function AdminApprovalsScreen() {
   }, [loadApprovals]);
 
   function handleApprove(sale: PendingApprovalItem) {
+    if (isOffline) {
+      Alert.alert(
+        'Offline Mode',
+        'Price approvals require an active backend server connection. Please reconnect to the internet to authorize below-minimum orders.'
+      );
+      return;
+    }
     Alert.alert(
       'Approve Below-Minimum Sale?',
       `Order #${sale.id.slice(0, 8)} for ${sale.customer?.shopName || 'Retail Customer'} will be confirmed. Stock will be deducted and final invoice generated.`,
@@ -86,6 +95,13 @@ export default function AdminApprovalsScreen() {
   }
 
   function handleReject(sale: PendingApprovalItem) {
+    if (isOffline) {
+      Alert.alert(
+        'Offline Mode',
+        'Rejecting special price orders requires an active backend server connection. Please reconnect to the internet to perform this action.'
+      );
+      return;
+    }
     Alert.alert(
       'Reject Special Price Request?',
       `Order #${sale.id.slice(0, 8)} will be marked REJECTED. No stock will be deducted.`,

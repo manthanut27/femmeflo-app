@@ -20,8 +20,10 @@ export default function NotFoundScreen() {
       router.replace('/(admin)' as any);
     } else if (user.role === 'MANAGER') {
       router.replace('/(manager)' as any);
-    } else {
+    } else if (user.role === 'SELLER') {
       router.replace('/(seller)' as any);
+    } else {
+      router.replace('/(auth)/login' as any);
     }
   }
 

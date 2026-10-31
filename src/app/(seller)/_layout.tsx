@@ -6,7 +6,7 @@ import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function SellerTabsLayout() {
-  const { user, isLoading } = useAuth();
+  const { user, state, isLoading } = useAuth();
   const router = useRouter();
 
   const isAllowedSeller =
@@ -14,19 +14,21 @@ export default function SellerTabsLayout() {
     (user?.role === 'MANAGER' && Boolean((user as any).isSeller));
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || state === 'INITIALIZING') return;
     if (!user) {
       router.replace('/(auth)/login' as any);
     } else if (!isAllowedSeller) {
       if (user.role === 'SUPER_ADMIN') {
         router.replace('/(admin)' as any);
-      } else {
+      } else if (user.role === 'MANAGER') {
         router.replace('/(manager)' as any);
+      } else {
+        router.replace('/(auth)/login' as any);
       }
     }
-  }, [user, isLoading, router, isAllowedSeller]);
+  }, [user, state, isLoading, router, isAllowedSeller]);
 
-  if (isLoading || !user || !isAllowedSeller) {
+  if (isLoading || state === 'INITIALIZING' || !user || !isAllowedSeller) {
     return (
       <View style={styles.authLoadingContainer}>
         <ActivityIndicator size="large" color={BrandColors.pink.primary} />

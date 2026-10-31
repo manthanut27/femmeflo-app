@@ -109,14 +109,14 @@ export default function LoginScreen() {
       const role = user.role;
 
       // Role-based routing based on verified backend user object
-      if (role === 'SELLER') {
-        router.replace('/(seller)' as any);
+      if (role === 'SUPER_ADMIN') {
+        router.replace('/(admin)' as any);
       } else if (role === 'MANAGER') {
         router.replace('/(manager)' as any);
-      } else if (role === 'SUPER_ADMIN') {
-        router.replace('/(admin)' as any);
-      } else {
+      } else if (role === 'SELLER') {
         router.replace('/(seller)' as any);
+      } else {
+        setError('Account role is not recognized. Please contact system support.');
       }
     } catch (err: any) {
       const msg = err.message || '';

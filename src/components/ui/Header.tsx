@@ -4,6 +4,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandColors, HitSlop, MaxContentWidth, Spacing, Typography } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
 
 export interface HeaderProps {
   title: string;
@@ -30,6 +31,14 @@ export function Header({
 }: HeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  let isOffline = false;
+  try {
+    const auth = useAuth();
+    isOffline = auth.isOffline;
+  } catch {
+    // Header used outside AuthProvider
+  }
 
   function handleBack() {
     if (onBack) {
@@ -94,6 +103,13 @@ export function Header({
           {rightAction}
         </View>
       </View>
+
+      {isOffline ? (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={13} color="#92400E" />
+          <Text style={styles.offlineBannerText}>Offline Mode • Viewing Cached System Data</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -173,5 +189,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '800',
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 5,
+    paddingHorizontal: Spacing.md,
+    borderRadius: 6,
+    marginTop: Spacing.xs,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  offlineBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
   },
 });
