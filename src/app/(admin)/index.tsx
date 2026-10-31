@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
-import { CardSkeleton, StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
+import { StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import {
   BorderRadius,
@@ -26,6 +26,7 @@ import {
   Colors,
   Elevation,
   MaxContentWidth,
+  Shadows,
   Spacing,
   Typography,
 } from '@/constants/theme';
@@ -38,6 +39,7 @@ export default function AdminDashboardScreen() {
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters State
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -70,16 +72,25 @@ export default function AdminDashboardScreen() {
 
   // Load filter options on mount
   useEffect(() => {
-    adminApi.getDashboardFilters().then((opts) => {
-      setFilterOptions({
-        categories: opts.categories || [],
-        managers: opts.managers || [],
-        sellers: opts.sellers || [],
-        states: opts.states || ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
-        districts: opts.districts || ['Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-        villages: opts.villages || ['Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
-      });
-    }).catch(() => {});
+    adminApi
+      .getDashboardFilters()
+      .then((opts) => {
+        setFilterOptions({
+          categories: Array.isArray(opts.categories) ? opts.categories : [],
+          managers: Array.isArray(opts.managers) ? opts.managers : [],
+          sellers: Array.isArray(opts.sellers) ? opts.sellers : [],
+          states: Array.isArray(opts.states) && opts.states.length > 0
+            ? opts.states
+            : ['Maharashtra', 'Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
+          districts: Array.isArray(opts.districts) && opts.districts.length > 0
+            ? opts.districts
+            : ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
+          villages: Array.isArray(opts.villages) && opts.villages.length > 0
+            ? opts.villages
+            : ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+        });
+      })
+      .catch(() => {});
   }, []);
 
   // Compute active date boundaries
@@ -142,6 +153,7 @@ export default function AdminDashboardScreen() {
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(null);
       const params = {
         state: selectedState || undefined,
         district: selectedDistrict || undefined,
@@ -153,17 +165,26 @@ export default function AdminDashboardScreen() {
         to: dateRange.to,
       };
 
-      const res = await adminApi.getDashboard(params).catch(() => ({
+      const res = await adminApi.getDashboard(params);
+      if (res) {
+        setDashboard(res);
+        setLoadError(null);
+      } else {
+        throw new Error('Received empty response from server.');
+      }
+    } catch (err: any) {
+      console.warn('Admin dashboard error', err);
+      const msg = err?.message || 'Failed to sync executive operations data.';
+      setLoadError(msg);
+      // Fallback default structure so UI never crashes even on network failure
+      setDashboard((prev) => prev || {
         totalRevenuePaise: 0,
         totalPacketsSold: 0,
         totalCustomers: 0,
         activeSellers: 0,
         pendingApprovalsCount: 0,
         warehouseStockBalance: 0,
-      }));
-      setDashboard(res);
-    } catch (err) {
-      console.warn('Admin dashboard error', err);
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -187,14 +208,21 @@ export default function AdminDashboardScreen() {
     loadData();
   }, [loadData]);
 
-  const formatRupees = (paise: number) => {
-    return `₹${((paise || 0) / 100).toLocaleString('en-IN', {
+  const formatRupees = (paise?: number | null) => {
+    const val = Number(paise);
+    const safe = isNaN(val) ? 0 : val;
+    return `₹${(safe / 100).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
   };
 
-  const pendingCount = dashboard?.pendingApprovalsCount || 0;
+  const formatCount = (count?: number | null) => {
+    const val = Number(count);
+    return (isNaN(val) ? 0 : val).toLocaleString('en-IN');
+  };
+
+  const pendingCount = Number(dashboard?.pendingApprovalsCount || 0);
 
   return (
     <View style={styles.container}>
@@ -213,6 +241,7 @@ export default function AdminDashboardScreen() {
             colors={[BrandColors.pink.dark]}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrapper}>
           {/* National Governance Banner */}
@@ -230,6 +259,35 @@ export default function AdminDashboardScreen() {
               <Badge label="SUPER ADMIN" variant="ACTIVE" />
             </View>
           </Card>
+
+          {/* Sync Error Alert Banner (if network or server error occurred) */}
+          {loadError ? (
+            <Card style={styles.errorAlertCard}>
+              <View style={styles.errorAlertRow}>
+                <View style={styles.errorIconBadge}>
+                  <Ionicons name="cloud-offline-outline" size={20} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Text style={styles.errorAlertTitle}>Live Sync Paused</Text>
+                  <Text style={styles.errorAlertDesc} numberOfLines={2}>
+                    {loadError}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => {
+                    setLoading(true);
+                    loadData();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry Loading Operations Data"
+                >
+                  <Ionicons name="reload" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.retryBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
+          ) : null}
 
           {/* Filter Bar Trigger & Active Filters Strip */}
           <Card style={styles.filterTriggerCard}>
@@ -316,9 +374,7 @@ export default function AdminDashboardScreen() {
                 ) : null}
                 {datePreset !== 'all' ? (
                   <View style={styles.activeChip}>
-                    <Text style={styles.activeChipText}>
-                      Period: {datePreset.toUpperCase()}
-                    </Text>
+                    <Text style={styles.activeChipText}>Period: {datePreset.toUpperCase()}</Text>
                     <Pressable onPress={() => setDatePreset('all')}>
                       <Ionicons name="close-circle" size={14} color="#64748B" />
                     </Pressable>
@@ -340,7 +396,7 @@ export default function AdminDashboardScreen() {
                     </Text>
                   </View>
                   <Text style={styles.approvalAlertDesc}>
-                    Orders below ₹25.00/pkt threshold are blocked from stock deduction and invoicing until authorized.
+                    Orders below the ₹25.00/pkt floor are blocked from stock deduction and invoicing until authorized.
                   </Text>
                 </View>
                 <Button
@@ -357,8 +413,11 @@ export default function AdminDashboardScreen() {
           <Text style={styles.sectionHeading}>
             National Operations Metrics {activeFiltersCount > 0 ? `(Filtered: ${activeFiltersCount})` : ''}
           </Text>
-          {loading ? (
+
+          {loading && !dashboard ? (
             <View style={styles.metricsGrid}>
+              <View style={styles.metricHalf}><StatCardSkeleton /></View>
+              <View style={styles.metricHalf}><StatCardSkeleton /></View>
               <View style={styles.metricHalf}><StatCardSkeleton /></View>
               <View style={styles.metricHalf}><StatCardSkeleton /></View>
               <View style={styles.metricHalf}><StatCardSkeleton /></View>
@@ -369,7 +428,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.metricHalf}>
                 <StatCard
                   title="Total Revenue"
-                  value={formatRupees(dashboard?.totalRevenuePaise || dashboard?.metrics?.totalEarningsPaise || 0)}
+                  value={formatRupees(dashboard?.totalRevenuePaise ?? dashboard?.metrics?.totalEarningsPaise ?? 0)}
                   subtitle="Confirmed gross receipts"
                   icon="wallet-outline"
                   iconColor={BrandColors.pink.primary}
@@ -380,7 +439,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.metricHalf}>
                 <StatCard
                   title="Packets Sold"
-                  value={(dashboard?.totalPacketsSold || dashboard?.metrics?.totalPacketsSold || 0).toLocaleString()}
+                  value={formatCount(dashboard?.totalPacketsSold ?? dashboard?.metrics?.totalPacketsSold ?? 0)}
                   subtitle="Sanitary napkins sold"
                   icon="cube-outline"
                   iconColor="#0284C7"
@@ -391,7 +450,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.metricHalf}>
                 <StatCard
                   title="HQ Warehouse Stock"
-                  value={`${(dashboard?.warehouseStockBalance || dashboard?.metrics?.warehouseStock || 0).toLocaleString()} pkts`}
+                  value={`${formatCount(dashboard?.warehouseStockBalance ?? dashboard?.metrics?.warehouseStock ?? dashboard?.metrics?.totalInventory ?? 0)} pkts`}
                   subtitle="Central inventory pool"
                   icon="business-outline"
                   iconColor={BrandColors.green.primary}
@@ -403,7 +462,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.metricHalf}>
                 <StatCard
                   title="Customer Network"
-                  value={(dashboard?.totalCustomers || dashboard?.metrics?.totalShops || 0).toLocaleString()}
+                  value={formatCount(dashboard?.totalCustomers ?? dashboard?.metrics?.totalShops ?? 0)}
                   subtitle="Active retail stores"
                   icon="storefront-outline"
                   iconColor={BrandColors.pink.primary}
@@ -414,7 +473,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.metricHalf}>
                 <StatCard
                   title="Active Field Force"
-                  value={(dashboard?.activeSellers || dashboard?.metrics?.totalSellers || 0).toLocaleString()}
+                  value={formatCount(dashboard?.activeSellers ?? dashboard?.metrics?.totalSellers ?? 0)}
                   subtitle="Officers on duty"
                   icon="people-outline"
                   iconColor={BrandColors.green.primary}
@@ -549,7 +608,7 @@ export default function AdminDashboardScreen() {
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalBody}>
+            <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Date Presets */}
               <Text style={styles.filterSectionTitle}>Period</Text>
               <View style={styles.chipGrid}>
@@ -608,17 +667,22 @@ export default function AdminDashboardScreen() {
                     All States
                   </Text>
                 </TouchableOpacity>
-                {filterOptions.states.map((st) => (
-                  <TouchableOpacity
-                    key={st}
-                    style={[styles.filterChip, selectedState === st && styles.filterChipActive]}
-                    onPress={() => setSelectedState(selectedState === st ? '' : st)}
-                  >
-                    <Text style={[styles.filterChipText, selectedState === st && styles.filterChipTextActive]}>
-                      {st}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {filterOptions.states.map((st, idx) => {
+                  const stateName = typeof st === 'string' ? st : (st as any)?.state || '';
+                  if (!stateName) return null;
+                  const isSelected = selectedState === stateName;
+                  return (
+                    <TouchableOpacity
+                      key={`st-${stateName}-${idx}`}
+                      style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                      onPress={() => setSelectedState(isSelected ? '' : stateName)}
+                    >
+                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                        {stateName}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
 
               {/* District */}
@@ -632,24 +696,29 @@ export default function AdminDashboardScreen() {
                     All Districts
                   </Text>
                 </TouchableOpacity>
-                {filterOptions.districts.map((dst) => (
-                  <TouchableOpacity
-                    key={dst}
-                    style={[styles.filterChip, selectedDistrict === dst && styles.filterChipActive]}
-                    onPress={() => setSelectedDistrict(selectedDistrict === dst ? '' : dst)}
-                  >
-                    <Text style={[styles.filterChipText, selectedDistrict === dst && styles.filterChipTextActive]}>
-                      {dst}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {filterOptions.districts.map((dst, idx) => {
+                  const districtName = typeof dst === 'string' ? dst : (dst as any)?.district || '';
+                  if (!districtName) return null;
+                  const isSelected = selectedDistrict === districtName;
+                  return (
+                    <TouchableOpacity
+                      key={`dst-${districtName}-${idx}`}
+                      style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                      onPress={() => setSelectedDistrict(isSelected ? '' : districtName)}
+                    >
+                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                        {districtName}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
 
               {/* Village */}
               <Text style={styles.filterSectionTitle}>Village / Cluster</Text>
               <TextInput
                 style={styles.dateInput}
-                placeholder="Filter by village name (e.g. Shivpur)..."
+                placeholder="Filter by village name (e.g. Diva, Shivpur)..."
                 value={selectedVillage}
                 onChangeText={setSelectedVillage}
               />
@@ -754,11 +823,12 @@ export default function AdminDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#FAF8F5',
   },
   scrollContent: {
+    flexGrow: 1,
     padding: Spacing.lg,
-    paddingBottom: 110,
+    paddingBottom: 120,
   },
   contentWrapper: {
     width: '100%',
@@ -769,6 +839,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     backgroundColor: BrandColors.pink.surface,
     borderColor: BrandColors.pink.subtle,
+    overflow: 'hidden',
   },
   bannerHeader: {
     flexDirection: 'row',
@@ -802,9 +873,56 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textSecondary,
   },
+  errorAlertCard: {
+    marginBottom: Spacing.md,
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    ...Shadows.sm,
+  },
+  errorAlertRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  errorIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  errorAlertTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  errorAlertDesc: {
+    fontSize: 12,
+    color: '#B91C1C',
+    marginTop: 2,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DC2626',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.md,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   filterTriggerCard: {
     padding: Spacing.sm,
     marginBottom: Spacing.md,
+    overflow: 'hidden',
   },
   filterTriggerHeader: {
     flexDirection: 'row',
@@ -878,6 +996,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     backgroundColor: '#FFFBEB',
     borderColor: '#FDE68A',
+    overflow: 'hidden',
   },
   approvalAlertRow: {
     flexDirection: 'row',
@@ -923,14 +1042,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-    zIndex: 9999,
-    elevation: 10,
   },
   modalContainer: {
-    backgroundColor: Colors.light.surface,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     maxHeight: '90%',
+    ...Shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',

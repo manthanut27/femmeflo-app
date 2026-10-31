@@ -57,6 +57,15 @@ export const adminApi = {
       if (raw.activeSellers === undefined) raw.activeSellers = raw.metrics.totalSellers || 0;
       if (raw.warehouseStockBalance === undefined) raw.warehouseStockBalance = raw.metrics.warehouseStock || raw.metrics.totalInventory || 0;
     }
+    // Safely sync pending approvals count if missing
+    if (raw && raw.pendingApprovalsCount === undefined) {
+      try {
+        const appRes = await apiRequest<any>('admin/approvals', { method: 'GET', params: { page: 1, pageSize: 1 } });
+        raw.pendingApprovalsCount = appRes?.pagination?.total ?? (Array.isArray(appRes?.items) ? appRes.items.length : 0);
+      } catch {
+        raw.pendingApprovalsCount = 0;
+      }
+    }
     return raw;
   },
 
@@ -70,16 +79,52 @@ export const adminApi = {
     villages: string[];
   }> {
     try {
-      return await apiRequest('admin/dashboard/filters', { method: 'GET' });
+      const raw = await apiRequest<any>('admin/dashboard/filters', { method: 'GET' });
+      if (!raw) throw new Error('Empty filters response');
+
+      // Normalize states to clean string array
+      const states: string[] = Array.isArray(raw.states)
+        ? raw.states.map((s: any) => (typeof s === 'string' ? s : s?.state || '')).filter(Boolean)
+        : [];
+
+      // Normalize districts: handle rawDistricts array of strings or districts array of objects
+      let districts: string[] = [];
+      if (Array.isArray(raw.rawDistricts)) {
+        districts = raw.rawDistricts.filter((d: any) => typeof d === 'string' && d.trim().length > 0);
+      } else if (Array.isArray(raw.districts)) {
+        districts = raw.districts
+          .map((d: any) => (typeof d === 'string' ? d : d?.district || ''))
+          .filter((d: string) => d.trim().length > 0);
+      }
+      districts = Array.from(new Set(districts));
+
+      // Normalize villages to clean string array
+      let villages: string[] = [];
+      if (Array.isArray(raw.villages)) {
+        villages = raw.villages
+          .map((v: any) => (typeof v === 'string' ? v : v?.village || ''))
+          .filter((v: string) => v.trim().length > 0);
+      }
+      villages = Array.from(new Set(villages));
+
+      return {
+        categories: Array.isArray(raw.categories) ? raw.categories : [],
+        customerLocations: Array.isArray(raw.customerLocations) ? raw.customerLocations : [],
+        managers: Array.isArray(raw.managers) ? raw.managers : [],
+        sellers: Array.isArray(raw.sellers) ? raw.sellers : [],
+        states: Array.from(new Set(states)),
+        districts,
+        villages,
+      };
     } catch {
       return {
         categories: [],
         customerLocations: [],
         managers: [],
         sellers: [],
-        states: [],
-        districts: [],
-        villages: [],
+        states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan', 'Maharashtra'],
+        districts: ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
+        villages: ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
       };
     }
   },
