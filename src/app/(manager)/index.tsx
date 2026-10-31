@@ -97,49 +97,57 @@ export default function ManagerDashboardScreen() {
 
           <Text style={styles.sectionHeading}>Territory Performance</Text>
           {loading ? (
-            <View style={styles.metricsGrid}>
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
-              <StatCardSkeleton />
+            <View style={styles.metricsContainer}>
+              <View style={styles.metricRow}>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </View>
+              <View style={styles.metricRow}>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </View>
             </View>
           ) : (
-            <View style={styles.metricsGrid}>
-              <StatCard
-                title="Monthly Revenue"
-                value={formatRupees(dashboard?.monthlyRevenuePaise || 0)}
-                subtitle="Confirmed sales volume"
-                icon="cash-outline"
-                iconColor={BrandColors.green.primary}
-                iconBgColor={BrandColors.green.surface}
-                accentColor={BrandColors.green.primary}
-              />
-              <StatCard
-                title="Packets Distributed"
-                value={(dashboard?.monthlyPacketsSold || 0).toLocaleString()}
-                subtitle="Total units sold"
-                icon="cube-outline"
-                iconColor={Colors.light.info}
-                iconBgColor={Colors.light.infoBg}
-              />
-              <StatCard
-                title="Active Field Force"
-                value={`${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}`}
-                subtitle="Sellers on active duty"
-                icon="people-outline"
-                iconColor={BrandColors.green.primary}
-                iconBgColor={BrandColors.green.surface}
-                onPress={() => router.push('/(manager)/sellers' as any)}
-              />
-              <StatCard
-                title="Retail Stores"
-                value={(dashboard?.totalCustomers || 0).toLocaleString()}
-                subtitle="Active customer network"
-                icon="storefront-outline"
-                iconColor={BrandColors.pink.primary}
-                iconBgColor={BrandColors.pink.subtle}
-                onPress={() => router.push('/(manager)/customers' as any)}
-              />
+            <View style={styles.metricsContainer}>
+              <View style={styles.metricRow}>
+                <StatCard
+                  title="Monthly Revenue"
+                  value={formatRupees(dashboard?.monthlyRevenuePaise || 0)}
+                  subtitle="Confirmed sales volume"
+                  icon="cash-outline"
+                  iconColor={BrandColors.green.primary}
+                  iconBgColor={BrandColors.green.surface}
+                  accentColor={BrandColors.green.primary}
+                />
+                <StatCard
+                  title="Packets Distributed"
+                  value={(dashboard?.monthlyPacketsSold || 0).toLocaleString()}
+                  subtitle="Total units sold"
+                  icon="cube-outline"
+                  iconColor={Colors.light.info}
+                  iconBgColor={Colors.light.infoBg}
+                />
+              </View>
+              <View style={styles.metricRow}>
+                <StatCard
+                  title="Active Field Force"
+                  value={`${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}`}
+                  subtitle="Sellers on active duty"
+                  icon="people-outline"
+                  iconColor={BrandColors.green.primary}
+                  iconBgColor={BrandColors.green.surface}
+                  onPress={() => router.push('/(manager)/sellers' as any)}
+                />
+                <StatCard
+                  title="Retail Stores"
+                  value={(dashboard?.totalCustomers || 0).toLocaleString()}
+                  subtitle="Active customer network"
+                  icon="storefront-outline"
+                  iconColor={BrandColors.pink.primary}
+                  iconBgColor={BrandColors.pink.subtle}
+                  onPress={() => router.push('/(manager)/customers' as any)}
+                />
+              </View>
             </View>
           )}
 
@@ -246,11 +254,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     marginTop: Spacing.xs,
   },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  metricsContainer: {
     gap: Spacing.md,
     marginBottom: Spacing.xl,
+    width: '100%',
+  },
+  metricRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    width: '100%',
   },
   actionsCol: {
     gap: Spacing.sm,

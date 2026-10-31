@@ -415,17 +415,24 @@ export default function AdminDashboardScreen() {
           </Text>
 
           {loading && !dashboard ? (
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricHalf}><StatCardSkeleton /></View>
-              <View style={styles.metricHalf}><StatCardSkeleton /></View>
-              <View style={styles.metricHalf}><StatCardSkeleton /></View>
-              <View style={styles.metricHalf}><StatCardSkeleton /></View>
-              <View style={styles.metricHalf}><StatCardSkeleton /></View>
-              <View style={styles.metricHalf}><StatCardSkeleton /></View>
+            <View style={styles.metricsContainer}>
+              <View style={styles.metricRow}>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </View>
+              <View style={styles.metricRow}>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </View>
+              <View style={styles.metricRow}>
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+              </View>
             </View>
           ) : (
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricHalf}>
+            <View style={styles.metricsContainer}>
+              {/* Row 1: Sales & Volume */}
+              <View style={styles.metricRow}>
                 <StatCard
                   title="Total Revenue"
                   value={formatRupees(dashboard?.totalRevenuePaise ?? dashboard?.metrics?.totalEarningsPaise ?? 0)}
@@ -434,9 +441,6 @@ export default function AdminDashboardScreen() {
                   iconColor={BrandColors.pink.primary}
                   iconBg={BrandColors.pink.subtle}
                 />
-              </View>
-
-              <View style={styles.metricHalf}>
                 <StatCard
                   title="Packets Sold"
                   value={formatCount(dashboard?.totalPacketsSold ?? dashboard?.metrics?.totalPacketsSold ?? 0)}
@@ -447,7 +451,8 @@ export default function AdminDashboardScreen() {
                 />
               </View>
 
-              <View style={styles.metricHalf}>
+              {/* Row 2: Warehouse Stock & Store Network */}
+              <View style={styles.metricRow}>
                 <StatCard
                   title="HQ Warehouse Stock"
                   value={`${formatCount(dashboard?.warehouseStockBalance ?? dashboard?.metrics?.warehouseStock ?? dashboard?.metrics?.totalInventory ?? 0)} pkts`}
@@ -457,9 +462,6 @@ export default function AdminDashboardScreen() {
                   iconBg={BrandColors.green.subtle}
                   accentColor={BrandColors.green.primary}
                 />
-              </View>
-
-              <View style={styles.metricHalf}>
                 <StatCard
                   title="Customer Network"
                   value={formatCount(dashboard?.totalCustomers ?? dashboard?.metrics?.totalShops ?? 0)}
@@ -470,7 +472,8 @@ export default function AdminDashboardScreen() {
                 />
               </View>
 
-              <View style={styles.metricHalf}>
+              {/* Row 3: Active Field Force & Approvals */}
+              <View style={styles.metricRow}>
                 <StatCard
                   title="Active Field Force"
                   value={formatCount(dashboard?.activeSellers ?? dashboard?.metrics?.totalSellers ?? 0)}
@@ -479,9 +482,6 @@ export default function AdminDashboardScreen() {
                   iconColor={BrandColors.green.primary}
                   iconBg={BrandColors.green.subtle}
                 />
-              </View>
-
-              <View style={styles.metricHalf}>
                 <StatCard
                   title="Price Approvals"
                   value={String(pendingCount)}
@@ -1023,15 +1023,15 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: Spacing.md,
   },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  metricsContainer: {
     gap: Spacing.md,
     marginBottom: Spacing.xl,
+    width: '100%',
   },
-  metricHalf: {
-    flex: 1,
-    minWidth: 150,
+  metricRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    width: '100%',
   },
   actionsCol: {
     gap: Spacing.sm,
