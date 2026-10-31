@@ -182,68 +182,86 @@ export default function ManagerIncentivesScreen() {
             <View>
               {/* KPI Summary Grid */}
               {loading ? (
-                <View style={styles.loadingGrid}>
-                  <CardSkeleton />
-                  <CardSkeleton />
+                <View style={styles.kpiContainer}>
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                  </View>
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                  </View>
                 </View>
               ) : (
-                <View style={styles.kpiGrid}>
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Total Delivered"
-                      value={`${(teamSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
-                      subtitle="Confirmed sold by team"
-                      icon="cube-outline"
-                      iconColor="#0284C7"
-                      iconBg="#F0F9FF"
-                    />
+                <View style={styles.kpiContainer}>
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Total Delivered"
+                        value={`${(teamSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
+                        subtitle="Confirmed sold by team"
+                        icon="cube-outline"
+                        iconColor="#0284C7"
+                        iconBg="#F0F9FF"
+                      />
+                    </View>
+
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Total Earned"
+                        value={formatCurrencyINR(
+                          teamSummary.totalIncentiveEarnedPaise ||
+                            teamSummary.totalIncentiveEarnedRupees * 100 ||
+                            0
+                        )}
+                        subtitle="Gross entitlement"
+                        icon="wallet-outline"
+                        iconColor={BrandColors.pink.primary}
+                        iconBg={BrandColors.pink.subtle}
+                      />
+                    </View>
                   </View>
 
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Total Earned"
-                      value={formatCurrencyINR(
-                        teamSummary.totalIncentiveEarnedPaise ||
-                          teamSummary.totalIncentiveEarnedRupees * 100 ||
-                          0
-                      )}
-                      subtitle="Gross entitlement"
-                      icon="wallet-outline"
-                      iconColor={BrandColors.pink.primary}
-                      iconBg={BrandColors.pink.subtle}
-                    />
-                  </View>
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Disbursed Paid"
+                        value={formatCurrencyINR(
+                          teamSummary.totalPaidPaise ||
+                            teamSummary.totalPaidRupees * 100 ||
+                            0
+                        )}
+                        subtitle="Bank payouts cleared"
+                        icon="checkmark-done-circle-outline"
+                        iconColor={BrandColors.green.primary}
+                        iconBg={BrandColors.green.subtle}
+                        accentColor={BrandColors.green.primary}
+                      />
+                    </View>
 
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Disbursed Paid"
-                      value={formatCurrencyINR(
-                        teamSummary.totalPaidPaise ||
-                          teamSummary.totalPaidRupees * 100 ||
-                          0
-                      )}
-                      subtitle="Bank payouts cleared"
-                      icon="checkmark-done-circle-outline"
-                      iconColor={BrandColors.green.primary}
-                      iconBg={BrandColors.green.subtle}
-                      accentColor={BrandColors.green.primary}
-                    />
-                  </View>
-
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Pending Payout"
-                      value={formatCurrencyINR(
-                        teamSummary.totalPendingPaise ||
-                          teamSummary.totalPendingRupees * 100 ||
-                          0
-                      )}
-                      subtitle="Outstanding balance"
-                      icon="hourglass-outline"
-                      iconColor={Colors.light.warning}
-                      iconBg={Colors.light.warningBg}
-                      accentColor={Colors.light.warning}
-                    />
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Pending Payout"
+                        value={formatCurrencyINR(
+                          teamSummary.totalPendingPaise ||
+                            teamSummary.totalPendingRupees * 100 ||
+                            0
+                        )}
+                        subtitle="Outstanding balance"
+                        icon="hourglass-outline"
+                        iconColor={Colors.light.warning}
+                        iconBg={Colors.light.warningBg}
+                        accentColor={Colors.light.warning}
+                      />
+                    </View>
                   </View>
                 </View>
               )}
@@ -342,27 +360,29 @@ export default function ManagerIncentivesScreen() {
           {/* TAB 2: PERSONAL FIELD EARNINGS */}
           {activeTab === 'PERSONAL' && (
             <View>
-              <View style={styles.kpiGrid}>
-                <View style={styles.kpiHalf}>
-                  <StatCard
-                    title="Personal Packets"
-                    value={`${(personalSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
-                    subtitle="Confirmed self sales"
-                    icon="cube-outline"
-                    iconColor="#0284C7"
-                    iconBg="#F0F9FF"
-                  />
-                </View>
+              <View style={styles.kpiContainer}>
+                <View style={styles.kpiRow}>
+                  <View style={styles.kpiCardWrapper}>
+                    <StatCard
+                      title="Personal Packets"
+                      value={`${(personalSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
+                      subtitle="Confirmed self sales"
+                      icon="cube-outline"
+                      iconColor="#0284C7"
+                      iconBg="#F0F9FF"
+                    />
+                  </View>
 
-                <View style={styles.kpiHalf}>
-                  <StatCard
-                    title="Personal Earned"
-                    value={formatCurrencyINR(personalSummary.totalIncentivePaise || 0)}
-                    subtitle="Field earnings balance"
-                    icon="wallet-outline"
-                    iconColor={BrandColors.pink.primary}
-                    iconBg={BrandColors.pink.subtle}
-                  />
+                  <View style={styles.kpiCardWrapper}>
+                    <StatCard
+                      title="Personal Earned"
+                      value={formatCurrencyINR(personalSummary.totalIncentivePaise || 0)}
+                      subtitle="Field earnings balance"
+                      icon="wallet-outline"
+                      iconColor={BrandColors.pink.primary}
+                      iconBg={BrandColors.pink.subtle}
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -472,20 +492,17 @@ const styles = StyleSheet.create({
     color: BrandColors.green.dark,
     fontWeight: '800',
   },
-  loadingGrid: {
+  kpiContainer: {
     gap: Spacing.md,
     marginBottom: Spacing.md,
   },
-  kpiGrid: {
+  kpiRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -Spacing.xs,
-    marginBottom: Spacing.md,
+    gap: Spacing.md,
+    width: '100%',
   },
-  kpiHalf: {
-    width: '50%',
-    paddingHorizontal: Spacing.xs,
-    marginBottom: Spacing.sm,
+  kpiCardWrapper: {
+    flex: 1,
   },
   searchBar: {
     flexDirection: 'row',

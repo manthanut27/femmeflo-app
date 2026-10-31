@@ -176,55 +176,73 @@ export default function ManagerShiftsScreen() {
 
           {/* Metric Cards */}
           {loading ? (
-            <View style={styles.loadingGrid}>
-              <CardSkeleton />
-              <CardSkeleton />
+            <View style={styles.kpiContainer}>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+              </View>
             </View>
           ) : (
-            <View style={styles.kpiGrid}>
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Active Duty Now"
-                  value={String(metrics.activeCount)}
-                  subtitle="Officers on the road"
-                  icon="navigate-outline"
-                  iconColor={BrandColors.green.primary}
-                  iconBg="#DCFCE7"
-                  accentColor={BrandColors.green.primary}
-                />
+            <View style={styles.kpiContainer}>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Active Duty Now"
+                    value={String(metrics.activeCount)}
+                    subtitle="Officers on the road"
+                    icon="navigate-outline"
+                    iconColor={BrandColors.green.primary}
+                    iconBg="#DCFCE7"
+                    accentColor={BrandColors.green.primary}
+                  />
+                </View>
+
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Completed Shifts"
+                    value={String(metrics.completedCount)}
+                    subtitle="Past duty logs"
+                    icon="checkmark-done-circle-outline"
+                    iconColor="#0284C7"
+                    iconBg="#F0F9FF"
+                  />
+                </View>
               </View>
 
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Completed Shifts"
-                  value={String(metrics.completedCount)}
-                  subtitle="Past duty logs"
-                  icon="checkmark-done-circle-outline"
-                  iconColor="#0284C7"
-                  iconBg="#F0F9FF"
-                />
-              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Store Visits Logged"
+                    value={String(metrics.totalVisits)}
+                    subtitle="Retail touchpoints"
+                    icon="storefront-outline"
+                    iconColor={BrandColors.pink.primary}
+                    iconBg={BrandColors.pink.subtle}
+                  />
+                </View>
 
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Store Visits Logged"
-                  value={String(metrics.totalVisits)}
-                  subtitle="Retail touchpoints"
-                  icon="storefront-outline"
-                  iconColor={BrandColors.pink.primary}
-                  iconBg={BrandColors.pink.subtle}
-                />
-              </View>
-
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Total Kilometers"
-                  value={`${metrics.totalDistance} km`}
-                  subtitle="Combined route distance"
-                  icon="speedometer-outline"
-                  iconColor="#F59E0B"
-                  iconBg="#FEF3C7"
-                />
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Total Kilometers"
+                    value={`${metrics.totalDistance} km`}
+                    subtitle="Combined route distance"
+                    icon="speedometer-outline"
+                    iconColor="#F59E0B"
+                    iconBg="#FEF3C7"
+                  />
+                </View>
               </View>
             </View>
           )}
@@ -526,20 +544,17 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
-  loadingGrid: {
+  kpiContainer: {
     gap: Spacing.md,
     marginBottom: Spacing.md,
   },
-  kpiGrid: {
+  kpiRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -Spacing.xs,
-    marginBottom: Spacing.md,
+    gap: Spacing.md,
+    width: '100%',
   },
-  kpiHalf: {
-    width: '50%',
-    paddingHorizontal: Spacing.xs,
-    marginBottom: Spacing.sm,
+  kpiCardWrapper: {
+    flex: 1,
   },
   filterChipRow: {
     flexDirection: 'row',

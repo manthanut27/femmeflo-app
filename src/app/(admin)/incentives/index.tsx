@@ -504,57 +504,62 @@ export default function AdminIncentivesScreen() {
 
           {/* National Summary Metrics */}
           {summary ? (
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricHalf}>
-                <StatCard
-                  title="Total Earned"
-                  value={`₹${((summary.totalEarnedPaise || 0) / 100).toLocaleString('en-IN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}`}
-                  subtitle="Gross commissions"
-                  icon="trophy-outline"
-                  iconColor={BrandColors.pink.primary}
-                  iconBg={BrandColors.pink.subtle}
-                />
+            <View style={styles.metricsContainer}>
+              <View style={styles.metricRow}>
+                <View style={styles.metricCardWrapper}>
+                  <StatCard
+                    title="Total Earned"
+                    value={`₹${((summary.totalEarnedPaise || 0) / 100).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}`}
+                    subtitle="Gross commissions"
+                    icon="trophy-outline"
+                    iconColor={BrandColors.pink.primary}
+                    iconBg={BrandColors.pink.subtle}
+                  />
+                </View>
+                <View style={styles.metricCardWrapper}>
+                  <StatCard
+                    title="Total Disbursed"
+                    value={`₹${((summary.totalPaidPaise || 0) / 100).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}`}
+                    subtitle="Completed payouts"
+                    icon="checkmark-circle-outline"
+                    iconColor={BrandColors.green.primary}
+                    iconBg={BrandColors.green.subtle}
+                    accentColor={BrandColors.green.primary}
+                  />
+                </View>
               </View>
-              <View style={styles.metricHalf}>
-                <StatCard
-                  title="Total Disbursed"
-                  value={`₹${((summary.totalPaidPaise || 0) / 100).toLocaleString('en-IN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}`}
-                  subtitle="Completed payouts"
-                  icon="checkmark-circle-outline"
-                  iconColor={BrandColors.green.primary}
-                  iconBg={BrandColors.green.subtle}
-                  accentColor={BrandColors.green.primary}
-                />
-              </View>
-              <View style={styles.metricHalf}>
-                <StatCard
-                  title="Pending Payable"
-                  value={`₹${((summary.totalPendingPaise || 0) / 100).toLocaleString('en-IN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}`}
-                  subtitle={`${summary.pendingEmployeesCount || 0} employees unpaid`}
-                  icon="hourglass-outline"
-                  iconColor={Colors.light.warning}
-                  iconBg={Colors.light.warningBg}
-                  accentColor={Colors.light.warning}
-                />
-              </View>
-              <View style={styles.metricHalf}>
-                <StatCard
-                  title="Adjustments"
-                  value={`+₹${(((summary.totalAdditionsPaise || 0) - (summary.totalDeductionsPaise || 0)) / 100).toFixed(2)}`}
-                  subtitle="Net manual corrections"
-                  icon="swap-vertical-outline"
-                  iconColor="#0284C7"
-                  iconBg="#F0F9FF"
-                />
+
+              <View style={styles.metricRow}>
+                <View style={styles.metricCardWrapper}>
+                  <StatCard
+                    title="Pending Payable"
+                    value={`₹${((summary.totalPendingPaise || 0) / 100).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}`}
+                    subtitle={`${summary.pendingEmployeesCount || 0} employees unpaid`}
+                    icon="hourglass-outline"
+                    iconColor={Colors.light.warning}
+                    iconBg={Colors.light.warningBg}
+                    accentColor={Colors.light.warning}
+                  />
+                </View>
+                <View style={styles.metricCardWrapper}>
+                  <StatCard
+                    title="Adjustments"
+                    value={`+₹${(((summary.totalAdditionsPaise || 0) - (summary.totalDeductionsPaise || 0)) / 100).toFixed(2)}`}
+                    subtitle="Net manual corrections"
+                    icon="swap-vertical-outline"
+                    iconColor="#0284C7"
+                    iconBg="#F0F9FF"
+                  />
+                </View>
               </View>
             </View>
           ) : null}
@@ -1012,14 +1017,17 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  metricsContainer: {
     gap: Spacing.md,
+    marginBottom: Spacing.md,
   },
-  metricHalf: {
+  metricRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    width: '100%',
+  },
+  metricCardWrapper: {
     flex: 1,
-    minWidth: 150,
   },
   filterSection: {
     gap: Spacing.sm,

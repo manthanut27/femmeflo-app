@@ -146,55 +146,73 @@ export default function ManagerInventoryScreen() {
 
           {/* KPI Summary Cards */}
           {loading ? (
-            <View style={styles.loadingGrid}>
-              <CardSkeleton />
-              <CardSkeleton />
+            <View style={styles.kpiContainer}>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+                <View style={styles.kpiCardWrapper}>
+                  <CardSkeleton />
+                </View>
+              </View>
             </View>
           ) : (
-            <View style={styles.kpiGrid}>
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Total Assigned"
-                  value={`${summary.totalAssigned.toLocaleString('en-IN')} pkts`}
-                  subtitle="Allocated to sellers"
-                  icon="cube-outline"
-                  iconColor="#0284C7"
-                  iconBg="#F0F9FF"
-                />
+            <View style={styles.kpiContainer}>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Total Assigned"
+                    value={`${summary.totalAssigned.toLocaleString('en-IN')} pkts`}
+                    subtitle="Allocated to sellers"
+                    icon="cube-outline"
+                    iconColor="#0284C7"
+                    iconBg="#F0F9FF"
+                  />
+                </View>
+
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Confirmed Sold"
+                    value={`${summary.totalSold.toLocaleString('en-IN')} pkts`}
+                    subtitle="Delivered to stores"
+                    icon="checkmark-done-circle-outline"
+                    iconColor={BrandColors.green.primary}
+                    iconBg={BrandColors.green.subtle}
+                  />
+                </View>
               </View>
 
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Confirmed Sold"
-                  value={`${summary.totalSold.toLocaleString('en-IN')} pkts`}
-                  subtitle="Delivered to stores"
-                  icon="checkmark-done-circle-outline"
-                  iconColor={BrandColors.green.primary}
-                  iconBg={BrandColors.green.subtle}
-                />
-              </View>
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Remaining Balance"
+                    value={`${summary.totalRemaining.toLocaleString('en-IN')} pkts`}
+                    subtitle="In active field vans"
+                    icon="bus-outline"
+                    iconColor={summary.totalRemaining < 50 ? Colors.light.warning : BrandColors.green.primary}
+                    iconBg={summary.totalRemaining < 50 ? Colors.light.warningBg : BrandColors.green.subtle}
+                    accentColor={summary.totalRemaining < 50 ? Colors.light.warning : BrandColors.green.primary}
+                  />
+                </View>
 
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Remaining Balance"
-                  value={`${summary.totalRemaining.toLocaleString('en-IN')} pkts`}
-                  subtitle="In active field vans"
-                  icon="bus-outline"
-                  iconColor={summary.totalRemaining < 50 ? Colors.light.warning : BrandColors.green.primary}
-                  iconBg={summary.totalRemaining < 50 ? Colors.light.warningBg : BrandColors.green.subtle}
-                  accentColor={summary.totalRemaining < 50 ? Colors.light.warning : BrandColors.green.primary}
-                />
-              </View>
-
-              <View style={styles.kpiHalf}>
-                <StatCard
-                  title="Supervised Sellers"
-                  value={String(summary.totalSellers || sellers.length)}
-                  subtitle="Field officers with stock"
-                  icon="people-outline"
-                  iconColor={BrandColors.pink.primary}
-                  iconBg={BrandColors.pink.subtle}
-                />
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Supervised Sellers"
+                    value={String(summary.totalSellers || sellers.length)}
+                    subtitle="Field officers with stock"
+                    icon="people-outline"
+                    iconColor={BrandColors.pink.primary}
+                    iconBg={BrandColors.pink.subtle}
+                  />
+                </View>
               </View>
             </View>
           )}
@@ -433,20 +451,17 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
-  loadingGrid: {
+  kpiContainer: {
     gap: Spacing.md,
     marginBottom: Spacing.md,
   },
-  kpiGrid: {
+  kpiRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -Spacing.xs,
-    marginBottom: Spacing.md,
+    gap: Spacing.md,
+    width: '100%',
   },
-  kpiHalf: {
-    width: '50%',
-    paddingHorizontal: Spacing.xs,
-    marginBottom: Spacing.sm,
+  kpiCardWrapper: {
+    flex: 1,
   },
   tabContainer: {
     flexDirection: 'row',

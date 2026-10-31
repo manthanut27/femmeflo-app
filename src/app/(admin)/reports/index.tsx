@@ -413,55 +413,75 @@ export default function AdminReportsScreen() {
 
               {/* KPI Summary Cards */}
               {loading ? (
-                <View style={styles.loadingGrid}>
-                  <CardSkeleton />
-                  <CardSkeleton />
+                <View style={styles.kpiContainer}>
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                  </View>
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                    <View style={styles.kpiCardWrapper}>
+                      <CardSkeleton />
+                    </View>
+                  </View>
                 </View>
               ) : (
-                <View style={styles.kpiGrid}>
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Net Revenue"
-                      value={formatCurrencyINR(report?.summary.grossSalesPaise || 0)}
-                      subtitle="Confirmed verified sales"
-                      icon="wallet-outline"
-                      iconColor={BrandColors.pink.primary}
-                      iconBg={BrandColors.pink.subtle}
-                    />
+                <View style={styles.kpiContainer}>
+                  {/* Row 1: Net Revenue & Packets Delivered */}
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Net Revenue"
+                        value={formatCurrencyINR(report?.summary.grossSalesPaise || 0)}
+                        subtitle="Confirmed verified sales"
+                        icon="wallet-outline"
+                        iconColor={BrandColors.pink.primary}
+                        iconBg={BrandColors.pink.subtle}
+                      />
+                    </View>
+
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Packets Delivered"
+                        value={`${(report?.summary.totalQuantitySold || 0).toLocaleString('en-IN')} pkts`}
+                        subtitle="Sanitary napkin volume"
+                        icon="cube-outline"
+                        iconColor="#0284C7"
+                        iconBg="#F0F9FF"
+                      />
+                    </View>
                   </View>
 
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Packets Delivered"
-                      value={`${(report?.summary.totalQuantitySold || 0).toLocaleString('en-IN')} pkts`}
-                      subtitle="Sanitary napkin volume"
-                      icon="cube-outline"
-                      iconColor="#0284C7"
-                      iconBg="#F0F9FF"
-                    />
-                  </View>
+                  {/* Row 2: Total Orders & Avg Order Value */}
+                  <View style={styles.kpiRow}>
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Total Orders"
+                        value={(report?.summary.totalSalesCount || 0).toLocaleString('en-IN')}
+                        subtitle="Completed store receipts"
+                        icon="receipt-outline"
+                        iconColor={BrandColors.green.primary}
+                        iconBg={BrandColors.green.subtle}
+                        accentColor={BrandColors.green.primary}
+                      />
+                    </View>
 
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Total Orders"
-                      value={(report?.summary.totalSalesCount || 0).toLocaleString('en-IN')}
-                      subtitle="Completed store receipts"
-                      icon="receipt-outline"
-                      iconColor={BrandColors.green.primary}
-                      iconBg={BrandColors.green.subtle}
-                      accentColor={BrandColors.green.primary}
-                    />
-                  </View>
-
-                  <View style={styles.kpiHalf}>
-                    <StatCard
-                      title="Avg Order Value"
-                      value={`₹${Math.round(report?.summary.averageOrderValueRupees || 0).toLocaleString('en-IN')}`}
-                      subtitle="Per retail store transaction"
-                      icon="trending-up-outline"
-                      iconColor="#F59E0B"
-                      iconBg="#FEF3C7"
-                    />
+                    <View style={styles.kpiCardWrapper}>
+                      <StatCard
+                        title="Avg Order Value"
+                        value={`₹${Math.round(report?.summary.averageOrderValueRupees || 0).toLocaleString('en-IN')}`}
+                        subtitle="Per retail store transaction"
+                        icon="trending-up-outline"
+                        iconColor="#F59E0B"
+                        iconBg="#FEF3C7"
+                      />
+                    </View>
                   </View>
                 </View>
               )}
@@ -511,7 +531,7 @@ export default function AdminReportsScreen() {
               {viewTab === 'ANALYTICS' && (
                 <Card style={styles.breakdownCard}>
                   <View style={styles.breakdownHeader}>
-                    <View style={{ flex: 1 }}>
+                    <View style={styles.breakdownHeaderTextGroup}>
                       <Text style={styles.breakdownTitle}>
                         {groupBy === 'date'
                           ? 'Daily Sales Performance'
@@ -665,7 +685,7 @@ export default function AdminReportsScreen() {
               {viewTab === 'FEEDBACK' && (
                 <Card style={styles.feedbackCard}>
                   <View style={styles.feedbackCardHeader}>
-                    <View>
+                    <View style={styles.feedbackHeaderTextGroup}>
                       <Text style={styles.feedbackSectionTitle}>Field Customer Observations</Text>
                       <Text style={styles.feedbackSectionSub}>
                         Real observations recorded by field officers during store visits
@@ -741,56 +761,62 @@ export default function AdminReportsScreen() {
           {mode === 'INVENTORY' && (
             <View style={{ marginTop: Spacing.sm }}>
               {/* Inventory KPI Summary */}
-              <View style={styles.kpiGrid}>
-                <View style={styles.kpiHalf}>
-                  <StatCard
-                    title="Total Stock"
-                    value={`${(inventoryReport?.totalStock || dashboard?.metrics?.totalInventory || 0).toLocaleString('en-IN')} pkts`}
-                    subtitle="Central & regional balance"
-                    icon="cube-outline"
-                    iconColor={BrandColors.pink.primary}
-                    iconBg={BrandColors.pink.subtle}
-                  />
+              <View style={styles.kpiContainer}>
+                {/* Row 1: Total Stock & HQ Central Stock */}
+                <View style={styles.kpiRow}>
+                  <View style={styles.kpiCardWrapper}>
+                    <StatCard
+                      title="Total Stock"
+                      value={`${(inventoryReport?.totalStock || dashboard?.metrics?.totalInventory || 0).toLocaleString('en-IN')} pkts`}
+                      subtitle="Central & regional balance"
+                      icon="cube-outline"
+                      iconColor={BrandColors.pink.primary}
+                      iconBg={BrandColors.pink.subtle}
+                    />
+                  </View>
+
+                  <View style={styles.kpiCardWrapper}>
+                    <StatCard
+                      title="HQ Central Stock"
+                      value={`${(inventoryReport?.hqStock || dashboard?.metrics?.hqStock || 0).toLocaleString('en-IN')} pkts`}
+                      subtitle="Headquarters warehouse"
+                      icon="business-outline"
+                      iconColor="#0284C7"
+                      iconBg="#F0F9FF"
+                    />
+                  </View>
                 </View>
 
-                <View style={styles.kpiHalf}>
-                  <StatCard
-                    title="HQ Central Stock"
-                    value={`${(inventoryReport?.hqStock || dashboard?.metrics?.hqStock || 0).toLocaleString('en-IN')} pkts`}
-                    subtitle="Headquarters warehouse"
-                    icon="business-outline"
-                    iconColor="#0284C7"
-                    iconBg="#F0F9FF"
-                  />
-                </View>
+                {/* Row 2: Warehouse Stock & Field Seller Van Stock */}
+                <View style={styles.kpiRow}>
+                  <View style={styles.kpiCardWrapper}>
+                    <StatCard
+                      title="Warehouse Stock"
+                      value={`${(inventoryReport?.warehouseStock || dashboard?.metrics?.warehouseStock || 0).toLocaleString('en-IN')} pkts`}
+                      subtitle="District distribution hubs"
+                      icon="home-outline"
+                      iconColor="#8B5CF6"
+                      iconBg="#F5F3FF"
+                    />
+                  </View>
 
-                <View style={styles.kpiHalf}>
-                  <StatCard
-                    title="Warehouse Stock"
-                    value={`${(inventoryReport?.warehouseStock || dashboard?.metrics?.warehouseStock || 0).toLocaleString('en-IN')} pkts`}
-                    subtitle="District distribution hubs"
-                    icon="home-outline"
-                    iconColor="#8B5CF6"
-                    iconBg="#F5F3FF"
-                  />
-                </View>
-
-                <View style={styles.kpiHalf}>
-                  <StatCard
-                    title="Field Seller Van Stock"
-                    value={`${(inventoryReport?.sellerStock || dashboard?.metrics?.sellerStock || 0).toLocaleString('en-IN')} pkts`}
-                    subtitle="In-transit mobile kits"
-                    icon="car-outline"
-                    iconColor={BrandColors.green.primary}
-                    iconBg={BrandColors.green.subtle}
-                  />
+                  <View style={styles.kpiCardWrapper}>
+                    <StatCard
+                      title="Field Seller Van Stock"
+                      value={`${(inventoryReport?.sellerStock || dashboard?.metrics?.sellerStock || 0).toLocaleString('en-IN')} pkts`}
+                      subtitle="In-transit mobile kits"
+                      icon="car-outline"
+                      iconColor={BrandColors.green.primary}
+                      iconBg={BrandColors.green.subtle}
+                    />
+                  </View>
                 </View>
               </View>
 
               {/* Locations Breakdown Table */}
               <Card style={styles.breakdownCard}>
                 <View style={styles.breakdownHeader}>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.breakdownHeaderTextGroup}>
                     <Text style={styles.breakdownTitle}>Stock Locations Directory</Text>
                     <Text style={styles.breakdownSubtitle}>
                       Live audited stock balances across central, regional, and field seller nodes
@@ -982,19 +1008,17 @@ const styles = StyleSheet.create({
   periodChipTextActive: {
     color: '#FFFFFF',
   },
-  loadingGrid: {
+  kpiContainer: {
     gap: Spacing.md,
     marginBottom: Spacing.md,
   },
-  kpiGrid: {
+  kpiRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: Spacing.md,
-    marginBottom: Spacing.md,
+    width: '100%',
   },
-  kpiHalf: {
+  kpiCardWrapper: {
     flex: 1,
-    minWidth: '45%',
   },
   viewTabsContainer: {
     flexDirection: 'row',
@@ -1031,6 +1055,9 @@ const styles = StyleSheet.create({
   },
   breakdownHeader: {
     marginBottom: Spacing.md,
+  },
+  breakdownHeaderTextGroup: {
+    width: '100%',
   },
   breakdownTitle: {
     ...Typography.bodyMedium,
@@ -1135,6 +1162,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Spacing.md,
+  },
+  feedbackHeaderTextGroup: {
+    flex: 1,
+    marginRight: Spacing.sm,
   },
   feedbackSectionTitle: {
     ...Typography.bodyMedium,
