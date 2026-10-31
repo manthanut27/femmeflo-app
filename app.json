@@ -2,7 +2,7 @@
   "expo": {
     "name": "FemmeFlo",
     "slug": "femmeflo-app",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "femmeflo",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.femmeflo.app",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#FAF8F5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
