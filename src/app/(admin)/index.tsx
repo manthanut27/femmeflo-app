@@ -495,101 +495,161 @@ export default function AdminDashboardScreen() {
             </View>
           )}
 
-          {/* Administration Actions */}
-          <Text style={styles.sectionHeading}>Administrative Actions</Text>
-          <View style={styles.actionsCol}>
-            <Button
-              title="Daily Sales Analytics & Reports"
-              variant="outline-admin"
-              size="lg"
-              icon={<Ionicons name="bar-chart-outline" size={20} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/reports' as any)}
-            />
-            <Button
-              title="Price Approvals Queue"
-              variant="admin"
-              size="lg"
-              icon={<Ionicons name="checkmark-done-circle-outline" size={20} color="#FFFFFF" />}
+          {/* Administration Actions Section Header */}
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionHeading}>Administrative Actions</Text>
+              <Text style={styles.sectionSubheading}>Operations Command & System Governance</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.viewAllActionsBtn}
+              onPress={() => router.push('/(admin)/actions' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="View All 13 Administrative Modules"
+            >
+              <Text style={styles.viewAllActionsText}>View All (13)</Text>
+              <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.dark} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Master Operations Command Hub Card */}
+          <Card style={styles.actionsHubCard}>
+            <View style={styles.actionsHubHeader}>
+              <View style={styles.actionsHubIconBadge}>
+                <Ionicons name="grid" size={22} color={BrandColors.pink.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.actionsHubTitleRow}>
+                  <Text style={styles.actionsHubTitle}>Operations Command Center</Text>
+                  <Badge label="13 MODULES READY" variant="ACTIVE" size="sm" />
+                </View>
+                <Text style={styles.actionsHubDesc}>
+                  Access financial ledgers, price approvals, central inventory transfers, field shifts, and customer directories with live data telemetry.
+                </Text>
+              </View>
+            </View>
+
+            {/* Quick Metrics Bar inside Hub Card */}
+            <View style={styles.hubMetricsRow}>
+              <View style={[styles.hubMetricChip, pendingCount > 0 && styles.hubMetricChipAlert]}>
+                <Ionicons
+                  name={pendingCount > 0 ? 'alert-circle' : 'checkmark-circle'}
+                  size={14}
+                  color={pendingCount > 0 ? '#DC2626' : '#059669'}
+                />
+                <Text style={[styles.hubMetricText, pendingCount > 0 && { color: '#DC2626' }]}>
+                  {pendingCount > 0 ? `${pendingCount} Approvals Due` : 'Approvals Clear'}
+                </Text>
+              </View>
+
+              <View style={styles.hubMetricChip}>
+                <Ionicons name="cube-outline" size={14} color={BrandColors.green.primary} />
+                <Text style={styles.hubMetricText}>
+                  {formatCount(dashboard?.warehouseStockBalance ?? 0)} Central Pkts
+                </Text>
+              </View>
+
+              <View style={styles.hubMetricChip}>
+                <Ionicons name="people-outline" size={14} color="#0284C7" />
+                <Text style={styles.hubMetricText}>
+                  {formatCount(dashboard?.activeSellers ?? 0)} Reps Active
+                </Text>
+              </View>
+            </View>
+
+            {/* Primary Action Button to Open Dedicated Actions Page */}
+            <TouchableOpacity
+              style={styles.openCommandCenterBtn}
+              onPress={() => router.push('/(admin)/actions' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="apps" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.openCommandCenterBtnText}>Open Administrative Actions Hub</Text>
+              <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </Card>
+
+          {/* Quick-Launch 4 Priority Cards Grid */}
+          <View style={styles.quickLaunchGrid}>
+            {/* 1. Approvals Queue */}
+            <TouchableOpacity
+              style={[
+                styles.quickLaunchCard,
+                pendingCount > 0 && styles.quickLaunchCardAlert,
+              ]}
               onPress={() => router.push('/(admin)/approvals' as any)}
-            />
-            <Button
-              title="Product Catalog & SKU Pricing"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="cube-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/products' as any)}
-            />
-            <Button
-              title="National Invoices Central Directory"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="document-text-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/invoices' as any)}
-            />
-            <Button
-              title="National Sales & Order Directory"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="receipt-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/sales' as any)}
-            />
-            <Button
-              title="Commissions & Incentive Disbursements"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="cash-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/incentives' as any)}
-            />
-            <Button
-              title="National Shifts & Field GPS Audit"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="compass-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/shifts' as any)}
-            />
-            <Button
-              title="Territory Manager Permissions Matrix"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/permissions' as any)}
-            />
-            <Button
-              title="Retail Customers & Bulk Onboarding"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="storefront-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/customers' as any)}
-            />
-            <Button
-              title="Inward Factory Stock & Warehouse Transfers"
-              variant="secondary"
-              size="md"
-              icon={<Ionicons name="swap-horizontal-outline" size={18} color="#FFFFFF" />}
+              activeOpacity={0.7}
+            >
+              <View style={styles.quickLaunchCardTop}>
+                <View
+                  style={[
+                    styles.quickLaunchIconBox,
+                    { backgroundColor: pendingCount > 0 ? '#FEF2F2' : '#ECFDF5' },
+                  ]}
+                >
+                  <Ionicons
+                    name="checkmark-done-circle"
+                    size={20}
+                    color={pendingCount > 0 ? '#DC2626' : '#059669'}
+                  />
+                </View>
+                <Badge
+                  label={pendingCount > 0 ? `${pendingCount} Pending` : 'Clear'}
+                  variant={pendingCount > 0 ? 'danger' : 'success'}
+                  size="sm"
+                />
+              </View>
+              <Text style={styles.quickLaunchTitle}>Price Approvals</Text>
+              <Text style={styles.quickLaunchSub}>Authorize orders below ₹25 floor</Text>
+            </TouchableOpacity>
+
+            {/* 2. Sales Analytics */}
+            <TouchableOpacity
+              style={styles.quickLaunchCard}
+              onPress={() => router.push('/(admin)/reports' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.quickLaunchCardTop}>
+                <View style={[styles.quickLaunchIconBox, { backgroundColor: '#F0F9FF' }]}>
+                  <Ionicons name="bar-chart" size={20} color="#0284C7" />
+                </View>
+                <Badge label="Analytics" variant="info" size="sm" />
+              </View>
+              <Text style={styles.quickLaunchTitle}>Sales Analytics</Text>
+              <Text style={styles.quickLaunchSub}>Daily revenue & volume trends</Text>
+            </TouchableOpacity>
+
+            {/* 3. Warehouse Transfers */}
+            <TouchableOpacity
+              style={styles.quickLaunchCard}
               onPress={() => router.push('/(admin)/inventory/transfer' as any)}
-            />
-            <Button
-              title="Manage Managers & Sellers Directory"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="people-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/users' as any)}
-            />
-            <Button
-              title="Customer Categories Configuration"
-              variant="outline-admin"
-              size="md"
-              icon={<Ionicons name="pricetags-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/categories' as any)}
-            />
-            <Button
-              title="Company Legal & Tax Invoice Settings"
-              variant="ghost"
-              size="md"
-              textStyle={{ color: BrandColors.pink.dark }}
-              icon={<Ionicons name="settings-outline" size={18} color={BrandColors.pink.dark} />}
-              onPress={() => router.push('/(admin)/settings' as any)}
-            />
+              activeOpacity={0.7}
+            >
+              <View style={styles.quickLaunchCardTop}>
+                <View style={[styles.quickLaunchIconBox, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="swap-horizontal" size={20} color={BrandColors.green.primary} />
+                </View>
+                <Badge label="Inward" variant="success" size="sm" />
+              </View>
+              <Text style={styles.quickLaunchTitle}>Stock Transfers</Text>
+              <Text style={styles.quickLaunchSub}>Factory inward & van dispatches</Text>
+            </TouchableOpacity>
+
+            {/* 4. Shifts & GPS */}
+            <TouchableOpacity
+              style={styles.quickLaunchCard}
+              onPress={() => router.push('/(admin)/shifts' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.quickLaunchCardTop}>
+                <View style={[styles.quickLaunchIconBox, { backgroundColor: '#F0FDFA' }]}>
+                  <Ionicons name="compass" size={20} color="#0D9488" />
+                </View>
+                <Badge label="Field Live" variant="neutral" size="sm" />
+              </View>
+              <Text style={styles.quickLaunchTitle}>Shifts & GPS Audit</Text>
+              <Text style={styles.quickLaunchSub}>Field rep beats & punch-ins</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -1021,6 +1081,17 @@ const styles = StyleSheet.create({
     ...Typography.subtitle,
     fontWeight: '700',
     color: Colors.light.text,
+    marginBottom: 2,
+  },
+  sectionSubheading: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: Spacing.md,
   },
   metricsContainer: {
@@ -1033,6 +1104,157 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     width: '100%',
   },
+  viewAllActionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.md,
+    backgroundColor: BrandColors.pink.subtle,
+  },
+  viewAllActionsText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    fontSize: 12,
+    color: BrandColors.pink.dark,
+  },
+
+  // Actions Hub Hero Card
+  actionsHubCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  actionsHubHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.md,
+  },
+  actionsHubIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: BrandColors.pink.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  actionsHubTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  actionsHubTitle: {
+    ...Typography.title,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  actionsHubDesc: {
+    ...Typography.body,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 17,
+  },
+  hubMetricsRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+    flexWrap: 'wrap',
+  },
+  hubMetricChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  hubMetricChipAlert: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECDD3',
+  },
+  hubMetricText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textPrimary,
+  },
+  openCommandCenterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BrandColors.pink.primary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+  },
+  openCommandCenterBtnText: {
+    ...Typography.label,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // 4 Priority Quick Launch Grid
+  quickLaunchGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  quickLaunchCard: {
+    width: '48.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing.sm + 2,
+    ...Shadows.sm,
+  },
+  quickLaunchCardAlert: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FFFDFD',
+  },
+  quickLaunchCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  quickLaunchIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: BorderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLaunchTitle: {
+    ...Typography.label,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    marginTop: 2,
+  },
+  quickLaunchSub: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.light.textMuted,
+    marginTop: 2,
+    lineHeight: 14,
+  },
+
   actionsCol: {
     gap: Spacing.sm,
     marginBottom: Spacing.xl,
