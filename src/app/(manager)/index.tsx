@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
-import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import { CardSkeleton, StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -98,8 +98,10 @@ export default function ManagerDashboardScreen() {
           <Text style={styles.sectionHeading}>Territory Performance</Text>
           {loading ? (
             <View style={styles.metricsGrid}>
-              <CardSkeleton />
-              <CardSkeleton />
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+              <StatCardSkeleton />
             </View>
           ) : (
             <View style={styles.metricsGrid}>
@@ -201,7 +203,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.lg,
-    paddingBottom: Spacing.huge,
+    paddingBottom: 110,
   },
   contentWrapper: {
     width: '100%',

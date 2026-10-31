@@ -148,6 +148,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.light.borderSubtle,
+    overflow: 'hidden',
     ...Shadows.sm,
     justifyContent: 'space-between',
     minHeight: 104,

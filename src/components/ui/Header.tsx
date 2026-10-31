@@ -106,6 +106,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
     paddingHorizontal: Spacing.lg,
     width: '100%',
+    zIndex: 10,
+    elevation: 3,
   },
   innerContainer: {
     flexDirection: 'row',

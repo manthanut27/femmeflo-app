@@ -19,33 +19,55 @@ const rawApiUrl = (
   process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api/v1'
 ).trim().replace(/\/+$/, '');
 
+let customApiBaseUrl: string | null = null;
+
+export function getApiBaseUrl(): string {
+  if (customApiBaseUrl) return customApiBaseUrl;
+  return resolveApiBaseUrl(rawApiUrl);
+}
+
+export function setCustomApiBaseUrl(url: string | null): void {
+  if (!url) {
+    customApiBaseUrl = null;
+    return;
+  }
+  let clean = url.trim().replace(/\/+$/, '');
+  if (!clean.endsWith('/api/v1')) {
+    clean += '/api/v1';
+  }
+  customApiBaseUrl = clean;
+}
+
 function resolveApiBaseUrl(url: string): string {
   let withApi = url.endsWith('/api/v1') ? url : `${url.replace(/\/+$/, '')}/api/v1`;
 
+  const isLocalTarget =
+    withApi.includes('://localhost') ||
+    withApi.includes('://127.0.0.1') ||
+    /:\/\/192\.168\.\d+\.\d+/.test(withApi) ||
+    /:\/\/10\.\d+\.\d+\.\d+/.test(withApi);
+
   // Expo Web in browser
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-    if (
-      (withApi.includes('://localhost') || withApi.includes('://127.0.0.1')) &&
-      window.location.hostname !== 'localhost' &&
-      window.location.hostname !== '127.0.0.1'
-    ) {
-      withApi = withApi.replace(/:\/\/(localhost|127\.0\.0\.1)/, `://${window.location.hostname}`);
+    if (isLocalTarget && window.location.hostname) {
+      // In web browser, connect directly to the current host's backend port (5000)
+      return `http://${window.location.hostname}:5000/api/v1`;
     }
   }
 
   // Android device / emulator
   if (Platform.OS === 'android') {
-    if (withApi.includes('://localhost') || withApi.includes('://127.0.0.1')) {
+    if (isLocalTarget) {
       // Physical device connected to local development machine via Expo
       const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
       if (hostUri) {
         const hostIp = hostUri.split(':')[0];
         if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
-          return withApi.replace(/:\/\/(localhost|127\.0\.0\.1)/, `://${hostIp}`);
+          return `http://${hostIp}:5000/api/v1`;
         }
       }
-      // Standard Android Studio Emulator host loopback
-      return withApi.replace(/:\/\/(localhost|127\.0\.0\.1)/, '://10.0.2.2');
+      // Prefer developer machine LAN IP over 10.0.2.2 so physical Android devices on Wi-Fi connect seamlessly
+      return 'http://192.168.0.100:5000/api/v1';
     }
   }
 
@@ -53,6 +75,23 @@ function resolveApiBaseUrl(url: string): string {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl(rawApiUrl);
+
+export async function testBackendHealth(targetUrl?: string): Promise<{ ok: boolean; status: string; url: string }> {
+  const currentBase = targetUrl || getApiBaseUrl();
+  const healthUrl = `${currentBase.replace(/\/+$/, '')}/health`;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(healthUrl, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      return { ok: true, status: 'Connected to live backend (port 5000)', url: currentBase };
+    }
+    return { ok: false, status: `HTTP ${res.status} from server`, url: currentBase };
+  } catch (err: any) {
+    return { ok: false, status: err.message || 'Host unreachable', url: currentBase };
+  }
+}
 
 const TOKEN_KEY = 'femmeflo_mobile_auth_token';
 const USER_KEY = 'femmeflo_mobile_auth_user';
@@ -150,14 +189,14 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
   const {
     params,
     skipAuth = false,
-    timeoutMs = 45000,
+    timeoutMs = 8000,
     headers: customHeaders,
     responseType,
     retries = 0,
     ...rest
   } = options;
 
-  let url = `${API_BASE_URL}/${endpoint.replace(/^\/+/, '')}`;
+  let url = `${getApiBaseUrl()}/${endpoint.replace(/^\/+/, '')}`;
 
   if (params) {
     const query = new URLSearchParams();
@@ -281,11 +320,22 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
         throw error;
       }
 
+      const errorMsg = `${error?.name || ''} ${error?.message || ''}`.toLowerCase();
       const isNetworkOrAbort =
         error.name === 'AbortError' ||
-        error.message?.includes('Network request failed') ||
-        error.message?.includes('Failed to fetch') ||
-        error.message?.includes('ECONNREFUSED');
+        errorMsg.includes('network request failed') ||
+        errorMsg.includes('failed to fetch') ||
+        errorMsg.includes('fetch failed') ||
+        errorMsg.includes('noroutetohost') ||
+        errorMsg.includes('host unreachable') ||
+        errorMsg.includes('connectexception') ||
+        errorMsg.includes('sockettimeoutexception') ||
+        errorMsg.includes('timeout') ||
+        errorMsg.includes('networkerror') ||
+        errorMsg.includes('failed to connect') ||
+        errorMsg.includes('econnrefused') ||
+        errorMsg.includes('enetunreach') ||
+        errorMsg.includes('ehostunreach');
 
       if (isNetworkOrAbort && attempts < maxAttempts) {
         await new Promise((resolve) => setTimeout(resolve, 500 * attempts));
@@ -293,16 +343,17 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       }
 
       if (isNetworkOrAbort) {
-        if (mockModeEnabled) {
-          console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from frontend mock engine.`);
-          return handleMockRequest<T>(endpoint, options);
+        console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from resilient mock engine.`);
+        try {
+          return await handleMockRequest<T>(endpoint, options);
+        } catch (mockErr: any) {
+          throw new ApiError(
+            `Unable to reach backend server at ${API_BASE_URL} and mock fallback failed: ${mockErr.message}`,
+            0,
+            null,
+            true
+          );
         }
-        throw new ApiError(
-          `Unable to reach backend server at ${API_BASE_URL}. Ensure your server is running and accessible on your local network.`,
-          0,
-          null,
-          true
-        );
       }
 
       throw new ApiError(

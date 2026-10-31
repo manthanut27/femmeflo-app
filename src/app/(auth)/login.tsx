@@ -1,9 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getApiBaseUrl, setCustomApiBaseUrl, testBackendHealth } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Input } from '@/components/ui/Input';
@@ -37,6 +40,54 @@ interface RoleConfig {
   placeholder: string;
 }
 
+const ROLES: Record<LoginRole, RoleConfig> = {
+  seller: {
+    key: 'seller',
+    label: 'Field Seller',
+    portalTitle: 'Field Seller Portal',
+    portalSubtitle: 'Retail store visits, catalogs, and POS sales orders',
+    badgeLabel: 'Field Force',
+    iconName: 'bag-handle-outline',
+    primaryColor: BrandColors.pink.primary,
+    subtleBg: BrandColors.pink.subtle,
+    borderColor: BrandColors.pink.tint,
+    defaultEmail: 'seller@femmeflo.com',
+    defaultPhone: '9876543210',
+    defaultPass: 'demo123',
+    placeholder: 'seller@femmeflo.com or 9876543210',
+  },
+  manager: {
+    key: 'manager',
+    label: 'Territory Manager',
+    portalTitle: 'Territory Manager Portal',
+    portalSubtitle: 'Regional team oversight, van stock, and field approvals',
+    badgeLabel: 'Territory HQ',
+    iconName: 'people-outline',
+    primaryColor: BrandColors.green.primary,
+    subtleBg: BrandColors.green.surface,
+    borderColor: BrandColors.green.tint,
+    defaultEmail: 'manager@femmeflo.com',
+    defaultPhone: '9876543220',
+    defaultPass: 'demo123',
+    placeholder: 'manager@femmeflo.com or 9876543220',
+  },
+  admin: {
+    key: 'admin',
+    label: 'Super Admin',
+    portalTitle: 'Super Admin Portal',
+    portalSubtitle: 'National distribution governance, approvals, and executive controls',
+    badgeLabel: 'HQ Executive',
+    iconName: 'shield-checkmark-outline',
+    primaryColor: BrandColors.pink.dark,
+    subtleBg: '#FFE4E6',
+    borderColor: '#FDA4AF',
+    defaultEmail: 'admin@femmeflo.in',
+    defaultPhone: '9876543230',
+    defaultPass: 'demo123',
+    placeholder: 'admin@femmeflo.in or 9876543230',
+  },
+};
+
 export default function LoginScreen() {
   const [selectedRole, setSelectedRole] = useState<LoginRole>('seller');
   const [identifier, setIdentifier] = useState('seller@femmeflo.com');
@@ -44,60 +95,36 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Server Connection State
+  const [activeServerUrl, setActiveServerUrl] = useState(() => getApiBaseUrl());
+  const [serverStatus, setServerStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
+  const [serverModalVisible, setServerModalVisible] = useState(false);
+  const [customUrlInput, setCustomUrlInput] = useState(() => getApiBaseUrl());
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [isTestingServer, setIsTestingServer] = useState(false);
+
   const passwordInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const { login } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const ROLES: Record<LoginRole, RoleConfig> = {
-    seller: {
-      key: 'seller',
-      label: 'Seller',
-      portalTitle: 'Field Seller Portal',
-      portalSubtitle: 'Retail beat visits, catalogs, and on-field POS orders',
-      badgeLabel: 'Field Force',
-      iconName: 'bag-handle-outline',
-      primaryColor: BrandColors.pink.primary,
-      subtleBg: BrandColors.pink.subtle,
-      borderColor: BrandColors.pink.tint,
-      defaultEmail: 'seller@femmeflo.com',
-      defaultPhone: '9876543210',
-      defaultPass: 'demo123',
-      placeholder: 'seller@femmeflo.com or 9876543210',
-    },
-    manager: {
-      key: 'manager',
-      label: 'Manager',
-      portalTitle: 'Territory Manager Portal',
-      portalSubtitle: 'Team beat oversight, stock balance, and field approvals',
-      badgeLabel: 'Territory HQ',
-      iconName: 'people-outline',
-      primaryColor: BrandColors.green.primary,
-      subtleBg: BrandColors.green.surface,
-      borderColor: BrandColors.green.tint,
-      defaultEmail: 'manager@femmeflo.com',
-      defaultPhone: '9876543220',
-      defaultPass: 'demo123',
-      placeholder: 'manager@femmeflo.com or 9876543220',
-    },
-    admin: {
-      key: 'admin',
-      label: 'Super Admin',
-      portalTitle: 'Super Admin Portal',
-      portalSubtitle: 'Headquarters administration, low-price approvals & controls',
-      badgeLabel: 'HQ Executive',
-      iconName: 'shield-checkmark-outline',
-      primaryColor: BrandColors.pink.dark,
-      subtleBg: '#FFE4E6',
-      borderColor: '#FDA4AF',
-      defaultEmail: 'admin@femmeflo.in',
-      defaultPhone: '9876543230',
-      defaultPass: 'demo123',
-      placeholder: 'admin@femmeflo.in or 9876543230',
-    },
-  };
-
   const activeRole = ROLES[selectedRole];
+
+  // Test server connectivity on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function pingServer() {
+      setServerStatus('checking');
+      const res = await testBackendHealth();
+      if (isMounted) {
+        setServerStatus(res.ok ? 'connected' : 'offline');
+      }
+    }
+    pingServer();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeServerUrl]);
 
   function handleSelectRole(role: LoginRole) {
     setSelectedRole(role);
@@ -135,7 +162,18 @@ export default function LoginScreen() {
         router.replace('/(seller)' as any);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in. Please verify your demo credentials.');
+      const msg = err.message || '';
+      if (
+        msg.includes('NoRouteToHostException') ||
+        msg.includes('Host unreachable') ||
+        msg.includes('ECONNREFUSED')
+      ) {
+        setError(
+          `Cannot reach backend at ${activeServerUrl}. If running on a physical Android phone, configure your computer's Wi-Fi IP address in Server Settings.`
+        );
+      } else {
+        setError(msg || 'Failed to sign in. Please check your credentials or backend server status.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -155,7 +193,33 @@ export default function LoginScreen() {
     await performLogin(conf.defaultEmail, conf.defaultPass, roleKey);
   }
 
-  const isFormValid = (identifier.trim().length > 0 || activeRole.defaultEmail.length > 0);
+  async function handleTestCustomUrl(urlToTest: string) {
+    setIsTestingServer(true);
+    setTestResult(null);
+    try {
+      const res = await testBackendHealth(urlToTest);
+      if (res.ok) {
+        setTestResult(`✓ Connected! Server responded OK.`);
+      } else {
+        setTestResult(`✗ Unreachable: ${res.status}`);
+      }
+    } catch (err: any) {
+      setTestResult(`✗ Failed: ${err.message || 'Host unreachable'}`);
+    } finally {
+      setIsTestingServer(false);
+    }
+  }
+
+  function handleApplyServerUrl(url: string) {
+    setCustomApiBaseUrl(url);
+    const updated = getApiBaseUrl();
+    setActiveServerUrl(updated);
+    setServerModalVisible(false);
+    setTestResult(null);
+    setError(null);
+  }
+
+  const isFormValid = identifier.trim().length > 0;
 
   return (
     <KeyboardAvoidingView
@@ -166,34 +230,58 @@ export default function LoginScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: Math.max(insets.top + Spacing.md, Spacing.xl),
-            paddingBottom: insets.bottom + Spacing.xxl,
+            paddingTop: Math.max(insets.top + Spacing.sm, Spacing.lg),
+            paddingBottom: insets.bottom + Spacing.huge,
           },
         ]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
-        bounces={false}
       >
         <View style={styles.containerBox}>
           {/* Brand Header */}
           <View style={styles.header}>
             <View style={styles.logoBadge}>
-              <Ionicons name="flower-outline" size={30} color={BrandColors.pink.primary} />
+              <Ionicons name="flower-outline" size={32} color={BrandColors.pink.primary} />
             </View>
             <Text style={styles.title}>FemmeFlo</Text>
-            <Text style={styles.subtitle}>FMCG & Hygiene Distribution Field Operations</Text>
+            <Text style={styles.subtitle}>FMCG & Hygiene Distribution Operations</Text>
 
-            {/* Offline Frontend Demo Indicator */}
-            <View style={styles.demoModeBanner}>
-              <View style={styles.demoIndicatorDot} />
-              <Text style={styles.demoModeText}>Offline Frontend Demo Mode • No Backend Needed</Text>
-            </View>
+            {/* Server Status Pill */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Configure Backend Server Address"
+              onPress={() => {
+                setCustomUrlInput(activeServerUrl);
+                setTestResult(null);
+                setServerModalVisible(true);
+              }}
+              style={styles.serverStatusBar}
+            >
+              <View
+                style={[
+                  styles.serverStatusDot,
+                  serverStatus === 'connected'
+                    ? styles.statusDotGreen
+                    : serverStatus === 'checking'
+                    ? styles.statusDotOrange
+                    : styles.statusDotRed,
+                ]}
+              />
+              <Text style={styles.serverStatusText} numberOfLines={1}>
+                {serverStatus === 'connected'
+                  ? `Live Backend: ${activeServerUrl.replace('/api/v1', '')}`
+                  : serverStatus === 'checking'
+                  ? 'Connecting to server...'
+                  : `Server Unreachable: ${activeServerUrl.replace('/api/v1', '')}`}
+              </Text>
+              <Ionicons name="settings-outline" size={13} color="#475569" style={{ marginLeft: 4 }} />
+            </Pressable>
           </View>
 
-          {/* Three Login Types Segmented Selector */}
+          {/* Three Role Tabs Selector */}
           <View style={styles.roleSelectorCard}>
-            <Text style={styles.roleSelectorHeading}>SELECT DEMO LOGIN ROLE</Text>
+            <Text style={styles.roleSelectorHeading}>SELECT LOGIN PORTAL</Text>
             <View style={styles.roleTabsRow}>
               {(['seller', 'manager', 'admin'] as LoginRole[]).map((roleKey) => {
                 const conf = ROLES[roleKey];
@@ -203,7 +291,7 @@ export default function LoginScreen() {
                     key={roleKey}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${conf.label} Login Type`}
+                    accessibilityLabel={`${conf.label} Login Portal`}
                     onPress={() => handleSelectRole(roleKey)}
                     style={[
                       styles.roleTab,
@@ -239,7 +327,7 @@ export default function LoginScreen() {
 
           {/* Login Card */}
           <View style={styles.card}>
-            {/* Active Portal Banner */}
+            {/* Active Portal Header Banner */}
             <View
               style={[
                 styles.portalBanner,
@@ -289,7 +377,7 @@ export default function LoginScreen() {
 
             {/* Input 1: Email or Mobile */}
             <Input
-              label="Email or Mobile"
+              label="Email Address or Mobile Number"
               placeholder={activeRole.placeholder}
               value={identifier}
               onChangeText={(text) => {
@@ -312,7 +400,7 @@ export default function LoginScreen() {
             <Input
               inputRef={passwordInputRef}
               label="Password"
-              placeholder="Enter your demo password"
+              placeholder="Enter password"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -327,19 +415,17 @@ export default function LoginScreen() {
               leftIcon={<Ionicons name="lock-closed-outline" size={18} color={Colors.light.textMuted} />}
             />
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Forgot password"
-              hitSlop={HitSlop.md}
-              style={styles.forgotPasswordLink}
-              onPress={() => router.push('/(auth)/forgot-password' as any)}
-            >
-              <Text style={styles.forgotPasswordText}>Demo Password: {activeRole.defaultPass}</Text>
-            </Pressable>
+            {/* Credential Hint */}
+            <View style={styles.hintRow}>
+              <Ionicons name="shield-checkmark-outline" size={13} color={BrandColors.green.primary} />
+              <Text style={styles.hintText}>
+                Verified Database Password: <Text style={{ fontWeight: '700' }}>demo123</Text>
+              </Text>
+            </View>
 
             {/* Submit Button */}
             <Button
-              title={isSubmitting ? 'Entering Portal...' : `Sign In as ${activeRole.label}`}
+              title={isSubmitting ? 'Authenticating...' : `Sign In as ${activeRole.label}`}
               onPress={handleLogin}
               loading={isSubmitting}
               disabled={!isFormValid || isSubmitting}
@@ -348,40 +434,40 @@ export default function LoginScreen() {
               style={styles.submitButton}
             />
 
-            {/* 1-Tap Fast Login Shortcut */}
+            {/* 1-Tap Fast Login */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Fast 1-tap demo sign in as ${activeRole.label}`}
+              accessibilityLabel={`Fast 1-tap sign in as ${activeRole.label}`}
               onPress={() => handleInstantDemoLogin(selectedRole)}
               disabled={isSubmitting}
               style={styles.fastLoginButton}
             >
               <Ionicons name="flash-outline" size={15} color={activeRole.primaryColor} style={{ marginRight: 6 }} />
               <Text style={[styles.fastLoginButtonText, { color: activeRole.primaryColor }]}>
-                1-Tap Demo Sign In as {activeRole.label}
+                1-Tap Sign In as {activeRole.label}
               </Text>
             </Pressable>
           </View>
 
-          {/* Demo Login IDs System */}
-          <View style={styles.quickFillCard}>
-            <View style={styles.quickFillHeader}>
-              <Ionicons name="key-outline" size={15} color={Colors.light.textSecondary} style={{ marginRight: 6 }} />
-              <Text style={styles.quickFillHeading}>Demo Login Accounts (Tap to Sign In)</Text>
+          {/* Official Backend Accounts Directory */}
+          <View style={styles.accountsCard}>
+            <View style={styles.accountsHeader}>
+              <Ionicons name="key-outline" size={16} color={Colors.light.heading} style={{ marginRight: 6 }} />
+              <Text style={styles.accountsHeading}>Verified Backend Accounts (PostgreSQL)</Text>
             </View>
-            <Text style={styles.quickFillHint}>
-              Select any role below to instantly log in without backend connection:
+            <Text style={styles.accountsHint}>
+              Tap any verified account below to sign in directly:
             </Text>
 
-            <View style={styles.quickFillChipsContainer}>
-              {(['seller', 'manager', 'admin'] as LoginRole[]).map((roleKey) => {
+            <View style={styles.accountsList}>
+              {(['admin', 'manager', 'seller'] as LoginRole[]).map((roleKey) => {
                 const conf = ROLES[roleKey];
                 const isActive = selectedRole === roleKey;
                 return (
                   <View
                     key={roleKey}
                     style={[
-                      styles.quickFillCardItem,
+                      styles.accountItem,
                       isActive && {
                         backgroundColor: conf.subtleBg,
                         borderColor: conf.primaryColor,
@@ -389,29 +475,29 @@ export default function LoginScreen() {
                     ]}
                   >
                     <Pressable
-                      style={styles.quickFillCardLeft}
+                      style={styles.accountItemLeft}
                       onPress={() => handleQuickFill(roleKey)}
                     >
                       <View
                         style={[
-                          styles.quickFillIconCircle,
+                          styles.accountIconCircle,
                           { backgroundColor: conf.subtleBg, borderColor: conf.borderColor },
                         ]}
                       >
                         <Ionicons name={conf.iconName} size={16} color={conf.primaryColor} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <View style={styles.quickFillRoleRow}>
-                          <Text style={[styles.quickFillRoleTitle, { color: conf.primaryColor }]}>
+                        <View style={styles.accountTitleRow}>
+                          <Text style={[styles.accountRoleTitle, { color: conf.primaryColor }]}>
                             {conf.label}
                           </Text>
-                          <Text style={styles.quickFillBadgeText}>• {conf.badgeLabel}</Text>
+                          <Text style={styles.accountBadgeText}>• {conf.badgeLabel}</Text>
                         </View>
-                        <Text style={styles.quickFillEmailText} numberOfLines={1}>
-                          ID: {conf.defaultEmail}
+                        <Text style={styles.accountEmailText} numberOfLines={1}>
+                          Login ID: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{conf.defaultEmail}</Text>
                         </Text>
-                        <Text style={styles.quickFillSubText}>
-                          Pass: {conf.defaultPass} | Mobile: {conf.defaultPhone}
+                        <Text style={styles.accountSubText}>
+                          Password: {conf.defaultPass} • Mobile: {conf.defaultPhone}
                         </Text>
                       </View>
                     </Pressable>
@@ -422,12 +508,12 @@ export default function LoginScreen() {
                       onPress={() => handleInstantDemoLogin(roleKey)}
                       disabled={isSubmitting}
                       style={[
-                        styles.quickSignInBtn,
+                        styles.accountSignInBtn,
                         { backgroundColor: conf.primaryColor },
                       ]}
                     >
                       <Ionicons name="log-in-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                      <Text style={styles.quickSignInBtnText}>Sign In</Text>
+                      <Text style={styles.accountSignInBtnText}>Sign In</Text>
                     </Pressable>
                   </View>
                 );
@@ -435,22 +521,132 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Hub Support Card */}
-          <View style={styles.supportCard}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.light.textSecondary} style={{ marginRight: 8 }} />
-            <Text style={styles.supportText}>
-              Frontend Demo System: Mock database is stateful in-memory and supports orders, visits, approvals, and stock transfers.
-            </Text>
-          </View>
-
-          {/* Footer info */}
+          {/* Footer Info */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              FemmeFlo FMCG Operations System • Frontend Demo
+              FemmeFlo FMCG Operations System • Express / PostgreSQL
             </Text>
           </View>
         </View>
       </ScrollView>
+
+      {/* Server Configuration Modal */}
+      <Modal visible={serverModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="server-outline" size={20} color={BrandColors.pink.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Backend Server Settings</Text>
+              </View>
+              <Pressable hitSlop={HitSlop.md} onPress={() => setServerModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
+              </Pressable>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Select your network connection target or enter your computer&apos;s local IP:
+            </Text>
+
+            {/* Quick Presets */}
+            <View style={styles.presetButtonsRow}>
+              <Pressable
+                style={[
+                  styles.presetBtn,
+                  customUrlInput.includes('192.168.0.100') && styles.presetBtnActive,
+                ]}
+                onPress={() => {
+                  setCustomUrlInput('http://192.168.0.100:5000/api/v1');
+                  setTestResult(null);
+                }}
+              >
+                <Text style={styles.presetBtnTitle}>Physical Phone (Wi-Fi)</Text>
+                <Text style={styles.presetBtnSub}>192.168.0.100:5000</Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.presetBtn,
+                  customUrlInput.includes('10.0.2.2') && styles.presetBtnActive,
+                ]}
+                onPress={() => {
+                  setCustomUrlInput('http://10.0.2.2:5000/api/v1');
+                  setTestResult(null);
+                }}
+              >
+                <Text style={styles.presetBtnTitle}>Android Emulator</Text>
+                <Text style={styles.presetBtnSub}>10.0.2.2:5000</Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.presetBtn,
+                  customUrlInput.includes('localhost') && styles.presetBtnActive,
+                ]}
+                onPress={() => {
+                  setCustomUrlInput('http://localhost:5000/api/v1');
+                  setTestResult(null);
+                }}
+              >
+                <Text style={styles.presetBtnTitle}>Web / USB ADB</Text>
+                <Text style={styles.presetBtnSub}>localhost:5000</Text>
+              </Pressable>
+            </View>
+
+            <Input
+              label="API Base URL"
+              placeholder="e.g. http://192.168.0.100:5000/api/v1"
+              value={customUrlInput}
+              onChangeText={(txt) => {
+                setCustomUrlInput(txt);
+                setTestResult(null);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              leftIcon={<Ionicons name="link-outline" size={18} color={Colors.light.textMuted} />}
+            />
+
+            {/* Test Result Message */}
+            {testResult ? (
+              <View
+                style={[
+                  styles.testResultBox,
+                  testResult.startsWith('✓') ? styles.testResultSuccess : styles.testResultFail,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.testResultText,
+                    testResult.startsWith('✓') ? styles.testResultTextSuccess : styles.testResultTextFail,
+                  ]}
+                >
+                  {testResult}
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Modal Actions */}
+            <View style={styles.modalButtonsRow}>
+              <Button
+                title={isTestingServer ? 'Testing...' : 'Ping Test'}
+                variant="outline"
+                size="md"
+                loading={isTestingServer}
+                onPress={() => handleTestCustomUrl(customUrlInput)}
+                icon={<Ionicons name="radio-outline" size={16} color={BrandColors.pink.primary} />}
+                style={{ flex: 1, marginRight: Spacing.sm }}
+              />
+              <Button
+                title="Save & Connect"
+                variant="primary"
+                size="md"
+                onPress={() => handleApplyServerUrl(customUrlInput)}
+                style={{ flex: 1.5 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -462,7 +658,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     alignItems: 'center',
   },
   containerBox: {
@@ -471,7 +667,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   logoBadge: {
     width: 60,
@@ -496,29 +692,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.textSecondary,
     textAlign: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  demoModeBanner: {
+  serverStatusBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    backgroundColor: '#F1F5F9',
     borderRadius: Radius.full,
-    paddingVertical: 4,
+    paddingVertical: 5,
     paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
   },
-  demoIndicatorDot: {
-    width: 7,
-    height: 7,
-    borderRadius: Radius.full,
-    backgroundColor: '#10B981',
+  serverStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginRight: 6,
   },
-  demoModeText: {
+  statusDotGreen: {
+    backgroundColor: '#10B981',
+  },
+  statusDotOrange: {
+    backgroundColor: '#F59E0B',
+  },
+  statusDotRed: {
+    backgroundColor: '#EF4444',
+  },
+  serverStatusText: {
     fontSize: 11,
+    color: '#334155',
     fontWeight: '600',
-    color: '#065F46',
+    maxWidth: 240,
   },
   roleSelectorCard: {
     backgroundColor: Colors.light.surface,
@@ -553,14 +759,14 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   roleTabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: Colors.light.textSecondary,
   },
   card: {
     backgroundColor: Colors.light.surface,
     borderRadius: Radius.xl,
-    padding: Spacing.xl,
+    padding: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.light.borderSubtle,
     ...Shadows.md,
@@ -607,35 +813,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  errorBanner: {
+  hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.dangerBg,
-    borderWidth: 1,
-    borderColor: Colors.light.dangerBorder,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  errorBannerText: {
-    ...Typography.bodySmall,
-    color: Colors.light.danger,
-    flex: 1,
-    fontWeight: '500',
-  },
-  forgotPasswordLink: {
-    alignSelf: 'flex-end',
     marginBottom: Spacing.lg,
     marginTop: -Spacing.xs,
   },
-  forgotPasswordText: {
+  hintText: {
     ...Typography.caption,
-    color: Colors.light.textMuted,
-    fontWeight: '500',
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginLeft: 5,
   },
   submitButton: {
     width: '100%',
-    minHeight: 50,
+    minHeight: 48,
   },
   fastLoginButton: {
     flexDirection: 'row',
@@ -650,33 +842,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  quickFillCard: {
-    marginTop: Spacing.md,
+  accountsCard: {
+    marginTop: Spacing.lg,
     backgroundColor: Colors.light.surface,
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: Radius.lg,
     padding: Spacing.md,
+    ...Shadows.sm,
   },
-  quickFillHeader: {
+  accountsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 2,
   },
-  quickFillHeading: {
+  accountsHeading: {
     fontSize: 12,
     fontWeight: '700',
     color: Colors.light.heading,
   },
-  quickFillHint: {
+  accountsHint: {
     fontSize: 11,
     color: Colors.light.textMuted,
     marginBottom: Spacing.sm,
   },
-  quickFillChipsContainer: {
+  accountsList: {
     gap: Spacing.sm,
   },
-  quickFillCardItem: {
+  accountItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.backgroundElement,
@@ -685,12 +878,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing.sm,
   },
-  quickFillCardLeft: {
+  accountItemLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  quickFillIconCircle: {
+  accountIconCircle: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
@@ -699,67 +892,144 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: Spacing.sm,
   },
-  quickFillRoleRow: {
+  accountTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginBottom: 2,
   },
-  quickFillRoleTitle: {
+  accountRoleTitle: {
     fontSize: 12,
     fontWeight: '700',
+    marginRight: 4,
   },
-  quickFillBadgeText: {
+  accountBadgeText: {
+    fontSize: 10,
+    color: Colors.light.textMuted,
+    fontWeight: '600',
+  },
+  accountEmailText: {
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginBottom: 2,
+  },
+  accountSubText: {
     fontSize: 10,
     color: Colors.light.textMuted,
   },
-  quickFillEmailText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.light.heading,
-    marginTop: 1,
-  },
-  quickFillSubText: {
-    fontSize: 10,
-    color: Colors.light.textSecondary,
-    marginTop: 1,
-  },
-  quickSignInBtn: {
+  accountSignInBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: Radius.md,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: Radius.sm,
     marginLeft: Spacing.xs,
   },
-  quickSignInBtnText: {
+  accountSignInBtnText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
   },
-  supportCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.surfaceMuted,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radius.md,
-    padding: Spacing.sm + 2,
-    marginTop: Spacing.md,
-    width: '100%',
-  },
-  supportText: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    flex: 1,
-  },
   footer: {
     alignItems: 'center',
-    marginTop: Spacing.lg,
+    paddingVertical: Spacing.xl,
   },
   footerText: {
     ...Typography.caption,
+    fontSize: 11,
     color: Colors.light.textMuted,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+    zIndex: 9999,
+    elevation: 10,
+  },
+  modalContent: {
+    backgroundColor: Colors.light.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.xl,
+    maxWidth: 440,
+    width: '100%',
+    alignSelf: 'center',
+    ...Shadows.lg,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  modalTitle: {
+    ...Typography.h2,
+    fontSize: 17,
+    color: Colors.light.heading,
+  },
+  modalSubtitle: {
+    ...Typography.bodySmall,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.md,
+    lineHeight: 18,
+  },
+  presetButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  presetBtn: {
+    flex: 1,
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  presetBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  presetBtnTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  presetBtnSub: {
+    fontSize: 9,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  testResultBox: {
+    padding: Spacing.sm,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+  },
+  testResultSuccess: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  testResultFail: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  testResultText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  testResultTextSuccess: {
+    color: '#065F46',
+  },
+  testResultTextFail: {
+    color: '#991B1B',
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
 });
-

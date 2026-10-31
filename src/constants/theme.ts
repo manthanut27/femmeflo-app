@@ -249,7 +249,7 @@ export const Spacing = {
   xl: 20,
   xxl: 24,
   xxxl: 32,
-  huge: 48,
+  huge: 100, // Guaranteed clearance above bottom navigation tab bars (70-88px)
 } as const;
 
 export const Radius = {

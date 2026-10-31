@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
-import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import { CardSkeleton, StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import {
   BorderRadius,
@@ -358,9 +358,11 @@ export default function AdminDashboardScreen() {
             National Operations Metrics {activeFiltersCount > 0 ? `(Filtered: ${activeFiltersCount})` : ''}
           </Text>
           {loading ? (
-            <View style={{ gap: Spacing.md, marginBottom: Spacing.lg }}>
-              <CardSkeleton />
-              <CardSkeleton />
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricHalf}><StatCardSkeleton /></View>
+              <View style={styles.metricHalf}><StatCardSkeleton /></View>
+              <View style={styles.metricHalf}><StatCardSkeleton /></View>
+              <View style={styles.metricHalf}><StatCardSkeleton /></View>
             </View>
           ) : (
             <View style={styles.metricsGrid}>
@@ -756,7 +758,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.lg,
-    paddingBottom: Spacing.huge,
+    paddingBottom: 110,
   },
   contentWrapper: {
     width: '100%',
@@ -921,6 +923,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    zIndex: 9999,
+    elevation: 10,
   },
   modalContainer: {
     backgroundColor: Colors.light.surface,

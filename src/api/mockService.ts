@@ -165,16 +165,28 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // ----------------------------------------------------
   if (cleanEndpoint === 'seller/dashboard') {
     const todaySales = mockDb.sales.filter((s) => s.status === 'CONFIRMED');
-    const todayAmountPaise = todaySales.reduce((acc, s) => acc + s.totalAmountPaise, 0);
-    const todayPackets = todaySales.reduce((acc, s) => acc + s.packetCount, 0);
+    const todayAmountPaise = todaySales.reduce((acc, s) => acc + s.totalAmountPaise, 0) || 147500;
+    const todayPackets = todaySales.reduce((acc, s) => acc + s.packetCount, 0) || 45;
     const pendingApprovalsCount = mockDb.sales.filter((s) => s.status === 'PENDING').length;
 
     const data: SellerDashboardData = {
+      todaySalesPaise: todayAmountPaise,
       todaySalesAmountPaise: todayAmountPaise,
+      todayOrdersCount: todaySales.length || 18,
       todayPacketsSold: todayPackets,
+      monthSalesPaise: todayAmountPaise * 4,
+      lowStockCount: mockDb.inventory.balance < 50 ? 1 : 0,
       stockBalance: mockDb.inventory.balance,
       pendingApprovalsCount,
       activeShift: mockDb.currentShift,
+      metrics: {
+        assignedPackets: 250,
+        soldPackets: todayPackets,
+        remainingPackets: mockDb.inventory.balance,
+        totalIncentivePaise: todayPackets * 200,
+        totalIncentiveRupees: (todayPackets * 200) / 100,
+      },
+      recentSales: mockDb.sales.slice(0, 5),
     };
     return data as unknown as T;
   }

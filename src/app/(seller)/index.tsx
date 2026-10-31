@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
+import { StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import {
   BrandColors,
@@ -265,19 +266,22 @@ export default function SellerDashboardScreen() {
           </View>
 
           {loading ? (
-            <ActivityIndicator style={{ marginVertical: 32 }} size="large" color={BrandColors.pink.primary} />
+            <View style={styles.metricsGrid}>
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+            </View>
           ) : (
             <View style={styles.metricsGrid}>
               <StatCard
                 title="Today's Revenue"
-                value={formatRupees(data?.todaySalesPaise || 0)}
+                value={formatRupees(data?.todaySalesPaise || data?.todaySalesAmountPaise || 0)}
                 icon={<Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="pink"
                 changeLabel="Recorded sales"
               />
               <StatCard
                 title="Orders Booked"
-                value={String(data?.todayOrdersCount || 0)}
+                value={String(data?.todayOrdersCount || data?.todayPacketsSold || 0)}
                 icon={<Ionicons name="receipt-outline" size={20} color={BrandColors.green.primary} />}
                 variant="green"
                 changeLabel="In-store visits"
@@ -290,22 +294,29 @@ export default function SellerDashboardScreen() {
             <Text style={styles.sectionHeading}>Month-to-Date</Text>
           </View>
 
-          <View style={styles.metricsGrid}>
-            <StatCard
-              title="Monthly Sales"
-              value={formatRupees(data?.monthSalesPaise || 0)}
-              icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
-              variant="default"
-              changeLabel="Target progress"
-            />
-            <StatCard
-              title="Stock Status"
-              value={data?.lowStockCount ? `${data.lowStockCount} Low` : 'Healthy'}
-              icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
-              variant={data?.lowStockCount ? 'pink' : 'default'}
-              changeLabel="Warehouse inventory"
-            />
-          </View>
+          {loading ? (
+            <View style={styles.metricsGrid}>
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+            </View>
+          ) : (
+            <View style={styles.metricsGrid}>
+              <StatCard
+                title="Monthly Sales"
+                value={formatRupees(data?.monthSalesPaise || 0)}
+                icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
+                variant="default"
+                changeLabel="Target progress"
+              />
+              <StatCard
+                title="Stock Status"
+                value={data?.lowStockCount ? `${data.lowStockCount} Low` : (data?.stockBalance ? `${data.stockBalance} Pkts` : 'Healthy')}
+                icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
+                variant={data?.lowStockCount ? 'pink' : 'default'}
+                changeLabel="Warehouse inventory"
+              />
+            </View>
+          )}
 
           {/* Field Quick Actions */}
           <View style={styles.sectionHeaderRow}>
@@ -444,7 +455,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   scrollContent: {
-    paddingBottom: Spacing.huge,
+    paddingBottom: 110,
   },
   contentWrapper: {
     width: '100%',
@@ -536,6 +547,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
+    zIndex: 9999,
+    elevation: 10,
   },
   modalContent: {
     backgroundColor: Colors.light.surface,
