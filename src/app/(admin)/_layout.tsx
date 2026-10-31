@@ -121,7 +121,7 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="actions/index"
+        name="actions"
         options={{ href: null }}
       />
       <Tabs.Screen

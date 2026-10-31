@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Modal,
@@ -501,15 +501,17 @@ export default function AdminDashboardScreen() {
               <Text style={styles.sectionHeading}>Administrative Actions</Text>
               <Text style={styles.sectionSubheading}>Operations Command & System Governance</Text>
             </View>
-            <TouchableOpacity
-              style={styles.viewAllActionsBtn}
-              onPress={() => router.push('/(admin)/actions' as any)}
-              accessibilityRole="button"
-              accessibilityLabel="View All 13 Administrative Modules"
-            >
-              <Text style={styles.viewAllActionsText}>View All (13)</Text>
-              <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.dark} />
-            </TouchableOpacity>
+            <Link href="/(admin)/actions" asChild>
+              <TouchableOpacity
+                style={styles.viewAllActionsBtn}
+                onPress={() => router.push('/(admin)/actions' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="View All 13 Administrative Modules"
+              >
+                <Text style={styles.viewAllActionsText}>View All (13)</Text>
+                <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.dark} />
+              </TouchableOpacity>
+            </Link>
           </View>
 
           {/* Master Operations Command Hub Card */}
@@ -558,15 +560,17 @@ export default function AdminDashboardScreen() {
             </View>
 
             {/* Primary Action Button to Open Dedicated Actions Page */}
-            <TouchableOpacity
-              style={styles.openCommandCenterBtn}
-              onPress={() => router.push('/(admin)/actions' as any)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="apps" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.openCommandCenterBtnText}>Open Administrative Actions Hub</Text>
-              <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
+            <Link href="/(admin)/actions" asChild>
+              <TouchableOpacity
+                style={styles.openCommandCenterBtn}
+                onPress={() => router.push('/(admin)/actions' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="apps" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.openCommandCenterBtnText}>Open Administrative Actions Hub</Text>
+                <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </Link>
           </Card>
 
           {/* Quick-Launch 4 Priority Cards Grid */}
