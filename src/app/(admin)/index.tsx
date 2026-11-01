@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  DeviceEventEmitter,
   Modal,
   Pressable,
   RefreshControl,
@@ -35,6 +36,7 @@ import { useAuth } from '@/context/AuthContext';
 export default function AdminDashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
 
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,8 +201,32 @@ export default function AdminDashboardScreen() {
     dateRange,
   ]);
 
+  // Re-fetch telemetry whenever executive overview comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  // Real-time synchronization when approvals/rejections happen across admin screens
   useEffect(() => {
-    loadData();
+    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      // Optimistically decrement pending count immediately for instantaneous response
+      setDashboard((prev) => {
+        if (!prev) return prev;
+        const current = Number(prev.pendingApprovalsCount || 0);
+        return {
+          ...prev,
+          pendingApprovalsCount: Math.max(0, current - 1),
+        };
+      });
+      // Synchronize latest live telemetry with backend
+      loadData();
+    });
+
+    return () => {
+      sub.remove();
+    };
   }, [loadData]);
 
   const onRefresh = useCallback(() => {
@@ -221,6 +247,18 @@ export default function AdminDashboardScreen() {
     const val = Number(count);
     return (isNaN(val) ? 0 : val).toLocaleString('en-IN');
   };
+
+  const handleOpenActionsHub = useCallback(() => {
+    try {
+      (navigation as any).navigate('actions/index');
+    } catch {
+      try {
+        router.navigate('/(admin)/actions' as any);
+      } catch {
+        router.push('/(admin)/actions' as any);
+      }
+    }
+  }, [navigation, router]);
 
   const pendingCount = Number(dashboard?.pendingApprovalsCount || 0);
 
@@ -501,17 +539,16 @@ export default function AdminDashboardScreen() {
               <Text style={styles.sectionHeading}>Administrative Actions</Text>
               <Text style={styles.sectionSubheading}>Operations Command & System Governance</Text>
             </View>
-            <Link href="/(admin)/actions" asChild>
-              <TouchableOpacity
-                style={styles.viewAllActionsBtn}
-                onPress={() => router.push('/(admin)/actions' as any)}
-                accessibilityRole="button"
-                accessibilityLabel="View All 13 Administrative Modules"
-              >
-                <Text style={styles.viewAllActionsText}>View All (13)</Text>
-                <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.dark} />
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity
+              style={styles.viewAllActionsBtn}
+              onPress={handleOpenActionsHub}
+              accessibilityRole="button"
+              accessibilityLabel="View All 13 Administrative Modules"
+              activeOpacity={0.7}
+            >
+              <Text style={styles.viewAllActionsText}>View All (13)</Text>
+              <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.dark} />
+            </TouchableOpacity>
           </View>
 
           {/* Master Operations Command Hub Card */}
@@ -560,17 +597,17 @@ export default function AdminDashboardScreen() {
             </View>
 
             {/* Primary Action Button to Open Dedicated Actions Page */}
-            <Link href="/(admin)/actions" asChild>
-              <TouchableOpacity
-                style={styles.openCommandCenterBtn}
-                onPress={() => router.push('/(admin)/actions' as any)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="apps" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.openCommandCenterBtnText}>Open Administrative Actions Hub</Text>
-                <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity
+              style={styles.openCommandCenterBtn}
+              onPress={handleOpenActionsHub}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Open Administrative Actions Hub"
+            >
+              <Ionicons name="apps" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.openCommandCenterBtnText}>Open Administrative Actions Hub</Text>
+              <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
           </Card>
 
           {/* Quick-Launch 4 Priority Cards Grid */}

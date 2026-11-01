@@ -328,7 +328,7 @@ describe('FemmeFlo Phase 8: Executive Governance, Invoices, CSV Export & Release
     });
 
     test('constructs proper PDF endpoint URLs for viewing and downloading', () => {
-      const baseUrl = 'http://localhost:5000/api/v1';
+      const baseUrl = 'https://femmeflo-inventory.onrender.com/api/v1';
       const invoiceId = 'inv_test_99';
 
       const viewUrl = `${baseUrl}/admin/invoices/${invoiceId}/pdf?download=false`;

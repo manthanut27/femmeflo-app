@@ -134,11 +134,13 @@ export default function ShiftScreen() {
     loadShiftData();
   }, [loadShiftData]);
 
-  // Elapsed timer ticker for active shift
+  // Elapsed timer ticker for active shift (pauses while end shift / selfie processing is active)
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
 
-    if (currentShift && currentShift.startTime) {
+    const isEndingProcess = isEndingShift || (faceModalVisible && faceModalMode === 'END') || endModalVisible;
+
+    if (currentShift && currentShift.startTime && !isEndingProcess) {
       const startMs = new Date(currentShift.startTime).getTime();
 
       const updateTicker = () => {
@@ -153,31 +155,49 @@ export default function ShiftScreen() {
 
       updateTicker();
       timerRef.current = setInterval(updateTicker, 1000);
-    } else {
+    } else if (!currentShift || !currentShift.startTime) {
       setElapsedTime('00:00:00');
     }
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [currentShift]);
+  }, [currentShift, isEndingShift, faceModalVisible, faceModalMode, endModalVisible]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadShiftData();
   }, [loadShiftData]);
 
-  // Helper to acquire GPS coordinates with fallback
+  // Helper to acquire GPS coordinates with fast cache check & timeout race
   async function acquireCoordinates(): Promise<{ latitude: number; longitude: number }> {
     try {
       if (Platform.OS !== 'web') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          return {
-            latitude: Number(loc.coords.latitude.toFixed(6)),
-            longitude: Number(loc.coords.longitude.toFixed(6)),
-          };
+          // 1. Check last known position first (instant: 10-50ms)
+          try {
+            const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
+            if (lastLoc && lastLoc.coords) {
+              return {
+                latitude: Number(lastLoc.coords.latitude.toFixed(6)),
+                longitude: Number(lastLoc.coords.longitude.toFixed(6)),
+              };
+            }
+          } catch {
+            // Ignore cache error and proceed to fresh read
+          }
+
+          // 2. Strict 3-second timeout race so GPS lock never delays closing the shift
+          const positionPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+          const loc = await Promise.race([positionPromise, timeoutPromise]);
+          if (loc && (loc as any).coords) {
+            return {
+              latitude: Number((loc as any).coords.latitude.toFixed(6)),
+              longitude: Number((loc as any).coords.longitude.toFixed(6)),
+            };
+          }
         }
       } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
         return new Promise((resolve) => {
@@ -189,7 +209,7 @@ export default function ShiftScreen() {
               });
             },
             () => resolve({ latitude: 22.7196, longitude: 75.8577 }),
-            { timeout: 6000 }
+            { timeout: 3000 }
           );
         });
       }

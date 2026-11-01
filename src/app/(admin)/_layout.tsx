@@ -121,40 +121,94 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="actions"
-        options={{ href: null }}
+        name="settings/password"
+        options={{
+          title: 'Change Password',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="actions/index"
+        options={{
+          title: 'Actions Hub',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="categories/index"
-        options={{ href: null }}
+        options={{
+          title: 'Categories',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="customers"
-        options={{ href: null }}
+        options={{
+          title: 'Customers',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="products/index"
-        options={{ href: null }}
+        options={{
+          title: 'Products',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="incentives/index"
-        options={{ href: null }}
+        options={{
+          title: 'Incentives',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="shifts/index"
-        options={{ href: null }}
+        options={{
+          title: 'Shifts',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="permissions/index"
-        options={{ href: null }}
+        options={{
+          title: 'Permissions',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="sales/index"
-        options={{ href: null }}
+        options={{
+          title: 'Sales',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="invoices/index"
-        options={{ href: null }}
+        options={{
+          title: 'Invoices',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
     </Tabs>
   );

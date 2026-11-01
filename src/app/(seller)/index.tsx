@@ -97,9 +97,25 @@ export default function SellerDashboardScreen() {
         const Location = require('expo-location');
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          latitude = loc.coords.latitude;
-          longitude = loc.coords.longitude;
+          try {
+            const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
+            if (lastLoc && lastLoc.coords) {
+              latitude = lastLoc.coords.latitude;
+              longitude = lastLoc.coords.longitude;
+            }
+          } catch {
+            // Fallback to fresh read
+          }
+
+          if (!latitude || !longitude) {
+            const posPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+            const loc = await Promise.race([posPromise, timeoutPromise]);
+            if (loc && (loc as any).coords) {
+              latitude = (loc as any).coords.latitude;
+              longitude = (loc as any).coords.longitude;
+            }
+          }
         }
       } catch {
         // Foreground GPS optional fallback
@@ -147,9 +163,25 @@ export default function SellerDashboardScreen() {
         const Location = require('expo-location');
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          latitude = loc.coords.latitude;
-          longitude = loc.coords.longitude;
+          try {
+            const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
+            if (lastLoc && lastLoc.coords) {
+              latitude = lastLoc.coords.latitude;
+              longitude = lastLoc.coords.longitude;
+            }
+          } catch {
+            // Fallback to fresh read
+          }
+
+          if (!latitude || !longitude) {
+            const posPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+            const loc = await Promise.race([posPromise, timeoutPromise]);
+            if (loc && (loc as any).coords) {
+              latitude = (loc as any).coords.latitude;
+              longitude = (loc as any).coords.longitude;
+            }
+          }
         }
       } catch {
         // Foreground GPS optional fallback

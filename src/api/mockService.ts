@@ -97,7 +97,35 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
 
   const cleanEndpoint = endpoint.replace(/^\/+/, '').split('?')[0];
   const method = (options.method || 'GET').toUpperCase();
-  const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {};
+  let body: any = {};
+  if (options.body) {
+    if (typeof options.body === 'string') {
+      try {
+        body = JSON.parse(options.body);
+      } catch {
+        body = {};
+      }
+    } else if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+      body = {};
+      try {
+        const fd = options.body as any;
+        if (typeof fd.get === 'function') {
+          for (const key of ['shopName', 'ownerName', 'contactName', 'phone', 'email', 'categoryId', 'address', 'pincode', 'state', 'district', 'village', 'latitude', 'longitude', 'accuracy', 'noPhotoReason']) {
+            const val = fd.get(key);
+            if (val != null) body[key] = val;
+          }
+        } else if (Array.isArray(fd._parts)) {
+          for (const [key, val] of fd._parts) {
+            body[key] = val;
+          }
+        }
+      } catch {
+        body = {};
+      }
+    } else {
+      body = options.body;
+    }
+  }
 
   // Role-Based Access Control (RBAC) in mock service
   if (cleanEndpoint.startsWith('admin/') && !cleanEndpoint.endsWith('auth/login')) {
@@ -251,25 +279,25 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { customer } as unknown as T;
   }
 
-  if (cleanEndpoint === 'seller/customers' && method === 'POST') {
+  if ((cleanEndpoint === 'seller/customers' || cleanEndpoint === 'manager/customers' || cleanEndpoint === 'admin/customers') && method === 'POST') {
     const category = mockDb.categories.find((cat) => cat.id === body.categoryId) || mockDb.categories[0];
     const newCustomer: CustomerItem = {
       id: `cust_${Date.now()}`,
-      shopName: body.shopName,
-      ownerName: body.ownerName,
+      shopName: body.shopName || 'Retail Shop',
+      ownerName: body.ownerName || body.contactName || 'Store Owner',
       email: body.email,
-      phone: body.phone,
-      categoryId: body.categoryId,
+      phone: body.phone || '+919876543210',
+      categoryId: body.categoryId || category?.id,
       category,
       sellerId: mockDb.currentUser.id,
       seller: { id: mockDb.currentUser.id, name: mockDb.currentUser.name },
-      address: body.address,
-      pincode: body.pincode,
-      state: body.state,
-      district: body.district,
+      address: body.address || 'Market Road',
+      pincode: body.pincode || '452001',
+      state: body.state || 'Madhya Pradesh',
+      district: body.district || 'Indore',
       village: body.village || null,
-      latitude: body.latitude || 22.7196,
-      longitude: body.longitude || 75.8577,
+      latitude: Number(body.latitude) || 22.7196,
+      longitude: Number(body.longitude) || 75.8577,
       photoUrl: 'https://images.unsplash.com/photo-1586015555751-63bb77f4322a?w=400',
       active: true,
       createdAt: new Date().toISOString(),

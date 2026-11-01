@@ -81,6 +81,7 @@ export interface CustomerItem {
   latitude?: number | null;
   longitude?: number | null;
   photoUrl?: string | null;
+  photoPath?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt?: string;
@@ -103,6 +104,7 @@ export interface CreateCustomerPayload {
   noPhotoReason?: string;
   photoSkipReason?: string;
   photoPath?: string;
+  photoUri?: string;
 }
 
 export interface BulkCustomerRow {
@@ -208,6 +210,8 @@ export interface WarehouseItem {
   district: string;
   address?: string;
   active: boolean;
+  type?: string;
+  balance?: number;
 }
 
 // ----------------------------------------------------

@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -24,6 +24,7 @@ import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
+import { DropdownTrigger } from '@/components/ui/SearchableDropdownModal';
 import {
   BorderRadius,
   BrandColors,
@@ -31,6 +32,7 @@ import {
   Elevation,
   HitSlop,
   MaxContentWidth,
+  Shadows,
   Spacing,
   Typography,
 } from '@/constants/theme';
@@ -63,6 +65,27 @@ export default function AdminUsersScreen() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [modalError, setModalError] = useState<string | null>(null);
 
+  // Searchable Manager Picker Subview State
+  const [managerSearchQuery, setManagerSearchQuery] = useState('');
+  const [isManagerPickerOpen, setIsManagerPickerOpen] = useState(false);
+
+  const filteredManagers = useMemo(() => {
+    const q = managerSearchQuery.trim().toLowerCase();
+    if (!q) return availableManagers;
+    return availableManagers.filter((m) => {
+      const matchName = m.name?.toLowerCase().includes(q) ?? false;
+      const matchEmail = m.email?.toLowerCase().includes(q) ?? false;
+      const matchPhone = m.phone?.toLowerCase().includes(q) ?? false;
+      const matchDistrict = m.district?.toLowerCase().includes(q) ?? false;
+      const matchState = m.state?.toLowerCase().includes(q) ?? false;
+      return matchName || matchEmail || matchPhone || matchDistrict || matchState;
+    });
+  }, [availableManagers, managerSearchQuery]);
+
+  const selectedManager = useMemo(() => {
+    return availableManagers.find((m) => m.id === formManagerId);
+  }, [availableManagers, formManagerId]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
@@ -73,7 +96,24 @@ export default function AdminUsersScreen() {
   const loadManagersList = useCallback(async () => {
     try {
       const res = await adminApi.listManagers({ pageSize: 100 });
-      setAvailableManagers(res.items);
+      if (res.items && res.items.length > 0) {
+        setAvailableManagers(res.items);
+      } else {
+        const filters = await adminApi.getDashboardFilters();
+        if (filters.managers && filters.managers.length > 0) {
+          setAvailableManagers(
+            filters.managers.map((m) => ({
+              id: m.id,
+              name: m.name,
+              email: (m as any).email || '',
+              role: 'MANAGER' as const,
+              state: m.state,
+              district: m.district,
+              active: true,
+            }))
+          );
+        }
+      }
       if (res.items.length > 0 && !formManagerId) {
         setFormManagerId(res.items[0].id);
       }
@@ -88,7 +128,9 @@ export default function AdminUsersScreen() {
       if (tab === 'MANAGERS') {
         const res = await adminApi.listManagers({ pageSize: 50, search: debouncedSearch.trim() || undefined });
         setUsers(res.items);
-        setAvailableManagers(res.items);
+        if (!debouncedSearch.trim() && res.items && res.items.length > 0) {
+          setAvailableManagers(res.items);
+        }
       } else {
         const res = await adminApi.listSellers({ pageSize: 50, search: debouncedSearch.trim() || undefined });
         setUsers(res.items);
@@ -122,10 +164,25 @@ export default function AdminUsersScreen() {
     setFormDistrict('Thane');
     setFormErrors({});
     setModalError(null);
+    setIsManagerPickerOpen(false);
+    setManagerSearchQuery('');
     if (availableManagers.length > 0) {
-      setFormManagerId(availableManagers[0].id);
+      const firstMgr = availableManagers[0];
+      setFormManagerId(firstMgr.id);
+      if (firstMgr.state) setFormState(firstMgr.state);
+      if (firstMgr.district) setFormDistrict(firstMgr.district);
+    } else {
+      setFormManagerId('');
     }
     setModalVisible(true);
+  }
+
+  function handleCloseModal() {
+    setModalVisible(false);
+    setIsManagerPickerOpen(false);
+    setManagerSearchQuery('');
+    setFormErrors({});
+    setModalError(null);
   }
 
   function validateForm(): boolean {
@@ -400,225 +457,391 @@ export default function AdminUsersScreen() {
         visible={modalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleCloseModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
+          style={styles.modalBackdrop}
         >
-          <View style={styles.modalContentCard}>
+          <Pressable style={styles.backdropDismiss} onPress={handleCloseModal} />
+
+          <View style={styles.modalSheetCard}>
             {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalHeading}>
-                  {modalRole === 'MANAGER' ? 'Onboard Territory Manager' : 'Onboard Field Seller'}
+                  {isManagerPickerOpen
+                    ? 'Supervising Manager'
+                    : modalRole === 'MANAGER'
+                    ? 'Onboard Territory Manager'
+                    : 'Onboard Field Seller'}
                 </Text>
                 <Text style={styles.modalSubheading}>
-                  {modalRole === 'MANAGER'
+                  {isManagerPickerOpen
+                    ? 'Search and assign the supervising territory manager'
+                    : modalRole === 'MANAGER'
                     ? 'Supervises field officers and territory customers'
                     : 'Field force officer for retail visits & POS orders'}
                 </Text>
               </View>
               <Pressable
-                onPress={() => setModalVisible(false)}
+                onPress={isManagerPickerOpen ? () => setIsManagerPickerOpen(false) : handleCloseModal}
                 hitSlop={HitSlop.md}
                 style={styles.modalCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
               >
-                <Ionicons name="close" size={20} color={Colors.light.textSecondary} />
+                <Ionicons
+                  name={isManagerPickerOpen ? 'arrow-back' : 'close'}
+                  size={20}
+                  color={Colors.light.textSecondary}
+                />
               </Pressable>
             </View>
 
-            {/* Role Switcher */}
-            <View style={styles.modalRoleSwitcher}>
-              <Pressable
-                style={[
-                  styles.modalRoleTab,
-                  modalRole === 'MANAGER' && styles.modalRoleTabActiveManager,
-                ]}
-                onPress={() => {
-                  setModalRole('MANAGER');
-                  setFormErrors({});
-                  setModalError(null);
-                }}
-              >
-                <Ionicons
-                  name="people"
-                  size={16}
-                  color={modalRole === 'MANAGER' ? '#FFFFFF' : BrandColors.green.primary}
-                />
-                <Text
-                  style={[
-                    styles.modalRoleTabText,
-                    modalRole === 'MANAGER' && styles.modalRoleTabTextActive,
-                  ]}
-                >
-                  Manager
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.modalRoleTab,
-                  modalRole === 'SELLER' && styles.modalRoleTabActiveSeller,
-                ]}
-                onPress={() => {
-                  setModalRole('SELLER');
-                  setFormErrors({});
-                  setModalError(null);
-                }}
-              >
-                <Ionicons
-                  name="bag-handle"
-                  size={16}
-                  color={modalRole === 'SELLER' ? '#FFFFFF' : BrandColors.pink.dark}
-                />
-                <Text
-                  style={[
-                    styles.modalRoleTabText,
-                    modalRole === 'SELLER' && styles.modalRoleTabTextActive,
-                  ]}
-                >
-                  Seller
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Form Fields Scroll */}
-            <ScrollView style={styles.modalFormScroll} keyboardShouldPersistTaps="handled">
-              {modalError && (
-                <FeedbackBanner
-                  type="error"
-                  message={modalError}
-                  onDismiss={() => setModalError(null)}
-                  style={{ marginBottom: Spacing.sm }}
-                />
-              )}
-
-              <Input
-                label="Full Name *"
-                placeholder="e.g. Ramesh Patil"
-                value={formName}
-                onChangeText={setFormName}
-                error={formErrors.name}
-                leftIcon={<Ionicons name="person-outline" size={18} color="#94A3B8" />}
-              />
-
-              <Input
-                label="Mobile Phone Number *"
-                placeholder="e.g. 9876543210"
-                keyboardType="phone-pad"
-                value={formPhone}
-                onChangeText={setFormPhone}
-                error={formErrors.phone}
-                helperText="10-digit Indian mobile number (auto-prefixed with +91)"
-                leftIcon={<Ionicons name="call-outline" size={18} color="#94A3B8" />}
-              />
-
-              <Input
-                label="Email Address (Optional)"
-                placeholder="e.g. ramesh@femmeflo.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={formEmail}
-                onChangeText={setFormEmail}
-                error={formErrors.email}
-                leftIcon={<Ionicons name="mail-outline" size={18} color="#94A3B8" />}
-              />
-
-              <Input
-                label="Initial Password *"
-                placeholder="Minimum 12 characters"
-                value={formPassword}
-                onChangeText={setFormPassword}
-                error={formErrors.password}
-                helperText="Initial access password (min. 12 characters)"
-                leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
-              />
-
-              {/* If Seller: Manager Assignment Selection */}
-              {modalRole === 'SELLER' && (
-                <View style={styles.managerSelectSection}>
-                  <Text style={styles.managerSelectLabel}>Supervising Territory Manager *</Text>
-                  {availableManagers.length === 0 ? (
-                    <Text style={styles.noManagersWarning}>
-                      ⚠️ No active Territory Managers found. Please create a Manager first before assigning sellers.
-                    </Text>
-                  ) : (
-                    <View style={styles.managerListWrap}>
-                      {availableManagers.map((mgr) => {
-                        const isSelected = formManagerId === mgr.id;
-                        return (
-                          <Pressable
-                            key={mgr.id}
-                            style={[
-                              styles.managerSelectItem,
-                              isSelected && styles.managerSelectItemActive,
-                            ]}
-                            onPress={() => setFormManagerId(mgr.id)}
-                          >
-                            <Ionicons
-                              name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                              size={18}
-                              color={isSelected ? BrandColors.pink.dark : Colors.light.textTertiary}
-                            />
-                            <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                              <Text style={[styles.mgrSelectName, isSelected && styles.mgrSelectNameActive]}>
-                                {mgr.name}
-                              </Text>
-                              <Text style={styles.mgrSelectSub}>
-                                {mgr.district || 'Territory'}, {mgr.state || 'State'} • {mgr.phone || mgr.email}
-                              </Text>
-                            </View>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
-                  {formErrors.managerId && (
-                    <Text style={styles.fieldErrorText}>{formErrors.managerId}</Text>
-                  )}
-                </View>
-              )}
-
-              <View style={styles.geoRow}>
-                <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                  <Input
-                    label="State"
-                    placeholder="e.g. Maharashtra"
-                    value={formState}
-                    onChangeText={setFormState}
+            {isManagerPickerOpen ? (
+              // SEARCHABLE MANAGER PICKER VIEW
+              <View style={styles.pickerContainer}>
+                {/* Search Bar */}
+                <View style={styles.pickerSearchBox}>
+                  <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
+                  <TextInput
+                    style={styles.pickerSearchInput}
+                    placeholder="Search by name, district, state, phone..."
+                    placeholderTextColor={Colors.light.textPlaceholder}
+                    value={managerSearchQuery}
+                    onChangeText={setManagerSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
                   />
+                  {managerSearchQuery.length > 0 && (
+                    <Pressable
+                      onPress={() => setManagerSearchQuery('')}
+                      hitSlop={HitSlop.md}
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear search"
+                    >
+                      <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+                    </Pressable>
+                  )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    label="District"
-                    placeholder="e.g. Thane"
-                    value={formDistrict}
-                    onChangeText={setFormDistrict}
+
+                {/* Filtered Managers List */}
+                <FlatList
+                  data={filteredManagers}
+                  keyExtractor={(item) => item.id}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.pickerListContent}
+                  renderItem={({ item }) => {
+                    const isSelected = formManagerId === item.id;
+                    return (
+                      <Pressable
+                        style={[
+                          styles.pickerManagerCard,
+                          isSelected && styles.pickerManagerCardSelected,
+                        ]}
+                        onPress={() => {
+                          setFormManagerId(item.id);
+                          if (item.state) setFormState(item.state);
+                          if (item.district) setFormDistrict(item.district);
+                          setFormErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.managerId;
+                            return next;
+                          });
+                          setIsManagerPickerOpen(false);
+                        }}
+                      >
+                        <View
+                          style={[
+                            styles.pickerManagerAvatar,
+                            isSelected && styles.pickerManagerAvatarSelected,
+                          ]}
+                        >
+                          <Ionicons
+                            name="people"
+                            size={18}
+                            color={isSelected ? '#FFFFFF' : BrandColors.green.primary}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.pickerManagerTitleRow}>
+                            <Text
+                              style={[
+                                styles.pickerManagerName,
+                                isSelected && styles.pickerManagerNameSelected,
+                              ]}
+                            >
+                              {item.name}
+                            </Text>
+                            <Badge
+                              label="MANAGER"
+                              variant={isSelected ? 'ACTIVE' : 'neutral'}
+                              size="sm"
+                            />
+                          </View>
+                          <Text style={styles.pickerManagerSub}>
+                            {[item.district, item.state].filter(Boolean).join(', ') || 'All Regions'} • {item.phone || item.email || 'No contact'}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={22}
+                            color={BrandColors.pink.dark}
+                            style={{ marginLeft: 8 }}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  }}
+                  ListEmptyComponent={
+                    <View style={styles.pickerEmptyContainer}>
+                      <Ionicons name="search-outline" size={36} color={Colors.light.textTertiary} />
+                      <Text style={styles.pickerEmptyTitle}>
+                        {availableManagers.length === 0
+                          ? 'No Territory Managers Found'
+                          : 'No matching managers found'}
+                      </Text>
+                      <Text style={styles.pickerEmptySub}>
+                        {availableManagers.length === 0
+                          ? 'Please onboard a Territory Manager first before adding sellers.'
+                          : 'Try searching with a different name, district, or phone number.'}
+                      </Text>
+                      {availableManagers.length === 0 && (
+                        <Button
+                          title="+ Onboard Territory Manager First"
+                          size="sm"
+                          variant="admin"
+                          style={{ marginTop: Spacing.md }}
+                          onPress={() => {
+                            setIsManagerPickerOpen(false);
+                            setModalRole('MANAGER');
+                          }}
+                        />
+                      )}
+                    </View>
+                  }
+                />
+
+                <View style={styles.pickerFooterRow}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    size="md"
+                    style={{ flex: 1 }}
+                    onPress={() => setIsManagerPickerOpen(false)}
                   />
                 </View>
               </View>
-            </ScrollView>
+            ) : (
+              // MAIN FORM VIEW
+              <>
+                {/* Role Switcher */}
+                <View style={styles.modalRoleSwitcher}>
+                  <Pressable
+                    style={[
+                      styles.modalRoleTab,
+                      modalRole === 'MANAGER' && styles.modalRoleTabActiveManager,
+                    ]}
+                    onPress={() => {
+                      setModalRole('MANAGER');
+                      setFormErrors({});
+                      setModalError(null);
+                    }}
+                  >
+                    <Ionicons
+                      name="people"
+                      size={16}
+                      color={modalRole === 'MANAGER' ? '#FFFFFF' : BrandColors.green.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.modalRoleTabText,
+                        modalRole === 'MANAGER' && styles.modalRoleTabTextActive,
+                      ]}
+                    >
+                      Manager
+                    </Text>
+                  </Pressable>
 
-            {/* Modal Actions */}
-            <View style={styles.modalActionRow}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                size="md"
-                style={{ flex: 1, marginRight: Spacing.sm }}
-                onPress={() => setModalVisible(false)}
-                disabled={isSubmitting}
-              />
-              <Button
-                title={isSubmitting ? 'Creating...' : modalRole === 'MANAGER' ? 'Create Manager' : 'Create Seller'}
-                variant="admin"
-                size="md"
-                style={{ flex: 1.5 }}
-                loading={isSubmitting}
-                onPress={handleCreateUser}
-              />
-            </View>
+                  <Pressable
+                    style={[
+                      styles.modalRoleTab,
+                      modalRole === 'SELLER' && styles.modalRoleTabActiveSeller,
+                    ]}
+                    onPress={() => {
+                      setModalRole('SELLER');
+                      setFormErrors({});
+                      setModalError(null);
+                      if (availableManagers.length > 0 && !formManagerId) {
+                        setFormManagerId(availableManagers[0].id);
+                        if (availableManagers[0].state) setFormState(availableManagers[0].state);
+                        if (availableManagers[0].district) setFormDistrict(availableManagers[0].district);
+                      }
+                    }}
+                  >
+                    <Ionicons
+                      name="bag-handle"
+                      size={16}
+                      color={modalRole === 'SELLER' ? '#FFFFFF' : BrandColors.pink.dark}
+                    />
+                    <Text
+                      style={[
+                        styles.modalRoleTabText,
+                        modalRole === 'SELLER' && styles.modalRoleTabTextActive,
+                      ]}
+                    >
+                      Seller
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Form Fields Scroll */}
+                <ScrollView
+                  style={styles.modalFormScroll}
+                  contentContainerStyle={styles.modalFormScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {modalError && (
+                    <FeedbackBanner
+                      type="error"
+                      message={modalError}
+                      onDismiss={() => setModalError(null)}
+                      style={{ marginBottom: Spacing.sm }}
+                    />
+                  )}
+
+                  <Input
+                    label="Full Name *"
+                    placeholder="e.g. Ramesh Patil"
+                    value={formName}
+                    onChangeText={(val) => {
+                      setFormName(val);
+                      if (formErrors.name) setFormErrors((p) => ({ ...p, name: '' }));
+                    }}
+                    error={formErrors.name}
+                    leftIcon={<Ionicons name="person-outline" size={18} color="#94A3B8" />}
+                  />
+
+                  <Input
+                    label="Mobile Phone Number *"
+                    placeholder="e.g. 9876543210"
+                    keyboardType="phone-pad"
+                    value={formPhone}
+                    onChangeText={(val) => {
+                      setFormPhone(val);
+                      if (formErrors.phone) setFormErrors((p) => ({ ...p, phone: '' }));
+                    }}
+                    error={formErrors.phone}
+                    helperText="10-digit Indian mobile number (auto-prefixed with +91)"
+                    leftIcon={<Ionicons name="call-outline" size={18} color="#94A3B8" />}
+                  />
+
+                  <Input
+                    label="Email Address (Optional)"
+                    placeholder="e.g. ramesh@femmeflo.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={formEmail}
+                    onChangeText={(val) => {
+                      setFormEmail(val);
+                      if (formErrors.email) setFormErrors((p) => ({ ...p, email: '' }));
+                    }}
+                    error={formErrors.email}
+                    leftIcon={<Ionicons name="mail-outline" size={18} color="#94A3B8" />}
+                  />
+
+                  <Input
+                    label="Initial Password *"
+                    placeholder="Minimum 12 characters"
+                    value={formPassword}
+                    onChangeText={(val) => {
+                      setFormPassword(val);
+                      if (formErrors.password) setFormErrors((p) => ({ ...p, password: '' }));
+                    }}
+                    error={formErrors.password}
+                    helperText="Initial access password (min. 12 characters)"
+                    isPassword={true}
+                    leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
+                  />
+
+                  {/* If Seller: Supervising Territory Manager Dropdown with Search Option */}
+                  {modalRole === 'SELLER' && (
+                    <DropdownTrigger
+                      label="Supervising Territory Manager"
+                      required
+                      value={selectedManager?.name}
+                      subtitle={
+                        selectedManager
+                          ? `${[selectedManager.district, selectedManager.state].filter(Boolean).join(', ') || 'All Regions'} • ${selectedManager.phone || selectedManager.email || 'No contact'}`
+                          : availableManagers.length === 0
+                          ? 'No active managers available. Create manager first.'
+                          : 'Tap to select supervising manager with search...'
+                      }
+                      placeholder="Select supervising territory manager..."
+                      icon="people"
+                      badge={selectedManager ? 'TERRITORY MGR' : undefined}
+                      onPress={() => {
+                        setManagerSearchQuery('');
+                        setIsManagerPickerOpen(true);
+                      }}
+                      error={formErrors.managerId}
+                    />
+                  )}
+
+                  <View style={styles.geoFieldsSection}>
+                    <Text style={styles.geoSectionHeading}>Assigned Operational Territory</Text>
+                    <View style={styles.geoRow}>
+                      <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                        <Input
+                          label="State"
+                          placeholder="e.g. Maharashtra"
+                          value={formState}
+                          onChangeText={setFormState}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Input
+                          label="District"
+                          placeholder="e.g. Thane"
+                          value={formDistrict}
+                          onChangeText={setFormDistrict}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </ScrollView>
+
+                {/* Modal Actions */}
+                <View style={styles.modalActionRow}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    size="md"
+                    style={{ flex: 1, marginRight: Spacing.sm }}
+                    onPress={handleCloseModal}
+                    disabled={isSubmitting}
+                  />
+                  <Button
+                    title={
+                      isSubmitting
+                        ? 'Creating...'
+                        : modalRole === 'MANAGER'
+                        ? 'Create Manager'
+                        : 'Create Seller'
+                    }
+                    variant="admin"
+                    size="md"
+                    style={{ flex: 1.5 }}
+                    loading={isSubmitting}
+                    onPress={handleCreateUser}
+                  />
+                </View>
+              </>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -789,21 +1012,30 @@ const styles = StyleSheet.create({
   },
 
   // Modal Styles
-  modalOverlay: {
+  modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.md,
+    justifyContent: 'flex-end',
   },
-  modalContentCard: {
+  backdropDismiss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  modalSheetCard: {
     width: '100%',
-    maxWidth: 520,
-    maxHeight: '90%',
+    maxWidth: MaxContentWidth,
+    maxHeight: '92%',
+    minHeight: 520,
     backgroundColor: Colors.light.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    ...Elevation.high,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? 34 : Spacing.lg,
+    ...Shadows.lg,
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -822,8 +1054,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   modalCloseBtn: {
-    padding: 4,
+    padding: 6,
     marginLeft: Spacing.sm,
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.full,
   },
   modalRoleSwitcher: {
     flexDirection: 'row',
@@ -857,65 +1091,123 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   modalFormScroll: {
-    maxHeight: 420,
+    flex: 1,
+  },
+  modalFormScrollContent: {
+    paddingBottom: Spacing.lg,
+  },
+  geoFieldsSection: {
+    marginTop: Spacing.xs,
     marginBottom: Spacing.md,
   },
-  managerSelectSection: {
-    marginVertical: Spacing.sm,
-  },
-  managerSelectLabel: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
-    color: Colors.light.textPrimary,
-    marginBottom: 6,
-  },
-  noManagersWarning: {
+  geoSectionHeading: {
     ...Typography.caption,
-    color: Colors.light.warning,
-    backgroundColor: Colors.light.warningBg,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  managerListWrap: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: BorderRadius.md,
-    maxHeight: 140,
-  },
-  managerSelectItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-    backgroundColor: '#FFFFFF',
-  },
-  managerSelectItemActive: {
-    backgroundColor: BrandColors.pink.subtle,
-  },
-  mgrSelectName: {
-    ...Typography.bodySmall,
     fontWeight: '700',
-    color: Colors.light.textPrimary,
-  },
-  mgrSelectNameActive: {
-    color: BrandColors.pink.dark,
-  },
-  mgrSelectSub: {
-    ...Typography.caption,
     color: Colors.light.textSecondary,
-    fontSize: 11,
-  },
-  fieldErrorText: {
-    color: Colors.light.danger,
-    fontSize: 12,
-    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Spacing.xs,
   },
   geoRow: {
     flexDirection: 'row',
   },
   modalActionRow: {
     flexDirection: 'row',
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    backgroundColor: Colors.light.surface,
+  },
+
+  // Searchable Picker Subview
+  pickerContainer: {
+    flex: 1,
+  },
+  pickerSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    paddingHorizontal: Spacing.md,
+    height: 44,
+    marginBottom: Spacing.sm,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    ...Typography.bodyMedium,
+    color: Colors.light.textPrimary,
+    paddingVertical: 0,
+    marginLeft: Spacing.xs,
+  },
+  pickerListContent: {
+    paddingBottom: Spacing.md,
+  },
+  pickerManagerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: '#FFFFFF',
+    marginBottom: Spacing.xs,
+  },
+  pickerManagerCardSelected: {
+    borderColor: BrandColors.pink.border,
+    backgroundColor: BrandColors.pink.subtle,
+  },
+  pickerManagerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BrandColors.green.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  pickerManagerAvatarSelected: {
+    backgroundColor: BrandColors.pink.primary,
+  },
+  pickerManagerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  pickerManagerName: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  pickerManagerNameSelected: {
+    color: BrandColors.pink.dark,
+  },
+  pickerManagerSub: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+  },
+  pickerEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xxl,
+    paddingHorizontal: Spacing.lg,
+  },
+  pickerEmptyTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    marginTop: Spacing.sm,
+  },
+  pickerEmptySub: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  pickerFooterRow: {
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,

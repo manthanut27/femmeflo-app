@@ -23,7 +23,7 @@ try {
   }
 } catch {}
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const BACKEND_URL = process.env.EXPO_PUBLIC_API_URL || 'https://femmeflo-inventory.onrender.com/api/v1';
 
 async function isBackendReachable(): Promise<boolean> {
   try {

@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { handleMockRequest } from './mockService';
@@ -14,11 +13,12 @@ export interface RequestOptions extends RequestInit {
 
 export { ApiError };
 
-// Determine Base URL (defaults to production Render backend)
-export const DEFAULT_PRODUCTION_API_URL = 'https://femmeflo-inventory.onrender.com/api/v1';
+// Primary Render Production Backend URL
+export const RENDER_BACKEND_API_URL = 'https://femmeflo-inventory.onrender.com/api/v1';
+export const DEFAULT_PRODUCTION_API_URL = RENDER_BACKEND_API_URL;
 
 const rawApiUrl = (
-  process.env.EXPO_PUBLIC_API_URL || DEFAULT_PRODUCTION_API_URL
+  process.env.EXPO_PUBLIC_API_URL || RENDER_BACKEND_API_URL
 ).trim().replace(/\/+$/, '');
 
 let customApiBaseUrl: string | null = null;
@@ -40,40 +40,12 @@ export function setCustomApiBaseUrl(url: string | null): void {
   customApiBaseUrl = clean;
 }
 
-function resolveApiBaseUrl(url: string): string {
-  let withApi = url.endsWith('/api/v1') ? url : `${url.replace(/\/+$/, '')}/api/v1`;
-
-  const isLocalTarget =
-    withApi.includes('://localhost') ||
-    withApi.includes('://127.0.0.1') ||
-    /:\/\/192\.168\.\d+\.\d+/.test(withApi) ||
-    /:\/\/10\.\d+\.\d+\.\d+/.test(withApi);
-
-  // Expo Web in browser
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
-    if (isLocalTarget && window.location.hostname) {
-      // In web browser, connect directly to the current host's backend port (5000)
-      return `http://${window.location.hostname}:5000/api/v1`;
-    }
+function resolveApiBaseUrl(url?: string | null): string {
+  if (!url || !url.trim()) {
+    return RENDER_BACKEND_API_URL;
   }
-
-  // Android device / emulator
-  if (Platform.OS === 'android') {
-    if (isLocalTarget) {
-      // Physical device connected to local development machine via Expo
-      const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
-      if (hostUri) {
-        const hostIp = hostUri.split(':')[0];
-        if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
-          return `http://${hostIp}:5000/api/v1`;
-        }
-      }
-      // Prefer developer machine LAN IP over 10.0.2.2 so physical Android devices on Wi-Fi connect seamlessly
-      return 'http://192.168.0.100:5000/api/v1';
-    }
-  }
-
-  return withApi;
+  const clean = url.trim().replace(/\/+$/, '');
+  return clean.endsWith('/api/v1') ? clean : `${clean}/api/v1`;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl(rawApiUrl);

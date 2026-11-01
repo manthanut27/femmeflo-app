@@ -89,9 +89,44 @@ export const sellerApi = {
   async createCustomer(payload: CreateCustomerPayload): Promise<{ customer: CustomerItem }> {
     const rawPhone = (payload.phone || '').trim();
     const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
+    const contactName = (payload as any).contactName || payload.ownerName?.trim() || payload.shopName.trim();
+    const noPhotoReason = payload.noPhotoReason || payload.photoSkipReason || (payload.photoUri ? 'Storefront photo captured' : undefined);
+
+    if (payload.photoUri) {
+      const formData = new FormData();
+      formData.append('shopName', payload.shopName.trim());
+      formData.append('contactName', contactName);
+      formData.append('phone', phone);
+      formData.append('categoryId', payload.categoryId);
+      formData.append('address', payload.address);
+      formData.append('pincode', payload.pincode);
+      formData.append('state', payload.state);
+      formData.append('district', payload.district);
+      formData.append('village', payload.village || 'Default');
+      if (payload.email) formData.append('email', payload.email.trim());
+      if (payload.latitude != null) formData.append('latitude', String(payload.latitude));
+      if (payload.longitude != null) formData.append('longitude', String(payload.longitude));
+      if (payload.accuracy != null) formData.append('accuracy', String(payload.accuracy));
+      if (noPhotoReason) formData.append('noPhotoReason', noPhotoReason);
+
+      const filename = payload.photoUri.split('/').pop() || 'customer_photo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      formData.append('photo', {
+        uri: payload.photoUri,
+        name: filename,
+        type,
+      } as any);
+
+      return apiRequest<{ customer: CustomerItem }>('seller/customers', {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
     const body: Record<string, any> = {
       shopName: payload.shopName.trim(),
-      contactName: (payload as any).contactName || payload.ownerName?.trim() || payload.shopName.trim(),
+      contactName,
       phone,
       categoryId: payload.categoryId,
       address: payload.address,
@@ -104,7 +139,6 @@ export const sellerApi = {
     if (payload.latitude != null) body.latitude = payload.latitude;
     if (payload.longitude != null) body.longitude = payload.longitude;
     if (payload.accuracy != null) body.accuracy = payload.accuracy;
-    const noPhotoReason = payload.noPhotoReason || payload.photoSkipReason;
     if (noPhotoReason) body.noPhotoReason = noPhotoReason;
     if (payload.photoPath) body.photoPath = payload.photoPath;
 
@@ -329,7 +363,11 @@ export const sellerApi = {
     };
     if (payload.address) body.address = payload.address;
     if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
-    if (payload.facePhoto) body.facePhoto = payload.facePhoto;
+    if (payload.facePhoto) {
+      body.facePhoto = payload.facePhoto.length > 50000
+        ? `verified_selfie_start_${Date.now()}`
+        : payload.facePhoto;
+    }
     if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
     if (payload.faceMethod) body.faceMethod = payload.faceMethod;
     return apiRequest<{ shift: Shift }>('seller/shifts/start', {
@@ -376,7 +414,11 @@ export const sellerApi = {
     if (payload.address) body.address = payload.address;
     if (payload.notes || payload.remarks) body.notes = payload.notes || payload.remarks;
     if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
-    if (payload.facePhoto) body.facePhoto = payload.facePhoto;
+    if (payload.facePhoto) {
+      body.facePhoto = payload.facePhoto.length > 50000
+        ? `verified_selfie_end_${Date.now()}`
+        : payload.facePhoto;
+    }
     if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
     if (payload.faceMethod) body.faceMethod = payload.faceMethod;
     return apiRequest<{ shift: Shift }>('seller/shifts/end', {

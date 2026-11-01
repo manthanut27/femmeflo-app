@@ -33,6 +33,23 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrencyINR, formatDateIST } from '@/utils/dateUtils';
 
+interface TeamIncentiveMember {
+  seller: {
+    id: string;
+    name: string;
+    phone?: string;
+    employeeCode?: string;
+  };
+  sellerId?: string;
+  sellerName?: string;
+  phone?: string;
+  confirmedPackets: number;
+  earnedPaise: number;
+  totalPaidPaise: number;
+  outstandingPaise: number;
+  status: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' | 'UNPAID';
+}
+
 export default function ManagerIncentivesScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -68,26 +85,45 @@ export default function ManagerIncentivesScreen() {
   const personal = data?.personal;
 
   // Extract team members
-  const teamMembers = useMemo(() => {
-    if (!team?.members) return [];
-    return team.members as Array<{
-      seller: { id: string; name: string; phone?: string; employeeCode?: string };
-      confirmedPackets: number;
-      earnedPaise: number;
-      totalPaidPaise: number;
-      outstandingPaise: number;
-      status: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' | 'UNPAID';
-    }>;
+  const teamMembers = useMemo<TeamIncentiveMember[]>(() => {
+    if (!team?.members || !Array.isArray(team.members)) return [];
+    return team.members.map((m: any, idx: number): TeamIncentiveMember => {
+      const sellerId = m.seller?.id || m.sellerId || m.id || `seller-${idx}`;
+      const sellerName = m.seller?.name || m.sellerName || m.name || 'Field Officer';
+      const sellerPhone = m.seller?.phone || m.phone || '';
+      const employeeCode = m.seller?.employeeCode || m.employeeCode || '';
+      const confirmedPackets = Number(m.confirmedPackets ?? m.packetsSold ?? 0);
+      const earnedPaise = Number(m.earnedPaise ?? m.totalEarnedPaise ?? 0);
+      const totalPaidPaise = Number(m.totalPaidPaise ?? m.paidPaise ?? 0);
+      const outstandingPaise = Number(m.outstandingPaise ?? m.netPayablePaise ?? m.pendingPaise ?? 0);
+
+      return {
+        seller: {
+          id: sellerId,
+          name: sellerName,
+          phone: sellerPhone,
+          employeeCode,
+        },
+        sellerId,
+        sellerName,
+        phone: sellerPhone,
+        confirmedPackets,
+        earnedPaise,
+        totalPaidPaise,
+        outstandingPaise,
+        status: (m.status || 'PENDING') as 'PAID' | 'PARTIALLY_PAID' | 'PENDING' | 'UNPAID',
+      };
+    });
   }, [team]);
 
   // Filter team members by search query
-  const filteredMembers = useMemo(() => {
+  const filteredMembers = useMemo<TeamIncentiveMember[]>(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return teamMembers;
-    return teamMembers.filter((m) => {
-      const name = (m.seller?.name || '').toLowerCase();
+    return teamMembers.filter((m: TeamIncentiveMember) => {
+      const name = (m.seller?.name || m.sellerName || '').toLowerCase();
       const code = (m.seller?.employeeCode || '').toLowerCase();
-      const phone = (m.seller?.phone || '').toLowerCase();
+      const phone = (m.seller?.phone || m.phone || '').toLowerCase();
       return name.includes(q) || code.includes(q) || phone.includes(q);
     });
   }, [teamMembers, searchQuery]);
@@ -313,14 +349,20 @@ export default function ManagerIncentivesScreen() {
                       statusLabel = 'PARTIALLY PAID';
                     }
 
+                    const sellerObj = member.seller || {
+                      id: member.sellerId || '',
+                      name: member.sellerName || 'Field Officer',
+                      phone: member.phone || '',
+                    };
+
                     return (
-                      <Card key={member.seller.id} style={styles.memberCard}>
+                      <Card key={sellerObj.id || member.sellerId || String(Math.random())} style={styles.memberCard}>
                         <View style={styles.memberTop}>
                           <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                            <Text style={styles.memberName}>{member.seller.name}</Text>
+                            <Text style={styles.memberName}>{sellerObj.name}</Text>
                             <Text style={styles.memberSub}>
-                              {member.seller.phone ? `${member.seller.phone} • ` : ''}
-                              {member.confirmedPackets.toLocaleString('en-IN')} pkts delivered
+                              {sellerObj.phone ? `${sellerObj.phone} • ` : ''}
+                              {(member.confirmedPackets || 0).toLocaleString('en-IN')} pkts delivered
                             </Text>
                           </View>
                           <Badge label={statusLabel} variant={statusVariant} />

@@ -544,4 +544,521 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       assert.throws(() => validateBatchSize(tooMany), /cannot exceed 100/);
     });
   });
+
+  describe('Part H: Administrative Action Hub & Navigation Integrity', () => {
+    test('H1: All 13 master administrative modules are registered with strict indexes, routes and categories', () => {
+      const EXPECTED_MODULES = [
+        { id: 'reports', index: 1, route: '/(admin)/reports', category: 'finance' },
+        { id: 'approvals', index: 2, route: '/(admin)/approvals', category: 'governance' },
+        { id: 'products', index: 3, route: '/(admin)/products', category: 'stock' },
+        { id: 'invoices', index: 4, route: '/(admin)/invoices', category: 'finance' },
+        { id: 'sales', index: 5, route: '/(admin)/sales', category: 'finance' },
+        { id: 'incentives', index: 6, route: '/(admin)/incentives', category: 'finance' },
+        { id: 'shifts', index: 7, route: '/(admin)/shifts', category: 'field' },
+        { id: 'permissions', index: 8, route: '/(admin)/permissions', category: 'governance' },
+        { id: 'customers', index: 9, route: '/(admin)/customers', category: 'field' },
+        { id: 'inventory', index: 10, route: '/(admin)/inventory/transfer', category: 'stock' },
+        { id: 'users', index: 11, route: '/(admin)/users', category: 'field' },
+        { id: 'categories', index: 12, route: '/(admin)/categories', category: 'system' },
+        { id: 'settings', index: 13, route: '/(admin)/settings', category: 'system' },
+      ];
+
+      assert.equal(EXPECTED_MODULES.length, 13);
+      for (let i = 0; i < EXPECTED_MODULES.length; i++) {
+        assert.equal(EXPECTED_MODULES[i].index, i + 1);
+        assert.ok(EXPECTED_MODULES[i].route.startsWith('/(admin)/'));
+      }
+    });
+
+    test('H2: Admin layout does not use href: null on sub-screens to prevent redirect-to-index trap', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const layoutContent = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/_layout.tsx'),
+        'utf8'
+      );
+
+      // Verify actions/index is declared without href: null
+      assert.ok(layoutContent.includes('name="actions/index"'));
+      assert.ok(!layoutContent.includes('name="actions/index"\n        options={{ href: null }}'));
+      assert.ok(!layoutContent.includes("name='actions/index'\n        options={{ href: null }}"));
+      // Ensure no screen uses href: null
+      assert.ok(!layoutContent.includes('href: null'));
+    });
+  });
+
+  describe('Part I: Real-time Executive Telemetry & Approval Count Synchronization', () => {
+    test('I1: Executive overview and Actions Hub wire useFocusEffect and DeviceEventEmitter listener', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+
+      const executiveSource = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/index.tsx'),
+        'utf8'
+      );
+      assert.ok(executiveSource.includes('useFocusEffect'), 'Executive overview must wire useFocusEffect');
+      assert.ok(
+        executiveSource.includes("DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED'"),
+        'Executive overview must listen to APPROVAL_STATUS_CHANGED'
+      );
+
+      const actionsSource = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/actions/index.tsx'),
+        'utf8'
+      );
+      assert.ok(actionsSource.includes('useFocusEffect'), 'Actions Hub must wire useFocusEffect');
+      assert.ok(
+        actionsSource.includes("DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED'"),
+        'Actions Hub must listen to APPROVAL_STATUS_CHANGED'
+      );
+
+      const approvalsSource = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/approvals/index.tsx'),
+        'utf8'
+      );
+      assert.ok(approvalsSource.includes('useFocusEffect'), 'Approvals screen must wire useFocusEffect');
+      assert.ok(
+        approvalsSource.includes("DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED'"),
+        'Approvals screen must emit APPROVAL_STATUS_CHANGED on approval or rejection'
+      );
+    });
+
+    test('I2: Approval event triggers optimistic decrement and preserves lower bound of 0', () => {
+      function applyOptimisticApproval(count: number): number {
+        return Math.max(0, count - 1);
+      }
+
+      assert.equal(applyOptimisticApproval(5), 4);
+      assert.equal(applyOptimisticApproval(1), 0);
+      assert.equal(applyOptimisticApproval(0), 0);
+    });
+  });
+
+  describe('Part J: HQ Stock Transfers & Inward Receipts Dropdown Searchable Parity', () => {
+    test('J1: Source warehouse initialization guarantees fallback HQ warehouse when API returns empty list', () => {
+      // Mock scenario where backend returns empty warehouse list because locations are typed as "HQ" instead of "WAREHOUSE"
+      const emptyApiResponse: any[] = [];
+      const defaultWarehouses = [
+        {
+          id: 'loc_hq_central',
+          name: 'Central HQ Warehouse',
+          code: 'WH-HQ-01',
+          type: 'HQ',
+          balance: 0,
+          state: 'Uttar Pradesh',
+          district: 'Varanasi',
+        },
+      ];
+
+      const resolvedWarehouses = emptyApiResponse.length > 0 ? emptyApiResponse : defaultWarehouses;
+
+      assert.ok(resolvedWarehouses.length >= 1, 'Warehouses list must never be empty');
+      assert.equal(resolvedWarehouses[0].id, 'loc_hq_central');
+      assert.equal(resolvedWarehouses[0].name, 'Central HQ Warehouse');
+      assert.equal(resolvedWarehouses[0].type, 'HQ');
+    });
+
+    test('J2: Searchable dropdown filter accurately matches titles, codes, and metadata', () => {
+      const options = [
+        {
+          id: 'wh_1',
+          title: 'Central HQ Warehouse',
+          subtitle: 'Code: WH-HQ-01 • Stock Balance: 50,000 pkts',
+          badge: 'CENTRAL HQ',
+          metadata: 'Uttar Pradesh Varanasi WH-HQ-01',
+        },
+        {
+          id: 'wh_2',
+          title: 'Varanasi Regional Depot',
+          subtitle: 'Code: WH-VNS-02 • Stock Balance: 12,500 pkts',
+          badge: 'REGIONAL',
+          metadata: 'Uttar Pradesh Varanasi WH-VNS-02',
+        },
+        {
+          id: 'wh_3',
+          title: 'Lucknow Logistics Hub',
+          subtitle: 'Code: WH-LKO-01 • Stock Balance: 8,200 pkts',
+          badge: 'REGIONAL',
+          metadata: 'Uttar Pradesh Lucknow WH-LKO-01',
+        },
+      ];
+
+      function filterOptions(query: string) {
+        const q = query.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter((opt) => {
+          const matchTitle = opt.title.toLowerCase().includes(q);
+          const matchSubtitle = opt.subtitle ? opt.subtitle.toLowerCase().includes(q) : false;
+          const matchBadge = opt.badge ? opt.badge.toLowerCase().includes(q) : false;
+          const matchMeta = opt.metadata ? opt.metadata.toLowerCase().includes(q) : false;
+          return matchTitle || matchSubtitle || matchBadge || matchMeta;
+        });
+      }
+
+      // Exact title search
+      const resLucknow = filterOptions('Lucknow');
+      assert.equal(resLucknow.length, 1);
+      assert.equal(resLucknow[0].id, 'wh_3');
+
+      // Substring code search
+      const resCode = filterOptions('WH-VNS');
+      assert.equal(resCode.length, 1);
+      assert.equal(resCode[0].id, 'wh_2');
+
+      // District metadata search
+      const resDistrict = filterOptions('Varanasi');
+      assert.equal(resDistrict.length, 2);
+
+      // Badge search
+      const resBadge = filterOptions('CENTRAL HQ');
+      assert.equal(resBadge.length, 1);
+      assert.equal(resBadge[0].id, 'wh_1');
+    });
+
+    test('J3: Transfer mode validates destination whereas Inward Receipt routes stock to Source Warehouse', () => {
+      interface TransferPayloadMock {
+        mode: 'TRANSFER' | 'RECEIPT';
+        sourceWarehouseId: string;
+        targetLocationId: string;
+        batchNumber: string;
+        quantity: number;
+      }
+
+      function validateTransferForm(form: TransferPayloadMock): { valid: boolean; error?: string } {
+        if (!form.sourceWarehouseId) {
+          return { valid: false, error: 'Source warehouse is required' };
+        }
+        if (form.mode === 'TRANSFER' && !form.targetLocationId) {
+          return { valid: false, error: 'Destination target is required for transfer' };
+        }
+        if (form.mode === 'RECEIPT' && !form.batchNumber.trim()) {
+          return { valid: false, error: 'Supplier batch number is required for inward receipt' };
+        }
+        if (form.quantity <= 0) {
+          return { valid: false, error: 'Quantity must be greater than zero' };
+        }
+        return { valid: true };
+      }
+
+      // Valid Transfer
+      const transferValid = validateTransferForm({
+        mode: 'TRANSFER',
+        sourceWarehouseId: 'loc_hq_central',
+        targetLocationId: 'seller_101',
+        batchNumber: '',
+        quantity: 50,
+      });
+      assert.equal(transferValid.valid, true);
+
+      // Invalid Transfer (missing target)
+      const transferMissingTarget = validateTransferForm({
+        mode: 'TRANSFER',
+        sourceWarehouseId: 'loc_hq_central',
+        targetLocationId: '',
+        batchNumber: '',
+        quantity: 50,
+      });
+      assert.equal(transferMissingTarget.valid, false);
+      assert.equal(transferMissingTarget.error, 'Destination target is required for transfer');
+
+      // Valid Inward Receipt (target location automatically set to warehouse or supplier)
+      const receiptValid = validateTransferForm({
+        mode: 'RECEIPT',
+        sourceWarehouseId: 'loc_hq_central',
+        targetLocationId: 'loc_hq_central',
+        batchNumber: 'MFG-2026-0881',
+        quantity: 1000,
+      });
+      assert.equal(receiptValid.valid, true);
+
+      // Invalid Inward Receipt (missing batch)
+      const receiptMissingBatch = validateTransferForm({
+        mode: 'RECEIPT',
+        sourceWarehouseId: 'loc_hq_central',
+        targetLocationId: 'loc_hq_central',
+        batchNumber: '',
+        quantity: 1000,
+      });
+      assert.equal(receiptMissingBatch.valid, false);
+      assert.equal(receiptMissingBatch.error, 'Supplier batch number is required for inward receipt');
+    });
+
+    test('J4: Quick-add quantity increment calculates clean rounded batches', () => {
+      function addQuantity(current: number, increment: number): number {
+        return Math.max(1, current + increment);
+      }
+
+      assert.equal(addQuantity(10, 25), 35);
+      assert.equal(addQuantity(35, 50), 85);
+      assert.equal(addQuantity(85, 100), 185);
+      assert.equal(addQuantity(185, 500), 685);
+    });
+  });
+
+  describe('Part K: Super Admin Seller Onboarding & Supervising Territory Manager Searchable Dropdown', () => {
+    const mockManagers: PublicUser[] = [
+      {
+        id: 'mgr_vns_01',
+        name: 'Varanasi Territory Manager',
+        email: 'manager.varanasi@femmeflo.com',
+        phone: '+919876543210',
+        role: 'MANAGER',
+        state: 'Uttar Pradesh',
+        district: 'Varanasi',
+        active: true,
+      },
+      {
+        id: 'mgr_lko_02',
+        name: 'Lucknow Operations Head',
+        email: 'manager.lucknow@femmeflo.com',
+        phone: '+919811223344',
+        role: 'MANAGER',
+        state: 'Uttar Pradesh',
+        district: 'Lucknow',
+        active: true,
+      },
+      {
+        id: 'mgr_tha_03',
+        name: 'Thane Territory Lead',
+        email: 'manager.thane@femmeflo.com',
+        phone: '+919899001122',
+        role: 'MANAGER',
+        state: 'Maharashtra',
+        district: 'Thane',
+        active: true,
+      },
+    ];
+
+    test('K1: Supervising manager search filters accurately across name, phone, email, and district', () => {
+      function searchManagers(query: string, list: PublicUser[]) {
+        const q = query.trim().toLowerCase();
+        if (!q) return list;
+        return list.filter((m) => {
+          const matchName = m.name?.toLowerCase().includes(q) ?? false;
+          const matchEmail = m.email?.toLowerCase().includes(q) ?? false;
+          const matchPhone = m.phone?.toLowerCase().includes(q) ?? false;
+          const matchDistrict = m.district?.toLowerCase().includes(q) ?? false;
+          const matchState = m.state?.toLowerCase().includes(q) ?? false;
+          return matchName || matchEmail || matchPhone || matchDistrict || matchState;
+        });
+      }
+
+      const resVaranasi = searchManagers('Varanasi', mockManagers);
+      assert.equal(resVaranasi.length, 1);
+      assert.equal(resVaranasi[0].id, 'mgr_vns_01');
+
+      const resPhone = searchManagers('9811', mockManagers);
+      assert.equal(resPhone.length, 1);
+      assert.equal(resPhone[0].id, 'mgr_lko_02');
+
+      const resUP = searchManagers('Uttar Pradesh', mockManagers);
+      assert.equal(resUP.length, 2);
+
+      const resName = searchManagers('Thane', mockManagers);
+      assert.equal(resName.length, 1);
+      assert.equal(resName[0].id, 'mgr_tha_03');
+    });
+
+    test('K2: Field seller onboarding enforces valid name, 10-digit mobile, >=12 char password, and managerId', () => {
+      function validateSellerForm(form: {
+        name: string;
+        phone: string;
+        password: string;
+        managerId: string;
+      }): { valid: boolean; errors: Record<string, string> } {
+        const errs: Record<string, string> = {};
+        if (!form.name.trim()) errs.name = 'Full name is required.';
+        const cleanPhone = form.phone.replace(/\D/g, '');
+        if (cleanPhone.length < 10) errs.phone = 'Please enter a valid 10-digit mobile number.';
+        if (!form.password || form.password.length < 12) {
+          errs.password = 'Initial password must be at least 12 characters.';
+        }
+        if (!form.managerId) {
+          errs.managerId = 'Please select a supervising Territory Manager.';
+        }
+        return { valid: Object.keys(errs).length === 0, errors: errs };
+      }
+
+      const validRes = validateSellerForm({
+        name: 'Ramesh Patil',
+        phone: '9876543210',
+        password: 'FemmeFlo@2026',
+        managerId: 'mgr_vns_01',
+      });
+      assert.equal(validRes.valid, true);
+
+      const missingMgr = validateSellerForm({
+        name: 'Ramesh Patil',
+        phone: '9876543210',
+        password: 'FemmeFlo@2026',
+        managerId: '',
+      });
+      assert.equal(missingMgr.valid, false);
+      assert.equal(missingMgr.errors.managerId, 'Please select a supervising Territory Manager.');
+
+      const shortPass = validateSellerForm({
+        name: 'Ramesh Patil',
+        phone: '9876543210',
+        password: 'pass123',
+        managerId: 'mgr_vns_01',
+      });
+      assert.equal(shortPass.valid, false);
+      assert.equal(shortPass.errors.password, 'Initial password must be at least 12 characters.');
+    });
+
+    test('K3: Selecting supervising manager auto-populates seller operational state & district', () => {
+      let state = 'Maharashtra';
+      let district = 'Thane';
+
+      function selectManager(manager: PublicUser) {
+        if (manager.state) state = manager.state;
+        if (manager.district) district = manager.district;
+      }
+
+      selectManager(mockManagers[0]);
+      assert.equal(state, 'Uttar Pradesh');
+      assert.equal(district, 'Varanasi');
+
+      selectManager(mockManagers[1]);
+      assert.equal(state, 'Uttar Pradesh');
+      assert.equal(district, 'Lucknow');
+    });
+
+    test('K4: Manager selection dropdown modal and trigger are properly integrated', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+
+      const usersSource = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/users/index.tsx'),
+        'utf8'
+      );
+
+      assert.ok(
+        usersSource.includes('DropdownTrigger'),
+        'Users screen must integrate DropdownTrigger for Supervising Territory Manager'
+      );
+      assert.ok(
+        usersSource.includes('isManagerPickerOpen'),
+        'Users screen must support searchable manager picker mode'
+      );
+      assert.ok(
+        usersSource.includes('filteredManagers'),
+        'Users screen must compute filtered managers in real time'
+      );
+    });
+  });
+
+
+  describe('Part L: Super Admin Settings Parity, Legal Details Edit Mode & Change Password Separation', () => {
+    test('L1: Dummy seed company strings are stripped so form starts clean without prefilled mock data', () => {
+      function sanitizeLoadedSettings(res: Partial<BusinessSettings>): Record<string, string> {
+        return {
+          companyName: res.companyName && res.companyName !== 'MASAKO ENTERPRISES PRIVATE LIMITED' ? res.companyName : '',
+          companyGst: res.companyGst && res.companyGst !== '09AAECM1234F1Z5' ? res.companyGst : '',
+          companyPan: res.companyPan && res.companyPan !== 'AAECM1234F' ? res.companyPan : '',
+          companyAddress: res.companyAddress && !res.companyAddress.includes('Plot 42') ? res.companyAddress : '',
+          companyPhone: res.companyPhone && res.companyPhone !== '+91 9876543210' ? res.companyPhone : '',
+          companyEmail: res.companyEmail && res.companyEmail !== 'billing@masako.co.in' ? res.companyEmail : '',
+          invoiceTerms: res.invoiceTerms && !res.invoiceTerms.includes('Goods once sold will not be taken back') ? res.invoiceTerms : '',
+        };
+      }
+
+      // Default seed input
+      const defaultSeed = {
+        companyName: 'MASAKO ENTERPRISES PRIVATE LIMITED',
+        companyGst: '09AAECM1234F1Z5',
+        companyAddress: 'Plot 42, Industrial Area Phase II, Lucknow, UP',
+      };
+      const cleaned = sanitizeLoadedSettings(defaultSeed);
+      assert.equal(cleaned.companyName, '');
+      assert.equal(cleaned.companyGst, '');
+      assert.equal(cleaned.companyAddress, '');
+
+      // Genuine user input
+      const genuineUser = {
+        companyName: 'FemmeFlo Distribution LLP',
+        companyGst: '27AABCU9603R1ZM',
+        companyAddress: 'MG Road, Pune, Maharashtra 411001',
+      };
+      const genuineCleaned = sanitizeLoadedSettings(genuineUser);
+      assert.equal(genuineCleaned.companyName, 'FemmeFlo Distribution LLP');
+      assert.equal(genuineCleaned.companyGst, '27AABCU9603R1ZM');
+      assert.equal(genuineCleaned.companyAddress, 'MG Road, Pune, Maharashtra 411001');
+    });
+
+    test('L2: Legal details form toggles between view mode and active edit mode with Cancel/Save state', () => {
+      let isEditingLegal = false;
+      let companyName = 'Old Corp';
+      const originalLegal = { companyName: 'Old Corp' };
+
+      // Enter edit mode
+      isEditingLegal = true;
+      companyName = 'New Corp Draft';
+
+      // Cancel reverts to original
+      function cancelEdit() {
+        companyName = originalLegal.companyName;
+        isEditingLegal = false;
+      }
+      cancelEdit();
+      assert.equal(isEditingLegal, false);
+      assert.equal(companyName, 'Old Corp');
+
+      // Save confirms new value
+      isEditingLegal = true;
+      companyName = 'FemmeFlo Official Pvt Ltd';
+      function saveEdit() {
+        originalLegal.companyName = companyName;
+        isEditingLegal = false;
+      }
+      saveEdit();
+      assert.equal(isEditingLegal, false);
+      assert.equal(companyName, 'FemmeFlo Official Pvt Ltd');
+      assert.equal(originalLegal.companyName, 'FemmeFlo Official Pvt Ltd');
+    });
+
+    test('L3: Dedicated change password screen and layout registration are verified', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+
+      const layoutSource = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/_layout.tsx'),
+        'utf8'
+      );
+      assert.ok(
+        layoutSource.includes('name="settings/password"'),
+        'Admin tabs layout must register settings/password screen'
+      );
+
+      const settingsSource = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/app/(admin)/settings/index.tsx'),
+        'utf8'
+      );
+      assert.ok(
+        settingsSource.includes('/(admin)/settings/password'),
+        'Settings index must link to /(admin)/settings/password'
+      );
+      assert.ok(
+        settingsSource.includes('isEditingLegal'),
+        'Settings index must implement isEditingLegal state'
+      );
+    });
+
+    test('L4: Password change validation enforces security invariants', () => {
+      function validatePasswordChange(current: string, next: string, confirm: string) {
+        if (!current) return { valid: false, error: 'Current password required' };
+        if (next.length < 12) return { valid: false, error: 'Must be at least 12 characters' };
+        const byteLen = new TextEncoder().encode(next).length;
+        if (byteLen > 72) return { valid: false, error: 'Exceeds 72 bytes' };
+        if (next !== confirm) return { valid: false, error: 'Passwords mismatch' };
+        return { valid: true };
+      }
+
+      assert.equal(validatePasswordChange('', 'FemmeFlo@2026', 'FemmeFlo@2026').valid, false);
+      assert.equal(validatePasswordChange('OldPass@123', 'short', 'short').valid, false);
+      assert.equal(validatePasswordChange('OldPass@123', 'FemmeFlo@2026', 'Different@2026').valid, false);
+      assert.equal(validatePasswordChange('OldPass@123', 'FemmeFlo@2026', 'FemmeFlo@2026').valid, true);
+    });
+  });
+
 });

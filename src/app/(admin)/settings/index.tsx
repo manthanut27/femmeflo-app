@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
-import { authApi } from '@/api/auth';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -37,6 +36,7 @@ export default function AdminSettingsScreen() {
   // Price Invariants
   const [minPriceRupees, setMinPriceRupees] = useState('25');
   const [lowStockThreshold, setLowStockThreshold] = useState('50');
+  const [savingPricing, setSavingPricing] = useState(false);
 
   // Company Legal Settings
   const [companyName, setCompanyName] = useState('');
@@ -47,17 +47,20 @@ export default function AdminSettingsScreen() {
   const [companyEmail, setCompanyEmail] = useState('');
   const [invoiceTerms, setInvoiceTerms] = useState('');
 
-  // Password Change
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  // Edit / Save toggle for Legal Entity & Invoice Details
+  const [isEditingLegal, setIsEditingLegal] = useState(false);
+  const [savingLegal, setSavingLegal] = useState(false);
+  const [originalLegal, setOriginalLegal] = useState({
+    companyName: '',
+    companyGst: '',
+    companyPan: '',
+    companyAddress: '',
+    companyPhone: '',
+    companyEmail: '',
+    invoiceTerms: '',
+  });
 
   const [loading, setLoading] = useState(true);
-  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -75,36 +78,56 @@ export default function AdminSettingsScreen() {
       if (res.lowStockThreshold !== undefined) {
         setLowStockThreshold(String(res.lowStockThreshold));
       }
-      if (res.companyName) setCompanyName(res.companyName);
-      if (res.companyGst) setCompanyGst(res.companyGst);
-      if (res.companyPan) setCompanyPan(res.companyPan);
-      if (res.companyAddress) setCompanyAddress(res.companyAddress);
-      if (res.companyPhone) setCompanyPhone(res.companyPhone);
-      if (res.companyEmail) setCompanyEmail(res.companyEmail);
-      if (res.invoiceTerms) setInvoiceTerms(res.invoiceTerms);
+
+      // Filter out any default dummy placeholder text to ensure fields are clean
+      const rawName = res.companyName && res.companyName !== 'MASAKO ENTERPRISES PRIVATE LIMITED' ? res.companyName : '';
+      const rawGst = res.companyGst && res.companyGst !== '09AAECM1234F1Z5' ? res.companyGst : '';
+      const rawPan = res.companyPan && res.companyPan !== 'AAECM1234F' ? res.companyPan : '';
+      const rawAddr = res.companyAddress && !res.companyAddress.includes('Plot 42') ? res.companyAddress : '';
+      const rawPhone = res.companyPhone && res.companyPhone !== '+91 9876543210' ? res.companyPhone : '';
+      const rawEmail = res.companyEmail && res.companyEmail !== 'billing@masako.co.in' ? res.companyEmail : '';
+      const rawTerms = res.invoiceTerms && !res.invoiceTerms.includes('Goods once sold will not be taken back') ? res.invoiceTerms : '';
+
+      setCompanyName(rawName);
+      setCompanyGst(rawGst);
+      setCompanyPan(rawPan);
+      setCompanyAddress(rawAddr);
+      setCompanyPhone(rawPhone);
+      setCompanyEmail(rawEmail);
+      setInvoiceTerms(rawTerms);
+
+      setOriginalLegal({
+        companyName: rawName,
+        companyGst: rawGst,
+        companyPan: rawPan,
+        companyAddress: rawAddr,
+        companyPhone: rawPhone,
+        companyEmail: rawEmail,
+        invoiceTerms: rawTerms,
+      });
     } catch {
-      // Mock / fallback defaults handled gracefully
+      // Defaults handled gracefully
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSaveSettings() {
-    if (savingSettings) return;
+  function handleCancelLegalEdit() {
+    setCompanyName(originalLegal.companyName);
+    setCompanyGst(originalLegal.companyGst);
+    setCompanyPan(originalLegal.companyPan);
+    setCompanyAddress(originalLegal.companyAddress);
+    setCompanyPhone(originalLegal.companyPhone);
+    setCompanyEmail(originalLegal.companyEmail);
+    setInvoiceTerms(originalLegal.invoiceTerms);
+    setIsEditingLegal(false);
+  }
 
-    const priceNum = parseFloat(minPriceRupees);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert('Invalid Price', 'Authoritative minimum sale price must be a positive number.');
-      return;
-    }
-
-    const thresholdNum = parseInt(lowStockThreshold, 10);
-
-    setSavingSettings(true);
+  async function handleSaveLegalDetails() {
+    if (savingLegal) return;
+    setSavingLegal(true);
     try {
       await adminApi.updateBusinessSettings({
-        minimumSalePricePaise: Math.round(priceNum * 100),
-        lowStockThreshold: isNaN(thresholdNum) ? undefined : thresholdNum,
         companyName: companyName.trim() || undefined,
         companyGst: companyGst.trim().toUpperCase() || undefined,
         companyPan: companyPan.trim().toUpperCase() || undefined,
@@ -114,50 +137,54 @@ export default function AdminSettingsScreen() {
         invoiceTerms: invoiceTerms.trim() || undefined,
       });
 
+      setOriginalLegal({
+        companyName,
+        companyGst,
+        companyPan,
+        companyAddress,
+        companyPhone,
+        companyEmail,
+        invoiceTerms,
+      });
+
+      setIsEditingLegal(false);
       Alert.alert(
-        'Settings Saved',
-        'Company legal information and pricing invariants have been updated successfully.'
+        'Legal Details Saved',
+        'Company legal information and invoice details have been updated successfully.'
       );
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update company configuration.');
+      Alert.alert('Error', err.message || 'Failed to update legal details.');
     } finally {
-      setSavingSettings(false);
+      setSavingLegal(false);
     }
   }
 
-  async function handleChangePassword() {
-    if (!currentPassword) {
-      Alert.alert('Required Field', 'Please enter your current password.');
-      return;
-    }
-    if (newPassword.length < 12) {
-      Alert.alert('Password Too Short', 'New password must be at least 12 characters long.');
-      return;
-    }
-    const byteLength = new TextEncoder().encode(newPassword).length;
-    if (byteLength > 72) {
-      Alert.alert('Password Too Long', 'New password exceeds the 72-byte limit.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Mismatch', 'New passwords do not match.');
+  async function handleSavePricing() {
+    if (savingPricing) return;
+
+    const priceNum = parseFloat(minPriceRupees);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      Alert.alert('Invalid Price', 'Authoritative minimum sale price must be a positive number.');
       return;
     }
 
-    setIsChangingPassword(true);
+    const thresholdNum = parseInt(lowStockThreshold, 10);
+
+    setSavingPricing(true);
     try {
-      await authApi.changePassword({
-        currentPassword,
-        newPassword,
+      await adminApi.updateBusinessSettings({
+        minimumSalePricePaise: Math.round(priceNum * 100),
+        lowStockThreshold: isNaN(thresholdNum) ? undefined : thresholdNum,
       });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      Alert.alert('Password Updated', 'Your security credentials have been updated successfully.');
+
+      Alert.alert(
+        'Pricing Rules Saved',
+        'Minimum price threshold and inventory alert level updated successfully.'
+      );
     } catch (err: any) {
-      Alert.alert('Password Change Failed', err.message || 'Could not update password. Please check your current password.');
+      Alert.alert('Error', err.message || 'Failed to update pricing rules.');
     } finally {
-      setIsChangingPassword(false);
+      setSavingPricing(false);
     }
   }
 
@@ -203,22 +230,45 @@ export default function AdminSettingsScreen() {
               </View>
             </Card>
 
-            {/* Legal Entity & Invoice Details */}
-            <Text style={styles.sectionHeading}>Legal Entity & Invoice Details</Text>
+            {/* Legal Entity & Invoice Details Card */}
             <Card style={styles.card}>
+              <View style={styles.cardHeaderWithAction}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Text style={styles.cardHeaderTitle}>Legal Entity & Invoice Details</Text>
+                  <Text style={styles.cardHeaderSubtitle}>
+                    Official registered business info printed on PDF tax invoices
+                  </Text>
+                </View>
+                {!isEditingLegal ? (
+                  <Button
+                    title="Edit Details"
+                    variant="outline"
+                    size="sm"
+                    onPress={() => setIsEditingLegal(true)}
+                    icon={<Ionicons name="create-outline" size={15} color={BrandColors.pink.dark} />}
+                  />
+                ) : (
+                  <Badge label="EDITING MODE" variant="warning" size="sm" />
+                )}
+              </View>
+
               <View style={styles.ruleNotice}>
                 <Ionicons name="document-text-outline" size={18} color={BrandColors.pink.dark} />
                 <Text style={styles.ruleNoticeText}>
-                  These legal details appear on all generated PDF tax invoices shared with retailers and customers.
+                  {isEditingLegal
+                    ? 'Enter your official corporate credentials below and tap Save Legal Details when finished.'
+                    : 'These legal details appear on all generated PDF tax invoices. Tap "Edit Details" to update the form.'}
                 </Text>
               </View>
 
               <Input
                 label="Legal Company Name *"
-                placeholder="e.g. MASAKO ENTERPRISES PRIVATE LIMITED"
+                placeholder="Enter legal entity / business name"
                 value={companyName}
                 onChangeText={setCompanyName}
                 autoCapitalize="words"
+                editable={isEditingLegal}
+                containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
                 helperText="Official registered entity name for tax invoices"
                 leftIcon={<Ionicons name="business-outline" size={18} color={Colors.light.textTertiary} />}
               />
@@ -227,20 +277,24 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Input
                     label="Company GSTIN"
-                    placeholder="e.g. 09AAECM1234F1Z5"
+                    placeholder="Enter 15-digit GSTIN"
                     value={companyGst}
                     onChangeText={(val) => setCompanyGst(val.toUpperCase())}
                     autoCapitalize="characters"
+                    editable={isEditingLegal}
+                    containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
                     helperText="15-character GST identification"
                   />
                 </View>
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                   <Input
                     label="Company PAN"
-                    placeholder="e.g. AAECM1234F"
+                    placeholder="Enter 10-digit PAN"
                     value={companyPan}
                     onChangeText={(val) => setCompanyPan(val.toUpperCase())}
                     autoCapitalize="characters"
+                    editable={isEditingLegal}
+                    containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
                     helperText="10-character PAN number"
                   />
                 </View>
@@ -248,11 +302,13 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Registered Corporate Address"
-                placeholder="e.g. Plot 42, Industrial Area Phase II, Lucknow, UP 226012"
+                placeholder="Enter registered corporate / office address"
                 value={companyAddress}
                 onChangeText={setCompanyAddress}
                 multiline
                 numberOfLines={2}
+                editable={isEditingLegal}
+                containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
                 helperText="Printed on invoice header"
                 leftIcon={<Ionicons name="location-outline" size={18} color={Colors.light.textTertiary} />}
               />
@@ -261,10 +317,12 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Input
                     label="Official Phone"
-                    placeholder="+91 9876543210"
+                    placeholder="Enter billing phone number"
                     value={companyPhone}
                     onChangeText={setCompanyPhone}
                     keyboardType="phone-pad"
+                    editable={isEditingLegal}
+                    containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
                     helperText="Billing support phone"
                     leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
                   />
@@ -272,11 +330,13 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                   <Input
                     label="Official Email"
-                    placeholder="billing@masako.co.in"
+                    placeholder="Enter billing email address"
                     value={companyEmail}
                     onChangeText={setCompanyEmail}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    editable={isEditingLegal}
+                    containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
                     helperText="Billing correspondence"
                     leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.light.textTertiary} />}
                   />
@@ -285,14 +345,38 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Invoice Terms & Conditions"
-                placeholder="e.g. 1. Goods once sold will not be returned.\n2. Payment due on delivery."
+                placeholder="Enter standard payment, delivery, or warranty terms"
                 value={invoiceTerms}
                 onChangeText={setInvoiceTerms}
                 multiline
                 numberOfLines={3}
-                helperText="Standard terms printed at the bottom of all customer invoices"
+                editable={isEditingLegal}
+                containerStyle={!isEditingLegal ? styles.readOnlyInput : undefined}
+                helperText="Standard terms printed at the bottom of customer invoices"
                 leftIcon={<Ionicons name="list-outline" size={18} color={Colors.light.textTertiary} />}
               />
+
+              {isEditingLegal && (
+                <View style={styles.legalActionRow}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    size="md"
+                    style={{ flex: 1, marginRight: Spacing.sm }}
+                    onPress={handleCancelLegalEdit}
+                    disabled={savingLegal}
+                  />
+                  <Button
+                    title={savingLegal ? 'Saving Legal Details...' : 'Save Legal Details'}
+                    variant="admin"
+                    size="md"
+                    style={{ flex: 1.5 }}
+                    loading={savingLegal}
+                    onPress={handleSaveLegalDetails}
+                    icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}
+                  />
+                </View>
+              )}
             </Card>
 
             {/* Pricing Rules & System Invariants */}
@@ -326,98 +410,12 @@ export default function AdminSettingsScreen() {
               />
 
               <Button
-                title={savingSettings ? 'Saving Settings...' : 'Save Legal & Pricing Configuration'}
-                onPress={handleSaveSettings}
-                loading={savingSettings}
+                title={savingPricing ? 'Saving Rules...' : 'Save Pricing Rules'}
+                onPress={handleSavePricing}
+                loading={savingPricing}
                 variant="admin"
                 size="lg"
                 icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}
-                style={{ marginTop: Spacing.sm }}
-              />
-            </Card>
-
-            {/* Account Security / Change Password */}
-            <Text style={styles.sectionHeading}>Account Security</Text>
-            <Card style={styles.card}>
-              <Text style={styles.cardSubtext}>
-                Ensure your Super Admin account uses a strong, unique password of at least 12 characters.
-              </Text>
-
-              <Input
-                label="Current Password *"
-                placeholder="Enter current password"
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                secureTextEntry={!showCurrentPassword}
-                autoCapitalize="none"
-                leftIcon={<Ionicons name="lock-closed-outline" size={18} color={Colors.light.textTertiary} />}
-                rightIcon={
-                  <Pressable onPress={() => setShowCurrentPassword(!showCurrentPassword)}>
-                    <Ionicons
-                      name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color={Colors.light.textTertiary}
-                    />
-                  </Pressable>
-                }
-              />
-
-              <Input
-                label="New Password (min 12 characters) *"
-                placeholder="Enter new strong password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                secureTextEntry={!showNewPassword}
-                autoCapitalize="none"
-                helperText={
-                  newPassword.length > 0 && newPassword.length < 12
-                    ? 'Password is too short (min 12 chars required)'
-                    : undefined
-                }
-                leftIcon={<Ionicons name="key-outline" size={18} color={Colors.light.textTertiary} />}
-                rightIcon={
-                  <Pressable onPress={() => setShowNewPassword(!showNewPassword)}>
-                    <Ionicons
-                      name={showNewPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color={Colors.light.textTertiary}
-                    />
-                  </Pressable>
-                }
-              />
-
-              <Input
-                label="Confirm New Password *"
-                placeholder="Re-enter new password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-                helperText={
-                  confirmPassword.length > 0 && confirmPassword !== newPassword
-                    ? 'Passwords do not match'
-                    : undefined
-                }
-                leftIcon={<Ionicons name="checkmark-done-outline" size={18} color={Colors.light.textTertiary} />}
-                rightIcon={
-                  <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                    <Ionicons
-                      name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color={Colors.light.textTertiary}
-                    />
-                  </Pressable>
-                }
-              />
-
-              <Button
-                title={isChangingPassword ? 'Updating Password...' : 'Change Password'}
-                onPress={handleChangePassword}
-                loading={isChangingPassword}
-                variant="outline"
-                size="md"
-                disabled={!currentPassword || newPassword.length < 12 || newPassword !== confirmPassword}
-                icon={<Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.primary} />}
                 style={{ marginTop: Spacing.sm }}
               />
             </Card>
@@ -475,6 +473,16 @@ export default function AdminSettingsScreen() {
               </Pressable>
             </Card>
 
+            {/* Change Password Button (Located directly above Sign Out) */}
+            <Button
+              title="Change Password"
+              variant="outline"
+              size="lg"
+              onPress={() => router.push('/(admin)/settings/password' as any)}
+              style={styles.changePasswordBtn}
+              icon={<Ionicons name="key-outline" size={18} color={BrandColors.pink.dark} />}
+            />
+
             {/* Logout */}
             <Button
               title="Sign Out of Super Admin Session"
@@ -519,115 +527,144 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     ...Elevation.low,
   },
-  cardSubtext: {
-    ...Typography.bodySmall,
-    color: Colors.light.textSecondary,
+  cardHeaderWithAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: Spacing.md,
+  },
+  cardHeaderTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  cardHeaderSubtitle: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
   },
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: BrandColors.pink.tint,
-    borderWidth: 2,
-    borderColor: BrandColors.pink.primary,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: BrandColors.pink.subtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.tint,
   },
   avatarText: {
-    ...Typography.h2,
-    color: BrandColors.pink.dark,
+    fontSize: 18,
     fontWeight: '800',
+    color: BrandColors.pink.dark,
   },
   userName: {
-    ...Typography.h3,
-    color: Colors.light.text,
+    ...Typography.h2,
+    color: Colors.light.textPrimary,
   },
   userEmail: {
-    ...Typography.bodySmall,
+    ...Typography.bodyMedium,
     color: Colors.light.textSecondary,
-    marginTop: 2,
   },
   sectionHeading: {
-    ...Typography.h3,
-    color: Colors.light.text,
-    marginBottom: Spacing.sm,
-    marginTop: Spacing.xs,
+    ...Typography.caption,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Spacing.xs,
+    marginLeft: 4,
   },
   ruleNotice: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: BrandColors.pink.tint,
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FDF2F8',
+    padding: Spacing.sm,
     borderRadius: BorderRadius.md,
-    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
     marginBottom: Spacing.md,
   },
   ruleNoticeText: {
-    ...Typography.bodySmall,
+    ...Typography.caption,
     color: BrandColors.pink.dark,
-    marginLeft: Spacing.sm,
     flex: 1,
-    lineHeight: 18,
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  readOnlyInput: {
+    opacity: 0.85,
+  },
+  legalActionRow: {
+    flexDirection: 'row',
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    marginTop: Spacing.xs,
   },
   rupeeSymbol: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.light.textSecondary,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: BrandColors.pink.dark,
+    marginRight: 4,
   },
   menuCard: {
+    marginBottom: Spacing.lg,
     backgroundColor: Colors.light.card,
     borderRadius: BorderRadius.lg,
-    padding: 0,
-    overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.light.border,
-    marginBottom: Spacing.lg,
+    padding: 0,
+    overflow: 'hidden',
     ...Elevation.low,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    padding: Spacing.md,
   },
   menuItemPressed: {
-    backgroundColor: Colors.light.surfaceSecondary,
+    backgroundColor: Colors.light.surfaceMuted,
   },
   menuLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.md,
   },
   menuIconCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: BrandColors.pink.tint,
+    backgroundColor: BrandColors.pink.subtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.md,
   },
   menuText: {
-    ...Typography.body,
+    ...Typography.bodyMedium,
     fontWeight: '600',
-    color: Colors.light.text,
+    color: Colors.light.textPrimary,
   },
   menuDivider: {
     height: 1,
     backgroundColor: Colors.light.border,
-    marginLeft: 68,
+    marginHorizontal: Spacing.md,
+  },
+  changePasswordBtn: {
+    borderColor: BrandColors.pink.border,
+    backgroundColor: '#FFFFFF',
+    marginBottom: Spacing.sm,
   },
   logoutBtn: {
-    marginTop: Spacing.sm,
     borderColor: BrandColors.pink.tint,
+    backgroundColor: '#FFF1F2',
+    marginBottom: Spacing.huge,
   },
 });

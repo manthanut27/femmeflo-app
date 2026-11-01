@@ -264,17 +264,18 @@ export default function AddCustomerScreen() {
         village: village.trim() || undefined,
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
-        noPhotoReason: photoUri ? undefined : noPhotoReason.trim(),
+        photoUri: photoUri || undefined,
+        noPhotoReason: photoUri ? (noPhotoReason.trim() || 'Storefront photo captured') : noPhotoReason.trim(),
       });
 
       const customerId = res.customer.id;
 
-      // Upload photo if chosen (non-blocking fallback)
-      if (photoUri && customerId) {
+      // Upload photo fallback if chosen and not already uploaded during creation
+      if (photoUri && customerId && !res.customer.photoPath && !res.customer.photoUrl) {
         try {
           await sellerApi.uploadCustomerPhoto(customerId, photoUri);
         } catch (photoErr) {
-          console.warn('Customer photo upload failed, record preserved', photoErr);
+          console.warn('Customer photo upload fallback failed, record preserved', photoErr);
         }
       }
 

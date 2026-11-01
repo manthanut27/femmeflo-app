@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  DeviceEventEmitter,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -32,7 +33,9 @@ type ActionCategory = 'all' | 'finance' | 'governance' | 'stock' | 'field' | 'sy
 
 interface AdminActionItem {
   id: string;
+  index: number;
   title: string;
+  buttonTitle: string;
   category: ActionCategory;
   categoryLabel: string;
   description: string;
@@ -52,6 +55,8 @@ interface AdminActionItem {
 export default function AdministrativeActionsScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
+  const theme = Colors.light;
 
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,14 +78,83 @@ export default function AdministrativeActionsScreen() {
     }
   }, []);
 
+  // Re-fetch telemetry whenever Actions Hub comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboardData();
+    }, [loadDashboardData])
+  );
+
+  // Real-time synchronization when approvals/rejections happen
   useEffect(() => {
-    loadDashboardData();
+    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      setDashboard((prev) => {
+        if (!prev) return prev;
+        const current = Number(prev.pendingApprovalsCount || 0);
+        return {
+          ...prev,
+          pendingApprovalsCount: Math.max(0, current - 1),
+        };
+      });
+      loadDashboardData();
+    });
+
+    return () => {
+      sub.remove();
+    };
   }, [loadDashboardData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadDashboardData();
   }, [loadDashboardData]);
+
+  const handleBack = useCallback(() => {
+    try {
+      (navigation as any).navigate('index');
+    } catch {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(admin)' as any);
+      }
+    }
+  }, [navigation, router]);
+
+  const handleNavigateToAction = useCallback(
+    (route: string) => {
+      const directTabs: Record<string, string> = {
+        '/(admin)/reports': 'reports/index',
+        '/(admin)/approvals': 'approvals/index',
+        '/(admin)/products': 'products/index',
+        '/(admin)/invoices': 'invoices/index',
+        '/(admin)/sales': 'sales/index',
+        '/(admin)/incentives': 'incentives/index',
+        '/(admin)/shifts': 'shifts/index',
+        '/(admin)/permissions': 'permissions/index',
+        '/(admin)/customers': 'customers',
+        '/(admin)/users': 'users/index',
+        '/(admin)/categories': 'categories/index',
+        '/(admin)/settings': 'settings/index',
+      };
+
+      const tabName = directTabs[route];
+      if (tabName) {
+        try {
+          (navigation as any).navigate(tabName);
+          return;
+        } catch {
+          // fallback to router
+        }
+      }
+      try {
+        router.push(route as any);
+      } catch {
+        router.navigate(route as any);
+      }
+    },
+    [navigation, router]
+  );
 
   const formatRupees = (paise?: number | null) => {
     const val = Number(paise);
@@ -111,7 +185,9 @@ export default function AdministrativeActionsScreen() {
       // 1. Daily Sales Analytics & Reports
       {
         id: 'reports',
+        index: 1,
         title: 'Daily Sales Analytics & Reports',
+        buttonTitle: 'Daily Reports & Analytics',
         category: 'finance',
         categoryLabel: 'Financial & Sales',
         description: 'Comprehensive gross revenue trends, turnover charts, and scheduled territory export logs.',
@@ -130,7 +206,9 @@ export default function AdministrativeActionsScreen() {
       // 2. Price Approvals Queue
       {
         id: 'approvals',
+        index: 2,
         title: 'Price Approvals Queue',
+        buttonTitle: 'Price Approvals Queue',
         category: 'governance',
         categoryLabel: 'Governance & Pricing',
         description: 'Authorize or reject sales submitted by field officers below the ₹25.00/pkt mandatory price floor.',
@@ -150,7 +228,9 @@ export default function AdministrativeActionsScreen() {
       // 3. Product Catalog & SKU Pricing
       {
         id: 'products',
+        index: 3,
         title: 'Product Catalog & SKU Pricing',
+        buttonTitle: 'Product Catalog & SKUs',
         category: 'stock',
         categoryLabel: 'Catalog & Stock',
         description: 'Manage sanitary napkin SKUs, variant specifications, barcode mappings, and MRP rate cards.',
@@ -169,7 +249,9 @@ export default function AdministrativeActionsScreen() {
       // 4. National Invoices Central Directory
       {
         id: 'invoices',
+        index: 4,
         title: 'National Invoices Central Directory',
+        buttonTitle: 'GST Tax Invoices',
         category: 'finance',
         categoryLabel: 'Financial & Sales',
         description: 'Centralized repository of all B2B and retail GST tax invoices with real-time PDF generation.',
@@ -188,7 +270,9 @@ export default function AdministrativeActionsScreen() {
       // 5. National Sales & Order Directory
       {
         id: 'sales',
+        index: 5,
         title: 'National Sales & Order Directory',
+        buttonTitle: 'Sales Order Directory',
         category: 'finance',
         categoryLabel: 'Financial & Sales',
         description: 'Master ledger of all orders recorded by field officers with line item audit and payment states.',
@@ -207,7 +291,9 @@ export default function AdministrativeActionsScreen() {
       // 6. Commissions & Incentive Disbursements
       {
         id: 'incentives',
+        index: 6,
         title: 'Commissions & Incentive Disbursements',
+        buttonTitle: 'Incentives & Payouts',
         category: 'finance',
         categoryLabel: 'Financial & Sales',
         description: 'Configure slab multipliers, compute seller target incentives, and approve payroll batches.',
@@ -226,7 +312,9 @@ export default function AdministrativeActionsScreen() {
       // 7. National Shifts & Field GPS Audit
       {
         id: 'shifts',
+        index: 7,
         title: 'National Shifts & Field GPS Audit',
+        buttonTitle: 'Field Shifts & GPS Audit',
         category: 'field',
         categoryLabel: 'Field Operations',
         description: 'Monitor on-duty field officers, GPS punch-in geofences, beat itineraries, and daily travel tracks.',
@@ -245,7 +333,9 @@ export default function AdministrativeActionsScreen() {
       // 8. Territory Manager Permissions Matrix
       {
         id: 'permissions',
+        index: 8,
         title: 'Territory Manager Permissions Matrix',
+        buttonTitle: 'Manager Permissions Matrix',
         category: 'governance',
         categoryLabel: 'Governance & Pricing',
         description: 'Granular role-based access control, territorial manager scopes, and supervisor override privileges.',
@@ -264,7 +354,9 @@ export default function AdministrativeActionsScreen() {
       // 9. Retail Customers & Bulk Onboarding
       {
         id: 'customers',
+        index: 9,
         title: 'Retail Customers & Bulk Onboarding',
+        buttonTitle: 'Retail Customers Directory',
         category: 'field',
         categoryLabel: 'Field Operations',
         description: 'Directory of registered retail pharmacies and clinics, plus batch CSV upload tool for field launch.',
@@ -285,7 +377,9 @@ export default function AdministrativeActionsScreen() {
       // 10. Inward Factory Stock & Warehouse Transfers
       {
         id: 'inventory',
+        index: 10,
         title: 'Inward Factory Stock & Warehouse Transfers',
+        buttonTitle: 'Stock Transfers & Inward',
         category: 'stock',
         categoryLabel: 'Catalog & Stock',
         description: 'Receive production shipments from factories and transfer stock to regional depots and sales vans.',
@@ -306,7 +400,9 @@ export default function AdministrativeActionsScreen() {
       // 11. Manage Managers & Sellers Directory
       {
         id: 'users',
+        index: 11,
         title: 'Manage Managers & Sellers Directory',
+        buttonTitle: 'Managers & Field Reps',
         category: 'field',
         categoryLabel: 'Field Operations',
         description: 'User governance for Area Sales Managers and Field Officers: provisioning, states, and credentials.',
@@ -325,7 +421,9 @@ export default function AdministrativeActionsScreen() {
       // 12. Customer Categories Configuration
       {
         id: 'categories',
+        index: 12,
         title: 'Customer Categories Configuration',
+        buttonTitle: 'Customer Categories',
         category: 'system',
         categoryLabel: 'System & Config',
         description: 'Define customer classification tiers (Wholesalers, Pharmacies, NGOs) and channel trade terms.',
@@ -344,7 +442,9 @@ export default function AdministrativeActionsScreen() {
       // 13. Company Legal & Tax Invoice Settings
       {
         id: 'settings',
+        index: 13,
         title: 'Company Legal & Tax Invoice Settings',
+        buttonTitle: 'Legal & Company Settings',
         category: 'system',
         categoryLabel: 'System & Config',
         description: 'Configure corporate legal entity names, GSTIN registrations, registered address, and invoice series.',
@@ -397,12 +497,12 @@ export default function AdministrativeActionsScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Header
         title="Administrative Actions"
         subtitle={`Command Center • ${filteredActions.length} Modules`}
         showBack
-        onBack={() => router.back()}
+        onBack={handleBack}
         showNotificationBell
       />
 
@@ -415,13 +515,15 @@ export default function AdministrativeActionsScreen() {
       >
         <View style={styles.contentWrapper}>
           {/* Executive Telemetry Strip */}
-          <Card style={styles.kpiSummaryCard}>
+          <Card style={[styles.kpiSummaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.kpiHeader}>
               <View style={styles.kpiBadge}>
                 <Ionicons name="shield-checkmark" size={16} color={BrandColors.pink.dark} />
                 <Text style={styles.kpiBadgeText}>HQ OPERATIONS COMMAND</Text>
               </View>
-              <Text style={styles.kpiUserText}>Super Admin • {user?.name || 'Administrator'}</Text>
+              <Text style={[styles.kpiUserText, { color: theme.textSecondary }]}>
+                Super Admin • {user?.name || 'Administrator'}
+              </Text>
             </View>
 
             <View style={styles.kpiMetricsRow}>
@@ -429,9 +531,9 @@ export default function AdministrativeActionsScreen() {
               <TouchableOpacity
                 style={[
                   styles.kpiChip,
-                  pendingCount > 0 ? styles.kpiChipAlert : styles.kpiChipSuccess,
+                  { backgroundColor: pendingCount > 0 ? '#FEF2F2' : theme.surfaceMuted, borderColor: pendingCount > 0 ? '#FECDD3' : theme.border },
                 ]}
-                onPress={() => router.push('/(admin)/approvals' as any)}
+                onPress={() => handleNavigateToAction('/(admin)/approvals')}
                 activeOpacity={0.8}
               >
                 <Ionicons
@@ -447,50 +549,111 @@ export default function AdministrativeActionsScreen() {
                 >
                   {pendingCount}
                 </Text>
-                <Text style={styles.kpiChipLabel}>
+                <Text style={[styles.kpiChipLabel, { color: theme.textSecondary }]}>
                   {pendingCount === 1 ? 'Pending Review' : 'Pending Reviews'}
                 </Text>
               </TouchableOpacity>
 
               {/* Warehouse stock chip */}
               <TouchableOpacity
-                style={styles.kpiChip}
-                onPress={() => router.push('/(admin)/inventory/transfer' as any)}
+                style={[styles.kpiChip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+                onPress={() => handleNavigateToAction('/(admin)/inventory/transfer')}
                 activeOpacity={0.8}
               >
                 <Ionicons name="cube-outline" size={16} color={BrandColors.green.primary} />
-                <Text style={styles.kpiChipValue}>{warehouseStock}</Text>
-                <Text style={styles.kpiChipLabel}>Central Pkts</Text>
+                <Text style={[styles.kpiChipValue, { color: theme.heading }]}>{warehouseStock}</Text>
+                <Text style={[styles.kpiChipLabel, { color: theme.textSecondary }]}>Central Pkts</Text>
               </TouchableOpacity>
 
               {/* Field force chip */}
               <TouchableOpacity
-                style={styles.kpiChip}
-                onPress={() => router.push('/(admin)/shifts' as any)}
+                style={[styles.kpiChip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
+                onPress={() => handleNavigateToAction('/(admin)/shifts')}
                 activeOpacity={0.8}
               >
                 <Ionicons name="people-outline" size={16} color="#0284C7" />
-                <Text style={styles.kpiChipValue}>{activeSellers}</Text>
-                <Text style={styles.kpiChipLabel}>Reps on Duty</Text>
+                <Text style={[styles.kpiChipValue, { color: theme.heading }]}>{activeSellers}</Text>
+                <Text style={[styles.kpiChipLabel, { color: theme.textSecondary }]}>Reps on Duty</Text>
               </TouchableOpacity>
             </View>
           </Card>
 
+          {/* 13 Administrative Action Buttons Grid Showcase */}
+          <View style={styles.buttonsSectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.sectionMainTitle}>All 13 Operational Action Buttons</Text>
+                <Badge label="13 READY" variant="ACTIVE" size="sm" />
+              </View>
+              <Text style={styles.buttonsCountText}>13 Modules</Text>
+            </View>
+            <Text style={styles.sectionMainSub}>
+              Tap any of the 13 command buttons below to immediately open that module or execute jobs.
+            </Text>
+          </View>
+
+          {/* 13 Action Buttons Grid */}
+          <View style={styles.quickButtonsGrid}>
+            {actionItems.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={[
+                  styles.quickButtonCard,
+                  action.highlightAlert && styles.quickButtonCardAlert,
+                ]}
+                onPress={() => handleNavigateToAction(action.route)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Button ${action.index}: ${action.title}`}
+              >
+                <View style={styles.quickButtonTop}>
+                  <View style={[styles.quickButtonIconBox, { backgroundColor: action.iconBg }]}>
+                    <Ionicons name={action.iconName} size={20} color={action.iconColor} />
+                  </View>
+                  <View style={styles.quickButtonNumBadge}>
+                    <Text style={styles.quickButtonNumText}>#{action.index}</Text>
+                  </View>
+                </View>
+                <Text style={styles.quickButtonTitle} numberOfLines={2}>
+                  {action.buttonTitle}
+                </Text>
+                <View style={styles.quickButtonFooter}>
+                  <Text style={styles.quickButtonCategory} numberOfLines={1}>
+                    {action.categoryLabel}
+                  </Text>
+                  <Ionicons
+                    name="arrow-forward-circle"
+                    size={16}
+                    color={action.highlightAlert ? '#DC2626' : BrandColors.pink.primary}
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Detailed Module Management & Search Section */}
+          <View style={styles.actionListHeader}>
+            <Text style={styles.sectionMainTitle}>Detailed Module Management & Audit</Text>
+            <Text style={styles.sectionMainSub}>
+              Search, filter and inspect live records, telemetry, and secondary actions
+            </Text>
+          </View>
+
           {/* Interactive Search & Domain Categories Filter */}
           <View style={styles.searchSection}>
-            <View style={styles.searchBarContainer}>
-              <Ionicons name="search-outline" size={20} color="#64748B" style={styles.searchIcon} />
+            <View style={[styles.searchBarContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="search-outline" size={20} color={theme.textPlaceholder} style={styles.searchIcon} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { color: theme.textPrimary }]}
                 placeholder="Search 13 admin modules, SKUs, or permissions..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={theme.textPlaceholder}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 clearButtonMode="while-editing"
               />
               {searchQuery.length > 0 ? (
                 <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                  <Ionicons name="close-circle" size={18} color={theme.textPlaceholder} />
                 </Pressable>
               ) : null}
             </View>
@@ -502,15 +665,19 @@ export default function AdministrativeActionsScreen() {
                 return (
                   <TouchableOpacity
                     key={cat.id}
-                    style={[styles.categoryPill, isActive && styles.categoryPillActive]}
+                    style={[
+                      styles.categoryPill,
+                      { backgroundColor: theme.surface, borderColor: theme.border },
+                      isActive && styles.categoryPillActive,
+                    ]}
                     onPress={() => setSelectedCategory(cat.id)}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.categoryPillText, isActive && styles.categoryPillTextActive]}>
+                    <Text style={[styles.categoryPillText, { color: theme.textSecondary }, isActive && styles.categoryPillTextActive]}>
                       {cat.label}
                     </Text>
                     <View style={[styles.categoryCountBadge, isActive && styles.categoryCountBadgeActive]}>
-                      <Text style={[styles.categoryCountText, isActive && styles.categoryCountTextActive]}>
+                      <Text style={[styles.categoryCountText, { color: theme.textSecondary }, isActive && styles.categoryCountTextActive]}>
                         {cat.count}
                       </Text>
                     </View>
@@ -523,10 +690,10 @@ export default function AdministrativeActionsScreen() {
           {/* Action Cards List */}
           <View style={styles.actionList}>
             {filteredActions.length === 0 ? (
-              <Card style={styles.emptyCard}>
-                <Ionicons name="search" size={40} color="#94A3B8" style={{ marginBottom: Spacing.sm }} />
-                <Text style={styles.emptyTitle}>No matching administrative modules</Text>
-                <Text style={styles.emptySubtitle}>
+              <Card style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Ionicons name="search" size={40} color={theme.textPlaceholder} style={{ marginBottom: Spacing.sm }} />
+                <Text style={[styles.emptyTitle, { color: theme.heading }]}>No matching administrative modules</Text>
+                <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
                   We could not find any modules matching "{searchQuery}". Try a different keyword or reset filters.
                 </Text>
                 <TouchableOpacity
@@ -545,6 +712,7 @@ export default function AdministrativeActionsScreen() {
                   key={action.id}
                   style={[
                     styles.actionCard,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
                     action.highlightAlert && styles.actionCardHighlight,
                   ]}
                 >
@@ -555,8 +723,10 @@ export default function AdministrativeActionsScreen() {
                         <Ionicons name={action.iconName} size={22} color={action.iconColor} />
                       </View>
                       <View style={styles.cardMeta}>
-                        <Text style={styles.categoryTag}>{action.categoryLabel.toUpperCase()}</Text>
-                        <Text style={styles.actionTitle}>{action.title}</Text>
+                        <Text style={[styles.categoryTag, { color: theme.textMuted }]}>
+                          BUTTON #{action.index} • {action.categoryLabel.toUpperCase()}
+                        </Text>
+                        <Text style={[styles.actionTitle, { color: theme.heading }]}>{action.title}</Text>
                       </View>
                     </View>
                     <Badge
@@ -567,14 +737,14 @@ export default function AdministrativeActionsScreen() {
                   </View>
 
                   {/* Operational Description */}
-                  <Text style={styles.actionDescription}>{action.description}</Text>
+                  <Text style={[styles.actionDescription, { color: theme.textSecondary }]}>{action.description}</Text>
 
                   {/* Telemetry Metrics Row */}
-                  <View style={styles.metricsBar}>
+                  <View style={[styles.metricsBar, { backgroundColor: theme.surfaceMuted, borderColor: theme.borderSubtle }]}>
                     {action.metrics.map((metric, idx) => (
                       <View key={idx} style={styles.metricBlock}>
-                        <Text style={styles.metricLabel}>{metric.label}</Text>
-                        <Text style={styles.metricValue}>{metric.value}</Text>
+                        <Text style={[styles.metricLabel, { color: theme.textMuted }]}>{metric.label}</Text>
+                        <Text style={[styles.metricValue, { color: theme.heading }]}>{metric.value}</Text>
                       </View>
                     ))}
                   </View>
@@ -586,17 +756,19 @@ export default function AdministrativeActionsScreen() {
                         styles.primaryActionBtn,
                         action.highlightAlert && styles.primaryActionBtnAlert,
                       ]}
-                      onPress={() => router.push(action.route as any)}
+                      onPress={() => handleNavigateToAction(action.route)}
                       activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${action.buttonTitle}`}
                     >
-                      <Text style={styles.primaryActionBtnText}>Launch Module</Text>
+                      <Text style={styles.primaryActionBtnText}>Open {action.buttonTitle}</Text>
                       <Ionicons name="arrow-forward" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
                     </TouchableOpacity>
 
                     {action.secondaryRoute ? (
                       <TouchableOpacity
                         style={styles.secondaryActionBtn}
-                        onPress={() => router.push(action.secondaryRoute as any)}
+                        onPress={() => handleNavigateToAction(action.secondaryRoute!)}
                         activeOpacity={0.7}
                       >
                         <Text style={styles.secondaryActionBtnText}>
@@ -624,7 +796,6 @@ export default function AdministrativeActionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   scrollContent: {
     paddingBottom: Spacing.xl + 40,
@@ -641,9 +812,6 @@ const styles = StyleSheet.create({
   kpiSummaryCard: {
     padding: Spacing.md,
     borderRadius: BorderRadius.lg,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     marginBottom: Spacing.md,
     ...Shadows.sm,
   },
@@ -667,7 +835,6 @@ const styles = StyleSheet.create({
   },
   kpiUserText: {
     ...Typography.caption,
-    color: Colors.light.textSecondary,
     fontSize: 11,
   },
   kpiMetricsRow: {
@@ -676,10 +843,8 @@ const styles = StyleSheet.create({
   },
   kpiChip: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     paddingVertical: Spacing.xs + 2,
     paddingHorizontal: Spacing.sm,
     alignItems: 'center',
@@ -688,22 +853,113 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     borderColor: '#FECDD3',
   },
-  kpiChipSuccess: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
   kpiChipValue: {
     ...Typography.label,
     fontWeight: '800',
     fontSize: 14,
-    color: Colors.light.textPrimary,
     marginTop: 2,
   },
   kpiChipLabel: {
     ...Typography.caption,
     fontSize: 10,
-    color: Colors.light.textSecondary,
     textAlign: 'center',
+  },
+
+  // 13 Quick Action Buttons Grid Showcase
+  buttonsSectionHeaderRow: {
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  sectionMainTitle: {
+    ...Typography.subtitle,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sectionMainSub: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+  },
+  buttonsCountText: {
+    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  quickButtonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  quickButtonCard: {
+    width: '48.5%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing.sm + 2,
+    ...Shadows.sm,
+  },
+  quickButtonCardAlert: {
+    borderColor: '#FECDD3',
+    backgroundColor: '#FFFDFD',
+  },
+  quickButtonTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickButtonIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickButtonNumBadge: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  quickButtonNumText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  quickButtonTitle: {
+    ...Typography.body,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 18,
+    minHeight: 36,
+  },
+  quickButtonFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  quickButtonCategory: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+    flex: 1,
+    marginRight: 4,
+  },
+  actionListHeader: {
+    marginBottom: Spacing.sm,
   },
 
   // Search & Filter Section
@@ -713,10 +969,8 @@ const styles = StyleSheet.create({
   searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: BorderRadius.md,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
     paddingHorizontal: Spacing.sm,
     height: 48,
     marginBottom: Spacing.sm,
@@ -730,7 +984,6 @@ const styles = StyleSheet.create({
     height: '100%',
     ...Typography.body,
     fontSize: 13,
-    color: Colors.light.textPrimary,
   },
   categoryScroll: {
     flexDirection: 'row',
@@ -738,9 +991,7 @@ const styles = StyleSheet.create({
   categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 9999,
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -754,7 +1005,6 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '600',
     fontSize: 12,
-    color: Colors.light.textSecondary,
   },
   categoryPillTextActive: {
     color: '#FFFFFF',
@@ -774,7 +1024,6 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.light.textSecondary,
   },
   categoryCountTextActive: {
     color: '#FFFFFF',
@@ -785,10 +1034,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   actionCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     padding: Spacing.md,
     ...Shadows.sm,
   },
@@ -823,20 +1070,17 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontSize: 10,
     fontWeight: '800',
-    color: Colors.light.textMuted,
     letterSpacing: 0.5,
   },
   actionTitle: {
     ...Typography.subtitle,
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.light.textPrimary,
     lineHeight: 20,
   },
   actionDescription: {
     ...Typography.body,
     fontSize: 12,
-    color: Colors.light.textSecondary,
     lineHeight: 17,
     marginTop: 4,
     marginBottom: Spacing.sm,
@@ -845,10 +1089,8 @@ const styles = StyleSheet.create({
   // Metrics Bar
   metricsBar: {
     flexDirection: 'row',
-    backgroundColor: '#FAF8F5',
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
-    borderColor: '#EAE6DF',
     paddingVertical: 6,
     paddingHorizontal: Spacing.sm,
     marginBottom: Spacing.md,
@@ -860,14 +1102,12 @@ const styles = StyleSheet.create({
   metricLabel: {
     ...Typography.caption,
     fontSize: 10,
-    color: Colors.light.textMuted,
     fontWeight: '600',
   },
   metricValue: {
     ...Typography.label,
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.light.textPrimary,
     marginTop: 1,
   },
 
@@ -920,22 +1160,18 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   emptyTitle: {
     ...Typography.subtitle,
     fontWeight: '700',
     fontSize: 15,
-    color: Colors.light.textPrimary,
     marginBottom: 4,
   },
   emptySubtitle: {
     ...Typography.body,
     fontSize: 12,
-    color: Colors.light.textSecondary,
     textAlign: 'center',
     marginBottom: Spacing.md,
   },

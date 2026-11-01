@@ -101,7 +101,10 @@ export default function SellerTabsLayout() {
       <Tabs.Screen
         name="inventory/index"
         options={{
-          href: null,
+          title: 'Inventory',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen
@@ -120,7 +123,10 @@ export default function SellerTabsLayout() {
       <Tabs.Screen
         name="incentives/index"
         options={{
-          href: null,
+          title: 'Incentives',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

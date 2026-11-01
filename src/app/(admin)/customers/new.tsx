@@ -225,8 +225,17 @@ export default function AdminAddCustomerScreen() {
         village: village.trim() || undefined,
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
-        noPhotoReason: photoUri ? undefined : noPhotoReason.trim(),
+        photoUri: photoUri || undefined,
+        noPhotoReason: photoUri ? (noPhotoReason.trim() || 'Storefront photo captured') : noPhotoReason.trim(),
       });
+
+      if (photoUri && res.customer.id && !res.customer.photoPath && !res.customer.photoUrl) {
+        try {
+          await adminApi.uploadCustomerPhoto(res.customer.id, photoUri);
+        } catch (e) {
+          console.warn('Customer photo upload fallback failed', e);
+        }
+      }
 
       setSavedCustomer(res.customer);
     } catch (err: any) {

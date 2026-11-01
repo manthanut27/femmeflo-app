@@ -1,7 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -52,9 +54,11 @@ export default function AdminApprovalsScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadApprovals();
-  }, [loadApprovals]);
+  useFocusEffect(
+    useCallback(() => {
+      loadApprovals();
+    }, [loadApprovals])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -81,6 +85,8 @@ export default function AdminApprovalsScreen() {
             setActionId(sale.id);
             try {
               await adminApi.approveSale(sale.id);
+              // Notify executive overview and actions hub to refresh counters immediately
+              DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { saleId: sale.id, action: 'APPROVE' });
               Alert.alert('Sale Approved', 'The sale has been confirmed.');
               loadApprovals();
             } catch (err: any) {
@@ -115,6 +121,8 @@ export default function AdminApprovalsScreen() {
             setActionId(sale.id);
             try {
               await adminApi.rejectSale(sale.id, 'Price below threshold rejected by Super Admin');
+              // Notify executive overview and actions hub to refresh counters immediately
+              DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { saleId: sale.id, action: 'REJECT' });
               Alert.alert('Sale Rejected', 'The order has been rejected without stock deduction.');
               loadApprovals();
             } catch (err: any) {

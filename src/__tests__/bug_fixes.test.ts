@@ -175,4 +175,24 @@ describe('FemmeFlo Bug Audit & Safe Fixes Regression Suite', () => {
     assert.equal(processedOrders.size, 1);
   });
 
+  // BUG-RENDER-ONLY: Backend base URL strictly defaults to Render cloud backend with zero localhost or 10.0.2.2 fallbacks
+  it('BUG-RENDER-ONLY: Backend base URL strictly defaults to Render cloud backend with zero localhost or 10.0.2.2 fallbacks', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const clientSource = fs.readFileSync(path.resolve(process.cwd(), 'src/api/client.ts'), 'utf8');
+
+    assert.ok(clientSource.includes("RENDER_BACKEND_API_URL = 'https://femmeflo-inventory.onrender.com/api/v1'"));
+    assert.ok(clientSource.includes('DEFAULT_PRODUCTION_API_URL = RENDER_BACKEND_API_URL'));
+    assert.ok(!clientSource.includes('http://localhost:5000'));
+    assert.ok(!clientSource.includes('10.0.2.2:5000'));
+    assert.ok(!clientSource.includes('192.168.0.100:5000'));
+    assert.ok(!clientSource.includes('window.location.hostname}:5000'));
+
+    const { getTranslationEndpointUrl, RENDER_BACKEND_API_URL } = await import('../api/translate.ts');
+    assert.equal(RENDER_BACKEND_API_URL, 'https://femmeflo-inventory.onrender.com/api/v1');
+    const translateUrl = getTranslationEndpointUrl();
+    assert.ok(translateUrl.startsWith('https://'), 'Translation endpoint must default to secure HTTPS');
+    assert.ok(!translateUrl.includes('localhost'), 'Translation endpoint must not default to localhost');
+  });
+
 });

@@ -102,9 +102,9 @@ export default function ManagerInventoryScreen() {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return sellers;
     return sellers.filter((item) => {
-      const name = (item.seller.name || '').toLowerCase();
-      const phone = (item.seller.phone || '').toLowerCase();
-      const village = (item.seller.village || '').toLowerCase();
+      const name = (item.seller?.name || '').toLowerCase();
+      const phone = (item.seller?.phone || '').toLowerCase();
+      const village = (item.seller?.village || '').toLowerCase();
       return name.includes(q) || phone.includes(q) || village.includes(q);
     });
   }, [sellers, searchQuery]);
@@ -300,15 +300,23 @@ export default function ManagerInventoryScreen() {
                       statusLabel = 'LOW STOCK';
                     }
 
+                    const sellerObj = item.seller || {
+                      id: String(Math.random()),
+                      name: 'Field Officer',
+                      phone: '',
+                      village: '',
+                      district: '',
+                    };
+
                     return (
-                      <Card key={item.seller.id} style={styles.sellerCard}>
+                      <Card key={sellerObj.id} style={styles.sellerCard}>
                         {/* Seller Header */}
                         <View style={styles.sellerCardTop}>
                           <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                            <Text style={styles.sellerName}>{item.seller.name}</Text>
+                            <Text style={styles.sellerName}>{sellerObj.name}</Text>
                             <Text style={styles.sellerLoc}>
-                              {item.seller.phone ? `${item.seller.phone} • ` : ''}
-                              {item.seller.village || item.seller.district || 'Territory Field Force'}
+                              {sellerObj.phone ? `${sellerObj.phone} • ` : ''}
+                              {sellerObj.village || sellerObj.district || 'Territory Field Force'}
                             </Text>
                           </View>
                           <Badge label={statusLabel} variant={statusVariant} />

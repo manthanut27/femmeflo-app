@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+export const RENDER_BACKEND_API_URL = 'https://femmeflo-inventory.onrender.com/api/v1';
+
+const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_URL || RENDER_BACKEND_API_URL
+).trim().replace(/\/+$/, '');
 
 export interface TranslateFeedbackResponse {
   translatedText: string;
@@ -15,7 +19,7 @@ export interface TranslateOptions {
 
 /**
  * Resolves the translation endpoint URL.
- * Checks for explicit environment override, website URL, or resolves relative to the local dev host.
+ * Checks for explicit environment override, website URL, or resolves relative to the Render backend.
  */
 export function getTranslationEndpointUrl(): string {
   // 1. Explicit environment variable override
@@ -29,20 +33,15 @@ export function getTranslationEndpointUrl(): string {
     return `${base}/api/translate`;
   }
 
-  // 3. Infer from API_BASE_URL (Express backend typically on port 5000, website on 3000)
+  // 3. Fallback to production Render backend translate route
   try {
     const url = new URL(API_BASE_URL);
-    // If backend is on 5000, website is on 3000 on the same host/LAN IP
-    if (url.port === '5000') {
-      url.port = '3000';
-      url.pathname = '/api/translate';
-      return url.toString();
-    }
+    return `${url.origin}/api/translate`;
   } catch {
     // If API_BASE_URL is relative or not a full URL
   }
 
-  return 'http://localhost:3000/api/translate';
+  return 'https://femmeflo-inventory.onrender.com/api/translate';
 }
 
 /**

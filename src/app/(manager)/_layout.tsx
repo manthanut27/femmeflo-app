@@ -67,7 +67,7 @@ export default function ManagerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="customers/index"
+        name="customers"
         options={{
           title: 'Stores',
           tabBarIcon: ({ color, size, focused }) => (
@@ -107,15 +107,30 @@ export default function ManagerTabsLayout() {
       />
       <Tabs.Screen
         name="inventory/index"
-        options={{ href: null }}
+        options={{
+          title: 'Inventory',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="shifts/index"
-        options={{ href: null }}
+        options={{
+          title: 'Shifts',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
       <Tabs.Screen
         name="incentives/index"
-        options={{ href: null }}
+        options={{
+          title: 'Incentives',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
       />
     </Tabs>
   );

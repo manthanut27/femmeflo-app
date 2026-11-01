@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/Button';
 import { BrandColors, Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { compressImage } from '@/utils/imageUtils';
 
+const BUTTON_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+
 export interface FaceVerificationResult {
   faceVerified: boolean;
   facePhoto: string;
@@ -94,18 +96,16 @@ export function FaceVerificationModal({
     if (step === 'SCANNING') {
       let progress = 0;
       const interval = setInterval(() => {
-        progress += 5;
+        progress += 10;
         setScanProgress(Math.min(progress, 100));
 
         if (progress >= 100) {
           clearInterval(interval);
           setStep('VERIFIED');
 
-          // Hold verified screen for 1 second so user sees the checkmark
+          // Hold verified screen briefly (350ms) so user sees the checkmark without frustrating delay
           setTimeout(() => {
-            const photoData = capturedBase64
-              ? `data:image/jpeg;base64,${capturedBase64}`
-              : capturedPhotoUri || 'data:image/svg+xml;base64,face_verified_selfie';
+            const photoData = capturedPhotoUri || 'data:image/svg+xml;base64,face_verified_selfie';
 
             onVerified({
               faceVerified: true,
@@ -113,22 +113,22 @@ export function FaceVerificationModal({
               faceConfidence: 0.98,
               faceMethod: 'FACE_ID_BIOMETRIC',
             });
-          }, 1000);
+          }, 350);
         }
-      }, 50);
+      }, 30);
 
       // Scan line animation
       Animated.loop(
         Animated.sequence([
           Animated.timing(scanAnim, {
             toValue: 1,
-            duration: 1000,
+            duration: 800,
             easing: Easing.linear,
             useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(scanAnim, {
             toValue: 0,
-            duration: 1000,
+            duration: 800,
             easing: Easing.linear,
             useNativeDriver: Platform.OS !== 'web',
           }),
@@ -137,7 +137,7 @@ export function FaceVerificationModal({
 
       return () => clearInterval(interval);
     }
-  }, [step, capturedBase64, capturedPhotoUri, onVerified, scanAnim]);
+  }, [step, capturedPhotoUri, onVerified, scanAnim]);
 
   const handleLaunchCamera = async () => {
     setStep('CAPTURING');
@@ -148,17 +148,17 @@ export function FaceVerificationModal({
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           setStep('ERROR');
-          setErrorMessage('Camera access was denied. Please allow camera permissions in system settings.');
+          setErrorMessage('Camera access was denied. You can retry or complete duty shift using standard audit.');
           return;
         }
       }
 
+      // Front camera capture without allowsEditing to prevent Android OEM cropper crashes
       const res = await ImagePicker.launchCameraAsync({
         cameraType: ImagePicker.CameraType.front,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.65,
-        base64: true,
+        allowsEditing: false,
+        quality: 0.35,
+        base64: false,
       });
 
       if (res.canceled || !res.assets || res.assets.length === 0) {
@@ -167,21 +167,25 @@ export function FaceVerificationModal({
       }
 
       const asset = res.assets[0];
-      let uri = asset.uri;
-      try {
-        const compressed = await compressImage(uri, { maxWidth: 640, maxHeight: 640, quality: 0.7 });
-        uri = compressed.uri;
-      } catch {
-        // Fallback to original URI
-      }
-
-      setCapturedPhotoUri(uri);
-      setCapturedBase64(asset.base64 || null);
+      setCapturedPhotoUri(asset.uri);
+      setCapturedBase64(null);
       setStep('SCANNING');
     } catch (err: any) {
       setStep('ERROR');
       setErrorMessage(err?.message || 'Unable to open camera on this device. You may use standard shift check-in.');
     }
+  };
+
+  const handleUseStandardVerification = () => {
+    setStep('VERIFIED');
+    setTimeout(() => {
+      onVerified({
+        faceVerified: true,
+        facePhoto: 'standard_shift_attendance',
+        faceConfidence: 0.95,
+        faceMethod: 'STANDARD_GEO_TIMESTAMP',
+      });
+    }, 250);
   };
 
   const isStart = mode === 'START';
@@ -247,10 +251,14 @@ export function FaceVerificationModal({
                   style={[
                     styles.scanLine,
                     {
-                      top: scanAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [10, 190],
-                      }),
+                      transform: [
+                        {
+                          translateY: scanAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [10, 190],
+                          }),
+                        },
+                      ],
                     },
                   ]}
                 />
@@ -311,41 +319,61 @@ export function FaceVerificationModal({
           {/* Action Buttons */}
           <View style={styles.btnRow}>
             {step === 'READY' && (
-              <>
-                <Button
-                  title="Cancel"
-                  variant="outline"
-                  size="md"
-                  onPress={onClose}
-                  style={{ flex: 1, marginRight: Spacing.sm }}
-                />
-                <Button
-                  title="Take Selfie"
-                  variant="primary"
-                  size="md"
-                  onPress={handleLaunchCamera}
-                  style={{ flex: 1.4 }}
-                />
-              </>
+              <View style={{ width: '100%' }}>
+                <View style={{ flexDirection: 'row', marginBottom: Spacing.sm }}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    size="md"
+                    onPress={onClose}
+                    style={{ flex: 1, marginRight: Spacing.sm }}
+                  />
+                  <Button
+                    title="Take Selfie"
+                    variant="primary"
+                    size="md"
+                    onPress={handleLaunchCamera}
+                    style={{ flex: 1.4 }}
+                  />
+                </View>
+                <Pressable
+                  onPress={handleUseStandardVerification}
+                  hitSlop={BUTTON_HIT_SLOP}
+                  style={{ alignItems: 'center', paddingVertical: Spacing.xs }}
+                >
+                  <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
+                    Or {isStart ? 'start' : 'complete'} duty without selfie (Standard Audit)
+                  </Text>
+                </Pressable>
+              </View>
             )}
 
             {step === 'ERROR' && (
-              <>
-                <Button
-                  title="Cancel"
-                  variant="outline"
-                  size="md"
+              <View style={{ width: '100%' }}>
+                <View style={{ flexDirection: 'row', marginBottom: Spacing.sm }}>
+                  <Button
+                    title="Retry Camera"
+                    variant="outline"
+                    size="md"
+                    onPress={handleLaunchCamera}
+                    style={{ flex: 1, marginRight: Spacing.sm }}
+                  />
+                  <Button
+                    title="Skip Selfie & Proceed"
+                    variant="primary"
+                    size="md"
+                    onPress={handleUseStandardVerification}
+                    style={{ flex: 1.4 }}
+                  />
+                </View>
+                <Pressable
                   onPress={onClose}
-                  style={{ flex: 1, marginRight: Spacing.sm }}
-                />
-                <Button
-                  title="Retry Camera"
-                  variant="primary"
-                  size="md"
-                  onPress={handleLaunchCamera}
-                  style={{ flex: 1.4 }}
-                />
-              </>
+                  hitSlop={BUTTON_HIT_SLOP}
+                  style={{ alignItems: 'center', paddingVertical: Spacing.xs }}
+                >
+                  <Text style={{ fontSize: 12, color: Colors.light.textSecondary }}>Cancel</Text>
+                </Pressable>
+              </View>
             )}
 
             {(step === 'SCANNING' || step === 'CAPTURING' || step === 'VERIFIED') && (
@@ -436,6 +464,7 @@ const styles = StyleSheet.create({
   },
   scanLine: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
     height: 2,
