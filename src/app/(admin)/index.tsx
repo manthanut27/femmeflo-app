@@ -478,6 +478,7 @@ export default function AdminDashboardScreen() {
                   icon="wallet-outline"
                   iconColor={BrandColors.pink.primary}
                   iconBg={BrandColors.pink.subtle}
+                  onPress={() => router.push('/(admin)/sales' as any)}
                 />
                 <StatCard
                   title="Packets Sold"
@@ -486,6 +487,7 @@ export default function AdminDashboardScreen() {
                   icon="cube-outline"
                   iconColor="#0284C7"
                   iconBg="#F0F9FF"
+                  onPress={() => router.push('/(admin)/reports' as any)}
                 />
               </View>
 
@@ -499,6 +501,7 @@ export default function AdminDashboardScreen() {
                   iconColor={BrandColors.green.primary}
                   iconBg={BrandColors.green.subtle}
                   accentColor={BrandColors.green.primary}
+                  onPress={() => router.push('/(admin)/inventory' as any)}
                 />
                 <StatCard
                   title="Customer Network"
@@ -507,6 +510,7 @@ export default function AdminDashboardScreen() {
                   icon="storefront-outline"
                   iconColor={BrandColors.pink.primary}
                   iconBg={BrandColors.pink.subtle}
+                  onPress={() => router.push('/(admin)/customers' as any)}
                 />
               </View>
 
@@ -519,6 +523,7 @@ export default function AdminDashboardScreen() {
                   icon="people-outline"
                   iconColor={BrandColors.green.primary}
                   iconBg={BrandColors.green.subtle}
+                  onPress={() => router.push('/(admin)/shifts' as any)}
                 />
                 <StatCard
                   title="Price Approvals"
@@ -528,6 +533,7 @@ export default function AdminDashboardScreen() {
                   iconColor={pendingCount > 0 ? Colors.light.warning : Colors.light.textTertiary}
                   iconBg={pendingCount > 0 ? Colors.light.warningBg : '#F1F5F9'}
                   accentColor={pendingCount > 0 ? Colors.light.warning : undefined}
+                  onPress={() => router.push('/(admin)/approvals' as any)}
                 />
               </View>
             </View>

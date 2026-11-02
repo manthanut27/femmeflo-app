@@ -118,6 +118,7 @@ export default function ManagerDashboardScreen() {
                   iconColor={BrandColors.green.primary}
                   iconBgColor={BrandColors.green.surface}
                   accentColor={BrandColors.green.primary}
+                  onPress={() => router.push('/(manager)/sales' as any)}
                 />
                 <StatCard
                   title="Packets Distributed"
@@ -126,6 +127,7 @@ export default function ManagerDashboardScreen() {
                   icon="cube-outline"
                   iconColor={Colors.light.info}
                   iconBgColor={Colors.light.infoBg}
+                  onPress={() => router.push('/(manager)/inventory' as any)}
                 />
               </View>
               <View style={styles.metricRow}>

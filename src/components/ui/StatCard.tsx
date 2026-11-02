@@ -96,7 +96,7 @@ export function StatCard({
         </View>
       ) : null}
 
-      {displaySubtitle || badge ? (
+      {displaySubtitle || badge || onPress ? (
         <View style={styles.footerRow}>
           {displaySubtitle ? (
             <Text style={styles.subtitle} numberOfLines={1}>
@@ -104,6 +104,9 @@ export function StatCard({
             </Text>
           ) : <View style={{ flex: 1 }} />}
           {badge ? <Badge label={badge} variant={badgeVariant} size="sm" /> : null}
+          {onPress && !badge ? (
+            <Ionicons name="chevron-forward" size={13} color={resolvedIconColor || Colors.light.textMuted} style={{ marginLeft: 2 }} />
+          ) : null}
         </View>
       ) : null}
     </View>

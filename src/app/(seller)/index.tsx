@@ -310,6 +310,7 @@ export default function SellerDashboardScreen() {
                 icon={<Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="pink"
                 changeLabel="Recorded sales"
+                onPress={() => router.push('/(seller)/sales' as any)}
               />
               <StatCard
                 title="Orders Booked"
@@ -317,6 +318,7 @@ export default function SellerDashboardScreen() {
                 icon={<Ionicons name="receipt-outline" size={20} color={BrandColors.green.primary} />}
                 variant="green"
                 changeLabel="In-store visits"
+                onPress={() => router.push('/(seller)/sales' as any)}
               />
             </View>
           )}
@@ -339,6 +341,7 @@ export default function SellerDashboardScreen() {
                 icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="default"
                 changeLabel="Target progress"
+                onPress={() => router.push('/(seller)/incentives' as any)}
               />
               <StatCard
                 title="Stock Status"
@@ -346,6 +349,7 @@ export default function SellerDashboardScreen() {
                 icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
                 variant={data?.lowStockCount ? 'pink' : 'default'}
                 changeLabel="Warehouse inventory"
+                onPress={() => router.push('/(seller)/inventory' as any)}
               />
             </View>
           )}
