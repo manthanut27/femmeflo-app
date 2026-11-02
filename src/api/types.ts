@@ -82,6 +82,7 @@ export interface CustomerItem {
   longitude?: number | null;
   photoUrl?: string | null;
   photoPath?: string | null;
+  noPhotoReason?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt?: string;

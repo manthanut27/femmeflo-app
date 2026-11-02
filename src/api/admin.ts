@@ -454,7 +454,10 @@ export const adminApi = {
         params,
       }
     );
-    const list = raw?.customers ?? raw?.items ?? [];
+    const list = (raw?.customers ?? raw?.items ?? []).map((c) => ({
+      ...c,
+      photoUrl: c.photoUrl || (c as any).photoPath || null,
+    }));
     return {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },

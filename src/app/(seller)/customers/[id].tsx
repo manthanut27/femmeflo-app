@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -6,6 +7,7 @@ import {
   Alert,
   Image,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +22,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +31,8 @@ export default function CustomerDetailScreen() {
   const [customer, setCustomer] = useState<CustomerItem | null>(null);
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -41,6 +46,60 @@ export default function CustomerDetailScreen() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  const shopPhotoUri = customer?.photoUrl || (customer as any)?.photoPath || null;
+
+  async function handleUpdatePhoto() {
+    if (!customer?.id || uploadingPhoto) return;
+
+    Alert.alert('Store Photograph', 'Select photo source', [
+      {
+        text: 'Camera',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Camera permission is required to capture store photo.');
+            return;
+          }
+          const res = await ImagePicker.launchCameraAsync(DEFAULT_IMAGE_PICKER_OPTIONS);
+          if (!res.canceled && res.assets[0]?.uri) {
+            await uploadPhoto(res.assets[0].uri);
+          }
+        },
+      },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'Gallery permission is required to select store photo.');
+            return;
+          }
+          const res = await ImagePicker.launchImageLibraryAsync(DEFAULT_IMAGE_PICKER_OPTIONS);
+          if (!res.canceled && res.assets[0]?.uri) {
+            await uploadPhoto(res.assets[0].uri);
+          }
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  async function uploadPhoto(uri: string) {
+    if (!customer?.id) return;
+    try {
+      setUploadingPhoto(true);
+      const compressed = await compressImage(uri);
+      const res = await sellerApi.uploadCustomerPhoto(customer.id, compressed.uri);
+      const newUrl = res.photoUrl || compressed.uri;
+      setCustomer((prev) => (prev ? { ...prev, photoUrl: newUrl, photoPath: newUrl } : null));
+      Alert.alert('Success', 'Storefront photo updated successfully.');
+    } catch (err: any) {
+      Alert.alert('Upload Error', err?.message || 'Failed to upload storefront photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   function handleCall() {
     if (!customer?.phone) return;
@@ -113,9 +172,73 @@ export default function CustomerDetailScreen() {
               <Badge label={customer.category?.name || 'Retail'} variant="info" size="md" />
             </View>
 
-            {customer.photoUrl ? (
-              <Image source={{ uri: customer.photoUrl }} style={styles.customerPhoto} />
-            ) : null}
+            {/* Storefront Photograph / Photo Action Banner */}
+            {shopPhotoUri ? (
+              <View style={styles.photoContainer}>
+                <Pressable
+                  onPress={() => setPreviewModalVisible(true)}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={`View full storefront photograph for ${customer.shopName}`}
+                >
+                  <Image
+                    source={{ uri: shopPhotoUri }}
+                    style={styles.customerPhoto}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.photoOverlayBadge}>
+                    <Ionicons name="storefront" size={13} color="#FFFFFF" />
+                    <Text style={styles.photoOverlayText}>Storefront Photo</Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={styles.updatePhotoBtn}
+                  onPress={handleUpdatePhoto}
+                  disabled={uploadingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Update Storefront Photo"
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="camera" size={13} color="#FFFFFF" />
+                      <Text style={styles.updatePhotoText}>Update Photo</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.noPhotoBanner}>
+                <View style={styles.noPhotoIconCircle}>
+                  <Ionicons name="storefront-outline" size={24} color={BrandColors.pink.primary} />
+                </View>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Text style={styles.noPhotoTitle}>No Storefront Photo</Text>
+                  <Text style={styles.noPhotoSubtitle} numberOfLines={2}>
+                    {customer.noPhotoReason
+                      ? `Exemption: ${customer.noPhotoReason}`
+                      : 'Capture a storefront photo to verify this outlet.'}
+                  </Text>
+                </View>
+                <Pressable
+                  style={styles.addPhotoBtn}
+                  onPress={handleUpdatePhoto}
+                  disabled={uploadingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add Storefront Photo"
+                >
+                  {uploadingPhoto ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="camera" size={14} color="#FFFFFF" />
+                      <Text style={styles.addPhotoBtnText}>Add Photo</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            )}
 
             {/* Quick Contact Buttons */}
             <View style={styles.contactRow}>
@@ -242,6 +365,43 @@ export default function CustomerDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Fullscreen Photo Preview Modal */}
+      {shopPhotoUri ? (
+        <Modal
+          visible={previewModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setPreviewModalVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {customer.shopName}
+                </Text>
+                <Text style={styles.modalSub}>Storefront Photograph</Text>
+              </View>
+              <Pressable
+                onPress={() => setPreviewModalVisible(false)}
+                hitSlop={HitSlop.md}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close photo preview"
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </Pressable>
+            </View>
+            <View style={styles.modalImageContainer}>
+              <Image
+                source={{ uri: shopPhotoUri }}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -290,11 +450,95 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
+  photoContainer: {
+    position: 'relative',
+    marginBottom: Spacing.md,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+  },
   customerPhoto: {
     width: '100%',
-    height: 180,
+    height: 190,
     borderRadius: Radius.md,
+  },
+  photoOverlayBadge: {
+    position: 'absolute',
+    bottom: Spacing.sm,
+    left: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  photoOverlayText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  updatePhotoBtn: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(233, 30, 99, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    ...Shadows.sm,
+  },
+  updatePhotoText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  noPhotoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BrandColors.pink.tint,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
+    borderRadius: Radius.md,
+    padding: Spacing.md,
     marginBottom: Spacing.md,
+  },
+  noPhotoIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  noPhotoTitle: {
+    fontSize: Typography.bodySmall.fontSize,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  noPhotoSubtitle: {
+    fontSize: Typography.caption.fontSize,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  addPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BrandColors.pink.primary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+  },
+  addPhotoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   contactRow: {
     flexDirection: 'row',
@@ -397,5 +641,44 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     fontWeight: '800',
     color: BrandColors.pink.primary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    justifyContent: 'center',
+    padding: Spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.md,
+    marginTop: 40,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalSub: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  modalCloseBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  modalImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.xl,
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.md,
   },
 });

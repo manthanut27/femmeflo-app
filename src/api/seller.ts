@@ -73,7 +73,10 @@ export const sellerApi = {
         params,
       }
     );
-    const list = raw?.customers ?? raw?.items ?? [];
+    const list = (raw?.customers ?? raw?.items ?? []).map((c) => ({
+      ...c,
+      photoUrl: c.photoUrl || (c as any).photoPath || null,
+    }));
     return {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
@@ -81,9 +84,16 @@ export const sellerApi = {
   },
 
   async getCustomer(id: string): Promise<{ customer: CustomerItem }> {
-    return apiRequest<{ customer: CustomerItem }>(`seller/customers/${id}`, {
+    const res = await apiRequest<{ customer: CustomerItem }>(`seller/customers/${id}`, {
       method: 'GET',
     });
+    if (res?.customer) {
+      res.customer = {
+        ...res.customer,
+        photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
+      };
+    }
+    return res;
   },
 
   async createCustomer(payload: CreateCustomerPayload): Promise<{ customer: CustomerItem }> {

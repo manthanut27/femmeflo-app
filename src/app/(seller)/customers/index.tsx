@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -109,6 +110,8 @@ export default function CustomerListScreen() {
       .join('')
       .toUpperCase();
 
+    const photoUri = item.photoUrl || (item as any).photoPath;
+
     return (
       <Card
         onPress={() => router.push(`/(seller)/customers/${item.id}` as any)}
@@ -118,7 +121,11 @@ export default function CustomerListScreen() {
       >
         <View style={styles.cardHeader}>
           <View style={styles.shopAvatar}>
-            <Text style={styles.shopAvatarText}>{initials || 'ST'}</Text>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.shopAvatarImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.shopAvatarText}>{initials || 'ST'}</Text>
+            )}
           </View>
           <View style={styles.shopInfo}>
             <Text style={styles.shopName} numberOfLines={1}>
@@ -382,6 +389,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.sm,
+    overflow: 'hidden',
+  },
+  shopAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
   shopAvatarText: {
     ...Typography.bodyMedium,
