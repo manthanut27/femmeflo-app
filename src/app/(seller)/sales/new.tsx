@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageTransition } from '@/components/ui/PageTransition';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
   BrandColors,
@@ -457,12 +459,7 @@ export default function NewSaleScreen() {
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
-        <Text style={styles.loadingText}>Loading POS Cart & Van Inventory...</Text>
-      </View>
-    );
+    return <LoadingState message="Loading POS catalog & inventory..." />;
   }
 
   return (

@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageTransition } from '@/components/ui/PageTransition';
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
@@ -224,11 +226,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
-      </View>
-    );
+    return <LoadingState message="Loading order details & tax invoice..." />;
   }
 
   if (!sale) {

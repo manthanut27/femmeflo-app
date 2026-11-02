@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View, ViewStyle } from 'react-native';
 import { Radius, Spacing } from '../../constants/theme';
 
 export interface LoadingSkeletonProps {
@@ -9,20 +9,46 @@ export interface LoadingSkeletonProps {
   style?: ViewStyle;
 }
 
+/**
+ * LoadingSkeleton (with smooth 60fps breathing pulse animation)
+ * Automatically cycles opacity on the native thread during data loading.
+ */
 export function LoadingSkeleton({
   width = '100%',
   height = 20,
   borderRadius = Radius.sm,
   style,
 }: LoadingSkeletonProps) {
+  const pulseAnim = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.95,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.35,
+          duration: 750,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
+
   return (
-    <View
+    <Animated.View
       style={[
         styles.skeleton,
         {
           width: width as any,
           height,
           borderRadius,
+          opacity: pulseAnim,
         },
         style,
       ]}
@@ -60,7 +86,7 @@ export function StatCardSkeleton({ style }: { style?: ViewStyle }) {
 
 const styles = StyleSheet.create({
   skeleton: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#CBD5E1',
   },
   cardSkeleton: {
     backgroundColor: '#FFFFFF',

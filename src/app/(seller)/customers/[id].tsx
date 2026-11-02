@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageTransition } from '@/components/ui/PageTransition';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 
@@ -132,11 +134,7 @@ export default function CustomerDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
-      </View>
-    );
+    return <LoadingState message="Loading store profile & ledger..." />;
   }
 
   if (!customer) {

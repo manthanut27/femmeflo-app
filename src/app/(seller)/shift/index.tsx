@@ -24,6 +24,8 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { PageTransition } from '@/components/ui/PageTransition';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -573,11 +575,7 @@ export default function ShiftScreen() {
   const isShiftActive = Boolean(currentShift && currentShift.startTime && !currentShift.endTime);
 
   if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
-      </View>
-    );
+    return <LoadingState message="Syncing field duty & GPS shift status..." />;
   }
 
   return (
