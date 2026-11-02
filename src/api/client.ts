@@ -463,9 +463,10 @@ export async function uploadFileMultipart<T = any>(
       }
 
       if (FileSystem && typeof FileSystem.uploadAsync === 'function') {
+        const uploadType = FileSystem.UploadType?.MULTIPART ?? FileSystem.FileSystemUploadType?.MULTIPART ?? 1;
         const result = await FileSystem.uploadAsync(url, fileUri, {
           httpMethod: 'POST',
-          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          uploadType,
           fieldName,
           headers: {
             Accept: 'application/json',
@@ -496,13 +497,18 @@ export async function uploadFileMultipart<T = any>(
     }
   }
 
-  // 2. Web or Fallback: convert file URI to Blob and use standard FormData
+  // 2. Web or Fallback: convert file URI to typed Blob and use standard FormData
   try {
-    const blobRes = await fetch(fileUri);
-    const blob = await blobRes.blob();
-    const formData = new FormData();
     const filename = fileUri.split('/').pop() || 'photo.jpg';
-    formData.append(fieldName, blob, filename);
+    const match = /\.(\w+)$/.exec(filename);
+    const ext = match ? match[1].toLowerCase() : 'jpg';
+    const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+    const blobRes = await fetch(fileUri);
+    const rawBlob = await blobRes.blob();
+    const typedBlob = new Blob([rawBlob], { type: mimeType });
+    const formData = new FormData();
+    formData.append(fieldName, typedBlob, filename);
 
     return await apiRequest<T>(endpoint, {
       method: 'POST',
