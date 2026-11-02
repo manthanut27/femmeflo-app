@@ -118,24 +118,3 @@ export async function compressImage(
     img.src = uri;
   });
 }
-
-/**
- * Creates a FormData payload suitable for React Native fetch / multipart photo uploads.
- */
-export function createImageFormData(
-  fieldName: string,
-  uri: string,
-  fileName?: string
-): FormData {
-  const formData = new FormData();
-  const name = fileName || uri.split('/').pop() || `${fieldName}_${Date.now()}.jpg`;
-  const type = getMimeTypeFromUri(name);
-
-  formData.append(fieldName, {
-    uri,
-    name,
-    type,
-  } as any);
-
-  return formData;
-}

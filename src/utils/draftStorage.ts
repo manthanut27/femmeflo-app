@@ -262,7 +262,30 @@ export function createDraftStorage(backend: StorageBackend) {
 }
 
 function resolveDefaultStorage(): StorageBackend {
-  // React Native / Expo AsyncStorage
+  // 1. Browser Web LocalStorage
+  if (typeof localStorage !== 'undefined') {
+    return {
+      async getItem(key: string) {
+        try {
+          return localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      },
+      async setItem(key: string, value: string) {
+        try {
+          localStorage.setItem(key, value);
+        } catch {}
+      },
+      async removeItem(key: string) {
+        try {
+          localStorage.removeItem(key);
+        } catch {}
+      },
+    };
+  }
+
+  // 2. React Native / Expo AsyncStorage
   try {
     const mod = require('@react-native-async-storage/async-storage');
     const asyncStorage = mod?.default ?? mod;
@@ -283,6 +306,7 @@ function resolveDefaultStorage(): StorageBackend {
     // In-memory fallback if native bindings are not present (e.g. Node test runner)
   }
 
+  // 3. In-memory Map fallback
   const memory = new Map<string, string>();
   return {
     async getItem(key: string) {
