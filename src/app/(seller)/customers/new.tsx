@@ -270,10 +270,13 @@ export default function AddCustomerScreen() {
 
       const customerId = res.customer.id;
 
-      // Upload photo fallback if chosen and not already uploaded during creation
-      if (photoUri && customerId && !res.customer.photoPath && !res.customer.photoUrl) {
+      // Upload storefront photo if captured
+      if (photoUri && customerId) {
         try {
-          await sellerApi.uploadCustomerPhoto(customerId, photoUri);
+          const photoRes = await sellerApi.uploadCustomerPhoto(customerId, photoUri);
+          if (photoRes?.photoUrl) {
+            res.customer.photoUrl = photoRes.photoUrl;
+          }
         } catch (photoErr) {
           console.warn('Customer photo upload fallback failed, record preserved', photoErr);
         }

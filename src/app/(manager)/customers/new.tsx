@@ -232,9 +232,12 @@ export default function ManagerAddCustomerScreen() {
         noPhotoReason: photoUri ? (noPhotoReason.trim() || 'Storefront photo captured') : noPhotoReason.trim(),
       });
 
-      if (photoUri && res.customer.id && !res.customer.photoPath && !res.customer.photoUrl) {
+      if (photoUri && res.customer.id) {
         try {
-          await managerApi.uploadCustomerPhoto(res.customer.id, photoUri);
+          const photoRes = await managerApi.uploadCustomerPhoto(res.customer.id, photoUri);
+          if (photoRes?.photoUrl) {
+            res.customer.photoUrl = photoRes.photoUrl;
+          }
         } catch (e) {
           console.warn('Customer photo upload fallback failed', e);
         }

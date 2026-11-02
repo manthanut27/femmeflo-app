@@ -434,3 +434,83 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
 
   throw new ApiError('Request failed after maximum retry attempts.', 0, null, true);
 }
+
+/**
+ * Robust multipart file uploader that works across Android, iOS, and Web.
+ * Uses native FileSystem.uploadAsync on devices to avoid JavaScript WinterCG fetch
+ * "Unsupported FormDataPart implementation" errors in modern Expo SDKs.
+ */
+export async function uploadFileMultipart<T = any>(
+  endpoint: string,
+  fileUri: string,
+  fieldName: string = 'photo'
+): Promise<T> {
+  if (isMockMode()) {
+    return { photoUrl: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=400' } as unknown as T;
+  }
+
+  const url = `${getApiBaseUrl()}/${endpoint.replace(/^\/+/, '')}`;
+  const token = await tokenStorage.getToken();
+
+  // 1. On Native (Android / iOS), use native FileSystem.uploadAsync
+  if (Platform.OS !== 'web') {
+    try {
+      let FileSystem: any = null;
+      try {
+        FileSystem = require('expo-file-system');
+      } catch {
+        // Not available in current runtime environment
+      }
+
+      if (FileSystem && typeof FileSystem.uploadAsync === 'function') {
+        const result = await FileSystem.uploadAsync(url, fileUri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName,
+          headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(result.body);
+        } catch {
+          parsed = result.body;
+        }
+
+        if (result.status >= 200 && result.status < 300) {
+          if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+            return parsed.data as T;
+          }
+          return parsed as T;
+        }
+
+        const errMsg = parsed?.message || parsed?.error || `Upload failed with HTTP ${result.status}`;
+        throw new ApiError(errMsg, result.status, parsed);
+      }
+    } catch (nativeErr: any) {
+      if (nativeErr instanceof ApiError) throw nativeErr;
+      console.warn('Native FileSystem.uploadAsync failed or unavailable, attempting blob upload:', nativeErr);
+    }
+  }
+
+  // 2. Web or Fallback: convert file URI to Blob and use standard FormData
+  try {
+    const blobRes = await fetch(fileUri);
+    const blob = await blobRes.blob();
+    const formData = new FormData();
+    const filename = fileUri.split('/').pop() || 'photo.jpg';
+    formData.append(fieldName, blob, filename);
+
+    return await apiRequest<T>(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    console.error('Multipart upload failed:', err);
+    throw new ApiError(err.message || 'Failed to upload photo', 500);
+  }
+}

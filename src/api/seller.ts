@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, isMockMode } from './client';
+import { apiRequest, API_BASE_URL, isMockMode, uploadFileMultipart } from './client';
 import type {
   BulkCustomerResponse,
   CheckInPayload,
@@ -92,38 +92,6 @@ export const sellerApi = {
     const contactName = (payload as any).contactName || payload.ownerName?.trim() || payload.shopName.trim();
     const noPhotoReason = payload.noPhotoReason || payload.photoSkipReason || (payload.photoUri ? 'Storefront photo captured' : undefined);
 
-    if (payload.photoUri) {
-      const formData = new FormData();
-      formData.append('shopName', payload.shopName.trim());
-      formData.append('contactName', contactName);
-      formData.append('phone', phone);
-      formData.append('categoryId', payload.categoryId);
-      formData.append('address', payload.address);
-      formData.append('pincode', payload.pincode);
-      formData.append('state', payload.state);
-      formData.append('district', payload.district);
-      formData.append('village', payload.village || 'Default');
-      if (payload.email) formData.append('email', payload.email.trim());
-      if (payload.latitude != null) formData.append('latitude', String(payload.latitude));
-      if (payload.longitude != null) formData.append('longitude', String(payload.longitude));
-      if (payload.accuracy != null) formData.append('accuracy', String(payload.accuracy));
-      if (noPhotoReason) formData.append('noPhotoReason', noPhotoReason);
-
-      const filename = payload.photoUri.split('/').pop() || 'customer_photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      formData.append('photo', {
-        uri: payload.photoUri,
-        name: filename,
-        type,
-      } as any);
-
-      return apiRequest<{ customer: CustomerItem }>('seller/customers', {
-        method: 'POST',
-        body: formData,
-      });
-    }
-
     const body: Record<string, any> = {
       shopName: payload.shopName.trim(),
       contactName,
@@ -208,21 +176,7 @@ export const sellerApi = {
   },
 
   async uploadCustomerPhoto(customerId: string, fileUri: string): Promise<{ photoUrl: string }> {
-    const formData = new FormData();
-    const filename = fileUri.split('/').pop() || 'photo.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-    formData.append('photo', {
-      uri: fileUri,
-      name: filename,
-      type,
-    } as any);
-
-    return apiRequest<{ photoUrl: string }>(`seller/customers/${customerId}/photo`, {
-      method: 'POST',
-      body: formData,
-    });
+    return uploadFileMultipart<{ photoUrl: string }>(`seller/customers/${customerId}/photo`, fileUri, 'photo');
   },
 
   // ----------------------------------------------------
