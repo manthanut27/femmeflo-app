@@ -110,7 +110,7 @@ export default function SellerTabsLayout() {
       <Tabs.Screen
         name="profile/shifts"
         options={{
-          href: null,
+          title: 'Shift History',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },
