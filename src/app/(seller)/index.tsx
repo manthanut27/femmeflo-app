@@ -379,9 +379,9 @@ export default function SellerDashboardScreen() {
             <Button
               title="Check Inventory Balance"
               onPress={() => router.push('/(seller)/inventory')}
-              variant="ghost"
-              size="md"
-              icon={<Ionicons name="layers-outline" size={18} color={BrandColors.pink.primary} />}
+              variant="outline"
+              size="lg"
+              icon={<Ionicons name="layers-outline" size={20} color={BrandColors.pink.primary} />}
               style={styles.actionBtn}
             />
           </View>

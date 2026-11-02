@@ -56,3 +56,4 @@ export function FadeInView({
     </Animated.View>
   );
 }
+

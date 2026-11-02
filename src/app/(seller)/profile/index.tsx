@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
-import { BrandColors, Colors, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
+import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function SellerProfileScreen() {
@@ -139,30 +139,61 @@ export default function SellerProfileScreen() {
           </Card>
 
           {/* Recent Duty Shifts */}
-          <Text style={styles.sectionHeading}>Recent Duty Shifts</Text>
+          <View style={styles.shiftSectionHeader}>
+            <Text style={styles.sectionHeading}>Recent Duty Shifts</Text>
+            {shiftHistory.length > 0 ? (
+              <Pressable
+                onPress={() => router.push('/(seller)/profile/shifts' as any)}
+                hitSlop={HitSlop.md}
+                style={styles.viewAllLink}
+                accessibilityRole="button"
+                accessibilityLabel="View all duty shifts"
+              >
+                <Text style={styles.viewAllLinkText}>See All ({shiftHistory.length})</Text>
+                <Ionicons name="chevron-forward" size={14} color={BrandColors.pink.primary} />
+              </Pressable>
+            ) : null}
+          </View>
+
           {shiftHistory.length === 0 ? (
             <Card variant="flat" style={{ padding: Spacing.md }}>
               <Text style={{ color: '#64748B', ...Typography.caption }}>No completed shifts recorded yet.</Text>
             </Card>
           ) : (
-            shiftHistory.map((shift) => (
-              <Card key={shift.id} style={styles.shiftCard}>
-                <View style={styles.shiftHeader}>
-                  <Text style={styles.shiftDate}>
-                    {new Date(shift.startTime).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
+            <>
+              {shiftHistory.slice(0, 5).map((shift) => (
+                <Card key={shift.id} style={styles.shiftCard}>
+                  <View style={styles.shiftHeader}>
+                    <Text style={styles.shiftDate}>
+                      {new Date(shift.startTime).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </Text>
+                    <Badge label={shift.status} variant={shift.status === 'COMPLETED' ? 'success' : 'warning'} size="sm" />
+                  </View>
+                  <Text style={styles.shiftKm}>
+                    Odometer: {shift.startOdometerKm} KM → {shift.endOdometerKm ?? 'Active'} KM
+                    {shift.endOdometerKm ? ` (${(shift.endOdometerKm - shift.startOdometerKm).toFixed(1)} KM traveled)` : ''}
                   </Text>
-                  <Badge label={shift.status} variant={shift.status === 'COMPLETED' ? 'success' : 'warning'} size="sm" />
-                </View>
-                <Text style={styles.shiftKm}>
-                  Odometer: {shift.startOdometerKm} KM → {shift.endOdometerKm ?? 'Active'} KM
-                  {shift.endOdometerKm ? ` (${(shift.endOdometerKm - shift.startOdometerKm).toFixed(1)} KM traveled)` : ''}
+                </Card>
+              ))}
+
+              <Pressable
+                style={styles.seeMoreShiftsBtn}
+                onPress={() => router.push('/(seller)/profile/shifts' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="View full shifts history in a separate page"
+              >
+                <Text style={styles.seeMoreShiftsText}>
+                  {shiftHistory.length > 5
+                    ? `View All ${shiftHistory.length} Shifts on Dedicated Page`
+                    : 'View Detailed Shifts History'}
                 </Text>
-              </Card>
-            ))
+                <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.primary} />
+              </Pressable>
+            </>
           )}
 
           {/* Sign Out Button */}
@@ -328,6 +359,42 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textSecondary,
     marginTop: 2,
+  },
+  shiftSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  viewAllLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+  },
+  viewAllLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
+  },
+  seeMoreShiftsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.tint,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.md,
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+  },
+  seeMoreShiftsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
   },
   logoutBtn: {
     marginTop: Spacing.xl,
