@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Radius, Spacing, Typography } from '../../constants/theme';
+import { PulseIndicator } from './PulseIndicator';
 
 export type BadgeVariant =
   | 'success'
@@ -25,6 +26,7 @@ export interface BadgeProps {
   textStyle?: TextStyle;
   size?: 'sm' | 'md';
   showDot?: boolean;
+  pulse?: boolean;
 }
 
 export function Badge({
@@ -34,6 +36,7 @@ export function Badge({
   textStyle,
   size = 'sm',
   showDot = true,
+  pulse = false,
 }: BadgeProps) {
   const normalizedVariant = getNormalizedVariant(variant);
   const colorScheme = badgeStyles[normalizedVariant];
@@ -44,7 +47,17 @@ export function Badge({
       accessibilityLabel={label}
       style={[styles.base, styles[size], colorScheme.container, style]}
     >
-      {showDot ? <View style={[styles.dot, styles[`${size}Dot`], colorScheme.dot]} /> : null}
+      {showDot ? (
+        pulse || variant === 'ACTIVE' ? (
+          <PulseIndicator
+            color={(colorScheme.dot.backgroundColor as string) || (colorScheme.text.color as string) || '#10B981'}
+            size={size === 'md' ? 8 : 6}
+            style={{ marginRight: 6 }}
+          />
+        ) : (
+          <View style={[styles.dot, styles[`${size}Dot`], colorScheme.dot]} />
+        )
+      ) : null}
       <Text
         style={[
           styles.text,

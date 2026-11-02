@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '../../constants/theme';
 import { Badge, BadgeVariant } from './Badge';
+import { NumberTicker } from './NumberTicker';
+import { FadeInView } from './FadeInView';
 
 export interface StatCardProps {
   title: string;
@@ -60,7 +62,8 @@ export function StatCard({
   const displaySubtitle = subtitle || changeLabel;
 
   const content = (
-    <View style={[styles.card, resolvedAccentColor ? { borderLeftColor: resolvedAccentColor, borderLeftWidth: 3.5 } : null, style]}>
+    <FadeInView duration={320} slideDistance={6}>
+      <View style={[styles.card, resolvedAccentColor ? { borderLeftColor: resolvedAccentColor, borderLeftWidth: 3.5 } : null, style]}>
       <View style={styles.headerRow}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -76,9 +79,13 @@ export function StatCard({
         ) : null}
       </View>
 
-      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-        {value}
-      </Text>
+      <NumberTicker
+        value={value}
+        style={styles.value}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      />
 
       {trend ? (
         <View style={styles.trendRow}>
@@ -109,7 +116,8 @@ export function StatCard({
           ) : null}
         </View>
       ) : null}
-    </View>
+      </View>
+    </FadeInView>
   );
 
   if (onPress) {

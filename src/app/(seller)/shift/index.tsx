@@ -614,7 +614,8 @@ export default function ShiftScreen() {
               </View>
               <Badge
                 label={isShiftActive ? 'ACTIVE SHIFT' : 'OFF DUTY'}
-                variant={isShiftActive ? 'success' : 'neutral'}
+                variant={isShiftActive ? 'ACTIVE' : 'neutral'}
+                pulse={isShiftActive}
               />
             </View>
 
