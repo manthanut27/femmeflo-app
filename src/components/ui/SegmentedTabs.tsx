@@ -27,6 +27,7 @@ export interface SegmentedTabsProps<T extends string | null = string | null> {
   onSelect?: (value: T) => void;
   onTabChange?: (value: T) => void;
   style?: StyleProp<ViewStyle>;
+  tabStyle?: StyleProp<ViewStyle>;
   activeColor?: string;
   scrollable?: boolean;
   accessibilityLabel?: string;
@@ -39,6 +40,7 @@ export function SegmentedTabs<T extends string | null = string | null>({
   onSelect,
   onTabChange,
   style,
+  tabStyle,
   activeColor = BrandColors.pink.primary,
   scrollable = false,
   accessibilityLabel = 'Filter options',
@@ -67,6 +69,7 @@ export function SegmentedTabs<T extends string | null = string | null>({
             onPress={() => notifySelect(tabVal)}
             style={({ pressed }) => [
               styles.tab,
+              tabStyle,
               isSelected && [styles.tabActive, { borderColor: activeColor }],
               pressed && styles.tabPressed,
             ]}
@@ -145,7 +148,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.xs + 2,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.sm,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: 'transparent',

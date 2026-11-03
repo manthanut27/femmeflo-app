@@ -90,7 +90,7 @@ export default function AdminInventoryScreen() {
     <View style={styles.container}>
       <Header
         title="HQ & Warehouses"
-        subtitle="National Storage & Logistics Network"
+        subtitle="Central and regional warehouse storage"
         rightAction={
           <Pressable
             accessibilityRole="button"
@@ -108,11 +108,11 @@ export default function AdminInventoryScreen() {
         {/* Action Banner */}
         <View style={styles.actionBanner}>
           <View style={{ flex: 1, marginRight: Spacing.md }}>
-            <Text style={styles.bannerTitle}>Stock Inward & Transfers</Text>
-            <Text style={styles.bannerSub}>Record factory receipts and transfers to sellers.</Text>
+            <Text style={styles.bannerTitle}>Inward & Transfer Stock</Text>
+            <Text style={styles.bannerSub}>Add incoming factory stock or send stock to field officers.</Text>
           </View>
           <Button
-            title="New Transfer"
+            title="Manage Stock"
             size="sm"
             variant="secondary"
             icon={<Ionicons name="swap-horizontal-outline" size={16} color="#FFFFFF" />}

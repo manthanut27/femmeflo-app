@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { adminApi } from '@/api/admin';
 import type { ProductItem, PublicUser, StockTransactionItem, WarehouseItem } from '@/api/types';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
@@ -35,10 +34,9 @@ import {
   MaxContentWidth,
   Shadows,
   Spacing,
-  Typography,
 } from '@/constants/theme';
 
-type TransferMode = 'TRANSFER' | 'RECEIPT' | 'HISTORY';
+type TransferMode = 'RECEIPT' | 'TRANSFER' | 'HISTORY';
 
 // Guaranteed default locations so source warehouse is NEVER blank or empty
 const DEFAULT_WAREHOUSES: WarehouseItem[] = [
@@ -66,8 +64,15 @@ const DEFAULT_WAREHOUSES: WarehouseItem[] = [
 
 export default function StockTransferScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string }>();
 
-  const [mode, setMode] = useState<TransferMode>('TRANSFER');
+  // Default to Inward Stock (RECEIPT) or query parameter if provided
+  const initialMode: TransferMode =
+    params.mode === 'TRANSFER' || params.mode === 'HISTORY'
+      ? (params.mode as TransferMode)
+      : 'RECEIPT';
+
+  const [mode, setMode] = useState<TransferMode>(initialMode);
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>(DEFAULT_WAREHOUSES);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [sellers, setSellers] = useState<PublicUser[]>([]);
@@ -76,7 +81,7 @@ export default function StockTransferScreen() {
   // Transactions History State
   const [transactions, setTransactions] = useState<StockTransactionItem[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<'ALL' | 'TRANSFER' | 'RECEIPT'>('ALL');
+  const [historyFilter, setHistoryFilter] = useState<'ALL' | 'INWARD' | 'TRANSFER'>('ALL');
 
   // Form Fields
   const [sourceWarehouseId, setSourceWarehouseId] = useState(DEFAULT_WAREHOUSES[0].id);
@@ -275,7 +280,7 @@ export default function StockTransferScreen() {
         (t) => t.type === 'TRANSFER' || t.type === 'DISPATCH' || t.type === 'OUTWARD'
       );
     }
-    if (historyFilter === 'RECEIPT') {
+    if (historyFilter === 'INWARD') {
       return transactions.filter(
         (t) => t.type === 'RECEIPT' || t.type === 'INWARD' || t.type === 'FACTORY'
       );
@@ -292,8 +297,8 @@ export default function StockTransferScreen() {
     }
 
     if (!selectedProductId) {
-      setFeedback({ type: 'error', message: 'Please select a product SKU.' });
-      Alert.alert('Missing Product', 'Please select a product SKU.');
+      setFeedback({ type: 'error', message: 'Please select a product.' });
+      Alert.alert('Missing Product', 'Please select a product.');
       return;
     }
 
@@ -302,8 +307,8 @@ export default function StockTransferScreen() {
     try {
       if (mode === 'RECEIPT') {
         if (!sourceWarehouseId) {
-          setFeedback({ type: 'error', message: 'Please select receiving warehouse.' });
-          Alert.alert('Missing Warehouse', 'Please select receiving warehouse.');
+          setFeedback({ type: 'error', message: 'Please select a warehouse.' });
+          Alert.alert('Missing Warehouse', 'Please select a warehouse.');
           setIsSubmitting(false);
           return;
         }
@@ -320,21 +325,21 @@ export default function StockTransferScreen() {
 
         setFeedback({
           type: 'success',
-          message: `Stock Inward Recorded: Received ${qty.toLocaleString('en-IN')} packets into warehouse.`,
+          message: `Stock Added: Successfully added ${qty.toLocaleString('en-IN')} packets into warehouse inventory.`,
         });
         loadTransactions();
         Alert.alert(
           'Stock Added',
-          `Successfully received ${qty.toLocaleString('en-IN')} packets into warehouse.`,
+          `Successfully added ${qty.toLocaleString('en-IN')} packets to warehouse.`,
           [{ text: 'OK' }]
         );
       } else {
         if (!sourceWarehouseId || !targetLocationId) {
           setFeedback({
             type: 'error',
-            message: 'Please select source warehouse and destination location.',
+            message: 'Please select source warehouse and destination.',
           });
-          Alert.alert('Missing Details', 'Please select source warehouse and destination location.');
+          Alert.alert('Missing Details', 'Please select source warehouse and destination.');
           setIsSubmitting(false);
           return;
         }
@@ -351,17 +356,17 @@ export default function StockTransferScreen() {
 
         setFeedback({
           type: 'success',
-          message: `Stock Transferred: Sent ${qty.toLocaleString('en-IN')} packets successfully.`,
+          message: `Stock Transferred: Successfully sent ${qty.toLocaleString('en-IN')} packets.`,
         });
         loadTransactions();
         Alert.alert(
           'Stock Transferred',
-          `Successfully transferred ${qty.toLocaleString('en-IN')} packets.`,
+          `Successfully sent ${qty.toLocaleString('en-IN')} packets.`,
           [{ text: 'OK' }]
         );
       }
     } catch (err: any) {
-      const msg = err.message || 'Failed to complete stock movement.';
+      const msg = err.message || 'Failed to complete stock operation.';
       setFeedback({ type: 'error', message: msg });
       Alert.alert('Operation Failed', msg);
     } finally {
@@ -369,10 +374,11 @@ export default function StockTransferScreen() {
     }
   }
 
+  // Clear, friendly 3-tab layout
   const modeTabs = [
+    { key: 'RECEIPT', label: 'Inward Stock' },
     { key: 'TRANSFER', label: 'Transfer Stock' },
-    { key: 'RECEIPT', label: 'Receive Stock' },
-    { key: 'HISTORY', label: 'Movement History' },
+    { key: 'HISTORY', label: 'History' },
   ];
 
   const quickQtyOptions =
@@ -401,13 +407,13 @@ export default function StockTransferScreen() {
       style={styles.container}
     >
       <Header
-        title="Stock Movement"
+        title="Headquarter Stock"
         subtitle={
           mode === 'RECEIPT'
-            ? 'Receive incoming factory stock into warehouse'
+            ? 'Add factory inward stock into warehouse'
             : mode === 'HISTORY'
-            ? 'Audit log of all stock transfers and inward receipts'
-            : 'Move stock to field officers or regional hubs'
+            ? 'History of all stock added and transferred'
+            : 'Transfer stock to field officers or regional hubs'
         }
         showBack
       />
@@ -433,7 +439,7 @@ export default function StockTransferScreen() {
             />
           )}
 
-          {/* 3-Mode Selector Tabs */}
+          {/* 3 Simple Tabs: Inward Stock | Transfer Stock | History */}
           <View style={styles.modeTabsWrap}>
             <SegmentedTabs
               tabs={modeTabs}
@@ -443,7 +449,7 @@ export default function StockTransferScreen() {
             />
           </View>
 
-          {/* MODE: HISTORY TAB */}
+          {/* TAB 3: HISTORY */}
           {mode === 'HISTORY' ? (
             <View style={styles.historyContainer}>
               {/* History Sub-Filter Pills */}
@@ -469,6 +475,24 @@ export default function StockTransferScreen() {
                 <TouchableOpacity
                   style={[
                     styles.historyFilterPill,
+                    historyFilter === 'INWARD' && styles.historyFilterPillActive,
+                  ]}
+                  onPress={() => setHistoryFilter('INWARD')}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.historyFilterPillText,
+                      historyFilter === 'INWARD' && styles.historyFilterPillTextActive,
+                    ]}
+                  >
+                    Inward Stock (+)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.historyFilterPill,
                     historyFilter === 'TRANSFER' && styles.historyFilterPillActive,
                   ]}
                   onPress={() => setHistoryFilter('TRANSFER')}
@@ -480,25 +504,7 @@ export default function StockTransferScreen() {
                       historyFilter === 'TRANSFER' && styles.historyFilterPillTextActive,
                     ]}
                   >
-                    Transfers
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.historyFilterPill,
-                    historyFilter === 'RECEIPT' && styles.historyFilterPillActive,
-                  ]}
-                  onPress={() => setHistoryFilter('RECEIPT')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.historyFilterPillText,
-                      historyFilter === 'RECEIPT' && styles.historyFilterPillTextActive,
-                    ]}
-                  >
-                    Receipts
+                    Transfer (-)
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -506,27 +512,27 @@ export default function StockTransferScreen() {
               {transactionsLoading ? (
                 <View style={styles.historyLoadingBox}>
                   <ActivityIndicator size="small" color={BrandColors.pink.primary} />
-                  <Text style={styles.historyLoadingText}>Loading stock movement history...</Text>
+                  <Text style={styles.historyLoadingText}>Loading stock history...</Text>
                 </View>
               ) : filteredTransactions.length === 0 ? (
                 <Card style={styles.emptyCard}>
-                  <Ionicons name="swap-horizontal" size={36} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No Stock Movements Found</Text>
+                  <Ionicons name="cube-outline" size={36} color="#94A3B8" />
+                  <Text style={styles.emptyTitle}>No Stock History Yet</Text>
                   <Text style={styles.emptySubtitle}>
-                    Stock transfers and inward receipts will appear here automatically.
+                    All inward stock additions and transfers will appear here in the history log.
                   </Text>
                 </Card>
               ) : (
                 <View style={styles.transactionList}>
                   {filteredTransactions.map((tx) => {
-                    const isReceipt =
+                    const isInward =
                       tx.type === 'RECEIPT' || tx.type === 'INWARD' || tx.type === 'FACTORY';
                     const productName = tx.product?.name || 'Sanitary Napkins';
                     const sku = tx.product?.sku || '';
                     const fromLoc =
-                      (tx as any).source?.name || tx.sourceLocation || 'Central Warehouse';
+                      (tx as any).source?.name || tx.sourceLocation || 'Factory Production';
                     const toLoc =
-                      (tx as any).destination?.name || tx.targetLocation || 'Field Team';
+                      (tx as any).destination?.name || tx.targetLocation || 'Central Warehouse';
 
                     return (
                       <Card key={tx.id} style={styles.txCard}>
@@ -535,18 +541,18 @@ export default function StockTransferScreen() {
                             <View
                               style={[
                                 styles.txIconBubble,
-                                { backgroundColor: isReceipt ? '#ECFDF5' : '#FFF5F7' },
+                                { backgroundColor: isInward ? '#ECFDF5' : '#FFF5F7' },
                               ]}
                             >
                               <Ionicons
-                                name={isReceipt ? 'arrow-down-circle' : 'swap-horizontal'}
+                                name={isInward ? 'arrow-down-circle' : 'swap-horizontal'}
                                 size={18}
-                                color={isReceipt ? '#059669' : '#E61C5D'}
+                                color={isInward ? '#059669' : '#E61C5D'}
                               />
                             </View>
                             <View>
                               <Text style={styles.txTypeLabel}>
-                                {isReceipt ? 'INWARD RECEIPT' : 'STOCK TRANSFER'}
+                                {isInward ? 'INWARD STOCK' : 'TRANSFERRED'}
                               </Text>
                               <Text style={styles.txDateText}>{formatTxDate(tx.createdAt)}</Text>
                             </View>
@@ -555,16 +561,16 @@ export default function StockTransferScreen() {
                           <View
                             style={[
                               styles.txQtyBadge,
-                              { backgroundColor: isReceipt ? '#ECFDF5' : '#FFF5F7' },
+                              { backgroundColor: isInward ? '#ECFDF5' : '#FFF5F7' },
                             ]}
                           >
                             <Text
                               style={[
                                 styles.txQtyText,
-                                { color: isReceipt ? '#059669' : '#E61C5D' },
+                                { color: isInward ? '#059669' : '#E61C5D' },
                               ]}
                             >
-                              {isReceipt ? '+' : '-'}
+                              {isInward ? '+' : '-'}
                               {tx.quantity.toLocaleString('en-IN')} pkts
                             </Text>
                           </View>
@@ -610,37 +616,42 @@ export default function StockTransferScreen() {
               )}
             </View>
           ) : (
-            /* MODE: TRANSFER & RECEIPT FORMS */
+            /* TAB 1 & 2: INWARD STOCK & TRANSFER FORMS */
             <>
               <Card style={styles.formCard}>
                 <View style={styles.cardHeaderRow}>
-                  <View style={styles.cardIconBox}>
+                  <View
+                    style={[
+                      styles.cardIconBox,
+                      mode === 'RECEIPT' && { backgroundColor: '#ECFDF5' },
+                    ]}
+                  >
                     <Ionicons
-                      name={mode === 'RECEIPT' ? 'download-outline' : 'swap-horizontal-outline'}
+                      name={mode === 'RECEIPT' ? 'arrow-down-circle-outline' : 'swap-horizontal-outline'}
                       size={20}
-                      color={BrandColors.pink.primary}
+                      color={mode === 'RECEIPT' ? '#059669' : BrandColors.pink.primary}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.cardHeaderTitle}>
-                      {mode === 'RECEIPT' ? 'Receive Stock' : 'Transfer Stock'}
+                      {mode === 'RECEIPT' ? 'Add Inward Stock' : 'Transfer Stock'}
                     </Text>
                     <Text style={styles.cardHeaderSub}>
                       {mode === 'RECEIPT'
-                        ? 'Add factory production batch into warehouse inventory'
-                        : 'Send stock from warehouse to field officers or hubs'}
+                        ? 'Add factory inward stock into headquarter warehouse'
+                        : 'Send stock to field officers or regional hubs'}
                     </Text>
                   </View>
                 </View>
 
-                {/* 1. Source / Receiving Warehouse */}
+                {/* 1. Warehouse Selection */}
                 <DropdownTrigger
-                  label={mode === 'RECEIPT' ? 'Receiving Warehouse' : 'From Warehouse'}
+                  label={mode === 'RECEIPT' ? 'Warehouse' : 'From Warehouse'}
                   required
                   value={selectedWarehouse?.name}
                   subtitle={
                     selectedWarehouse
-                      ? `Code: ${selectedWarehouse.code || 'HQ'} • Balance: ${(
+                      ? `Code: ${selectedWarehouse.code || 'HQ'} • Available Balance: ${(
                           (selectedWarehouse as any).balance ?? 0
                         ).toLocaleString('en-IN')} pkts`
                       : 'Tap to select warehouse'
@@ -653,7 +664,7 @@ export default function StockTransferScreen() {
                 {/* 2. Target Destination (for Transfers) */}
                 {mode === 'TRANSFER' ? (
                   <DropdownTrigger
-                    label="Send To (Officer / Warehouse)"
+                    label="Send To (Officer / Depot)"
                     required
                     value={selectedDestination?.title}
                     subtitle={selectedDestination?.subtitle || 'Tap to select recipient'}
@@ -663,9 +674,9 @@ export default function StockTransferScreen() {
                   />
                 ) : null}
 
-                {/* 3. Product SKU */}
+                {/* 3. Product Selection */}
                 <DropdownTrigger
-                  label="Product SKU"
+                  label="Select Product"
                   required
                   value={selectedProduct?.name}
                   subtitle={
@@ -683,7 +694,7 @@ export default function StockTransferScreen() {
                 {/* 4. Quantity Input & Quick Chips */}
                 <View style={styles.quantitySection}>
                   <Input
-                    label="Packet Quantity *"
+                    label="Quantity (Packets) *"
                     placeholder="e.g. 100"
                     value={quantityStr}
                     onChangeText={setQuantityStr}
@@ -722,11 +733,11 @@ export default function StockTransferScreen() {
                   </View>
                 </View>
 
-                {/* 5. Mode-Specific Inputs */}
+                {/* 5. Optional Fields */}
                 {mode === 'RECEIPT' ? (
                   <>
                     <Input
-                      label="Batch / Lot Number (Optional)"
+                      label="Batch Number (Optional)"
                       placeholder="e.g. BATCH-2026-OCT-01"
                       value={batchNumber}
                       onChangeText={setBatchNumber}
@@ -769,14 +780,14 @@ export default function StockTransferScreen() {
                 )}
               </Card>
 
-              {/* Submit Action Button */}
+              {/* Action Button with Clear Wording */}
               <Button
                 title={
                   isSubmitting
                     ? 'Processing...'
                     : mode === 'RECEIPT'
-                    ? 'Confirm & Add Stock'
-                    : 'Confirm & Send Stock'
+                    ? 'Add Stock to Warehouse'
+                    : 'Confirm & Transfer Stock'
                 }
                 variant="admin"
                 size="lg"
@@ -784,7 +795,7 @@ export default function StockTransferScreen() {
                 loading={isSubmitting}
                 icon={
                   mode === 'RECEIPT' ? (
-                    <Ionicons name="download-outline" size={20} color="#FFFFFF" />
+                    <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
                   ) : (
                     <Ionicons name="swap-horizontal-outline" size={20} color="#FFFFFF" />
                   )
@@ -792,11 +803,11 @@ export default function StockTransferScreen() {
                 style={{ marginTop: Spacing.xs, marginBottom: Spacing.md }}
               />
 
-              {/* Recent Movements Preview Strip */}
+              {/* Quick History Preview */}
               {transactions.length > 0 && (
                 <View style={styles.recentSection}>
                   <View style={styles.recentHeaderRow}>
-                    <Text style={styles.recentSectionTitle}>Recent Movements</Text>
+                    <Text style={styles.recentSectionTitle}>Recent History</Text>
                     <TouchableOpacity
                       onPress={() => setMode('HISTORY')}
                       hitSlop={6}
@@ -808,19 +819,19 @@ export default function StockTransferScreen() {
                   </View>
 
                   {transactions.slice(0, 3).map((tx) => {
-                    const isReceipt =
+                    const isInward =
                       tx.type === 'RECEIPT' || tx.type === 'INWARD' || tx.type === 'FACTORY';
                     return (
                       <View key={tx.id} style={styles.recentMiniCard}>
                         <View style={styles.recentMiniLeft}>
                           <Ionicons
-                            name={isReceipt ? 'arrow-down-circle' : 'swap-horizontal'}
+                            name={isInward ? 'arrow-down-circle' : 'swap-horizontal'}
                             size={16}
-                            color={isReceipt ? '#059669' : '#E61C5D'}
+                            color={isInward ? '#059669' : '#E61C5D'}
                           />
                           <View style={{ flex: 1, minWidth: 0 }}>
                             <Text style={styles.recentMiniProduct} numberOfLines={1}>
-                              {tx.product?.name || 'Stock'}
+                              {tx.product?.name || 'Sanitary Napkins'}
                             </Text>
                             <Text style={styles.recentMiniDate}>{formatTxDate(tx.createdAt)}</Text>
                           </View>
@@ -828,10 +839,10 @@ export default function StockTransferScreen() {
                         <Text
                           style={[
                             styles.recentMiniQty,
-                            { color: isReceipt ? '#059669' : '#E61C5D' },
+                            { color: isInward ? '#059669' : '#E61C5D' },
                           ]}
                         >
-                          {isReceipt ? '+' : '-'}
+                          {isInward ? '+' : '-'}
                           {tx.quantity} pkts
                         </Text>
                       </View>
@@ -847,7 +858,7 @@ export default function StockTransferScreen() {
       {/* 1. Searchable Warehouse Picker Modal */}
       <SearchableDropdownModal
         visible={warehousePickerOpen}
-        title={mode === 'RECEIPT' ? 'Select Receiving Warehouse' : 'Select Source Warehouse'}
+        title={mode === 'RECEIPT' ? 'Select Warehouse' : 'Select Source Warehouse'}
         searchPlaceholder="Search warehouse by name, code, or city..."
         options={warehouseOptions}
         selectedId={sourceWarehouseId}
@@ -862,7 +873,7 @@ export default function StockTransferScreen() {
       {/* 2. Searchable Destination Picker Modal */}
       <SearchableDropdownModal
         visible={destinationPickerOpen}
-        title="Select Target Destination (Officer / Depot)"
+        title="Select Target (Officer / Depot)"
         searchPlaceholder="Search officer by name, phone, or regional hub..."
         options={destinationOptions}
         selectedId={targetLocationId}
@@ -874,11 +885,11 @@ export default function StockTransferScreen() {
         emptyMessage="No officers or depots matching your query"
       />
 
-      {/* 3. Searchable Product SKU Picker Modal */}
+      {/* 3. Searchable Product Picker Modal */}
       <SearchableDropdownModal
         visible={productPickerOpen}
-        title="Select Product SKU"
-        searchPlaceholder="Search SKU by name, code, or floor price..."
+        title="Select Product"
+        searchPlaceholder="Search product by name or SKU..."
         options={productOptions}
         selectedId={selectedProductId}
         onSelect={(opt) => {
