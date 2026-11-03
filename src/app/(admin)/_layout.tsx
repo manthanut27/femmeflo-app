@@ -148,6 +148,15 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="users/[id]"
+        options={{
+          title: 'User Details',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
         name="notifications/index"
         options={{
           title: 'Notifications',

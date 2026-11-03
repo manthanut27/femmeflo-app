@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  DeviceEventEmitter,
   FlatList,
   Modal,
   KeyboardAvoidingView,
@@ -156,6 +157,12 @@ export default function AdminUsersScreen() {
   useEffect(() => {
     loadUsers(false);
     loadManagersList();
+
+    const sub = DeviceEventEmitter.addListener('USER_UPDATED', () => {
+      loadUsers(false);
+      loadManagersList();
+    });
+    return () => sub.remove();
   }, [loadUsers, loadManagersList]);
 
   const onRefresh = useCallback(() => {
@@ -300,8 +307,14 @@ export default function AdminUsersScreen() {
     return (
       <Card
         style={styles.card}
-        accessibilityRole="summary"
+        accessibilityRole="button"
         accessibilityLabel={`User ${item.name}, ${item.email || item.phone}, role ${tab === 'MANAGERS' ? 'Manager' : 'Seller'}, status ${item.active ? 'Active' : 'Inactive'}${isDualRole ? ', Dual Role' : ''}`}
+        onPress={() =>
+          router.push({
+            pathname: '/(admin)/users/[id]',
+            params: { id: item.id, role: tab === 'MANAGERS' ? 'MANAGER' : 'SELLER' },
+          } as any)
+        }
       >
         <View style={styles.header}>
           <View style={styles.avatarRow}>
@@ -334,11 +347,14 @@ export default function AdminUsersScreen() {
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Badge
-              label={item.active ? 'ACTIVE' : 'INACTIVE'}
-              variant={item.active ? 'ACTIVE' : 'INACTIVE'}
-              size="sm"
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Badge
+                label={item.active ? 'ACTIVE' : 'INACTIVE'}
+                variant={item.active ? 'ACTIVE' : 'INACTIVE'}
+                size="sm"
+              />
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </View>
             {isDualRole && (
               <Badge
                 label="DUAL ROLE"

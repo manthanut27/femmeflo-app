@@ -845,6 +845,16 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { manager: newManager, user: newManager } as unknown as T;
   }
 
+  if (cleanEndpoint.startsWith('admin/managers/') && method === 'GET' && !cleanEndpoint.includes('/permissions')) {
+    const targetId = cleanEndpoint.replace('admin/managers/', '');
+    const mgr =
+      mockDb.managers.find((m) => m.id === targetId) ||
+      mockDb.sellers.find((s) => s.id === targetId || (s as any).sellerId === targetId);
+    if (mgr) {
+      return { manager: mgr, user: mgr } as unknown as T;
+    }
+  }
+
   if (cleanEndpoint.startsWith('admin/managers/') && method === 'PATCH' && !cleanEndpoint.includes('/permissions')) {
     const targetId = cleanEndpoint.replace('admin/managers/', '');
     const mgr = mockDb.managers.find((m) => m.id === targetId);
@@ -855,6 +865,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       if (body.phone !== undefined) mgr.phone = body.phone;
       if (body.state !== undefined) mgr.state = body.state;
       if (body.district !== undefined) mgr.district = body.district;
+      if (body.active !== undefined) mgr.active = Boolean(body.active);
       return { manager: mgr, user: mgr } as unknown as T;
     }
     return { success: true } as unknown as T;
@@ -865,6 +876,32 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       items: mockDb.sellers,
       pagination: { page: 1, pageSize: 50, total: mockDb.sellers.length, totalPages: 1 },
     } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/sellers/') && method === 'GET') {
+    const targetId = cleanEndpoint.replace('admin/sellers/', '');
+    const seller =
+      mockDb.sellers.find((s) => s.id === targetId || (s as any).sellerId === targetId) ||
+      mockDb.managers.find((m) => m.id === targetId);
+    if (seller) {
+      return { seller, user: seller } as unknown as T;
+    }
+  }
+
+  if (cleanEndpoint.startsWith('admin/sellers/') && method === 'PATCH') {
+    const targetId = cleanEndpoint.replace('admin/sellers/', '');
+    const seller = mockDb.sellers.find((s) => s.id === targetId || (s as any).sellerId === targetId);
+    if (seller) {
+      if (body.name !== undefined) seller.name = body.name;
+      if (body.email !== undefined) seller.email = body.email;
+      if (body.phone !== undefined) seller.phone = body.phone;
+      if (body.state !== undefined) seller.state = body.state;
+      if (body.district !== undefined) seller.district = body.district;
+      if (body.village !== undefined) seller.village = body.village;
+      if (body.active !== undefined) seller.active = Boolean(body.active);
+      return { seller, user: seller } as unknown as T;
+    }
+    return { success: true } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/sellers' && method === 'POST') {

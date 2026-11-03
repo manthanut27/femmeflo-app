@@ -505,6 +505,13 @@ export const adminApi = {
     return { manager: (res.manager ?? res.user)! };
   },
 
+  async getManager(managerId: string): Promise<{ manager: PublicUser }> {
+    const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(`admin/managers/${managerId}`, {
+      method: 'GET',
+    });
+    return { manager: (res.manager ?? res.user)! };
+  },
+
   async listSellers(params?: { page?: number; pageSize?: number; search?: string }): Promise<{ items: PublicUser[]; pagination: PaginationMeta }> {
     const raw = await apiRequest<{ sellers?: PublicUser[]; items?: PublicUser[]; pagination: PaginationMeta }>(
       'admin/sellers',
@@ -570,6 +577,72 @@ export const adminApi = {
       body: JSON.stringify(body),
     });
     return { seller: (res.seller ?? res.user)! };
+  },
+
+  async getSeller(sellerId: string): Promise<{ seller: PublicUser }> {
+    const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>(`admin/sellers/${sellerId}`, {
+      method: 'GET',
+    });
+    return { seller: (res.seller ?? res.user)! };
+  },
+
+  async updateSeller(
+    sellerId: string,
+    payload: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      state?: string;
+      district?: string;
+      village?: string;
+      managerId?: string;
+      dailyTarget?: number;
+      shiftTiming?: string;
+      designation?: string;
+      active?: boolean;
+    }
+  ): Promise<{ seller: PublicUser }> {
+    const body: Record<string, any> = {};
+    if (payload.name !== undefined) body.name = payload.name.trim();
+    if (payload.email !== undefined) body.email = payload.email.trim();
+    if (payload.phone !== undefined) {
+      const raw = payload.phone.trim();
+      body.phone = raw.startsWith('+') ? raw : `+91${raw.replace(/\D/g, '').slice(-10)}`;
+    }
+    if (payload.state !== undefined) body.state = payload.state.trim();
+    if (payload.district !== undefined) body.district = payload.district.trim();
+    if (payload.village !== undefined) body.village = payload.village.trim();
+    if (payload.managerId !== undefined) body.managerId = payload.managerId;
+    if (payload.dailyTarget !== undefined) body.dailyTarget = payload.dailyTarget;
+    if (payload.shiftTiming !== undefined) body.shiftTiming = payload.shiftTiming.trim();
+    if (payload.designation !== undefined) body.designation = payload.designation.trim();
+    if (payload.active !== undefined) body.active = payload.active;
+
+    const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>(`admin/sellers/${sellerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return { seller: (res.seller ?? res.user)! };
+  },
+
+  async getUser(userId: string, preferredRole?: 'MANAGER' | 'SELLER'): Promise<{ user: PublicUser; role: 'MANAGER' | 'SELLER' }> {
+    if (preferredRole === 'MANAGER') {
+      try {
+        const res = await this.getManager(userId);
+        if (res.manager) return { user: res.manager, role: 'MANAGER' };
+      } catch {}
+    } else if (preferredRole === 'SELLER') {
+      try {
+        const res = await this.getSeller(userId);
+        if (res.seller) return { user: res.seller, role: 'SELLER' };
+      } catch {}
+    }
+    try {
+      const res = await this.getManager(userId);
+      if (res.manager) return { user: res.manager, role: 'MANAGER' };
+    } catch {}
+    const sellerRes = await this.getSeller(userId);
+    return { user: sellerRes.seller, role: 'SELLER' };
   },
 
   // ----------------------------------------------------
