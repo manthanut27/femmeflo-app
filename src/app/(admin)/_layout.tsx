@@ -120,6 +120,42 @@ export default function AdminTabsLayout() {
           ),
         }}
       />
+                  <Tabs.Screen
+        name="sellers/new"
+        options={{
+          title: 'Onboard Seller',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="managers/new"
+        options={{
+          title: 'Onboard Manager',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="users/new"
+        options={{
+          title: 'Onboard User',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="notifications/index"
+        options={{
+          title: 'Notifications',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
       <Tabs.Screen
         name="settings/password"
         options={{

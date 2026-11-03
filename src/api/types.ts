@@ -15,7 +15,16 @@ export interface PublicUser {
   state?: string | null;
   district?: string | null;
   village?: string | null;
+  territory?: string | null;
   managerId?: string | null;
+  employeeCode?: string | null;
+  designation?: string | null;
+  aadhaarNumber?: string | null;
+  drivingLicenseNumber?: string | null;
+  qualification?: string | null;
+  alternatePhone?: string | null;
+  address?: string | null;
+  pincode?: string | null;
   permissions?: string[];
   createdAt?: string;
   updatedAt?: string;
@@ -435,6 +444,9 @@ export interface NotificationItem {
   message: string;
   read: boolean;
   type?: string;
+  categoryLabel?: string;
+  actionUrl?: string;
+  actionLabel?: string;
   createdAt: string;
 }
 

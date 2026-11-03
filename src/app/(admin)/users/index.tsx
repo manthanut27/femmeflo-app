@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -40,6 +41,7 @@ import {
 type UserTab = 'MANAGERS' | 'SELLERS';
 
 export default function AdminUsersScreen() {
+  const router = useRouter();
   const [tab, setTab] = useState<UserTab>('MANAGERS');
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [availableManagers, setAvailableManagers] = useState<PublicUser[]>([]);
@@ -61,6 +63,8 @@ export default function AdminUsersScreen() {
   const [formState, setFormState] = useState('Maharashtra');
   const [formDistrict, setFormDistrict] = useState('Thane');
   const [formManagerId, setFormManagerId] = useState('');
+  const [formVillage, setFormVillage] = useState('');
+  const [formDailyTarget, setFormDailyTarget] = useState('30');
   const [formIsSeller, setFormIsSeller] = useState(false);
   // Edit Manager Persona Modal State
   const [editingManager, setEditingManager] = useState<PublicUser | null>(null);
@@ -161,26 +165,11 @@ export default function AdminUsersScreen() {
   }, [loadUsers, loadManagersList]);
 
   function handleOpenAddModal(role: 'MANAGER' | 'SELLER') {
-    setModalRole(role);
-    setFormName('');
-    setFormPhone('');
-    setFormEmail('');
-    setFormPassword('FemmeFlo@2026');
-    setFormState('Maharashtra');
-    setFormDistrict('Thane');
-    setFormErrors({});
-    setModalError(null);
-    setIsManagerPickerOpen(false);
-    setManagerSearchQuery('');
-    if (availableManagers.length > 0) {
-      const firstMgr = availableManagers[0];
-      setFormManagerId(firstMgr.id);
-      if (firstMgr.state) setFormState(firstMgr.state);
-      if (firstMgr.district) setFormDistrict(firstMgr.district);
+    if (role === 'MANAGER') {
+      router.push('/(admin)/managers/new' as any);
     } else {
-      setFormManagerId('');
+      router.push('/(admin)/sellers/new' as any);
     }
-    setModalVisible(true);
   }
 
   function handleCloseModal() {
@@ -419,7 +408,13 @@ export default function AdminUsersScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add user"
             style={styles.headerAddBtn}
-            onPress={() => handleOpenAddModal(tab === 'MANAGERS' ? 'MANAGER' : 'SELLER')}
+            onPress={() => {
+              if (tab === 'MANAGERS') {
+                router.push('/(admin)/managers/new' as any);
+              } else {
+                router.push('/(admin)/sellers/new' as any);
+              }
+            }}
             hitSlop={HitSlop.md}
           >
             <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
@@ -455,7 +450,7 @@ export default function AdminUsersScreen() {
           <View style={styles.actionPillsRow}>
             <Pressable
               style={[styles.actionPill, styles.actionPillManager]}
-              onPress={() => handleOpenAddModal('MANAGER')}
+              onPress={() => router.push('/(admin)/managers/new' as any)}
               accessibilityRole="button"
               accessibilityLabel="Add New Manager"
             >
@@ -465,7 +460,7 @@ export default function AdminUsersScreen() {
 
             <Pressable
               style={[styles.actionPill, styles.actionPillSeller]}
-              onPress={() => handleOpenAddModal('SELLER')}
+              onPress={() => router.push('/(admin)/sellers/new' as any)}
               accessibilityRole="button"
               accessibilityLabel="Add New Seller"
             >

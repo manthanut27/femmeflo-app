@@ -98,7 +98,7 @@ export default function ManagerSellersScreen() {
             <Text style={styles.phoneText}>{item.phone || 'No phone recorded'}</Text>
           </View>
           <Text style={styles.territoryText}>
-            {[item.district, item.state].filter(Boolean).join(', ') || 'Assigned Territory'}
+            {[item.village, [item.district, item.state].filter(Boolean).join(', ')].filter(Boolean).join(' • ') || 'Assigned Territory'}
           </Text>
         </View>
       </Card>

@@ -79,6 +79,17 @@ export const managerApi = {
     state?: string;
     district?: string;
     village?: string;
+    dailyTarget?: number;
+    shiftTiming?: string;
+    designation?: string;
+    employeeCode?: string;
+    active?: boolean;
+    alternatePhone?: string;
+    aadhaarNumber?: string;
+    drivingLicenseNumber?: string;
+    qualification?: string;
+    address?: string;
+    pincode?: string;
   }): Promise<{ seller: ManagerSellerItem }> {
     const rawPhone = (payload.phone || '').trim();
     const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
@@ -91,6 +102,17 @@ export const managerApi = {
     if (payload.state?.trim()) body.state = payload.state.trim();
     if (payload.district?.trim()) body.district = payload.district.trim();
     if (payload.village?.trim()) body.village = payload.village.trim();
+    if (payload.dailyTarget) body.dailyTarget = payload.dailyTarget;
+    if (payload.shiftTiming?.trim()) body.shiftTiming = payload.shiftTiming.trim();
+    if (payload.designation?.trim()) body.designation = payload.designation.trim();
+    if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
+    if (payload.active !== undefined) body.active = payload.active;
+    if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
+    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
+    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
+    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
+    if (payload.address?.trim()) body.address = payload.address.trim();
+    if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
 
     const raw = await apiRequest<{ seller?: ManagerSellerItem; user?: ManagerSellerItem }>('manager/sellers', {
       method: 'POST',

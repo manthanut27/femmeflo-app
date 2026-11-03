@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleProp, Text, TextStyle } from 'react-native';
 
 export interface NumberTickerProps {
-  value: string | number;
+  value: number | string;
   duration?: number;
   style?: StyleProp<TextStyle>;
   numberOfLines?: number;
@@ -11,12 +11,12 @@ export interface NumberTickerProps {
 }
 
 /**
- * NumberTicker (adapted from 21st.dev Number Ticker / Money Flow)
- * Smoothly interpolates and rolls numbers, metrics, and currency with high fidelity.
+ * Animated numeric ticker component for Indian FMCG metrics.
+ * Gracefully parses prefix (e.g. ₹), integer with commas (e.g. 14,800), and decimal/suffix.
  */
 export function NumberTicker({
   value,
-  duration = 700,
+  duration = 800,
   style,
   numberOfLines = 1,
   adjustsFontSizeToFit = true,
@@ -26,31 +26,20 @@ export function NumberTicker({
   // Matches prefix (e.g. ₹ or $), number with commas/decimals, and suffix (e.g. pkts, km)
   const match = rawStr.match(/^([^0-9.-]*)([0-9,]+(?:\.[0-9]+)?)(.*)$/);
 
-  if (!match) {
-    return (
-      <Text
-        style={style}
-        numberOfLines={numberOfLines}
-        adjustsFontSizeToFit={adjustsFontSizeToFit}
-        minimumFontScale={minimumFontScale}
-      >
-        {rawStr}
-      </Text>
-    );
-  }
-
-  const [, prefix, numStr, suffix] = match;
+  const prefix = match ? match[1] : '';
+  const numStr = match ? match[2] : '';
+  const suffix = match ? match[3] : '';
   const hasComma = numStr.includes(',');
   const decimalParts = numStr.replace(/,/g, '').split('.');
   const decimalPlaces = decimalParts.length > 1 ? decimalParts[1].length : 0;
-  const targetNum = parseFloat(numStr.replace(/,/g, ''));
+  const targetNum = match ? parseFloat(numStr.replace(/,/g, '')) : NaN;
 
-  const [displayValue, setDisplayValue] = useState<number>(0);
-  const prevTargetRef = useRef<number>(0);
+  const [displayValue, setDisplayValue] = useState<number>(isNaN(targetNum) ? 0 : targetNum);
+  const prevTargetRef = useRef<number>(isNaN(targetNum) ? 0 : targetNum);
   const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (isNaN(targetNum)) return;
+    if (!match || isNaN(targetNum)) return;
 
     const startNum = prevTargetRef.current;
     const diff = targetNum - startNum;
@@ -81,7 +70,20 @@ export function NumberTicker({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [targetNum, duration]);
+  }, [match, targetNum, duration]);
+
+  if (!match) {
+    return (
+      <Text
+        style={style}
+        numberOfLines={numberOfLines}
+        adjustsFontSizeToFit={adjustsFontSizeToFit}
+        minimumFontScale={minimumFontScale}
+      >
+        {rawStr}
+      </Text>
+    );
+  }
 
   // Format current animated number
   let formattedNumber = displayValue.toFixed(decimalPlaces);
@@ -102,4 +104,3 @@ export function NumberTicker({
     </Text>
   );
 }
-

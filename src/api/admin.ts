@@ -365,6 +365,13 @@ export const adminApi = {
     state?: string;
     district?: string;
     village?: string;
+    employeeCode?: string;
+    aadhaarNumber?: string;
+    drivingLicenseNumber?: string;
+    qualification?: string;
+    alternatePhone?: string;
+    address?: string;
+    pincode?: string;
     permissions?: string[];
     isSeller?: boolean;
   }): Promise<{ manager: PublicUser }> {
@@ -379,6 +386,13 @@ export const adminApi = {
     if (payload.state?.trim()) body.state = payload.state.trim();
     if (payload.district?.trim()) body.district = payload.district.trim();
     if (payload.village?.trim()) body.village = payload.village.trim();
+    if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
+    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
+    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
+    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
+    if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
+    if (payload.address?.trim()) body.address = payload.address.trim();
+    if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
     if (payload.permissions) body.permissions = payload.permissions;
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
 
@@ -448,6 +462,17 @@ export const adminApi = {
     state?: string;
     district?: string;
     village?: string;
+    dailyTarget?: number;
+    shiftTiming?: string;
+    designation?: string;
+    employeeCode?: string;
+    active?: boolean;
+    alternatePhone?: string;
+    aadhaarNumber?: string;
+    drivingLicenseNumber?: string;
+    qualification?: string;
+    address?: string;
+    pincode?: string;
   }): Promise<{ seller: PublicUser }> {
     const rawPhone = (payload.phone || '').trim();
     const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
@@ -461,6 +486,17 @@ export const adminApi = {
     if (payload.state?.trim()) body.state = payload.state.trim();
     if (payload.district?.trim()) body.district = payload.district.trim();
     if (payload.village?.trim()) body.village = payload.village.trim();
+    if (payload.dailyTarget) body.dailyTarget = payload.dailyTarget;
+    if (payload.shiftTiming?.trim()) body.shiftTiming = payload.shiftTiming.trim();
+    if (payload.designation?.trim()) body.designation = payload.designation.trim();
+    if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
+    if (payload.active !== undefined) body.active = payload.active;
+    if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
+    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
+    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
+    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
+    if (payload.address?.trim()) body.address = payload.address.trim();
+    if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
 
     const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>('admin/sellers', {
       method: 'POST',
@@ -522,6 +558,7 @@ export const adminApi = {
     if (payload.accuracy != null) body.accuracy = payload.accuracy;
     if (noPhotoReason) body.noPhotoReason = noPhotoReason;
     if (payload.photoPath) body.photoPath = payload.photoPath;
+    if (payload.sellerId) body.sellerId = payload.sellerId;
 
     return apiRequest<{ customer: CustomerItem }>('admin/customers', {
       method: 'POST',

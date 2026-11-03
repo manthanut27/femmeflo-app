@@ -1,3 +1,10 @@
+const PHOTO_EXEMPTION_CHIPS = [
+  'Poor network connectivity',
+  'Customer refused photo',
+  'Shopkeeper not present / closed',
+  'Camera / device malfunction',
+  'Indoor shop / poor lighting',
+];
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -407,8 +414,40 @@ export default function ManagerAddCustomerScreen() {
 
             {!photoUri && (
               <View style={{ marginTop: Spacing.md }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#991B1B', marginBottom: 4 }}>
+                  Reason for not adding shopkeeper photo * (Mandatory)
+                </Text>
+                <Text style={{ fontSize: 11, color: '#7F1D1D', marginBottom: 8 }}>
+                  Required when photo missing. Since no storefront photo is attached, please state why.
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {PHOTO_EXEMPTION_CHIPS.map((chip) => {
+                    const isSelected = noPhotoReason === chip;
+                    return (
+                      <Pressable
+                        key={chip}
+                        onPress={() => {
+                          setNoPhotoReason(chip);
+                          if (errors.noPhotoReason) setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
+                        }}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 9999,
+                          borderWidth: 1,
+                          borderColor: isSelected ? BrandColors.green.primary : '#FECACA',
+                          backgroundColor: isSelected ? BrandColors.green.primary : '#FFFFFF',
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: isSelected ? '#FFFFFF' : '#991B1B' }}>
+                          {chip}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
                 <Input
-                  label="Mandatory Photo Exemption Reason *"
+                  label="Custom Exemption Reason Details *"
                   placeholder="e.g. Remote kiosk, Owner unavailable, Device camera error"
                   value={noPhotoReason}
                   onChangeText={setNoPhotoReason}
