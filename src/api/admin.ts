@@ -20,6 +20,7 @@ import type {
   SalesReportData,
   SalesReportQuery,
   Shift,
+  StockTransactionItem,
   UpdateProductPayload,
   UpdateUserRatePayload,
   UserIncentiveDetails,
@@ -376,6 +377,33 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async listTransactions(params?: {
+    page?: number;
+    pageSize?: number;
+    locationId?: string;
+    type?: string;
+  }): Promise<{ items: StockTransactionItem[]; pagination: PaginationMeta }> {
+    try {
+      const raw = await apiRequest<{ transactions?: StockTransactionItem[]; items?: StockTransactionItem[]; pagination: PaginationMeta }>(
+        'admin/inventory/transactions',
+        {
+          method: 'GET',
+          params,
+        }
+      );
+      const list = raw?.transactions ?? raw?.items ?? [];
+      return {
+        items: list,
+        pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+      };
+    } catch {
+      return {
+        items: [],
+        pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+      };
+    }
   },
 
   // ----------------------------------------------------

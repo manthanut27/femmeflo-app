@@ -45,10 +45,10 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Executive',
+          title: 'Home',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'pie-chart' : 'pie-chart-outline'}
+              name={focused ? 'home' : 'home-outline'}
               size={size}
               color={typeof color === 'string' ? color : undefined}
             />
@@ -84,7 +84,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'HQ Stock',
+          title: 'Stock',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'cube' : 'cube-outline'}
@@ -97,10 +97,10 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="users/index"
         options={{
-          title: 'Users',
+          title: 'Team',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'people-circle' : 'people-circle-outline'}
+              name={focused ? 'people' : 'people-outline'}
               size={size}
               color={typeof color === 'string' ? color : undefined}
             />

@@ -804,6 +804,14 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { success: true, message: 'Stock transfer recorded and dispatched.' } as unknown as T;
   }
 
+  if (cleanEndpoint === 'admin/inventory/transactions') {
+    return {
+      items: mockDb.transactions,
+      transactions: mockDb.transactions,
+      pagination: { page: 1, pageSize: 20, total: mockDb.transactions.length, totalPages: 1 },
+    } as unknown as T;
+  }
+
   if (cleanEndpoint === 'admin/managers' && method === 'GET') {
     return {
       items: mockDb.managers,

@@ -271,10 +271,10 @@ export function DropdownTrigger({
               color={hasValue ? BrandColors.pink.primary : Colors.light.textTertiary}
             />
           </View>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Text
-                style={[styles.triggerValueText, !hasValue && styles.triggerPlaceholderText]}
+                style={[styles.triggerValueText, !hasValue && styles.triggerPlaceholderText, { flexShrink: 1 }]}
                 numberOfLines={1}
               >
                 {value || placeholder}
@@ -282,7 +282,7 @@ export function DropdownTrigger({
               {badge ? <Badge label={badge} variant="ACTIVE" size="sm" /> : null}
             </View>
             {subtitle ? (
-              <Text style={styles.triggerSubText} numberOfLines={1}>
+              <Text style={styles.triggerSubText} numberOfLines={2}>
                 {subtitle}
               </Text>
             ) : null}
