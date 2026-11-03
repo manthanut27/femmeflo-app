@@ -77,6 +77,8 @@ export const adminApi = {
     states: string[];
     districts: string[];
     villages: string[];
+    rawDistricts?: Array<{ state: string; district: string } | string>;
+    rawVillages?: Array<{ state: string; district: string; village: string } | string>;
   }> {
     try {
       const raw = await apiRequest<any>('admin/dashboard/filters', { method: 'GET' });
@@ -115,6 +117,8 @@ export const adminApi = {
         states: Array.from(new Set(states)),
         districts,
         villages,
+        rawDistricts: Array.isArray(raw.districts) ? raw.districts : [],
+        rawVillages: Array.isArray(raw.villages) ? raw.villages : [],
       };
     } catch {
       return {
@@ -125,6 +129,22 @@ export const adminApi = {
         states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan', 'Maharashtra'],
         districts: ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
         villages: ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+        rawDistricts: [
+          { state: 'Maharashtra', district: 'Thane' },
+          { state: 'Maharashtra', district: 'Mumbai' },
+          { state: 'Uttar Pradesh', district: 'Varanasi' },
+          { state: 'Madhya Pradesh', district: 'Indore' },
+          { state: 'Madhya Pradesh', district: 'Bhopal' },
+          { state: 'Bihar', district: 'Patna' },
+          { state: 'Rajasthan', district: 'Jaipur' },
+        ],
+        rawVillages: [
+          { state: 'Maharashtra', district: 'Thane', village: 'Diva' },
+          { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
+          { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
+          { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
+          { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
+        ],
       };
     }
   },
