@@ -389,6 +389,41 @@ export const adminApi = {
     return { manager: (res.manager ?? res.user)! };
   },
 
+  async updateManager(
+    managerId: string,
+    payload: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      state?: string;
+      district?: string;
+      village?: string;
+      permissions?: string[];
+      isSeller?: boolean;
+      active?: boolean;
+    }
+  ): Promise<{ manager: PublicUser }> {
+    const body: Record<string, any> = {};
+    if (payload.name !== undefined) body.name = payload.name.trim();
+    if (payload.email !== undefined) body.email = payload.email.trim();
+    if (payload.phone !== undefined) {
+      const raw = payload.phone.trim();
+      body.phone = raw.startsWith('+') ? raw : `+91${raw.replace(/\D/g, '').slice(-10)}`;
+    }
+    if (payload.state !== undefined) body.state = payload.state.trim();
+    if (payload.district !== undefined) body.district = payload.district.trim();
+    if (payload.village !== undefined) body.village = payload.village.trim();
+    if (payload.permissions !== undefined) body.permissions = payload.permissions;
+    if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
+    if (payload.active !== undefined) body.active = payload.active;
+
+    const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(`admin/managers/${managerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return { manager: (res.manager ?? res.user)! };
+  },
+
   async listSellers(params?: { page?: number; pageSize?: number; search?: string }): Promise<{ items: PublicUser[]; pagination: PaginationMeta }> {
     const raw = await apiRequest<{ sellers?: PublicUser[]; items?: PublicUser[]; pagination: PaginationMeta }>(
       'admin/sellers',

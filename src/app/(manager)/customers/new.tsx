@@ -40,9 +40,11 @@ import {
 import { draftStorage } from '@/utils/draftStorage';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ManagerAddCustomerScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
   // Form Fields
   const [shopName, setShopName] = useState('');
@@ -99,7 +101,9 @@ export default function ManagerAddCustomerScreen() {
       .listSellers({ pageSize: 50 })
       .then((res) => {
         setSellers(res.items);
-        if (res.items.length > 0 && !sellerId) {
+        if (user?.isSeller) {
+          setSellerId(user.id);
+        } else if (res.items.length > 0 && !sellerId) {
           setSellerId(res.items[0].id);
         }
       })
@@ -226,6 +230,7 @@ export default function ManagerAddCustomerScreen() {
         state: stateName.trim(),
         district: district.trim(),
         village: village.trim() || undefined,
+        sellerId: sellerId || (user?.isSeller ? user.id : undefined),
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
         photoUri: photoUri || undefined,
@@ -450,6 +455,58 @@ export default function ManagerAddCustomerScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
+          </Card>
+
+          {/* Account Assignment & Field Fulfillment */}
+          <Text style={styles.sectionHeading}>Account Assignment & Field Fulfillment</Text>
+          <Card style={styles.card}>
+            <Text style={styles.cardSubText}>
+              Select whether this retail partner is fulfilled directly under your personal van stock or assigned to a territory seller.
+            </Text>
+            <View style={styles.sellerSelectWrap}>
+              {user?.isSeller ? (
+                <Pressable
+                  style={[
+                    styles.sellerPill,
+                    (!sellerId || sellerId === user?.id) && styles.sellerPillSelected,
+                  ]}
+                  onPress={() => setSellerId(user?.id || '')}
+                >
+                  <Ionicons
+                    name="car"
+                    size={16}
+                    color={(!sellerId || sellerId === user?.id) ? '#FFFFFF' : BrandColors.green.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.sellerPillText,
+                      (!sellerId || sellerId === user?.id) && styles.sellerPillTextSelected,
+                    ]}
+                  >
+                    Myself (Personal Van Stock)
+                  </Text>
+                </Pressable>
+              ) : null}
+              {sellers.map((s) => {
+                const isSelected = sellerId === s.id;
+                return (
+                  <Pressable
+                    key={s.id}
+                    style={[styles.sellerPill, isSelected && styles.sellerPillSelected]}
+                    onPress={() => setSellerId(s.id)}
+                  >
+                    <Ionicons
+                      name="person"
+                      size={14}
+                      color={isSelected ? '#FFFFFF' : Colors.light.textSecondary}
+                    />
+                    <Text style={[styles.sellerPillText, isSelected && styles.sellerPillTextSelected]}>
+                      {s.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Card>
 
           {/* Trade Category */}
@@ -691,6 +748,40 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.light.textSecondary,
     marginTop: 1,
+  },
+  cardSubText: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.sm,
+    lineHeight: 16,
+  },
+  sellerSelectWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  sellerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: '#F8FAFC',
+  },
+  sellerPillSelected: {
+    backgroundColor: BrandColors.green.primary,
+    borderColor: BrandColors.green.primary,
+  },
+  sellerPillText: {
+    ...Typography.bodySmall,
+    fontWeight: '600',
+    color: Colors.light.textPrimary,
+  },
+  sellerPillTextSelected: {
+    color: '#FFFFFF',
   },
 });
 

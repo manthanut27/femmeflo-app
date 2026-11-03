@@ -61,6 +61,12 @@ export default function AdminUsersScreen() {
   const [formState, setFormState] = useState('Maharashtra');
   const [formDistrict, setFormDistrict] = useState('Thane');
   const [formManagerId, setFormManagerId] = useState('');
+  const [formIsSeller, setFormIsSeller] = useState(false);
+  // Edit Manager Persona Modal State
+  const [editingManager, setEditingManager] = useState<PublicUser | null>(null);
+  const [editIsSeller, setEditIsSeller] = useState(false);
+  const [isUpdatingPersona, setIsUpdatingPersona] = useState(false);
+  const [editPersonaError, setEditPersonaError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [modalError, setModalError] = useState<string | null>(null);
@@ -181,8 +187,40 @@ export default function AdminUsersScreen() {
     setModalVisible(false);
     setIsManagerPickerOpen(false);
     setManagerSearchQuery('');
+    setFormIsSeller(false);
     setFormErrors({});
     setModalError(null);
+  }
+
+  function handleOpenEditModal(manager: PublicUser) {
+    setEditingManager(manager);
+    setEditIsSeller(Boolean(manager.isSeller));
+    setEditPersonaError(null);
+  }
+
+  function handleCloseEditModal() {
+    setEditingManager(null);
+    setEditPersonaError(null);
+  }
+
+  async function handleSavePersona() {
+    if (!editingManager || isUpdatingPersona) return;
+    setIsUpdatingPersona(true);
+    setEditPersonaError(null);
+    try {
+      await adminApi.updateManager(editingManager.id, { isSeller: editIsSeller });
+      setScreenFeedback({
+        type: 'success',
+        message: `Dual-Role Persona ${editIsSeller ? 'enabled' : 'disabled'} for ${editingManager.name}. Van stock allocation updated.`,
+      });
+      setEditingManager(null);
+      loadUsers(false);
+      loadManagersList();
+    } catch (err: any) {
+      setEditPersonaError(err.message || 'Failed to update manager persona.');
+    } finally {
+      setIsUpdatingPersona(false);
+    }
   }
 
   function validateForm(): boolean {
@@ -228,6 +266,7 @@ export default function AdminUsersScreen() {
           password: formPassword,
           state: formState.trim() || undefined,
           district: formDistrict.trim() || undefined,
+          isSeller: formIsSeller,
         });
         setModalVisible(false);
         setScreenFeedback({
@@ -267,62 +306,108 @@ export default function AdminUsersScreen() {
     { key: 'SELLERS', label: 'Sellers (Field Force)', badge: tab === 'SELLERS' ? users.length : undefined },
   ];
 
-  const renderItem = ({ item }: { item: PublicUser }) => (
-    <Card
-      style={styles.card}
-      accessibilityRole="summary"
-      accessibilityLabel={`User ${item.name}, ${item.email || item.phone}, role ${tab === 'MANAGERS' ? 'Manager' : 'Seller'}, status ${item.active ? 'Active' : 'Inactive'}`}
-    >
-      <View style={styles.header}>
-        <View style={styles.avatarRow}>
-          <View
-            style={[
-              styles.avatarCircle,
-              {
-                backgroundColor:
-                  tab === 'MANAGERS' ? BrandColors.green.subtle : BrandColors.pink.subtle,
-                borderColor:
-                  tab === 'MANAGERS' ? BrandColors.green.tint : BrandColors.pink.tint,
-              },
-            ]}
-          >
-            <Text
+  const renderItem = ({ item }: { item: PublicUser }) => {
+    const isDualRole = tab === 'MANAGERS' && Boolean(item.isSeller);
+    return (
+      <Card
+        style={styles.card}
+        accessibilityRole="summary"
+        accessibilityLabel={`User ${item.name}, ${item.email || item.phone}, role ${tab === 'MANAGERS' ? 'Manager' : 'Seller'}, status ${item.active ? 'Active' : 'Inactive'}${isDualRole ? ', Dual Role' : ''}`}
+      >
+        <View style={styles.header}>
+          <View style={styles.avatarRow}>
+            <View
               style={[
-                styles.avatarText,
+                styles.avatarCircle,
                 {
-                  color:
-                    tab === 'MANAGERS' ? BrandColors.green.primary : BrandColors.pink.dark,
+                  backgroundColor:
+                    tab === 'MANAGERS' ? BrandColors.green.subtle : BrandColors.pink.subtle,
+                  borderColor:
+                    tab === 'MANAGERS' ? BrandColors.green.tint : BrandColors.pink.tint,
                 },
               ]}
             >
-              {item.name?.slice(0, 2).toUpperCase() || 'U'}
+              <Text
+                style={[
+                  styles.avatarText,
+                  {
+                    color:
+                      tab === 'MANAGERS' ? BrandColors.green.primary : BrandColors.pink.dark,
+                  },
+                ]}
+              >
+                {item.name?.slice(0, 2).toUpperCase() || 'U'}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.email}>{item.email || 'No email registered'}</Text>
+            </View>
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <Badge
+              label={item.active ? 'ACTIVE' : 'INACTIVE'}
+              variant={item.active ? 'ACTIVE' : 'INACTIVE'}
+              size="sm"
+            />
+            {isDualRole && (
+              <Badge
+                label="DUAL ROLE"
+                variant="ACTIVE"
+                size="sm"
+                pulse={true}
+              />
+            )}
+          </View>
+        </View>
+
+        {isDualRole && (
+          <View style={styles.dualRoleBadgeRow}>
+            <Ionicons name="bus-outline" size={13} color={BrandColors.pink.dark} />
+            <Text style={styles.dualRoleBadgeText}>Dedicated Van Stock & Field Sales POS Active</Text>
+          </View>
+        )}
+
+        <View style={styles.footer}>
+          <View style={styles.contactRow}>
+            <Ionicons name="call-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
+            <Text style={styles.phone}>{item.phone || 'No phone registered'}</Text>
+          </View>
+          <View style={styles.territoryRow}>
+            <Ionicons name="location-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
+            <Text style={styles.territory}>
+              {[item.district, item.state].filter(Boolean).join(', ') || 'All Regions'}
             </Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.email}>{item.email || 'No email registered'}</Text>
+        </View>
+
+        {tab === 'MANAGERS' && (
+          <View style={styles.managerCardActionRow}>
+            <Pressable
+              style={styles.configurePersonaBtn}
+              onPress={() => handleOpenEditModal(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Configure persona for ${item.name}`}
+            >
+              <Ionicons
+                name="swap-horizontal"
+                size={14}
+                color={isDualRole ? BrandColors.pink.primary : BrandColors.green.primary}
+              />
+              <Text
+                style={[
+                  styles.configurePersonaBtnText,
+                  isDualRole && { color: BrandColors.pink.dark },
+                ]}
+              >
+                {isDualRole ? 'Manage Dual-Role Persona' : '+ Enable Dual-Role Persona'}
+              </Text>
+            </Pressable>
           </View>
-        </View>
-        <Badge
-          label={item.active ? 'ACTIVE' : 'INACTIVE'}
-          variant={item.active ? 'ACTIVE' : 'INACTIVE'}
-          size="sm"
-        />
-      </View>
-      <View style={styles.footer}>
-        <View style={styles.contactRow}>
-          <Ionicons name="call-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
-          <Text style={styles.phone}>{item.phone || 'No phone registered'}</Text>
-        </View>
-        <View style={styles.territoryRow}>
-          <Ionicons name="location-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
-          <Text style={styles.territory}>
-            {[item.district, item.state].filter(Boolean).join(', ') || 'All Regions'}
-          </Text>
-        </View>
-      </View>
-    </Card>
-  );
+        )}
+      </Card>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -813,6 +898,46 @@ export default function AdminUsersScreen() {
                       </View>
                     </View>
                   </View>
+
+                  {/* Dual-Role Persona Toggle for Managers */}
+                  {modalRole === 'MANAGER' && (
+                    <Pressable
+                      style={[
+                        styles.dualRoleToggleCard,
+                        formIsSeller && styles.dualRoleToggleCardActive,
+                      ]}
+                      onPress={() => setFormIsSeller(!formIsSeller)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: formIsSeller }}
+                      accessibilityLabel="Enable Dual-Role Persona for field sales and dedicated van stock"
+                    >
+                      <View style={styles.dualRoleToggleLeft}>
+                        <View style={[styles.dualRoleToggleIconCircle, formIsSeller && styles.dualRoleToggleIconCircleActive]}>
+                          <Ionicons
+                            name="swap-horizontal"
+                            size={18}
+                            color={formIsSeller ? '#FFFFFF' : BrandColors.green.primary}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.dualRoleToggleTitle}>Dual-Role Persona</Text>
+                            <Badge
+                              label={formIsSeller ? 'FIELD SALES & VAN STOCK' : 'OFF'}
+                              variant={formIsSeller ? 'ACTIVE' : 'neutral'}
+                              size="sm"
+                            />
+                          </View>
+                          <Text style={styles.dualRoleToggleDesc}>
+                            Provisions dedicated vehicle/van inventory, allows frontline mobile POS sales, duty shifts, and store onboarding.
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.switchTrack, formIsSeller && styles.switchTrackActive]}>
+                        <View style={[styles.switchThumb, formIsSeller && styles.switchThumbActive]} />
+                      </View>
+                    </Pressable>
+                  )}
                 </ScrollView>
 
                 {/* Modal Actions */}
@@ -842,6 +967,184 @@ export default function AdminUsersScreen() {
                 </View>
               </>
             )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ======================================================= */}
+      {/* EDIT MANAGER PERSONA & DUAL-ROLE CONFIGURATION MODAL   */}
+      {/* ======================================================= */}
+      <Modal
+        visible={Boolean(editingManager)}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCloseEditModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={handleCloseEditModal} />
+
+          <View style={styles.modalSheetCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalHeading}>Configure Manager Persona</Text>
+                <Text style={styles.modalSubheading}>
+                  Territory supervision & dual operational field roles
+                </Text>
+              </View>
+              <Pressable
+                onPress={handleCloseEditModal}
+                hitSlop={HitSlop.md}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={20} color={Colors.light.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.modalFormScroll}
+              contentContainerStyle={styles.modalFormScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {editPersonaError && (
+                <FeedbackBanner
+                  type="error"
+                  message={editPersonaError}
+                  onDismiss={() => setEditPersonaError(null)}
+                  style={{ marginBottom: Spacing.sm }}
+                />
+              )}
+
+              {/* Manager Card Summary */}
+              {editingManager && (
+                <View style={styles.editManagerHeaderBox}>
+                  <View style={styles.editManagerAvatarCircle}>
+                    <Text style={styles.editManagerAvatarText}>
+                      {editingManager.name?.slice(0, 2).toUpperCase() || 'TM'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.editManagerName}>{editingManager.name}</Text>
+                    <Text style={styles.editManagerSub}>
+                      {[editingManager.district, editingManager.state].filter(Boolean).join(', ') || 'All Regions'} • {editingManager.phone || editingManager.email}
+                    </Text>
+                  </View>
+                  <Badge label="MANAGER" variant="ACTIVE" size="sm" />
+                </View>
+              )}
+
+              {/* Dual-Role Setting Toggle Card */}
+              <Pressable
+                style={[
+                  styles.dualRoleToggleCard,
+                  editIsSeller && styles.dualRoleToggleCardActive,
+                ]}
+                onPress={() => setEditIsSeller(!editIsSeller)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: editIsSeller }}
+                accessibilityLabel="Enable Dual-Role Persona for field sales and dedicated van stock"
+              >
+                <View style={styles.dualRoleToggleLeft}>
+                  <View style={[styles.dualRoleToggleIconCircle, editIsSeller && styles.dualRoleToggleIconCircleActive]}>
+                    <Ionicons
+                      name="swap-horizontal"
+                      size={20}
+                      color={editIsSeller ? '#FFFFFF' : BrandColors.green.primary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.dualRoleToggleTitle}>Dual-Role Persona</Text>
+                      <Badge
+                        label={editIsSeller ? 'FIELD SALES READY' : 'SUPERVISORY ONLY'}
+                        variant={editIsSeller ? 'ACTIVE' : 'neutral'}
+                        size="sm"
+                      />
+                    </View>
+                    <Text style={styles.dualRoleToggleDesc}>
+                      {editIsSeller
+                        ? 'Manager has supervisory privileges AND frontline field capabilities with dedicated van inventory.'
+                        : 'Manager operates strictly in supervisory governance without individual field stock balance.'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.switchTrack, editIsSeller && styles.switchTrackActive]}>
+                  <View style={[styles.switchThumb, editIsSeller && styles.switchThumbActive]} />
+                </View>
+              </Pressable>
+
+              {/* Architectural Feature Explanation Box */}
+              <View style={styles.architectureBox}>
+                <View style={styles.archTitleRow}>
+                  <Ionicons name="information-circle-outline" size={18} color={BrandColors.pink.primary} />
+                  <Text style={styles.archTitle}>What Enabling This Feature Does</Text>
+                </View>
+
+                <View style={styles.archItem}>
+                  <Ionicons name="swap-horizontal-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.archItemHeading}>Dual Portal & Screen Navigation</Text>
+                    <Text style={styles.archItemDesc}>
+                      Manager Portal: supervisory team reports, audits, price breaches. Seller Portal: frontline mobile POS, store visits, and duty punch-in.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.archItem}>
+                  <Ionicons name="car-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.archItemHeading}>Dedicated Field Inventory (Van Stock)</Text>
+                    <Text style={styles.archItemDesc}>
+                      Provisions an individual field stock balance under this manager. Central HQ or depot inventory can be transferred directly to their vehicle for retail fulfillment.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.archItem}>
+                  <Ionicons name="storefront-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.archItemHeading}>Frontline Customer Onboarding</Text>
+                    <Text style={styles.archItemDesc}>
+                      Directly onboards and KYC-verifies new retail outlets on the road, with those customers automatically mapped under their supervisory territory.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.archItem}>
+                  <Ionicons name="key-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.archItemHeading}>Single Identity & Credentials</Text>
+                    <Text style={styles.archItemDesc}>
+                      Unified login credentials grant access across both seller-level transaction APIs and manager-level governance endpoints.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionRow}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                size="md"
+                style={{ flex: 1, marginRight: Spacing.sm }}
+                onPress={handleCloseEditModal}
+                disabled={isUpdatingPersona}
+              />
+              <Button
+                title={isUpdatingPersona ? 'Saving...' : 'Save Persona Settings'}
+                variant="admin"
+                size="md"
+                style={{ flex: 1.5 }}
+                loading={isUpdatingPersona}
+                onPress={handleSavePersona}
+              />
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1211,5 +1514,189 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.sm,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
+  },
+  dualRoleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BrandColors.pink.subtle,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xs,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.tint,
+  },
+  dualRoleBadgeText: {
+    ...Typography.caption,
+    color: BrandColors.pink.dark,
+    fontWeight: '600',
+    fontSize: 11,
+    marginLeft: 6,
+  },
+  managerCardActionRow: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  configurePersonaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  configurePersonaBtnText: {
+    ...Typography.caption,
+    color: BrandColors.green.primary,
+    fontWeight: '700',
+    fontSize: 11,
+    marginLeft: 4,
+  },
+  dualRoleToggleCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.light.border,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dualRoleToggleCardActive: {
+    borderColor: BrandColors.green.primary,
+    backgroundColor: BrandColors.green.subtle,
+  },
+  dualRoleToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  dualRoleToggleIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  dualRoleToggleIconCircleActive: {
+    backgroundColor: BrandColors.green.primary,
+  },
+  dualRoleToggleTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  dualRoleToggleDesc: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  switchTrack: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#CBD5E1',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  switchTrackActive: {
+    backgroundColor: BrandColors.green.primary,
+  },
+  switchThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  switchThumbActive: {
+    alignSelf: 'flex-end',
+  },
+  editManagerHeaderBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginBottom: Spacing.sm,
+  },
+  editManagerAvatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: BrandColors.green.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.green.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  editManagerAvatarText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: BrandColors.green.primary,
+  },
+  editManagerName: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  editManagerSub: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+  },
+  architectureBox: {
+    marginTop: Spacing.lg,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  archTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  archTitle: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    marginLeft: 6,
+  },
+  archItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
+  },
+  archIcon: {
+    marginTop: 2,
+    marginRight: 8,
+  },
+  archItemHeading: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  archItemDesc: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

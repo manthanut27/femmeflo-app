@@ -106,6 +106,7 @@ export interface CreateCustomerPayload {
   photoSkipReason?: string;
   photoPath?: string;
   photoUri?: string;
+  sellerId?: string;
 }
 
 export interface BulkCustomerRow {

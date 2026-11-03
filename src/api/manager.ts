@@ -160,6 +160,7 @@ export const managerApi = {
       village: payload.village || 'Default',
     };
     if (payload.email) body.email = payload.email.trim();
+    if (payload.sellerId) body.sellerId = payload.sellerId;
     if (payload.latitude != null) body.latitude = payload.latitude;
     if (payload.longitude != null) body.longitude = payload.longitude;
     if (payload.accuracy != null) body.accuracy = payload.accuracy;

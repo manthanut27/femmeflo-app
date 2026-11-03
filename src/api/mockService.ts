@@ -787,12 +787,28 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       phone: body.phone || '+91 98765 00000',
       role: 'MANAGER',
       active: true,
+      isSeller: Boolean(body.isSeller),
       state: body.state || 'Madhya Pradesh',
       district: body.district || 'Indore',
       createdAt: new Date().toISOString(),
     };
     mockDb.managers.unshift(newManager);
-    return { manager: newManager } as unknown as T;
+    return { manager: newManager, user: newManager } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/managers/') && method === 'PATCH' && !cleanEndpoint.includes('/permissions')) {
+    const targetId = cleanEndpoint.replace('admin/managers/', '');
+    const mgr = mockDb.managers.find((m) => m.id === targetId);
+    if (mgr) {
+      if (body.isSeller !== undefined) mgr.isSeller = Boolean(body.isSeller);
+      if (body.name !== undefined) mgr.name = body.name;
+      if (body.email !== undefined) mgr.email = body.email;
+      if (body.phone !== undefined) mgr.phone = body.phone;
+      if (body.state !== undefined) mgr.state = body.state;
+      if (body.district !== undefined) mgr.district = body.district;
+      return { manager: mgr, user: mgr } as unknown as T;
+    }
+    return { success: true } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/sellers' && method === 'GET') {

@@ -228,6 +228,34 @@ export default function SellerDashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BrandColors.pink.primary]} />}
       >
         <View style={styles.contentWrapper}>
+          {/* Dual-Role Persona Manager Return Banner */}
+          {user?.role === 'MANAGER' ? (
+            <Card style={styles.managerModeCard}>
+              <View style={styles.managerModeHeader}>
+                <View style={styles.managerModeIconBox}>
+                  <Ionicons name="briefcase-outline" size={18} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.managerModeTitleRow}>
+                    <Text style={styles.managerModeTitle}>Field Sales Mode</Text>
+                    <Badge label="TERRITORY MANAGER" variant="ACTIVE" size="sm" pulse={true} />
+                  </View>
+                  <Text style={styles.managerModeDesc}>
+                    Operating field POS sales & duty visits with your dedicated van stock.
+                  </Text>
+                </View>
+              </View>
+              <Button
+                title="Return to Territory Manager Hub"
+                variant="outline-secondary"
+                size="sm"
+                icon={<Ionicons name="swap-horizontal" size={16} color={BrandColors.green.primary} />}
+                onPress={() => router.replace('/(manager)' as any)}
+                style={styles.managerModeBtn}
+              />
+            </Card>
+          ) : null}
+
           {/* Active Shift Card */}
           <Card
             variant={currentShift ? 'elevated' : 'outlined'}
@@ -617,5 +645,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: Spacing.lg,
+  },
+  managerModeCard: {
+    backgroundColor: BrandColors.green.subtle,
+    borderColor: BrandColors.green.tint,
+    borderWidth: 1.5,
+    marginBottom: Spacing.md,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+  },
+  managerModeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  managerModeIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BrandColors.green.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+    marginTop: 2,
+  },
+  managerModeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  managerModeTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: BrandColors.green.dark,
+  },
+  managerModeDesc: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    lineHeight: 16,
+  },
+  managerModeBtn: {
+    marginTop: Spacing.sm,
   },
 });

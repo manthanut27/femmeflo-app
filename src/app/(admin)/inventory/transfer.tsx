@@ -69,6 +69,7 @@ export default function StockTransferScreen() {
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>(DEFAULT_WAREHOUSES);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [sellers, setSellers] = useState<PublicUser[]>([]);
+  const [managers, setManagers] = useState<PublicUser[]>([]);
 
   // Form Fields
   const [sourceWarehouseId, setSourceWarehouseId] = useState(DEFAULT_WAREHOUSES[0].id);
@@ -92,8 +93,9 @@ export default function StockTransferScreen() {
       adminApi.getWarehouses().catch(() => ({ items: DEFAULT_WAREHOUSES })),
       adminApi.listProducts().catch(() => ({ items: [] as ProductItem[] })),
       adminApi.listSellers({ pageSize: 100 }).catch(() => ({ items: [] as PublicUser[] })),
+      adminApi.listManagers({ pageSize: 100 }).catch(() => ({ items: [] as PublicUser[] })),
       adminApi.getInventorySummary().catch(() => null),
-    ]).then(([whRes, prodRes, sellRes, summary]) => {
+    ]).then(([whRes, prodRes, sellRes, mgrRes, summary]) => {
       const liveWarehouses: WarehouseItem[] = whRes.items && whRes.items.length > 0 ? whRes.items : DEFAULT_WAREHOUSES;
       setWarehouses(liveWarehouses);
 
@@ -102,6 +104,9 @@ export default function StockTransferScreen() {
 
       const sellItems = sellRes.items || [];
       setSellers(sellItems);
+
+      const mgrItems = mgrRes.items || [];
+      setManagers(mgrItems);
 
       // Initialize source warehouse
       if (liveWarehouses.length > 0) {
@@ -150,11 +155,25 @@ export default function StockTransferScreen() {
     });
   }, [warehouses]);
 
-  // Dropdown Options: Destination Targets (Field Officers & Regional Depots)
+  // Dropdown Options: Destination Targets (Field Officers, Dual-Role Managers & Regional Depots)
   const destinationOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [];
 
-    // 1. Field Officers / Sellers
+    // 1. Dual-Role Managers (Dedicated Field Van Stock)
+    const dualRoleManagers = managers.filter((m) => Boolean(m.isSeller));
+    for (const m of dualRoleManagers) {
+      list.push({
+        id: m.id,
+        title: `${m.name} (Dual-Role Manager - Van Stock)`,
+        subtitle: `Manager Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
+        badge: 'VAN STOCK',
+        badgeVariant: 'ACTIVE',
+        metadata: `${m.phone || ''} ${m.email || ''} ${m.district || ''} dual role van stock manager`,
+        icon: 'car',
+      });
+    }
+
+    // 2. Field Officers / Sellers
     for (const s of sellers) {
       list.push({
         id: s.id,
@@ -184,7 +203,7 @@ export default function StockTransferScreen() {
     }
 
     return list;
-  }, [sellers, warehouses, sourceWarehouseId]);
+  }, [managers, sellers, warehouses, sourceWarehouseId]);
 
   const selectedDestination = useMemo(() => {
     return destinationOptions.find((d) => d.id === targetLocationId);

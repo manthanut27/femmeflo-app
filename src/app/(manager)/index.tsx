@@ -17,7 +17,7 @@ import { Header } from '@/components/ui/Header';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { CardSkeleton, StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
-import { BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
+import { BorderRadius, BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ManagerDashboardScreen() {
@@ -81,6 +81,34 @@ export default function ManagerDashboardScreen() {
         }
       >
         <View style={styles.contentWrapper}>
+          {/* Dual-Role Persona Quick Switch Banner */}
+          {user?.isSeller ? (
+            <Card style={styles.dualRoleCard}>
+              <View style={styles.dualRoleHeader}>
+                <View style={styles.dualRoleIconBox}>
+                  <Ionicons name="swap-horizontal" size={20} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.dualRoleTitleRow}>
+                    <Text style={styles.dualRoleTitle}>Dual-Role Persona Active</Text>
+                    <Badge label="FIELD READY" variant="ACTIVE" size="sm" pulse={true} />
+                  </View>
+                  <Text style={styles.dualRoleDesc}>
+                    Frontline sales authority enabled: personal van stock, mobile POS orders, shift punch-in, and store KYC onboarding.
+                  </Text>
+                </View>
+              </View>
+              <Button
+                title="Switch to Field Sales Mode"
+                variant="primary"
+                size="md"
+                icon={<Ionicons name="bag-handle-outline" size={18} color="#FFFFFF" />}
+                onPress={() => router.replace('/(seller)' as any)}
+                style={styles.dualRoleBtn}
+              />
+            </Card>
+          ) : null}
+
           <Card variant="outlined" style={styles.territoryCard}>
             <View style={styles.territoryHeader}>
               <View style={styles.territoryInfo}>
@@ -269,5 +297,46 @@ const styles = StyleSheet.create({
   },
   actionsCol: {
     gap: Spacing.sm,
+  },
+  dualRoleCard: {
+    backgroundColor: BrandColors.pink.subtle,
+    borderColor: BrandColors.pink.tint,
+    borderWidth: 1.5,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+  },
+  dualRoleHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  dualRoleIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BrandColors.pink.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+    marginTop: 2,
+  },
+  dualRoleTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  dualRoleTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  dualRoleDesc: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    lineHeight: 16,
+  },
+  dualRoleBtn: {
+    marginTop: Spacing.sm,
   },
 });
