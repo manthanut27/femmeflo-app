@@ -79,7 +79,7 @@ export default function AdminDashboardScreen() {
   // Active dropdown modal selector for pickers
   const [activeDropdown, setActiveDropdown] = useState<ActiveDropdownType>(null);
 
-  // Available filter options loaded from backend
+  // Available filter options loaded from backend (with comprehensive defaults matching web)
   const [filterOptions, setFilterOptions] = useState<{
     categories: Array<{ id: string; name: string }>;
     managers: Array<{ id: string; name: string; state?: string | null; district?: string | null }>;
@@ -90,14 +90,47 @@ export default function AdminDashboardScreen() {
     rawDistricts?: Array<{ state: string; district: string } | string>;
     rawVillages?: Array<{ state: string; district: string; village: string } | string>;
   }>({
-    categories: [],
-    managers: [],
-    sellers: [],
-    states: [],
-    districts: [],
-    villages: [],
-    rawDistricts: [],
-    rawVillages: [],
+    categories: [
+      { id: 'cat_01', name: 'Sanitary Pads' },
+      { id: 'cat_02', name: 'Intimate Care' },
+      { id: 'cat_03', name: 'Wellness & Nutrition' },
+    ],
+    managers: [
+      { id: 'usr_manager_01', name: 'Rajesh Kumar', state: 'Madhya Pradesh', district: 'Indore' },
+      { id: 'usr_manager_02', name: 'Sunil Verma', state: 'Madhya Pradesh', district: 'Bhopal' },
+      { id: 'usr_manager_03', name: 'Meenakshi Iyer', state: 'Maharashtra', district: 'Nagpur' },
+    ],
+    sellers: [
+      { id: 'usr_seller_01', name: 'Pooja Sharma', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
+      { id: 'usr_seller_02', name: 'Kavita Patel', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
+      { id: 'usr_seller_03', name: 'Aakash Solanki', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
+      { id: 'usr_seller_04', name: 'Deepika Rathore', managerId: 'usr_manager_02', state: 'Madhya Pradesh', district: 'Bhopal' },
+    ],
+    states: ['Bihar', 'Madhya Pradesh', 'Maharashtra', 'Rajasthan', 'Uttar Pradesh'],
+    districts: ['Bhopal', 'Indore', 'Jaipur', 'Mumbai', 'Nagpur', 'Patna', 'Thane', 'Varanasi'],
+    villages: ['Andheri', 'Cantonment', 'Diva', 'Indore City', 'Kolar', 'Mhow', 'Rau', 'Sanwer', 'Sehore', 'Shivpur'],
+    rawDistricts: [
+      { state: 'Madhya Pradesh', district: 'Indore' },
+      { state: 'Madhya Pradesh', district: 'Bhopal' },
+      { state: 'Maharashtra', district: 'Thane' },
+      { state: 'Maharashtra', district: 'Mumbai' },
+      { state: 'Maharashtra', district: 'Nagpur' },
+      { state: 'Uttar Pradesh', district: 'Varanasi' },
+      { state: 'Bihar', district: 'Patna' },
+      { state: 'Rajasthan', district: 'Jaipur' },
+    ],
+    rawVillages: [
+      { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
+      { state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' },
+      { state: 'Madhya Pradesh', district: 'Indore', village: 'Mhow' },
+      { state: 'Madhya Pradesh', district: 'Indore', village: 'Sanwer' },
+      { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
+      { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Sehore' },
+      { state: 'Maharashtra', district: 'Thane', village: 'Diva' },
+      { state: 'Maharashtra', district: 'Mumbai', village: 'Andheri' },
+      { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
+      { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
+    ],
   });
 
   // Load filter options on mount
@@ -105,22 +138,17 @@ export default function AdminDashboardScreen() {
     adminApi
       .getDashboardFilters()
       .then((opts) => {
-        setFilterOptions({
-          categories: Array.isArray(opts.categories) ? opts.categories : [],
-          managers: Array.isArray(opts.managers) ? opts.managers : [],
-          sellers: Array.isArray(opts.sellers) ? opts.sellers : [],
-          states: Array.isArray(opts.states) && opts.states.length > 0
-            ? opts.states
-            : ['Maharashtra', 'Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
-          districts: Array.isArray(opts.districts) && opts.districts.length > 0
-            ? opts.districts
-            : ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-          villages: Array.isArray(opts.villages) && opts.villages.length > 0
-            ? opts.villages
-            : ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
-          rawDistricts: opts.rawDistricts || [],
-          rawVillages: opts.rawVillages || [],
-        });
+        if (!opts) return;
+        setFilterOptions((prev) => ({
+          categories: Array.isArray(opts.categories) && opts.categories.length > 0 ? opts.categories : prev.categories,
+          managers: Array.isArray(opts.managers) && opts.managers.length > 0 ? opts.managers : prev.managers,
+          sellers: Array.isArray(opts.sellers) && opts.sellers.length > 0 ? opts.sellers : prev.sellers,
+          states: Array.isArray(opts.states) && opts.states.length > 0 ? opts.states : prev.states,
+          districts: Array.isArray(opts.districts) && opts.districts.length > 0 ? opts.districts : prev.districts,
+          villages: Array.isArray(opts.villages) && opts.villages.length > 0 ? opts.villages : prev.villages,
+          rawDistricts: opts.rawDistricts && opts.rawDistricts.length > 0 ? opts.rawDistricts : prev.rawDistricts,
+          rawVillages: opts.rawVillages && opts.rawVillages.length > 0 ? opts.rawVillages : prev.rawVillages,
+        }));
       })
       .catch(() => {});
   }, []);
@@ -588,7 +616,7 @@ export default function AdminDashboardScreen() {
 
     if (activeDropdown === 'village') {
       const options: DropdownOption[] = [
-        { id: '', title: 'All villages / clusters' },
+        { id: '', title: 'All villages' },
         ...availableVillages.map((v) => ({ id: v, title: v })),
       ];
       return {
@@ -1272,19 +1300,33 @@ export default function AdminDashboardScreen() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.modalHeaderTitle}>Territory & Scope Filters</Text>
                   <Text style={styles.modalHeaderSub} numberOfLines={1}>
-                    Filter live metrics by hierarchy and category
+                    Filter live operational metrics by geographic hierarchy and category
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setFilterModalVisible(false)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Close filter dialog"
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {activeDraftCount > 0 && (
+                  <TouchableOpacity
+                    style={styles.modalHeaderResetBtn}
+                    onPress={handleResetDraft}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset all filters"
+                  >
+                    <Ionicons name="refresh-outline" size={12} color="#E61C5D" />
+                    <Text style={styles.modalHeaderResetText}>Reset all</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setFilterModalVisible(false)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close filter dialog"
+                >
+                  <Ionicons name="close" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Scrollable Form Body */}
@@ -1367,7 +1409,7 @@ export default function AdminDashboardScreen() {
                 {/* Custom Date Inputs */}
                 <View style={styles.dateInputsRow}>
                   <View style={styles.dateInputCol}>
-                    <Text style={styles.dateFieldLabel}>From (YYYY-MM-DD):</Text>
+                    <Text style={styles.dateFieldLabel}>From:</Text>
                     <TextInput
                       style={styles.dateInputField}
                       placeholder="YYYY-MM-DD"
@@ -1378,7 +1420,7 @@ export default function AdminDashboardScreen() {
                     />
                   </View>
                   <View style={styles.dateInputCol}>
-                    <Text style={styles.dateFieldLabel}>To (YYYY-MM-DD):</Text>
+                    <Text style={styles.dateFieldLabel}>To:</Text>
                     <TextInput
                       style={styles.dateInputField}
                       placeholder="YYYY-MM-DD"
@@ -2210,6 +2252,22 @@ const styles = StyleSheet.create({
   modalHeaderSub: {
     fontSize: 11,
     color: '#64748B',
+  },
+  modalHeaderResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
+    backgroundColor: '#FFF5F7',
+  },
+  modalHeaderResetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#E61C5D',
   },
   modalCloseBtn: {
     padding: 4,

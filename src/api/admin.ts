@@ -122,28 +122,47 @@ export const adminApi = {
       };
     } catch {
       return {
-        categories: [],
+        categories: [
+          { id: 'cat_01', name: 'Sanitary Pads' },
+          { id: 'cat_02', name: 'Intimate Care' },
+          { id: 'cat_03', name: 'Wellness & Nutrition' },
+        ],
         customerLocations: [],
-        managers: [],
-        sellers: [],
-        states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan', 'Maharashtra'],
-        districts: ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-        villages: ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+        managers: [
+          { id: 'usr_manager_01', name: 'Rajesh Kumar', state: 'Madhya Pradesh', district: 'Indore' },
+          { id: 'usr_manager_02', name: 'Sunil Verma', state: 'Madhya Pradesh', district: 'Bhopal' },
+          { id: 'usr_manager_03', name: 'Meenakshi Iyer', state: 'Maharashtra', district: 'Nagpur' },
+        ],
+        sellers: [
+          { id: 'usr_seller_01', name: 'Pooja Sharma', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
+          { id: 'usr_seller_02', name: 'Kavita Patel', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
+          { id: 'usr_seller_03', name: 'Aakash Solanki', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
+          { id: 'usr_seller_04', name: 'Deepika Rathore', managerId: 'usr_manager_02', state: 'Madhya Pradesh', district: 'Bhopal' },
+        ],
+        states: ['Bihar', 'Madhya Pradesh', 'Maharashtra', 'Rajasthan', 'Uttar Pradesh'],
+        districts: ['Bhopal', 'Indore', 'Jaipur', 'Mumbai', 'Nagpur', 'Patna', 'Thane', 'Varanasi'],
+        villages: ['Andheri', 'Cantonment', 'Diva', 'Indore City', 'Kolar', 'Mhow', 'Rau', 'Sanwer', 'Sehore', 'Shivpur'],
         rawDistricts: [
-          { state: 'Maharashtra', district: 'Thane' },
-          { state: 'Maharashtra', district: 'Mumbai' },
-          { state: 'Uttar Pradesh', district: 'Varanasi' },
           { state: 'Madhya Pradesh', district: 'Indore' },
           { state: 'Madhya Pradesh', district: 'Bhopal' },
+          { state: 'Maharashtra', district: 'Thane' },
+          { state: 'Maharashtra', district: 'Mumbai' },
+          { state: 'Maharashtra', district: 'Nagpur' },
+          { state: 'Uttar Pradesh', district: 'Varanasi' },
           { state: 'Bihar', district: 'Patna' },
           { state: 'Rajasthan', district: 'Jaipur' },
         ],
         rawVillages: [
+          { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
+          { state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' },
+          { state: 'Madhya Pradesh', district: 'Indore', village: 'Mhow' },
+          { state: 'Madhya Pradesh', district: 'Indore', village: 'Sanwer' },
+          { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
+          { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Sehore' },
           { state: 'Maharashtra', district: 'Thane', village: 'Diva' },
+          { state: 'Maharashtra', district: 'Mumbai', village: 'Andheri' },
           { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
           { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
-          { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
-          { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
         ],
       };
     }
