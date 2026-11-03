@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -153,7 +154,11 @@ export default function LoginScreen() {
           {/* Brand Header */}
           <View style={styles.header}>
             <View style={styles.logoBadge}>
-              <Ionicons name="flower-outline" size={34} color={BrandColors.pink.primary} />
+              <Image
+                source={require('../../../assets/images/femmeflo-mark.png')}
+                style={styles.logoMark}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.title}>FemmeFlo</Text>
             <Text style={styles.subtitle}>Enterprise Field Operations & Sales</Text>
@@ -354,16 +359,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   logoBadge: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: Radius.full,
-    backgroundColor: BrandColors.pink.subtle,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.sm,
     borderWidth: 1.5,
-    borderColor: BrandColors.pink.tint,
+    borderColor: '#D1FAE5',
     ...Shadows.sm,
+  },
+  logoMark: {
+    width: 48,
+    height: 48,
   },
   title: {
     fontSize: Typography.headlineSm.fontSize,
