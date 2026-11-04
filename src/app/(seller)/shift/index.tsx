@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -819,52 +820,85 @@ export default function ShiftScreen() {
       {/* ---------------------------------------------------- */}
       {/* 1. START SHIFT MODAL */}
       {/* ---------------------------------------------------- */}
-      <Modal visible={startModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={startModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setStartModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setStartModalVisible(false)}
+          />
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Start Field Duty Shift</Text>
-            <Text style={styles.modalSubtitle}>
-              Confirm starting odometer reading and proceed to selfie attendance verification.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>Start Field Duty Shift</Text>
+              <Text style={styles.modalSubtitle}>
+                Confirm starting odometer reading and proceed to selfie attendance verification.
+              </Text>
 
-            <Input
-              label="Starting Odometer (km) *"
-              value={startOdometer}
-              onChangeText={setStartOdometer}
-              keyboardType="numeric"
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color="#94A3B8" />}
-            />
-
-            <Input
-              label="Shift Remarks (Optional)"
-              value={startNotes}
-              onChangeText={setStartNotes}
-              leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
-            />
-
-            <View style={styles.modalBtnRow}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setStartModalVisible(false)}
-                style={{ flex: 1, marginRight: Spacing.sm }}
+              <Input
+                label="Starting Odometer (km) *"
+                value={startOdometer}
+                onChangeText={setStartOdometer}
+                keyboardType="numeric"
+                leftIcon={<Ionicons name="speedometer-outline" size={18} color="#94A3B8" />}
+                autoFocus
               />
-              <Button
-                title="Proceed to Face ID"
-                variant="primary"
-                onPress={handleInitiateStartShift}
-                style={{ flex: 1.4 }}
+
+              <Input
+                label="Shift Remarks (Optional)"
+                value={startNotes}
+                onChangeText={setStartNotes}
+                leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
               />
-            </View>
+
+              <View style={styles.modalBtnRow}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setStartModalVisible(false)}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title="Proceed to Face ID"
+                  variant="primary"
+                  onPress={handleInitiateStartShift}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---------------------------------------------------- */}
       {/* 2. CHECK-IN STORE VISIT MODAL */}
       {/* ---------------------------------------------------- */}
-      <Modal visible={checkInModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={checkInModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setCheckInModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setCheckInModalVisible(false)}
+          />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Check-in Store Visit</Text>
             <Text style={styles.modalSubtitle}>
@@ -917,14 +951,27 @@ export default function ShiftScreen() {
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---------------------------------------------------- */}
       {/* 3. CHECK-OUT VISIT MODAL (BRANCH 1 & BRANCH 2) */}
       {/* ---------------------------------------------------- */}
-      <Modal visible={checkOutModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={checkOutModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setCheckOutModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setCheckOutModalVisible(false)}
+          />
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>Check-out Store Visit</Text>
@@ -1228,51 +1275,71 @@ export default function ShiftScreen() {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---------------------------------------------------- */}
       {/* 4. END SHIFT MODAL */}
       {/* ---------------------------------------------------- */}
-      <Modal visible={endModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={endModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setEndModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setEndModalVisible(false)}
+          />
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>End Field Duty Shift</Text>
-            <Text style={styles.modalSubtitle}>
-              Log final odometer reading and complete shift checkout via Face ID.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>End Field Duty Shift</Text>
+              <Text style={styles.modalSubtitle}>
+                Log final odometer reading and complete shift checkout via Face ID.
+              </Text>
 
-            <Input
-              label={`Closing Odometer (km) * (Must be >= ${startKm} km)`}
-              value={endOdometer}
-              onChangeText={setEndOdometer}
-              keyboardType="numeric"
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color="#94A3B8" />}
-            />
-
-            <Input
-              label="Shift Summary / Remarks (Optional)"
-              value={endNotes}
-              onChangeText={setEndNotes}
-              leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
-            />
-
-            <View style={styles.modalBtnRow}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setEndModalVisible(false)}
-                style={{ flex: 1, marginRight: Spacing.sm }}
+              <Input
+                label={`Closing Odometer (km) * (Must be >= ${startKm} km)`}
+                value={endOdometer}
+                onChangeText={setEndOdometer}
+                keyboardType="numeric"
+                leftIcon={<Ionicons name="speedometer-outline" size={18} color="#94A3B8" />}
+                autoFocus
               />
-              <Button
-                title="Proceed to Face ID"
-                variant="primary"
-                onPress={handleInitiateEndShift}
-                style={{ flex: 1.4 }}
+
+              <Input
+                label="Shift Summary / Remarks (Optional)"
+                value={endNotes}
+                onChangeText={setEndNotes}
+                leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
               />
-            </View>
+
+              <View style={styles.modalBtnRow}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setEndModalVisible(false)}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title="Proceed to Face ID"
+                  variant="primary"
+                  onPress={handleInitiateEndShift}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ---------------------------------------------------- */}
@@ -1476,6 +1543,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
+  },
+  modalBackdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     backgroundColor: Colors.light.surface,

@@ -4,7 +4,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -419,94 +421,134 @@ export default function SellerDashboardScreen() {
       </ScrollView>
 
       {/* Start Shift Modal */}
-      <Modal visible={startShiftModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={startShiftModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setStartShiftModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setStartShiftModalVisible(false)}
+          />
           <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Start Daily Duty Shift</Text>
-              <Pressable hitSlop={HitSlop.md} onPress={() => setStartShiftModalVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              Enter your vehicle odometer starting KM before beginning travel or store visits.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Start Daily Duty Shift</Text>
+                <Pressable hitSlop={HitSlop.md} onPress={() => setStartShiftModalVisible(false)}>
+                  <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Enter your vehicle odometer starting KM before beginning travel or store visits.
+              </Text>
 
-            <Input
-              label="Starting Odometer (KM)"
-              keyboardType="numeric"
-              value={odometerKm}
-              onChangeText={setOdometerKm}
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
-            />
+              <Input
+                label="Starting Odometer (KM)"
+                keyboardType="numeric"
+                value={odometerKm}
+                onChangeText={setOdometerKm}
+                leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
+                autoFocus
+              />
 
-            <View style={styles.modalButtonsRow}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => setStartShiftModalVisible(false)}
-                disabled={isShiftSubmitting}
-                style={{ flex: 1, marginRight: Spacing.sm }}
-              />
-              <Button
-                title={isShiftSubmitting ? 'Starting...' : 'Confirm Start'}
-                variant="secondary"
-                onPress={handleStartShift}
-                loading={isShiftSubmitting}
-                style={{ flex: 1.4 }}
-              />
-            </View>
+              <View style={styles.modalButtonsRow}>
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => setStartShiftModalVisible(false)}
+                  disabled={isShiftSubmitting}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={isShiftSubmitting ? 'Starting...' : 'Confirm Start'}
+                  variant="secondary"
+                  onPress={handleStartShift}
+                  loading={isShiftSubmitting}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* End Shift Modal */}
-      <Modal visible={endShiftModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={endShiftModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setEndShiftModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setEndShiftModalVisible(false)}
+          />
           <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Complete Daily Duty Shift</Text>
-              <Pressable hitSlop={HitSlop.md} onPress={() => setEndShiftModalVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              Enter your vehicle odometer ending KM to close daily duty and log travel distance.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Complete Daily Duty Shift</Text>
+                <Pressable hitSlop={HitSlop.md} onPress={() => setEndShiftModalVisible(false)}>
+                  <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Enter your vehicle odometer ending KM to close daily duty and log travel distance.
+              </Text>
 
-            <Input
-              label="Ending Odometer (KM)"
-              keyboardType="numeric"
-              value={odometerKm}
-              onChangeText={setOdometerKm}
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
-            />
-
-            <Input
-              label="End of Day Remarks (Optional)"
-              value={shiftRemarks}
-              onChangeText={setShiftRemarks}
-              leftIcon={<Ionicons name="chatbox-outline" size={18} color={Colors.light.textSecondary} />}
-            />
-
-            <View style={styles.modalButtonsRow}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => setEndShiftModalVisible(false)}
-                disabled={isShiftSubmitting}
-                style={{ flex: 1, marginRight: Spacing.sm }}
+              <Input
+                label="Ending Odometer (KM)"
+                keyboardType="numeric"
+                value={odometerKm}
+                onChangeText={setOdometerKm}
+                leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
+                autoFocus
               />
-              <Button
-                title={isShiftSubmitting ? 'Saving...' : 'End Duty Shift'}
-                variant="primary"
-                onPress={handleEndShift}
-                loading={isShiftSubmitting}
-                style={{ flex: 1.4 }}
+
+              <Input
+                label="End of Day Remarks (Optional)"
+                value={shiftRemarks}
+                onChangeText={setShiftRemarks}
+                leftIcon={<Ionicons name="chatbox-outline" size={18} color={Colors.light.textSecondary} />}
               />
-            </View>
+
+              <View style={styles.modalButtonsRow}>
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => setEndShiftModalVisible(false)}
+                  disabled={isShiftSubmitting}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={isShiftSubmitting ? 'Saving...' : 'End Duty Shift'}
+                  variant="primary"
+                  onPress={handleEndShift}
+                  loading={isShiftSubmitting}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -613,11 +655,16 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     elevation: 10,
   },
+  modalBackdropDismiss: {
+    ...StyleSheet.absoluteFill,
+  },
   modalContent: {
     backgroundColor: Colors.light.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     padding: Spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
+    maxHeight: '90%',
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
