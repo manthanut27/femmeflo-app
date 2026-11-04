@@ -325,29 +325,34 @@ export const sellerApi = {
   },
 
   async startShift(payload: StartShiftPayload): Promise<{ shift: Shift }> {
-    const startKm = payload.startOdometerKm ?? (payload as any).odometerKm ?? 0;
-    const lat = payload.latitude ?? payload.startLatitude ?? 0;
-    const lng = payload.longitude ?? payload.startLongitude ?? 0;
+    const lat = Number(payload.latitude ?? payload.startLatitude ?? 0);
+    const lng = Number(payload.longitude ?? payload.startLongitude ?? 0);
 
+    // Backend startShiftSchema is z.strictObject:
+    // Strictly allows only: latitude, longitude, address, faceVerified, facePhoto, faceConfidence, faceMethod.
+    // Unrecognized keys like startOdometerKm, odometerKm, startLatitude, startLongitude trigger Zod errors.
     const body: Record<string, any> = {
-      startOdometerKm: startKm,
-      odometerKm: startKm,
-      startLatitude: lat,
-      startLongitude: lng,
       latitude: lat,
       longitude: lng,
     };
-    if (payload.address) body.address = payload.address;
-    if (payload.notes) body.notes = payload.notes;
-    if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
+    if (payload.address) {
+      body.address = payload.address.slice(0, 500);
+    }
+    if (payload.faceVerified !== undefined) {
+      body.faceVerified = payload.faceVerified;
+    }
     if (payload.facePhoto) {
       const isLocalUri = payload.facePhoto.startsWith("file:") || payload.facePhoto.startsWith("content:");
       body.facePhoto = (isLocalUri || payload.facePhoto.length > 50000)
         ? `verified_selfie_start_${Date.now()}`
         : payload.facePhoto;
     }
-    if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
-    if (payload.faceMethod) body.faceMethod = payload.faceMethod;
+    if (payload.faceConfidence !== undefined) {
+      body.faceConfidence = payload.faceConfidence;
+    }
+    if (payload.faceMethod) {
+      body.faceMethod = payload.faceMethod;
+    }
     return apiRequest<{ shift: Shift }>('seller/shifts/start', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -355,14 +360,19 @@ export const sellerApi = {
   },
 
   async checkIn(payload: CheckInPayload): Promise<{ visit: ShiftVisit }> {
+    // Backend checkInSchema is z.strictObject({ latitude, longitude, shopName, customerId?, notes? })
     const body: Record<string, any> = {
-      latitude: payload.latitude ?? 0,
-      longitude: payload.longitude ?? 0,
-      shopName: payload.shopName || (payload as any).customer?.shopName || 'Retail Customer',
+      latitude: Number(payload.latitude ?? 0),
+      longitude: Number(payload.longitude ?? 0),
+      shopName: (payload.shopName || (payload as any).customer?.shopName || 'Retail Customer').slice(0, 200),
     };
-    if (payload.customerId) body.customerId = payload.customerId;
-    if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
-    if ((payload as any).shiftId) body.shiftId = (payload as any).shiftId;
+    if (payload.customerId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.customerId)) {
+      body.customerId = payload.customerId;
+    }
+    const notesText = payload.notes || payload.summary;
+    if (notesText) {
+      body.notes = notesText.slice(0, 1000);
+    }
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-in', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -370,15 +380,25 @@ export const sellerApi = {
   },
 
   async checkOut(payload: CheckOutPayload): Promise<{ visit: ShiftVisit }> {
+    // Backend checkOutSchema is z.strictObject({ visitId, latitude, longitude, notes?, saleDone?, customerFeedback?, saleId? })
     const body: Record<string, any> = {
       visitId: payload.visitId,
-      latitude: payload.latitude ?? 0,
-      longitude: payload.longitude ?? 0,
+      latitude: Number(payload.latitude ?? 0),
+      longitude: Number(payload.longitude ?? 0),
     };
-    if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
-    if (payload.saleDone !== undefined) body.saleDone = payload.saleDone;
-    if (payload.customerFeedback) body.customerFeedback = payload.customerFeedback;
-    if (payload.saleId) body.saleId = payload.saleId;
+    const notesText = payload.notes || payload.summary;
+    if (notesText) {
+      body.notes = notesText.slice(0, 1000);
+    }
+    if (payload.saleDone !== undefined) {
+      body.saleDone = payload.saleDone;
+    }
+    if (payload.customerFeedback) {
+      body.customerFeedback = payload.customerFeedback.slice(0, 1000);
+    }
+    if (payload.saleId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.saleId)) {
+      body.saleId = payload.saleId;
+    }
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-out', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -386,33 +406,38 @@ export const sellerApi = {
   },
 
   async endShift(payload: EndShiftPayload): Promise<{ shift: Shift }> {
-    const endKm = payload.endOdometerKm ?? (payload as any).odometerKm ?? 0;
-    const lat = payload.latitude ?? payload.endLatitude ?? 0;
-    const lng = payload.longitude ?? payload.endLongitude ?? 0;
+    const lat = Number(payload.latitude ?? payload.endLatitude ?? 0);
+    const lng = Number(payload.longitude ?? payload.endLongitude ?? 0);
 
+    // Backend endShiftSchema is z.strictObject:
+    // Strictly allows only: latitude, longitude, address, notes, faceVerified, facePhoto, faceConfidence, faceMethod.
+    // Unrecognized keys like endOdometerKm, odometerKm, endLatitude, endLongitude, shiftId, remarks trigger Zod errors.
     const body: Record<string, any> = {
-      endOdometerKm: endKm,
-      odometerKm: endKm,
-      endLatitude: lat,
-      endLongitude: lng,
       latitude: lat,
       longitude: lng,
     };
-    if (payload.shiftId) body.shiftId = payload.shiftId;
-    if (payload.address) body.address = payload.address;
-    if (payload.notes || payload.remarks) {
-      body.notes = payload.notes || payload.remarks;
-      body.remarks = payload.notes || payload.remarks;
+    if (payload.address) {
+      body.address = payload.address.slice(0, 500);
     }
-    if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
+    const endNotesText = payload.notes || payload.remarks;
+    if (endNotesText) {
+      body.notes = endNotesText.slice(0, 1000);
+    }
+    if (payload.faceVerified !== undefined) {
+      body.faceVerified = payload.faceVerified;
+    }
     if (payload.facePhoto) {
       const isLocalUri = payload.facePhoto.startsWith("file:") || payload.facePhoto.startsWith("content:");
       body.facePhoto = (isLocalUri || payload.facePhoto.length > 50000)
         ? `verified_selfie_end_${Date.now()}`
         : payload.facePhoto;
     }
-    if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
-    if (payload.faceMethod) body.faceMethod = payload.faceMethod;
+    if (payload.faceConfidence !== undefined) {
+      body.faceConfidence = payload.faceConfidence;
+    }
+    if (payload.faceMethod) {
+      body.faceMethod = payload.faceMethod;
+    }
     return apiRequest<{ shift: Shift }>('seller/shifts/end', {
       method: 'POST',
       body: JSON.stringify(body),

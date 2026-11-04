@@ -442,9 +442,9 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
   });
 
   // ----------------------------------------------------
-  // SCENARIO 12: Dual-Compatible Shift API Payload Builder
+  // SCENARIO 12: Strict Backend Zod Conformance for Shift Start & End
   // ----------------------------------------------------
-  test('Scenario 12: Shift Start & End payloads include odometer and GPS coordinates in server-expected format', () => {
+  test('Scenario 12: Shift Start & End payloads strictly conform to backend Zod schemas without unrecognized keys', () => {
     const startPayload = {
       startOdometerKm: 15200,
       latitude: 22.7196,
@@ -456,26 +456,27 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
       address: 'Start notes: beat route Indore Central',
     };
 
-    const startKm = startPayload.startOdometerKm ?? 0;
-    const lat = startPayload.latitude ?? 0;
-    const lng = startPayload.longitude ?? 0;
+    const lat = Number(startPayload.latitude ?? 0);
+    const lng = Number(startPayload.longitude ?? 0);
 
     const startBody: Record<string, any> = {
-      startOdometerKm: startKm,
-      odometerKm: startKm,
-      startLatitude: lat,
-      startLongitude: lng,
       latitude: lat,
       longitude: lng,
     };
-    if (startPayload.address) startBody.address = startPayload.address;
+    if (startPayload.address) startBody.address = startPayload.address.slice(0, 500);
     if (startPayload.faceVerified !== undefined) startBody.faceVerified = startPayload.faceVerified;
+    if (startPayload.facePhoto) startBody.facePhoto = startPayload.facePhoto;
+    if (startPayload.faceConfidence !== undefined) startBody.faceConfidence = startPayload.faceConfidence;
+    if (startPayload.faceMethod) startBody.faceMethod = startPayload.faceMethod;
 
-    assert.equal(startBody.startOdometerKm, 15200);
-    assert.equal(startBody.odometerKm, 15200);
-    assert.equal(startBody.startLatitude, 22.7196);
-    assert.equal(startBody.startLongitude, 75.8577);
+    // Strict validation: Must not contain unrecognized keys that trigger Zod errors
+    assert.equal(startBody.latitude, 22.7196);
+    assert.equal(startBody.longitude, 75.8577);
     assert.equal(startBody.faceVerified, true);
+    assert.equal(startBody.startOdometerKm, undefined);
+    assert.equal(startBody.odometerKm, undefined);
+    assert.equal(startBody.startLatitude, undefined);
+    assert.equal(startBody.startLongitude, undefined);
 
     const endPayload = {
       endOdometerKm: 15280,
@@ -483,27 +484,29 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
       longitude: 75.8600,
       faceVerified: true,
       notes: 'Closing notes: beat route finished',
+      shiftId: 'shift_12345',
     };
 
-    const endKm = endPayload.endOdometerKm ?? 0;
+    const endLat = Number(endPayload.latitude ?? 0);
+    const endLng = Number(endPayload.longitude ?? 0);
+
     const endBody: Record<string, any> = {
-      endOdometerKm: endKm,
-      odometerKm: endKm,
-      endLatitude: endPayload.latitude,
-      endLongitude: endPayload.longitude,
-      latitude: endPayload.latitude,
-      longitude: endPayload.longitude,
+      latitude: endLat,
+      longitude: endLng,
     };
-    if (endPayload.notes) {
-      endBody.notes = endPayload.notes;
-      endBody.remarks = endPayload.notes;
-    }
+    if (endPayload.notes) endBody.notes = endPayload.notes.slice(0, 1000);
+    if (endPayload.faceVerified !== undefined) endBody.faceVerified = endPayload.faceVerified;
 
-    assert.equal(endBody.endOdometerKm, 15280);
-    assert.equal(endBody.odometerKm, 15280);
-    assert.equal(endBody.endLatitude, 22.7250);
-    assert.equal(endBody.endLongitude, 75.8600);
-    assert.equal(endBody.remarks, 'Closing notes: beat route finished');
+    // Strict validation: Must not contain unrecognized keys that trigger Zod errors
+    assert.equal(endBody.latitude, 22.7250);
+    assert.equal(endBody.longitude, 75.8600);
+    assert.equal(endBody.notes, 'Closing notes: beat route finished');
+    assert.equal(endBody.endOdometerKm, undefined);
+    assert.equal(endBody.odometerKm, undefined);
+    assert.equal(endBody.endLatitude, undefined);
+    assert.equal(endBody.endLongitude, undefined);
+    assert.equal(endBody.shiftId, undefined);
+    assert.equal(endBody.remarks, undefined);
   });
 
   // ----------------------------------------------------

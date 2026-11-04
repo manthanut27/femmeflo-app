@@ -137,8 +137,13 @@ export default function ShiftScreen() {
       }
 
       if (active && typeof active === 'object' && ('id' in active || 'startTime' in active)) {
-        setCurrentShift(active);
-        await draftStorage.saveActiveShift(userId, active).catch(() => {});
+        const cached = await draftStorage.getActiveShift(userId).catch(() => null);
+        const merged: Shift = {
+          ...active,
+          startOdometerKm: active.startOdometerKm ?? cached?.startOdometerKm ?? 0,
+        };
+        setCurrentShift(merged);
+        await draftStorage.saveActiveShift(userId, merged).catch(() => {});
       } else if (shiftRes === null || active === null) {
         setCurrentShift(null);
         await draftStorage.clearActiveShift(userId).catch(() => {});
@@ -294,8 +299,12 @@ export default function ShiftScreen() {
 
       const startedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
       if (startedShift && typeof startedShift === 'object') {
-        setCurrentShift(startedShift);
-        await draftStorage.saveActiveShift(userId, startedShift);
+        const enrichedShift: Shift = {
+          ...startedShift,
+          startOdometerKm: startedShift.startOdometerKm ?? pendingOdometerKm,
+        };
+        setCurrentShift(enrichedShift);
+        await draftStorage.saveActiveShift(userId, enrichedShift);
       }
       setStartOdometer('');
       setStartNotes('');
