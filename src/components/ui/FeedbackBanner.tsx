@@ -74,7 +74,7 @@ export function FeedbackBanner({
 
   return (
     <View
-      accessibilityRole={type === 'error' ? 'alert' : 'status'}
+      accessibilityRole={type === 'error' ? 'alert' : 'summary'}
       accessibilityLiveRegion="polite"
       style={[
         styles.banner,
