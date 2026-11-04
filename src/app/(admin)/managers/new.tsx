@@ -128,7 +128,8 @@ export default function AdminOnboardManagerScreen() {
       errs.email = 'Please provide a valid login email address.';
     }
 
-    if (!password || password.length < 12) {
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword || trimmedPassword.length < 12) {
       errs.password = 'Initial password must be at least 12 characters.';
     }
 
@@ -177,9 +178,9 @@ export default function AdminOnboardManagerScreen() {
     const cleanAltPhone = alternatePhone.trim() ? `+91 ${alternatePhone.replace(/\D/g, '').slice(-10)}` : undefined;
 
     const resolvedQualification =
-      qualification === 'Other Qualification' && customQualification.trim()
-        ? customQualification.trim()
-        : qualification.trim();
+      qualification === 'Other Qualification'
+        ? (customQualification.trim() || undefined)
+        : (qualification.trim() || undefined);
 
     try {
       const res = await adminApi.createManager({

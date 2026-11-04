@@ -196,7 +196,8 @@ export default function AdminOnboardSellerScreen() {
       errs.email = 'Please provide a valid email format.';
     }
 
-    if (!password || password.length < 8) {
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword || trimmedPassword.length < 8) {
       errs.password = 'Initial password must be at least 8 characters.';
     }
 
@@ -208,6 +209,10 @@ export default function AdminOnboardSellerScreen() {
 
     if (!drivingLicenseNumber.trim()) {
       errs.drivingLicenseNumber = 'Valid Indian Driving License number is mandatory.';
+    }
+
+    if (qualification === 'Other Qualification' && !customQualification.trim()) {
+      errs.customQualification = 'Please specify the custom qualification.';
     }
 
     // 4. Address & Territory
@@ -237,9 +242,9 @@ export default function AdminOnboardSellerScreen() {
     const cleanAlt = alternatePhone.trim() ? `+91 ${alternatePhone.replace(/\D/g, '').slice(-10)}` : undefined;
 
     const resolvedQualification =
-      qualification === 'Other Qualification' && customQualification.trim()
-        ? customQualification.trim()
-        : qualification.trim();
+      qualification === 'Other Qualification'
+        ? (customQualification.trim() || undefined)
+        : (qualification.trim() || undefined);
 
     try {
       const res = await adminApi.createSeller({
@@ -713,7 +718,11 @@ export default function AdminOnboardSellerScreen() {
                   <Input
                     placeholder="Enter other qualification (e.g. B.Tech, LLB, Ph.D, B.Ed)"
                     value={customQualification}
-                    onChangeText={setCustomQualification}
+                    onChangeText={(val) => {
+                      setCustomQualification(val);
+                      if (errors.customQualification) setErrors((p) => ({ ...p, customQualification: '' }));
+                    }}
+                    error={errors.customQualification}
                     leftIcon={<Ionicons name="school-outline" size={16} color="#94A3B8" />}
                   />
                 </View>

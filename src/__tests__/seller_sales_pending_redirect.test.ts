@@ -58,3 +58,4 @@ describe('Seller Sales & Reports Stats Card Redirection Suite', () => {
     assert.match(content, /name=["']pending["']/);
   });
 });
+

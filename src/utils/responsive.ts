@@ -7,7 +7,7 @@ import {
   getMaxContainerWidth,
   getResponsiveFontSize,
   getResponsiveSize,
-  getResponsiveSpacing,
+  getResponsiveSpacing
 } from './responsiveCore';
 
 export * from './responsiveCore';

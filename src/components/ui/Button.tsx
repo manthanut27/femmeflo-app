@@ -161,6 +161,7 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: '600',
     textAlign: 'center',
+    flexShrink: 1,
   },
   smText: {
     ...Typography.bodySmall,

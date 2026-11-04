@@ -115,9 +115,9 @@ export function hasPermission(
   if (user.role !== 'MANAGER') return false;
 
   const userPerms = user.permissions;
-  // If user is an active manager without explicitly assigned permissions array, grant default access
+  // Fail-closed: missing or non-array permissions is treated as having no permissions
   if (!userPerms || !Array.isArray(userPerms)) {
-    return true;
+    return false;
   }
 
   if (userPerms.includes(permission)) return true;

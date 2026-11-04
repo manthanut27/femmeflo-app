@@ -106,7 +106,7 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
       assert.equal(canMonitorStock(adminUser), true);
     });
 
-    test('allows manager with unassigned permissions (legacy/fallback) for backward compatibility', () => {
+    test('strictly denies operations when manager has unassigned or missing permissions (fail-closed)', () => {
       const legacyManager: PublicUser = {
         id: 'usr_mgr_legacy',
         name: 'Legacy Manager',
@@ -115,11 +115,11 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
         active: true,
         permissions: undefined,
       };
-      assert.equal(canViewSellers(legacyManager), true);
-      assert.equal(canOnboardSellers(legacyManager), true);
-      assert.equal(canViewCustomers(legacyManager), true);
-      assert.equal(canOnboardCustomers(legacyManager), true);
-      assert.equal(canMonitorStock(legacyManager), true);
+      assert.equal(canViewSellers(legacyManager), false);
+      assert.equal(canOnboardSellers(legacyManager), false);
+      assert.equal(canViewCustomers(legacyManager), false);
+      assert.equal(canOnboardCustomers(legacyManager), false);
+      assert.equal(canMonitorStock(legacyManager), false);
     });
 
     test('strictly denies all operations when manager permissions array is empty []', () => {

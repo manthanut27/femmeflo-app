@@ -100,6 +100,16 @@ function sleep(ms = 80): Promise<void> {
 /**
  * Handle incoming API requests in offline UI mock mode
  */
+function matchesLoginIdentifier(u: { email?: string | null; phone?: string | null }, rawId: string): boolean {
+  if (u.email && u.email.toLowerCase() === rawId) return true;
+  const rawDigits = rawId.replace(/\D/g, '').slice(-10);
+  if (rawDigits.length === 10 && u.phone) {
+    const userDigits = u.phone.replace(/\D/g, '').slice(-10);
+    if (userDigits.length === 10 && userDigits === rawDigits) return true;
+  }
+  return false;
+}
+
 export async function handleMockRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   await sleep(60);
 
@@ -156,6 +166,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const roleHint = (body.roleHint || '').trim().toLowerCase();
     let selectedUser: PublicUser | null = null;
 
+    const customMgr = mockDb.managers.find((m) => matchesLoginIdentifier(m, rawId));
+    const customSeller = mockDb.sellers.find((s) => matchesLoginIdentifier(s, rawId));
+
     if (
       roleHint === 'admin' ||
       cleanEndpoint.startsWith('admin') ||
@@ -173,17 +186,8 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       rawId === '9876543220' ||
       rawId === 'manager@femmeflo.com' ||
       rawId === 'manager@femmeflo.in' ||
-      mockDb.managers.some(
-        (m) =>
-          (m.email && m.email.toLowerCase() === rawId) ||
-          (m.phone && m.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
-      )
+      Boolean(customMgr)
     ) {
-      const customMgr = mockDb.managers.find(
-        (m) =>
-          (m.email && m.email.toLowerCase() === rawId) ||
-          (m.phone && m.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
-      );
       selectedUser = customMgr || MOCK_USERS.manager;
     } else if (
       roleHint === 'seller' ||
@@ -192,17 +196,8 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       rawId === '9876543210' ||
       rawId === 'seller@femmeflo.com' ||
       rawId === 'seller@femmeflo.in' ||
-      mockDb.sellers.some(
-        (s) =>
-          (s.email && s.email.toLowerCase() === rawId) ||
-          (s.phone && s.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
-      )
+      Boolean(customSeller)
     ) {
-      const customSeller = mockDb.sellers.find(
-        (s) =>
-          (s.email && s.email.toLowerCase() === rawId) ||
-          (s.phone && s.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
-      );
       selectedUser = (customSeller as unknown as PublicUser) || MOCK_USERS.seller;
     } else {
       throw new ApiError('Invalid login credentials.', 401);
@@ -693,25 +688,39 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     } as unknown as T;
   }
 
-  if (cleanEndpoint === 'manager/customers/bulk' && method === 'POST') {
-    if (mockDb.currentUser.role === 'MANAGER' && !canOnboardCustomers(mockDb.currentUser)) {
+  if ((cleanEndpoint === 'manager/customers/bulk' || cleanEndpoint === 'seller/customers/bulk' || cleanEndpoint === 'admin/customers/bulk') && method === 'POST') {
+    if (cleanEndpoint === 'manager/customers/bulk' && mockDb.currentUser.role === 'MANAGER' && !canOnboardCustomers(mockDb.currentUser)) {
       throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard customers.', 403);
     }
     const rows = (body.customers || []) as any[];
     const created: CustomerItem[] = [];
     for (const r of rows) {
+      const categoryId = r.categoryId || body.defaultCategoryId;
+      const matchedCategory = mockDb.categories.find(
+        (cat) => cat.id === categoryId || cat.name?.toLowerCase() === (r.category || '').toLowerCase()
+      ) || mockDb.categories[0];
+
+      const sellerId = r.sellerId || body.defaultSellerId || mockDb.currentUser.id;
+      const assignedSeller = mockDb.sellers.find((s) => s.id === sellerId || (s as any).sellerId === sellerId);
+      const sellerInfo = assignedSeller
+        ? { id: assignedSeller.id, name: assignedSeller.name }
+        : { id: mockDb.currentUser.id, name: mockDb.currentUser.name };
+
       const cust: CustomerItem = {
         id: `cust_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         shopName: r.shopName || 'Retail Shop',
         ownerName: r.ownerName || r.contactName || 'Owner',
         phone: r.phone || '+91 98765 00000',
         email: r.email,
-        category: r.category || 'Retail Store',
-        address: r.address || '',
-        district: r.district || 'Indore',
-        village: r.village || undefined,
-        state: r.state || 'Madhya Pradesh',
-        pincode: r.pincode || '452001',
+        categoryId: matchedCategory?.id || categoryId,
+        category: matchedCategory || r.category || 'Retail Store',
+        sellerId,
+        seller: sellerInfo,
+        address: r.address || r.streetName || '',
+        district: r.district || body.defaultDistrict || 'Indore',
+        village: r.village || body.defaultVillage || undefined,
+        state: r.state || body.defaultState || 'Madhya Pradesh',
+        pincode: r.pincode || body.defaultPincode || '452001',
         active: true,
         createdAt: new Date().toISOString(),
       };
@@ -723,7 +732,6 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       createdCount: created.length,
       failedCount: 0,
       errors: [],
-      items: created,
     } as unknown as T;
   }
 

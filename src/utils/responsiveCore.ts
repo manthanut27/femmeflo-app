@@ -81,6 +81,7 @@ export function getResponsiveFontSize(fontSize: number, width: number): number {
  */
 export function getResponsiveSpacing(spacing: number, width: number): number {
   if (width < Breakpoints.mobileMin) {
+    if (spacing <= 0) return spacing;
     return Math.max(Math.round(spacing * 0.85), 2);
   }
   if (width >= Breakpoints.smallTabletMin) {

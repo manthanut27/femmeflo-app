@@ -239,7 +239,8 @@ export default function AdminOnboardUserScreen() {
         errs.email = 'Please provide a valid email format.';
       }
 
-      if (!password || password.length < 12) {
+      const trimmedPassword = password.trim();
+      if (!trimmedPassword || trimmedPassword.length < 12) {
         errs.password = 'Initial password must be at least 12 characters.';
       }
 
@@ -277,7 +278,8 @@ export default function AdminOnboardUserScreen() {
         errs.email = 'Please provide a valid email format.';
       }
 
-      if (!password || password.length < 8) {
+      const trimmedPassword = password.trim();
+      if (!trimmedPassword || trimmedPassword.length < 8) {
         errs.password = 'Initial password must be at least 8 characters.';
       }
 
@@ -316,9 +318,9 @@ export default function AdminOnboardUserScreen() {
     const formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
     const cleanAltPhone = alternatePhone.trim() ? `+91 ${alternatePhone.replace(/\D/g, '').slice(-10)}` : undefined;
     const resolvedQualification =
-      qualification === 'Other Qualification' && customQualification.trim()
-        ? customQualification.trim()
-        : qualification.trim();
+      qualification === 'Other Qualification'
+        ? (customQualification.trim() || undefined)
+        : (qualification.trim() || undefined);
 
     try {
       if (selectedRole === 'MANAGER') {

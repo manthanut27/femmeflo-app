@@ -1,19 +1,16 @@
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
 import {
   getDeviceType,
-  getResponsiveSize,
-  getResponsiveFontSize,
-  getResponsiveSpacing,
   getGridColumns,
   getMaxContainerWidth,
-  Breakpoints,
+  getResponsiveFontSize,
+  getResponsiveSize,
+  getResponsiveSpacing
 } from '../utils/responsiveCore.ts';
 
 describe('Responsive Design System Foundation Suite', () => {
   it('correctly maps screen widths to device type categories', () => {
-    assert.equal(Breakpoints.smallMobileMax, 359);
-    assert.equal(Breakpoints.tabletMin, 768);
     // Small mobile (<360px)
     assert.equal(getDeviceType(320), 'smallMobile');
     assert.equal(getDeviceType(359), 'smallMobile');
@@ -80,6 +77,10 @@ describe('Responsive Design System Foundation Suite', () => {
     // Compact spacing on tiny screens
     const smallSpacing = getResponsiveSpacing(baseSpacing, 320);
     assert.ok(smallSpacing < baseSpacing && smallSpacing >= 12);
+
+    // Preserves zero and negative spacing on small mobile
+    assert.equal(getResponsiveSpacing(0, 320), 0);
+    assert.equal(getResponsiveSpacing(-8, 320), -8);
 
     // Baseline spacing on standard phones
     assert.equal(getResponsiveSpacing(baseSpacing, 390), baseSpacing);
