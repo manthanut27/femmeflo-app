@@ -243,14 +243,14 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // ----------------------------------------------------
   if (cleanEndpoint === 'seller/dashboard') {
     const todaySales = mockDb.sales.filter((s) => s.status === 'CONFIRMED');
-    const todayAmountPaise = todaySales.reduce((acc, s) => acc + s.totalAmountPaise, 0) || 147500;
-    const todayPackets = todaySales.reduce((acc, s) => acc + s.packetCount, 0) || 45;
+    const todayAmountPaise = todaySales.reduce((acc, s) => acc + s.totalAmountPaise, 0);
+    const todayPackets = todaySales.reduce((acc, s) => acc + s.packetCount, 0);
     const pendingApprovalsCount = mockDb.sales.filter((s) => s.status === 'PENDING').length;
 
     const data: SellerDashboardData = {
       todaySalesPaise: todayAmountPaise,
       todaySalesAmountPaise: todayAmountPaise,
-      todayOrdersCount: todaySales.length || 18,
+      todayOrdersCount: todaySales.length,
       todayPacketsSold: todayPackets,
       monthSalesPaise: todayAmountPaise * 4,
       lowStockCount: mockDb.inventory.balance < 50 ? 1 : 0,

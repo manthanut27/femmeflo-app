@@ -32,19 +32,19 @@ export const sellerApi = {
       method: 'GET',
     });
     const metrics = raw?.metrics;
-    const remainingPackets = metrics?.remainingPackets ?? raw?.stockBalance ?? 305;
-    const soldPackets = metrics?.soldPackets ?? raw?.todayPacketsSold ?? 45;
+    const remainingPackets = metrics?.remainingPackets ?? raw?.stockBalance ?? 0;
+    const soldPackets = metrics?.soldPackets ?? raw?.todayPacketsSold ?? 0;
     const salesPaise =
       raw?.todaySalesPaise ??
       raw?.todaySalesAmountPaise ??
-      (metrics?.soldPackets ? metrics.soldPackets * 3500 : 147500);
+      (metrics?.soldPackets !== undefined ? metrics.soldPackets * 3500 : 0);
 
     return {
       todaySalesPaise: salesPaise,
       todaySalesAmountPaise: salesPaise,
-      todayOrdersCount: raw?.todayOrdersCount ?? (raw?.recentSales?.length ? raw.recentSales.length : 18),
+      todayOrdersCount: raw?.todayOrdersCount ?? (Array.isArray(raw?.recentSales) ? raw.recentSales.length : 0),
       todayPacketsSold: soldPackets,
-      monthSalesPaise: raw?.monthSalesPaise ?? (salesPaise * 4),
+      monthSalesPaise: raw?.monthSalesPaise ?? salesPaise,
       lowStockCount: raw?.lowStockCount ?? (remainingPackets < 20 ? 1 : 0),
       stockBalance: remainingPackets,
       metrics: metrics,

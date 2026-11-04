@@ -335,7 +335,7 @@ export default function SellerDashboardScreen() {
             <View style={styles.metricsGrid}>
               <StatCard
                 title="Today's Revenue"
-                value={formatRupees(data?.todaySalesPaise || data?.todaySalesAmountPaise || 0)}
+                value={formatRupees(data?.todaySalesPaise ?? data?.todaySalesAmountPaise ?? 0)}
                 icon={<Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="pink"
                 changeLabel="Recorded sales"
@@ -343,7 +343,7 @@ export default function SellerDashboardScreen() {
               />
               <StatCard
                 title="Orders Booked"
-                value={String(data?.todayOrdersCount || data?.todayPacketsSold || 0)}
+                value={String(data?.todayOrdersCount ?? 0)}
                 icon={<Ionicons name="receipt-outline" size={20} color={BrandColors.green.primary} />}
                 variant="green"
                 changeLabel="In-store visits"
@@ -366,7 +366,7 @@ export default function SellerDashboardScreen() {
             <View style={styles.metricsGrid}>
               <StatCard
                 title="Monthly Sales"
-                value={formatRupees(data?.monthSalesPaise || 0)}
+                value={formatRupees(data?.monthSalesPaise ?? 0)}
                 icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="default"
                 changeLabel="Target progress"
@@ -379,6 +379,7 @@ export default function SellerDashboardScreen() {
                 variant={data?.lowStockCount ? 'pink' : 'default'}
                 changeLabel="Warehouse inventory"
                 onPress={() => router.push('/(seller)/inventory' as any)}
+                animate={false}
               />
             </View>
           )}
