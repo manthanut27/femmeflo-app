@@ -88,3 +88,4 @@ export async function requireActiveShift(
 
   return false;
 }
+

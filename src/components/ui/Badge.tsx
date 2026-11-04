@@ -59,6 +59,7 @@ export function Badge({
         )
       ) : null}
       <Text
+        numberOfLines={1}
         style={[
           styles.text,
           styles[`${size}Text`],
@@ -106,6 +107,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignSelf: 'flex-start',
     borderWidth: 1,
+    flexShrink: 0,
   },
   sm: {
     paddingVertical: 3,
@@ -131,6 +133,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
+    flexShrink: 0,
   },
   smText: {
     fontSize: 10,

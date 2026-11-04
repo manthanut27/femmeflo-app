@@ -105,3 +105,4 @@ describe('Seller Shift Prerequisite Enforcement Suite', () => {
     assert.ok(results.every((r) => r.blocked === true));
   });
 });
+

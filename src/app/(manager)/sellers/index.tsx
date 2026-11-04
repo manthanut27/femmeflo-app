@@ -92,13 +92,18 @@ export default function ManagerSellersScreen() {
             <Text style={styles.avatarText}>{initials || 'SF'}</Text>
           </View>
           <View style={styles.sellerInfo}>
-            <Text style={styles.sellerName}>{item.name}</Text>
-            <Text style={styles.sellerEmail}>{item.email}</Text>
+            <Text style={styles.sellerName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={styles.sellerEmail} numberOfLines={1}>
+              {item.email}
+            </Text>
           </View>
           <Badge
             label={item.active ? 'ACTIVE' : 'INACTIVE'}
             variant={item.active ? 'ACTIVE' : 'INACTIVE'}
             size="sm"
+            style={styles.statusBadge}
           />
         </View>
 
@@ -286,6 +291,10 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textSecondary,
     marginTop: 2,
+  },
+  statusBadge: {
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   cardFooter: {
     flexDirection: 'row',
