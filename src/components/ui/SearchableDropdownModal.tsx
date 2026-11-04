@@ -17,7 +17,6 @@ import {
   BorderRadius,
   BrandColors,
   Colors,
-  Elevation,
   MaxContentWidth,
   Shadows,
   Spacing,
@@ -62,7 +61,7 @@ export function SearchableDropdownModal({
     const q = searchQuery.trim().toLowerCase();
     if (!q) return options;
     return options.filter((opt) => {
-      const matchTitle = opt.title.toLowerCase().includes(q);
+      const matchTitle = opt.title ? opt.title.toLowerCase().includes(q) : false;
       const matchSubtitle = opt.subtitle ? opt.subtitle.toLowerCase().includes(q) : false;
       const matchBadge = opt.badge ? opt.badge.toLowerCase().includes(q) : false;
       const matchMeta = opt.metadata ? opt.metadata.toLowerCase().includes(q) : false;

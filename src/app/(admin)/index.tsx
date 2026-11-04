@@ -211,17 +211,17 @@ export default function AdminDashboardScreen() {
 
   // Real-time synchronization when approvals/rejections happen across admin screens
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
-      // Optimistically decrement pending count immediately for instantaneous response
-      setDashboard((prev) => {
-        if (!prev) return prev;
-        const current = Number(prev.pendingApprovalsCount || 0);
-        return {
-          ...prev,
-          pendingApprovalsCount: Math.max(0, current - 1),
-        };
-      });
-      // Synchronize latest live telemetry with backend
+    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', (event?: any) => {
+      if (event?.action === 'APPROVE' || event?.action === 'REJECT') {
+        setDashboard((prev) => {
+          if (!prev) return prev;
+          const current = Number(prev.pendingApprovalsCount || 0);
+          return {
+            ...prev,
+            pendingApprovalsCount: Math.max(0, current - 1),
+          };
+        });
+      }
       loadData();
     });
 

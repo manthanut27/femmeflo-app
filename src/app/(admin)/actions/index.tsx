@@ -87,15 +87,17 @@ export default function AdministrativeActionsScreen() {
 
   // Real-time synchronization when approvals/rejections happen
   useEffect(() => {
-    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
-      setDashboard((prev) => {
-        if (!prev) return prev;
-        const current = Number(prev.pendingApprovalsCount || 0);
-        return {
-          ...prev,
-          pendingApprovalsCount: Math.max(0, current - 1),
-        };
-      });
+    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', (event?: any) => {
+      if (event?.action === 'APPROVE' || event?.action === 'REJECT') {
+        setDashboard((prev) => {
+          if (!prev) return prev;
+          const current = Number(prev.pendingApprovalsCount || 0);
+          return {
+            ...prev,
+            pendingApprovalsCount: Math.max(0, current - 1),
+          };
+        });
+      }
       loadDashboardData();
     });
 

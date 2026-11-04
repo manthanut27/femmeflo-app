@@ -164,7 +164,7 @@ export default function StockTransferScreen() {
     for (const m of dualRoleManagers) {
       list.push({
         id: m.id,
-        title: `${m.name} (Dual-Role Manager - Van Stock)`,
+        title: `${m.name || 'Manager'} (Dual-Role Manager - Van Stock)`,
         subtitle: `Manager Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
         badge: 'VAN STOCK',
         badgeVariant: 'ACTIVE',
@@ -177,8 +177,8 @@ export default function StockTransferScreen() {
     for (const s of sellers) {
       list.push({
         id: s.id,
-        title: `${s.name} (Field Officer)`,
-        subtitle: `Seller ID: ${s.id.slice(0, 8)} • Phone: ${s.phone || 'N/A'}`,
+        title: `${s.name || 'Field Officer'} (Field Officer)`,
+        subtitle: `Seller ID: ${s.id ? String(s.id).slice(0, 8) : 'N/A'} • Phone: ${s.phone || 'N/A'}`,
         badge: 'FIELD SELLER',
         badgeVariant: 'ACTIVE',
         metadata: `${s.phone || ''} ${s.email || ''}`,
@@ -186,13 +186,13 @@ export default function StockTransferScreen() {
       });
     }
 
-    // 2. Regional Hubs / Other Warehouses
+    // 3. Regional Hubs / Other Warehouses
     for (const w of warehouses) {
       if (w.id !== sourceWarehouseId) {
         const bal = typeof (w as any).balance === 'number' ? (w as any).balance : 0;
         list.push({
           id: w.id,
-          title: `${w.name} (Regional Hub)`,
+          title: `${w.name || 'Regional Hub'} (Regional Hub)`,
           subtitle: `Code: ${w.code || 'WH'} • Balance: ${bal.toLocaleString('en-IN')} pkts`,
           badge: 'DEPOT / HUB',
           badgeVariant: 'neutral',
@@ -216,8 +216,8 @@ export default function StockTransferScreen() {
       const basePrice = ((p.basePricePaise ?? 3000) / 100).toFixed(2);
       return {
         id: p.id,
-        title: p.name,
-        subtitle: `SKU: ${p.sku || p.id.slice(0, 8)} • Base: ₹${basePrice} • Min Floor: ₹${minFloor}`,
+        title: p.name || 'Product SKU',
+        subtitle: `SKU: ${p.sku || (p.id ? String(p.id).slice(0, 8) : 'SKU')} • Base: ₹${basePrice} • Min Floor: ₹${minFloor}`,
         badge: p.sku || 'SKU',
         badgeVariant: 'ACTIVE',
         metadata: `${p.sku || ''} ${p.description || ''}`,
@@ -225,6 +225,14 @@ export default function StockTransferScreen() {
       };
     });
   }, [products]);
+
+  const navigateBackSafely = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(admin)/inventory' as any);
+    }
+  };
 
   async function handleSubmit() {
     if (isSubmitting) return;
@@ -264,9 +272,8 @@ export default function StockTransferScreen() {
 
         setFeedback({ type: 'success', message: `Stock Inward Recorded: Received ${qty} packets into warehouse.` });
         Alert.alert('Stock Inward Recorded', `Received ${qty} packets into warehouse.`, [
-          { text: 'OK', onPress: () => router.back() },
+          { text: 'OK', onPress: navigateBackSafely },
         ]);
-        setTimeout(() => router.back(), 1500);
       } else {
         if (!sourceWarehouseId || !targetLocationId) {
           setFeedback({ type: 'error', message: 'Please select source warehouse and destination location.' });
@@ -288,9 +295,8 @@ export default function StockTransferScreen() {
 
         setFeedback({ type: 'success', message: `Stock Transfer Dispatched: Transferred ${qty} packets successfully.` });
         Alert.alert('Stock Transfer Dispatched', `Transferred ${qty} packets successfully.`, [
-          { text: 'OK', onPress: () => router.back() },
+          { text: 'OK', onPress: navigateBackSafely },
         ]);
-        setTimeout(() => router.back(), 1500);
       }
     } catch (err: any) {
       const msg = err.message || 'Failed to complete stock movement.';

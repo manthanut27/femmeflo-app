@@ -296,7 +296,7 @@ export const adminApi = {
 
     // If destinationId was passed as a seller's user ID, attempt resolution to their stockLocation ID
     try {
-      const summary = await this.getInventorySummary();
+      const summary = await adminApi.getInventorySummary();
       const matchedSellerLocation = summary?.locations?.find(
         (l) => l.sellerId === destinationId || l.id === destinationId
       );
@@ -309,28 +309,22 @@ export const adminApi = {
 
     const requestKey = payload.requestKey || payload.reference || undefined;
 
-    let body: any;
+    const body: Record<string, any> = {
+      sourceWarehouseId: sourceId,
+      sourceId,
+      targetLocationId: destinationId,
+      destinationId,
+      productId: payload.productId,
+      quantity: payload.quantity,
+      reference: requestKey || payload.reference,
+    };
     if (payload.items && payload.items.length > 0) {
-      body = {
-        sourceId,
-        destinationId,
-        items: payload.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-        requestKey,
-      };
+      body.items = payload.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
     } else if (payload.productId) {
-      body = {
-        sourceId,
-        destinationId,
-        items: [{ productId: payload.productId, quantity: payload.quantity }],
-        requestKey,
-      };
-    } else {
-      body = {
-        sourceId,
-        destinationId,
-        quantity: payload.quantity,
-        requestKey,
-      };
+      body.items = [{ productId: payload.productId, quantity: payload.quantity }];
+    }
+    if (requestKey) {
+      body.requestKey = requestKey;
     }
 
     return apiRequest<{ success: boolean; message?: string }>('admin/inventory/transfers', {

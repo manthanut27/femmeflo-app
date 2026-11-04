@@ -116,3 +116,4 @@ describe('Sales Retail Customer Dropdown & Search Option Suite', () => {
     assert.strictEqual(activeSales.length, 2);
   });
 });
+
