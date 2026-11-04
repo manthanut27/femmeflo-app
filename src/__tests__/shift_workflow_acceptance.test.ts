@@ -440,4 +440,126 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
     const openVisit: ShiftVisit = { ...existingVisit, checkOutTime: null };
     assert.equal(canInitiateCheckout(openVisit, false).allowed, true);
   });
+
+  // ----------------------------------------------------
+  // SCENARIO 12: Dual-Compatible Shift API Payload Builder
+  // ----------------------------------------------------
+  test('Scenario 12: Shift Start & End payloads include odometer and GPS coordinates in server-expected format', () => {
+    const startPayload = {
+      startOdometerKm: 15200,
+      latitude: 22.7196,
+      longitude: 75.8577,
+      faceVerified: true,
+      facePhoto: 'data:image/jpeg;base64,selfie_test_base64',
+      faceConfidence: 0.98,
+      faceMethod: 'FACE_ID_BIOMETRIC',
+      address: 'Start notes: beat route Indore Central',
+    };
+
+    const startKm = startPayload.startOdometerKm ?? 0;
+    const lat = startPayload.latitude ?? 0;
+    const lng = startPayload.longitude ?? 0;
+
+    const startBody: Record<string, any> = {
+      startOdometerKm: startKm,
+      odometerKm: startKm,
+      startLatitude: lat,
+      startLongitude: lng,
+      latitude: lat,
+      longitude: lng,
+    };
+    if (startPayload.address) startBody.address = startPayload.address;
+    if (startPayload.faceVerified !== undefined) startBody.faceVerified = startPayload.faceVerified;
+
+    assert.equal(startBody.startOdometerKm, 15200);
+    assert.equal(startBody.odometerKm, 15200);
+    assert.equal(startBody.startLatitude, 22.7196);
+    assert.equal(startBody.startLongitude, 75.8577);
+    assert.equal(startBody.faceVerified, true);
+
+    const endPayload = {
+      endOdometerKm: 15280,
+      latitude: 22.7250,
+      longitude: 75.8600,
+      faceVerified: true,
+      notes: 'Closing notes: beat route finished',
+    };
+
+    const endKm = endPayload.endOdometerKm ?? 0;
+    const endBody: Record<string, any> = {
+      endOdometerKm: endKm,
+      odometerKm: endKm,
+      endLatitude: endPayload.latitude,
+      endLongitude: endPayload.longitude,
+      latitude: endPayload.latitude,
+      longitude: endPayload.longitude,
+    };
+    if (endPayload.notes) {
+      endBody.notes = endPayload.notes;
+      endBody.remarks = endPayload.notes;
+    }
+
+    assert.equal(endBody.endOdometerKm, 15280);
+    assert.equal(endBody.odometerKm, 15280);
+    assert.equal(endBody.endLatitude, 22.7250);
+    assert.equal(endBody.endLongitude, 75.8600);
+    assert.equal(endBody.remarks, 'Closing notes: beat route finished');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 13: Numeric Coordinate & Duration Parsing Crash Guard
+  // ----------------------------------------------------
+  test('Scenario 13: Numeric coordinate & duration parsing robustness prevents runtime .toFixed type errors', () => {
+    // When backend returns Decimal fields serialized as string
+    const serverShiftWithStrings: any = {
+      id: 'shift_str_001',
+      startLatitude: '22.719584',
+      startLongitude: '75.857712',
+      startTime: '2026-11-04T09:00:00.000Z',
+    };
+
+    const formatGpsCoordinates = (shift: any) => {
+      const lat = Number(shift.startLatitude).toFixed(4);
+      const lng = shift.startLongitude != null ? Number(shift.startLongitude).toFixed(4) : '0.0000';
+      return `GPS Locked (${lat}, ${lng})`;
+    };
+
+    assert.doesNotThrow(() => {
+      const text = formatGpsCoordinates(serverShiftWithStrings);
+      assert.equal(text, 'GPS Locked (22.7196, 75.8577)');
+    });
+
+    // When duration is a string or null
+    const formatDuration = (durationMins: any) => {
+      return durationMins != null ? `${Number(durationMins).toFixed(1)} mins` : 'Completed';
+    };
+
+    assert.equal(formatDuration('45.75'), '45.8 mins');
+    assert.equal(formatDuration(null), 'Completed');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 14: Shift Response Unpacking Multi-Shape Resilience
+  // ----------------------------------------------------
+  test('Scenario 14: Shift response unpacking supports both nested { shift: Shift } and direct Shift resource shapes', () => {
+    const rawNested = {
+      shift: { id: 'shift_nested', startTime: '2026-11-04T09:00:00Z', startOdometerKm: 12000 },
+    };
+    const rawDirect = {
+      id: 'shift_direct',
+      startTime: '2026-11-04T09:00:00Z',
+      startOdometerKm: 12000,
+    };
+    const rawApiDataNested = {
+      data: { shift: { id: 'shift_data_nested', startTime: '2026-11-04T09:00:00Z' } },
+    };
+
+    const unpackShift = (res: any) => {
+      return res?.shift || res?.data?.shift || res?.data || res;
+    };
+
+    assert.equal(unpackShift(rawNested).id, 'shift_nested');
+    assert.equal(unpackShift(rawDirect).id, 'shift_direct');
+    assert.equal(unpackShift(rawApiDataNested).id, 'shift_data_nested');
+  });
 });

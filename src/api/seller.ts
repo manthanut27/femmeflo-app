@@ -321,11 +321,20 @@ export const sellerApi = {
   },
 
   async startShift(payload: StartShiftPayload): Promise<{ shift: Shift }> {
+    const startKm = payload.startOdometerKm ?? (payload as any).odometerKm ?? 0;
+    const lat = payload.latitude ?? payload.startLatitude ?? 0;
+    const lng = payload.longitude ?? payload.startLongitude ?? 0;
+
     const body: Record<string, any> = {
-      latitude: payload.latitude ?? payload.startLatitude ?? 0,
-      longitude: payload.longitude ?? payload.startLongitude ?? 0,
+      startOdometerKm: startKm,
+      odometerKm: startKm,
+      startLatitude: lat,
+      startLongitude: lng,
+      latitude: lat,
+      longitude: lng,
     };
     if (payload.address) body.address = payload.address;
+    if (payload.notes) body.notes = payload.notes;
     if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
     if (payload.facePhoto) {
       body.facePhoto = payload.facePhoto.length > 50000
@@ -371,12 +380,23 @@ export const sellerApi = {
   },
 
   async endShift(payload: EndShiftPayload): Promise<{ shift: Shift }> {
+    const endKm = payload.endOdometerKm ?? (payload as any).odometerKm ?? 0;
+    const lat = payload.latitude ?? payload.endLatitude ?? 0;
+    const lng = payload.longitude ?? payload.endLongitude ?? 0;
+
     const body: Record<string, any> = {
-      latitude: payload.latitude ?? payload.endLatitude ?? 0,
-      longitude: payload.longitude ?? payload.endLongitude ?? 0,
+      endOdometerKm: endKm,
+      odometerKm: endKm,
+      endLatitude: lat,
+      endLongitude: lng,
+      latitude: lat,
+      longitude: lng,
     };
     if (payload.address) body.address = payload.address;
-    if (payload.notes || payload.remarks) body.notes = payload.notes || payload.remarks;
+    if (payload.notes || payload.remarks) {
+      body.notes = payload.notes || payload.remarks;
+      body.remarks = payload.notes || payload.remarks;
+    }
     if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
     if (payload.facePhoto) {
       body.facePhoto = payload.facePhoto.length > 50000

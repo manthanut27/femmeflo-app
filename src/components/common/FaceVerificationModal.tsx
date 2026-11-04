@@ -3,7 +3,6 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Image,
@@ -15,8 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
-import { BrandColors, Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { compressImage } from '@/utils/imageUtils';
+import { BrandColors, Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 
 const BUTTON_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -49,11 +47,12 @@ export function FaceVerificationModal({
   const [step, setStep] = useState<VerificationStep>('READY');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
-  const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState(0);
 
   const scanAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const verificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -61,10 +60,33 @@ export function FaceVerificationModal({
       setStep('READY');
       setErrorMessage(null);
       setCapturedPhotoUri(null);
-      setCapturedBase64(null);
       setScanProgress(0);
       scanAnim.setValue(0);
+
+      // On Android, recover any pending image if MainActivity was killed during camera picker
+      if (Platform.OS === 'android' && typeof ImagePicker.getPendingResultAsync === 'function') {
+        ImagePicker.getPendingResultAsync()
+          .then((pending) => {
+            if (pending && 'assets' in pending && !pending.canceled && pending.assets && pending.assets.length > 0) {
+              const asset = pending.assets[0];
+              if (asset?.uri) {
+                setCapturedPhotoUri(asset.uri);
+                setStep('SCANNING');
+              }
+            }
+          })
+          .catch(() => {
+            // Ignore pending result check failure
+          });
+      }
+    } else {
+      if (verificationTimerRef.current) clearTimeout(verificationTimerRef.current);
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
     }
+    return () => {
+      if (verificationTimerRef.current) clearTimeout(verificationTimerRef.current);
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    };
   }, [visible, scanAnim]);
 
   // Pulse animation for scanner frame
@@ -91,20 +113,22 @@ export function FaceVerificationModal({
     }
   }, [visible, step, pulseAnim]);
 
-  // Verification step progression once photo is captured
+  // Verification step progression once photo is captured or selected
   useEffect(() => {
     if (step === 'SCANNING') {
       let progress = 0;
-      const interval = setInterval(() => {
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+
+      scanIntervalRef.current = setInterval(() => {
         progress += 10;
         setScanProgress(Math.min(progress, 100));
 
         if (progress >= 100) {
-          clearInterval(interval);
+          if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
           setStep('VERIFIED');
 
           // Hold verified screen briefly (350ms) so user sees the checkmark without frustrating delay
-          setTimeout(() => {
+          verificationTimerRef.current = setTimeout(() => {
             const photoData = capturedPhotoUri || 'data:image/svg+xml;base64,face_verified_selfie';
 
             onVerified({
@@ -135,11 +159,14 @@ export function FaceVerificationModal({
         ])
       ).start();
 
-      return () => clearInterval(interval);
+      return () => {
+        if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      };
     }
   }, [step, capturedPhotoUri, onVerified, scanAnim]);
 
   const handleLaunchCamera = async () => {
+    if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
     setStep('CAPTURING');
     setErrorMessage(null);
 
@@ -148,14 +175,15 @@ export function FaceVerificationModal({
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           setStep('ERROR');
-          setErrorMessage('Camera access was denied. You can retry or complete duty shift using standard audit.');
+          setErrorMessage('Camera access was denied. You can upload a photo or complete duty shift using standard audit.');
           return;
         }
       }
 
-      // Front camera capture without allowsEditing to prevent Android OEM cropper crashes
+      // Safe front camera type fallback to prevent undefined property crashes
+      const frontCameraType = (ImagePicker.CameraType?.front as any) ?? 'front';
       const res = await ImagePicker.launchCameraAsync({
-        cameraType: ImagePicker.CameraType.front,
+        cameraType: frontCameraType,
         allowsEditing: false,
         quality: 0.35,
         base64: false,
@@ -167,18 +195,61 @@ export function FaceVerificationModal({
       }
 
       const asset = res.assets[0];
-      setCapturedPhotoUri(asset.uri);
-      setCapturedBase64(null);
-      setStep('SCANNING');
+      if (asset?.uri) {
+        setCapturedPhotoUri(asset.uri);
+        setStep('SCANNING');
+      } else {
+        setStep('READY');
+      }
     } catch (err: any) {
       setStep('ERROR');
-      setErrorMessage(err?.message || 'Unable to open camera on this device. You may use standard shift check-in.');
+      setErrorMessage(err?.message || 'Unable to open camera on this device. You may upload a photo or use standard shift check-in.');
+    }
+  };
+
+  const handleChooseFromGallery = async () => {
+    if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
+    setStep('CAPTURING');
+    setErrorMessage(null);
+
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          setStep('ERROR');
+          setErrorMessage('Photo library access was denied. You can capture a selfie or complete duty shift using standard audit.');
+          return;
+        }
+      }
+
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.35,
+        base64: false,
+      });
+
+      if (res.canceled || !res.assets || res.assets.length === 0) {
+        setStep('READY');
+        return;
+      }
+
+      const asset = res.assets[0];
+      if (asset?.uri) {
+        setCapturedPhotoUri(asset.uri);
+        setStep('SCANNING');
+      } else {
+        setStep('READY');
+      }
+    } catch (err: any) {
+      setStep('ERROR');
+      setErrorMessage(err?.message || 'Unable to select photo on this device. You may use standard shift check-in.');
     }
   };
 
   const handleUseStandardVerification = () => {
     setStep('VERIFIED');
-    setTimeout(() => {
+    verificationTimerRef.current = setTimeout(() => {
       onVerified({
         faceVerified: true,
         facePhoto: 'standard_shift_attendance',
@@ -234,7 +305,11 @@ export function FaceVerificationModal({
               ]}
             >
               {capturedPhotoUri ? (
-                <Image source={{ uri: capturedPhotoUri }} style={styles.capturedPhoto} />
+                <Image
+                  source={{ uri: capturedPhotoUri }}
+                  style={styles.capturedPhoto}
+                  resizeMode="cover"
+                />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Ionicons
@@ -276,13 +351,13 @@ export function FaceVerificationModal({
             <View style={styles.statusBox}>
               {step === 'READY' && (
                 <Text style={styles.statusText}>
-                  Please capture a clear front-facing selfie to verify attendance.
+                  Capture a front selfie or upload a photo to verify shift attendance.
                 </Text>
               )}
               {step === 'CAPTURING' && (
                 <View style={styles.rowCenter}>
                   <ActivityIndicator size="small" color={BrandColors.pink.primary} />
-                  <Text style={[styles.statusText, { marginLeft: 8 }]}>Opening front camera...</Text>
+                  <Text style={[styles.statusText, { marginLeft: 8 }]}>Accessing camera / photo library...</Text>
                 </View>
               )}
               {step === 'SCANNING' && (
@@ -320,59 +395,81 @@ export function FaceVerificationModal({
           <View style={styles.btnRow}>
             {step === 'READY' && (
               <View style={{ width: '100%' }}>
-                <View style={{ flexDirection: 'row', marginBottom: Spacing.sm }}>
-                  <Button
-                    title="Cancel"
-                    variant="outline"
-                    size="md"
-                    onPress={onClose}
-                    style={{ flex: 1, marginRight: Spacing.sm }}
-                  />
+                <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
                     title="Take Selfie"
                     variant="primary"
                     size="md"
+                    icon={<Ionicons name="camera-outline" size={18} color="#FFFFFF" />}
                     onPress={handleLaunchCamera}
-                    style={{ flex: 1.4 }}
+                    style={{ flex: 1.2 }}
+                  />
+                  <Button
+                    title="Upload Photo"
+                    variant="secondary"
+                    size="md"
+                    icon={<Ionicons name="image-outline" size={18} color="#FFFFFF" />}
+                    onPress={handleChooseFromGallery}
+                    style={{ flex: 1.2 }}
                   />
                 </View>
-                <Pressable
-                  onPress={handleUseStandardVerification}
-                  hitSlop={BUTTON_HIT_SLOP}
-                  style={{ alignItems: 'center', paddingVertical: Spacing.xs }}
-                >
-                  <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
-                    Or {isStart ? 'start' : 'complete'} duty without selfie (Standard Audit)
-                  </Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    size="sm"
+                    onPress={onClose}
+                    style={{ flex: 0.8 }}
+                  />
+                  <Pressable
+                    onPress={handleUseStandardVerification}
+                    hitSlop={BUTTON_HIT_SLOP}
+                    style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.xs }}
+                  >
+                    <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
+                      Standard Audit (No Photo)
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             )}
 
             {step === 'ERROR' && (
               <View style={{ width: '100%' }}>
-                <View style={{ flexDirection: 'row', marginBottom: Spacing.sm }}>
+                <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
                     title="Retry Camera"
                     variant="outline"
                     size="md"
+                    icon={<Ionicons name="camera-outline" size={16} color={BrandColors.pink.primary} />}
                     onPress={handleLaunchCamera}
-                    style={{ flex: 1, marginRight: Spacing.sm }}
+                    style={{ flex: 1 }}
                   />
                   <Button
-                    title="Skip Selfie & Proceed"
-                    variant="primary"
+                    title="Upload Photo"
+                    variant="secondary"
                     size="md"
+                    icon={<Ionicons name="image-outline" size={16} color="#FFFFFF" />}
+                    onPress={handleChooseFromGallery}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                  <Button
+                    title="Cancel"
+                    variant="ghost"
+                    size="sm"
+                    onPress={onClose}
+                    style={{ flex: 0.6 }}
+                  />
+                  <Button
+                    title="Skip & Proceed"
+                    variant="primary"
+                    size="sm"
                     onPress={handleUseStandardVerification}
                     style={{ flex: 1.4 }}
                   />
                 </View>
-                <Pressable
-                  onPress={onClose}
-                  hitSlop={BUTTON_HIT_SLOP}
-                  style={{ alignItems: 'center', paddingVertical: Spacing.xs }}
-                >
-                  <Text style={{ fontSize: 12, color: Colors.light.textSecondary }}>Cancel</Text>
-                </Pressable>
               </View>
             )}
 
@@ -476,7 +573,10 @@ const styles = StyleSheet.create({
   },
   verifiedOverlay: {
     position: 'absolute',
-    inset: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
