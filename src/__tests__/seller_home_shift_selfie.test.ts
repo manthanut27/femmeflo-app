@@ -125,5 +125,17 @@ describe('Seller Home Page Selfie Attendance Verification Suite', () => {
     assert.equal(payload.faceVerified, true);
     assert.equal(payload.remarks, 'All beat visits completed');
   });
+
+  it('enforces that FaceVerificationModal removes Standard Audit (No Photo) for shift start attendance', async () => {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const modalPath = path.resolve(process.cwd(), 'src/components/common/FaceVerificationModal.tsx');
+    const content = await fs.readFile(modalPath, 'utf-8');
+
+    // Ensure Standard Audit (No Photo) is strictly removed for shift start
+    assert.match(content, /\{!isStart\s*&&\s*\(\s*<Pressable[\s\S]*?Standard Audit \(No Photo\)/);
+    // Ensure Skip & Proceed error bypass is strictly removed for shift start
+    assert.match(content, /\{!isStart\s*&&\s*\(\s*<Button[\s\S]*?Skip & Proceed/);
+  });
 });
 

@@ -61,6 +61,7 @@ export function FaceVerificationModal({
   useEffect(() => {
     onVerifiedRef.current = onVerified;
   }, [onVerified]);
+  const isStart = mode === 'START';
 
   const stopScanAnimation = useCallback(() => {
     if (scanLoopRef.current) {
@@ -224,7 +225,7 @@ export function FaceVerificationModal({
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           setStep('ERROR');
-          setErrorMessage('Camera access was denied. You can upload a photo or complete duty shift using standard audit.');
+          setErrorMessage(isStart ? 'Camera access was denied. Please grant camera permission in device settings or upload a photo to verify attendance.' : 'Camera access was denied. You can upload a photo or complete duty shift using standard audit.');
           return;
         }
       }
@@ -252,7 +253,7 @@ export function FaceVerificationModal({
       }
     } catch (err: any) {
       setStep('ERROR');
-      setErrorMessage(err?.message || 'Unable to open camera on this device. You may upload a photo or use standard shift check-in.');
+      setErrorMessage(err?.message || (isStart ? 'Unable to open camera on this device. Please upload a photo to verify attendance.' : 'Unable to open camera on this device. You may upload a photo or use standard shift check-in.'));
     }
   };
 
@@ -266,7 +267,7 @@ export function FaceVerificationModal({
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           setStep('ERROR');
-          setErrorMessage('Photo library access was denied. You can capture a selfie or complete duty shift using standard audit.');
+          setErrorMessage(isStart ? 'Photo library access was denied. Please capture a front selfie to verify attendance.' : 'Photo library access was denied. You can capture a selfie or complete duty shift using standard audit.');
           return;
         }
       }
@@ -292,7 +293,7 @@ export function FaceVerificationModal({
       }
     } catch (err: any) {
       setStep('ERROR');
-      setErrorMessage(err?.message || 'Unable to select photo on this device. You may use standard shift check-in.');
+      setErrorMessage(err?.message || (isStart ? 'Unable to select photo on this device. Please capture a front selfie to verify attendance.' : 'Unable to select photo on this device. You may use standard shift check-in.'));
     }
   };
 
@@ -311,7 +312,6 @@ export function FaceVerificationModal({
     }, 250);
   };
 
-  const isStart = mode === 'START';
 
   return (
     <Modal
@@ -465,23 +465,25 @@ export function FaceVerificationModal({
                     style={{ flex: 1.2 }}
                   />
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                <View style={{ flexDirection: 'row', justifyContent: isStart ? 'center' : 'space-between', alignItems: 'center', marginTop: 2 }}>
                   <Button
                     title="Cancel"
                     variant="outline"
                     size="sm"
                     onPress={onClose}
-                    style={{ flex: 0.8 }}
+                    style={{ flex: isStart ? 1 : 0.8 }}
                   />
-                  <Pressable
-                    onPress={handleUseStandardVerification}
-                    hitSlop={BUTTON_HIT_SLOP}
-                    style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.xs }}
-                  >
-                    <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
-                      Standard Audit (No Photo)
-                    </Text>
-                  </Pressable>
+                  {!isStart && (
+                    <Pressable
+                      onPress={handleUseStandardVerification}
+                      hitSlop={BUTTON_HIT_SLOP}
+                      style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.xs }}
+                    >
+                      <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
+                        Standard Audit (No Photo)
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             )}
@@ -506,21 +508,23 @@ export function FaceVerificationModal({
                     style={{ flex: 1 }}
                   />
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+                <View style={{ flexDirection: 'row', justifyContent: isStart ? 'center' : 'space-between', alignItems: 'center', marginTop: 2 }}>
                   <Button
                     title="Cancel"
                     variant="ghost"
                     size="sm"
                     onPress={onClose}
-                    style={{ flex: 0.6 }}
+                    style={{ flex: isStart ? 1 : 0.6 }}
                   />
-                  <Button
-                    title="Skip & Proceed"
-                    variant="primary"
-                    size="sm"
-                    onPress={handleUseStandardVerification}
-                    style={{ flex: 1.4 }}
-                  />
+                  {!isStart && (
+                    <Button
+                      title="Skip & Proceed"
+                      variant="primary"
+                      size="sm"
+                      onPress={handleUseStandardVerification}
+                      style={{ flex: 1.4 }}
+                    />
+                  )}
                 </View>
               </View>
             )}
