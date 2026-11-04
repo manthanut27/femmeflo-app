@@ -205,6 +205,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   checkText: {
+    flex: 1,
     ...Typography.bodySmall,
     color: Colors.light.text,
     fontWeight: '600',

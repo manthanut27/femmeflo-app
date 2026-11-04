@@ -83,6 +83,8 @@ export function Button({
         <>
           {icon}
           <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
             style={[
               styles.text,
               styles[`${size}Text`],

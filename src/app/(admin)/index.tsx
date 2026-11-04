@@ -1316,6 +1316,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     maxHeight: '90%',
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
     ...Shadows.lg,
   },
   modalHeader: {

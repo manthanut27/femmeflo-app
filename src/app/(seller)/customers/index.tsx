@@ -1,17 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
 import { categoriesApi } from '@/api/categories';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem, PaginationMeta } from '@/api/types';
@@ -24,6 +10,20 @@ import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { requireActiveShift } from '@/utils/shiftGuard';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 export default function CustomerListScreen() {
   const router = useRouter();
@@ -59,7 +59,7 @@ export default function CustomerListScreen() {
     categoriesApi
       .listCategories()
       .then((res) => setCategories(res.items))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const loadCustomers = useCallback(

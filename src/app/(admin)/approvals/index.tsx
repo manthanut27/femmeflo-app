@@ -581,6 +581,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   actionsRow: {
+    flexWrap: 'wrap',
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: Spacing.md,

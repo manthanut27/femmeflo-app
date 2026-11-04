@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   tabBarLabel: {
     ...Typography.caption,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
 });

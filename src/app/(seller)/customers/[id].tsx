@@ -1,7 +1,19 @@
+import { sellerApi } from '@/api/seller';
+import type { CustomerItem, SaleItem } from '@/api/types';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Header } from '@/components/ui/Header';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
+import { requireActiveShift } from '@/utils/shiftGuard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,19 +26,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { sellerApi } from '@/api/seller';
-import type { CustomerItem, SaleItem } from '@/api/types';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Header } from '@/components/ui/Header';
-import { LoadingState } from '@/components/ui/LoadingState';
-import { PageTransition } from '@/components/ui/PageTransition';
-import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import { useAuth } from '@/context/AuthContext';
-import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
-import { requireActiveShift } from '@/utils/shiftGuard';
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

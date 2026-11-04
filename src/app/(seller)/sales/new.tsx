@@ -1142,14 +1142,17 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
   },
   controlsRow: {
+    flexWrap: 'wrap',
     flexDirection: 'row',
     gap: Spacing.md,
     marginTop: Spacing.xs,
   },
   qtyContainer: {
+    minWidth: 120,
     flex: 1,
   },
   priceContainer: {
+    minWidth: 120,
     flex: 1,
   },
   inputLabel: {

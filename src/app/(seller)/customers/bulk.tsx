@@ -1,11 +1,11 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
 import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
 import { BatchCustomerOnboarding } from '@/components/customers/BatchCustomerOnboarding';
 import { BrandColors, Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { checkHasActiveShift } from '@/utils/shiftGuard';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 export default function SellerBulkCustomerScreen() {
   const router = useRouter();

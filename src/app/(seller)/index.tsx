@@ -707,12 +707,12 @@ const styles = StyleSheet.create({
   },
   shiftTrackerBtn: {
     flex: 1.4,
-    minWidth: 150,
+    minWidth: 130,
     minHeight: 44,
   },
   endShiftBtn: {
     flex: 1,
-    minWidth: 120,
+    minWidth: 100,
     minHeight: 44,
   },
   shiftBtn: {

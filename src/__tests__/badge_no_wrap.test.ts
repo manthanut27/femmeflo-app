@@ -36,3 +36,4 @@ describe('Badge Single-Line & No-Wrap Guard Suite', () => {
     );
   });
 });
+

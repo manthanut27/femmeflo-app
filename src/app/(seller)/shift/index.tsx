@@ -1662,6 +1662,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.xl,
     padding: Spacing.xl,
     maxHeight: '85%',
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
   modalTitle: {
     ...Typography.h2,

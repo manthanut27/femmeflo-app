@@ -154,7 +154,7 @@ export function StatCard({
 const styles = StyleSheet.create({
   pressableWrapper: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 110,
   },
   card: {
     backgroundColor: Colors.light.surface,
