@@ -7,6 +7,8 @@ import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { canOnboardSellers, canViewSellers } from '@/utils/permissions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -21,6 +23,9 @@ import {
 
 export default function ManagerSellersScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const allowView = canViewSellers(user);
+  const allowOnboard = canOnboardSellers(user);
 
   const [sellers, setSellers] = useState<ManagerSellerItem[]>([]);
   const [search, setSearch] = useState('');
@@ -42,6 +47,11 @@ export default function ManagerSellersScreen() {
   }, [search]);
 
   const loadSellers = useCallback(async () => {
+    if (!allowView) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const res = await managerApi.listSellers({
         page: 1,
@@ -56,7 +66,7 @@ export default function ManagerSellersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [debouncedSearch]);
+  }, [allowView, debouncedSearch]);
 
   useEffect(() => {
     loadSellers();
@@ -105,21 +115,43 @@ export default function ManagerSellersScreen() {
     );
   };
 
+  if (!allowView) {
+    return (
+      <View style={styles.container}>
+        <Header title="Field Force" subtitle="Territory Officers" showBack />
+        <View style={styles.restrictedContainer}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Access Restricted"
+            description="You do not have permission to view field officers in your territory. Please contact your administrator to request 'View assigned field officers' permission."
+            iconColor={Colors.light.danger}
+            iconBgColor={Colors.light.dangerBg}
+            actionTitle="Back to Dashboard"
+            buttonVariant="secondary"
+            onAction={() => router.replace('/(manager)' as any)}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Header
         title="Field Force"
         subtitle={`${pagination.total} assigned sellers`}
         rightAction={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Onboard new field officer"
-            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            onPress={() => router.push('/(manager)/sellers/new' as any)}
-            hitSlop={HitSlop.md}
-          >
-            <Ionicons name="person-add" size={18} color="#FFFFFF" />
-          </Pressable>
+          allowOnboard ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Onboard new field officer"
+              style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+              onPress={() => router.push('/(manager)/sellers/new' as any)}
+              hitSlop={HitSlop.md}
+            >
+              <Ionicons name="person-add" size={18} color="#FFFFFF" />
+            </Pressable>
+          ) : undefined
         }
       />
 
@@ -152,9 +184,9 @@ export default function ManagerSellersScreen() {
           iconColor={BrandColors.green.primary}
           iconBgColor={BrandColors.green.surface}
           iconBorderColor={BrandColors.green.light}
-          actionTitle="Onboard First Officer"
+          actionTitle={allowOnboard ? "Onboard First Officer" : undefined}
           buttonVariant="secondary"
-          onAction={() => router.push('/(manager)/sellers/new' as any)}
+          onAction={allowOnboard ? () => router.push('/(manager)/sellers/new' as any) : undefined}
         />
       ) : (
         <FlatList
@@ -276,5 +308,14 @@ const styles = StyleSheet.create({
   territoryText: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
+  },
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });

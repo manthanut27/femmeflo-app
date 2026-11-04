@@ -433,7 +433,6 @@ export default function SellerDashboardScreen() {
 
             <Input
               label="Starting Odometer (KM)"
-              placeholder="e.g. 14250"
               keyboardType="numeric"
               value={odometerKm}
               onChangeText={setOdometerKm}
@@ -476,7 +475,6 @@ export default function SellerDashboardScreen() {
 
             <Input
               label="Ending Odometer (KM)"
-              placeholder="e.g. 14320"
               keyboardType="numeric"
               value={odometerKm}
               onChangeText={setOdometerKm}
@@ -485,7 +483,6 @@ export default function SellerDashboardScreen() {
 
             <Input
               label="End of Day Remarks (Optional)"
-              placeholder="e.g. Covered Rau & Pithampur market"
               value={shiftRemarks}
               onChangeText={setShiftRemarks}
               leftIcon={<Ionicons name="chatbox-outline" size={18} color={Colors.light.textSecondary} />}

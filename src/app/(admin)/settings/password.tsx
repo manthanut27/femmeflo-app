@@ -152,7 +152,6 @@ export default function AdminChangePasswordScreen() {
             {/* Inputs */}
             <Input
               label="Current Password *"
-              placeholder="Enter your current master password"
               value={currentPassword}
               onChangeText={setCurrentPassword}
               secureTextEntry={!showCurrentPassword}
@@ -171,7 +170,6 @@ export default function AdminChangePasswordScreen() {
 
             <Input
               label="New Master Password *"
-              placeholder="Minimum 12 characters"
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry={!showNewPassword}
@@ -195,7 +193,6 @@ export default function AdminChangePasswordScreen() {
 
             <Input
               label="Confirm New Password *"
-              placeholder="Re-enter new master password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={!showConfirmPassword}

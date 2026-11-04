@@ -502,7 +502,6 @@ export default function AddCustomerScreen() {
                 </View>
                 <Input
                   label="Custom Exemption Reason Details *"
-                  placeholder="e.g. Remote rural location, Owner unavailable"
                   value={noPhotoReason}
                   onChangeText={setNoPhotoReason}
                   error={errors.noPhotoReason}
@@ -520,7 +519,6 @@ export default function AddCustomerScreen() {
           <Card style={styles.card}>
             <Input
               label="Shop / Store Name *"
-              placeholder="e.g. Shree Ganesh General Stores"
               value={shopName}
               onChangeText={setShopName}
               error={errors.shopName}
@@ -529,7 +527,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Contact Person / Owner Name *"
-              placeholder="e.g. Ramesh Patel"
               value={ownerName}
               onChangeText={setOwnerName}
               error={errors.ownerName}
@@ -538,7 +535,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Mobile Number *"
-              placeholder="e.g. 9876543210"
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
@@ -549,7 +545,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Customer Email Address *"
-              placeholder="e.g. ramesh@example.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -587,7 +582,6 @@ export default function AddCustomerScreen() {
           <Card style={styles.card}>
             <Input
               label="PIN Code *"
-              placeholder="e.g. 452001"
               value={pincode}
               onChangeText={handlePincodeChange}
               keyboardType="numeric"
@@ -604,7 +598,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Street Address / Shop No. *"
-              placeholder="e.g. Shop 4, Main Market Road"
               value={address}
               onChangeText={setAddress}
               error={errors.address}
@@ -615,7 +608,6 @@ export default function AddCustomerScreen() {
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
                 <Input
                   label="Village / Ward"
-                  placeholder="e.g. Rau"
                   value={village}
                   onChangeText={setVillage}
                 />
@@ -623,7 +615,6 @@ export default function AddCustomerScreen() {
               <View style={{ flex: 1 }}>
                 <Input
                   label="District *"
-                  placeholder="e.g. Indore"
                   value={district}
                   onChangeText={setDistrict}
                   error={errors.district}
@@ -633,7 +624,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="State *"
-              placeholder="e.g. Madhya Pradesh"
               value={stateName}
               onChangeText={setStateName}
               error={errors.stateName}

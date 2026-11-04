@@ -654,7 +654,6 @@ export function BatchCustomerOnboarding({
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
                 <Input
                   label="Default PIN Code"
-                  placeholder="e.g. 411028"
                   value={defaultPincode}
                   onChangeText={handleDefaultPincodeChange}
                   keyboardType="numeric"
@@ -672,7 +671,6 @@ export function BatchCustomerOnboarding({
               <View style={{ flex: 1 }}>
                 <Input
                   label="Default District *"
-                  placeholder="e.g. Pune"
                   value={defaultDistrict}
                   onChangeText={setDefaultDistrict}
                 />
@@ -683,7 +681,6 @@ export function BatchCustomerOnboarding({
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
                 <Input
                   label="Default Village / Town *"
-                  placeholder="e.g. Hadapsar"
                   value={defaultVillage}
                   onChangeText={setDefaultVillage}
                 />
@@ -692,7 +689,6 @@ export function BatchCustomerOnboarding({
               <View style={{ flex: 1 }}>
                 <Input
                   label="Default State *"
-                  placeholder="Maharashtra"
                   value={defaultState}
                   onChangeText={setDefaultState}
                 />
@@ -701,7 +697,6 @@ export function BatchCustomerOnboarding({
 
             <Input
               label="Default Photo Exemption Reason *"
-              placeholder="e.g. Bulk field onboarding visit"
               value={defaultNoPhotoReason}
               onChangeText={setDefaultNoPhotoReason}
             />
@@ -856,7 +851,6 @@ export function BatchCustomerOnboarding({
                   <View style={{ flex: 1, marginRight: Spacing.sm }}>
                     <Input
                       label="Store / Shop Name *"
-                      placeholder="e.g. Shree Ganesh Kirana"
                       value={row.shopName}
                       onChangeText={(v) => updateRowField(idx, 'shopName', v)}
                     />
@@ -864,7 +858,6 @@ export function BatchCustomerOnboarding({
                   <View style={{ flex: 1 }}>
                     <Input
                       label="Contact Person *"
-                      placeholder="e.g. Ramesh Patel"
                       value={row.contactName}
                       onChangeText={(v) => updateRowField(idx, 'contactName', v)}
                     />
@@ -875,7 +868,6 @@ export function BatchCustomerOnboarding({
                   <View style={{ flex: 1, marginRight: Spacing.sm }}>
                     <Input
                       label="Mobile Number (10 Digits) *"
-                      placeholder="e.g. 9876543210"
                       value={row.phone}
                       onChangeText={(v) => updateRowField(idx, 'phone', v)}
                       keyboardType="phone-pad"
@@ -886,7 +878,6 @@ export function BatchCustomerOnboarding({
                   <View style={{ flex: 1 }}>
                     <Input
                       label="PIN Code (6 Digits)"
-                      placeholder="e.g. 411028"
                       value={row.pincode}
                       onChangeText={(v) => handleRowPincodeChange(idx, v)}
                       keyboardType="numeric"
@@ -899,7 +890,6 @@ export function BatchCustomerOnboarding({
                   <View style={{ flex: 1, marginRight: Spacing.sm }}>
                     <Input
                       label="Village / Town *"
-                      placeholder="e.g. Hadapsar"
                       value={row.village}
                       onChangeText={(v) => updateRowField(idx, 'village', v)}
                     />
@@ -907,7 +897,6 @@ export function BatchCustomerOnboarding({
                   <View style={{ flex: 1 }}>
                     <Input
                       label="District *"
-                      placeholder="e.g. Pune"
                       value={row.district}
                       onChangeText={(v) => updateRowField(idx, 'district', v)}
                     />
@@ -916,7 +905,6 @@ export function BatchCustomerOnboarding({
 
                 <Input
                   label="Photo Exemption Reason *"
-                  placeholder="e.g. Remote field onboarding visit"
                   value={row.noPhotoReason}
                   onChangeText={(v) => updateRowField(idx, 'noPhotoReason', v)}
                 />

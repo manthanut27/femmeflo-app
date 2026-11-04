@@ -30,6 +30,7 @@ import { ISTClock } from '@/components/common/ISTClock';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
@@ -48,6 +49,7 @@ import { draftStorage } from '@/utils/draftStorage';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
 import { useAuth } from '@/context/AuthContext';
+import { canOnboardCustomers } from '@/utils/permissions';
 
 export default function ManagerAddCustomerScreen() {
   const router = useRouter();
@@ -213,6 +215,10 @@ export default function ManagerAddCustomerScreen() {
 
   async function handleSubmit() {
     if (isSubmitting) return;
+    if (!canOnboardCustomers(user)) {
+      Alert.alert('Access Denied', 'You do not have permission to onboard new customers.');
+      return;
+    }
     if (!validate()) {
       setFeedback({
         type: 'error',
@@ -296,6 +302,26 @@ export default function ManagerAddCustomerScreen() {
             />
           </View>
         </ScrollView>
+      </View>
+    );
+  }
+
+  if (!canOnboardCustomers(user)) {
+    return (
+      <View style={styles.container}>
+        <Header title="Onboard Customer" subtitle="Territory Retail Partner" showBack />
+        <View style={styles.restrictedContainer}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Access Restricted"
+            description="You do not have permission to onboard new customers. Please contact your administrator to request 'Onboard new customers' permission."
+            iconColor={Colors.light.danger}
+            iconBgColor={Colors.light.dangerBg}
+            actionTitle="Back to Customers"
+            buttonVariant="secondary"
+            onAction={() => router.replace('/(manager)/customers' as any)}
+          />
+        </View>
       </View>
     );
   }
@@ -448,7 +474,6 @@ export default function ManagerAddCustomerScreen() {
                 </View>
                 <Input
                   label="Custom Exemption Reason Details *"
-                  placeholder="e.g. Remote kiosk, Owner unavailable, Device camera error"
                   value={noPhotoReason}
                   onChangeText={setNoPhotoReason}
                   error={errors.noPhotoReason}
@@ -462,7 +487,6 @@ export default function ManagerAddCustomerScreen() {
           <Card style={styles.card}>
             <Input
               label="Shop / Store Name *"
-              placeholder="e.g. Shree Ganesh Kirana"
               value={shopName}
               onChangeText={setShopName}
               error={errors.shopName}
@@ -470,7 +494,6 @@ export default function ManagerAddCustomerScreen() {
 
             <Input
               label="Contact Person / Owner Name *"
-              placeholder="e.g. Ramesh Patel"
               value={ownerName}
               onChangeText={setOwnerName}
               error={errors.ownerName}
@@ -478,7 +501,6 @@ export default function ManagerAddCustomerScreen() {
 
             <Input
               label="Mobile Number *"
-              placeholder="e.g. 9876543210"
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
@@ -488,7 +510,6 @@ export default function ManagerAddCustomerScreen() {
 
             <Input
               label="Email Address (Optional)"
-              placeholder="e.g. ramesh@example.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -574,7 +595,6 @@ export default function ManagerAddCustomerScreen() {
           <Card style={styles.card}>
             <Input
               label="PIN Code *"
-              placeholder="e.g. 411028"
               value={pincode}
               onChangeText={handlePincodeChange}
               keyboardType="numeric"
@@ -585,7 +605,6 @@ export default function ManagerAddCustomerScreen() {
 
             <Input
               label="Street Address / Shop No. *"
-              placeholder="e.g. Shop 4, Main Market Road"
               value={address}
               onChangeText={setAddress}
               error={errors.address}
@@ -593,14 +612,14 @@ export default function ManagerAddCustomerScreen() {
 
             <View style={{ flexDirection: 'row' }}>
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                <Input label="Village / Locality" placeholder="e.g. Hadapsar" value={village} onChangeText={setVillage} />
+                <Input label="Village / Locality" value={village} onChangeText={setVillage} />
               </View>
               <View style={{ flex: 1 }}>
-                <Input label="District *" placeholder="e.g. Pune" value={district} onChangeText={setDistrict} error={errors.district} />
+                <Input label="District *" value={district} onChangeText={setDistrict} error={errors.district} />
               </View>
             </View>
 
-            <Input label="State *" placeholder="Maharashtra" value={stateName} onChangeText={setStateName} error={errors.stateName} />
+            <Input label="State *" value={stateName} onChangeText={setStateName} error={errors.stateName} />
           </Card>
 
           {/* Submit */}
@@ -821,6 +840,15 @@ const styles = StyleSheet.create({
   },
   sellerPillTextSelected: {
     color: '#FFFFFF',
+  },
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });
 

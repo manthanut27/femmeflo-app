@@ -747,7 +747,6 @@ export default function AdminDashboardScreen() {
                     <Text style={styles.inputLabel}>From Date (YYYY-MM-DD)</Text>
                     <TextInput
                       style={styles.dateInput}
-                      placeholder="2026-10-01"
                       value={customFrom}
                       onChangeText={setCustomFrom}
                     />
@@ -756,7 +755,6 @@ export default function AdminDashboardScreen() {
                     <Text style={styles.inputLabel}>To Date (YYYY-MM-DD)</Text>
                     <TextInput
                       style={styles.dateInput}
-                      placeholder="2026-10-31"
                       value={customTo}
                       onChangeText={setCustomTo}
                     />

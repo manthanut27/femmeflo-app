@@ -31,7 +31,6 @@ interface RoleConfig {
   primaryColor: string;
   subtleBg: string;
   borderColor: string;
-  placeholder: string;
 }
 
 const ROLES: Record<LoginRole, RoleConfig> = {
@@ -45,7 +44,6 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     primaryColor: BrandColors.pink.primary,
     subtleBg: BrandColors.pink.subtle,
     borderColor: BrandColors.pink.tint,
-    placeholder: 'seller@femmeflo.com or mobile number',
   },
   manager: {
     key: 'manager',
@@ -57,7 +55,6 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     primaryColor: BrandColors.green.primary,
     subtleBg: BrandColors.green.surface,
     borderColor: BrandColors.green.tint,
-    placeholder: 'manager@femmeflo.com or mobile number',
   },
   admin: {
     key: 'admin',
@@ -69,7 +66,6 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     primaryColor: BrandColors.pink.dark,
     subtleBg: '#FFE4E6',
     borderColor: '#FDA4AF',
-    placeholder: 'admin@femmeflo.in or mobile number',
   },
 };
 
@@ -258,7 +254,6 @@ export default function LoginScreen() {
             {/* Input 1: Email or Mobile */}
             <Input
               label="Email Address or Mobile Number"
-              placeholder={activeRole.placeholder}
               value={identifier}
               onChangeText={(text) => {
                 setIdentifier(text);
@@ -280,7 +275,6 @@ export default function LoginScreen() {
             <Input
               inputRef={passwordInputRef}
               label="Password"
-              placeholder="Enter password"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);

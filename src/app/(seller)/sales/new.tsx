@@ -747,7 +747,6 @@ export default function NewSaleScreen() {
               <View style={styles.bankInputBox}>
                 <Text style={styles.inputLabel}>UPI / Bank Transaction Reference</Text>
                 <TextInput
-                  placeholder="e.g. UPI/1234567890/HDFC"
                   value={paymentReference}
                   onChangeText={setPaymentReference}
                   style={styles.textInput}
@@ -764,7 +763,6 @@ export default function NewSaleScreen() {
             </Text>
 
             <TextInput
-              placeholder="e.g. Owner requested 50 more packets next week due to festival demand."
               value={customerFeedback}
               onChangeText={setCustomerFeedback}
               multiline

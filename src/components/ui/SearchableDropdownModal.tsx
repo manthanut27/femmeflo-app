@@ -248,9 +248,11 @@ export function DropdownTrigger({
 
   return (
     <View style={styles.triggerWrapper}>
-      <Text style={styles.triggerLabel}>
-        {label} {required ? <Text style={styles.requiredStar}>*</Text> : null}
-      </Text>
+      {label ? (
+        <Text style={styles.triggerLabel}>
+          {label} {required ? <Text style={styles.requiredStar}>*</Text> : null}
+        </Text>
+      ) : null}
 
       <TouchableOpacity
         style={[
@@ -261,7 +263,7 @@ export function DropdownTrigger({
         onPress={onPress}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${value || placeholder}`}
+        accessibilityLabel={`${label || 'Select'}: ${value || placeholder}`}
       >
         <View style={styles.triggerLeft}>
           <View style={[styles.triggerIconBox, hasValue && styles.triggerIconBoxFilled]}>
@@ -271,18 +273,31 @@ export function DropdownTrigger({
               color={hasValue ? BrandColors.pink.primary : Colors.light.textTertiary}
             />
           </View>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text
-                style={[styles.triggerValueText, !hasValue && styles.triggerPlaceholderText]}
+                style={[
+                  styles.triggerValueText,
+                  !hasValue && styles.triggerPlaceholderText,
+                  { flexShrink: 1 },
+                ]}
                 numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {value || placeholder}
               </Text>
-              {badge ? <Badge label={badge} variant="ACTIVE" size="sm" /> : null}
+              {badge ? (
+                <View style={{ flexShrink: 0 }}>
+                  <Badge label={badge} variant="ACTIVE" size="sm" />
+                </View>
+              ) : null}
             </View>
             {subtitle ? (
-              <Text style={styles.triggerSubText} numberOfLines={1}>
+              <Text
+                style={styles.triggerSubText}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {subtitle}
               </Text>
             ) : null}
@@ -478,6 +493,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 12,
     minHeight: 52,
+    overflow: 'hidden',
     ...Shadows.sm,
   },
   triggerBoxFilled: {
@@ -491,6 +507,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
     marginRight: Spacing.sm,
   },
   triggerIconBox: {
@@ -501,6 +518,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
+    flexShrink: 0,
   },
   triggerIconBoxFilled: {
     backgroundColor: BrandColors.pink.subtle,
@@ -510,6 +528,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.light.textPrimary,
+    flexShrink: 1,
   },
   triggerPlaceholderText: {
     color: Colors.light.textPlaceholder,
@@ -520,6 +539,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.light.textSecondary,
     marginTop: 2,
+    flexShrink: 1,
   },
   chevronBox: {
     paddingLeft: 4,

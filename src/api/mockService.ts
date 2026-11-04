@@ -1,6 +1,14 @@
 import type { PendingApprovalItem } from './admin';
 import type { ManagerSellerItem } from './manager';
-import { ALL_BACKEND_PERMISSIONS } from '../utils/permissions';
+import {
+  ALL_BACKEND_PERMISSIONS,
+  canMonitorStock,
+  canOnboardCustomers,
+  canOnboardSellers,
+  canViewCustomers,
+  canViewSellers,
+  syncPermissionAliases,
+} from '../utils/permissions';
 import {
   MOCK_ADMIN_DASHBOARD,
   MOCK_ALL_MANAGERS,
@@ -164,18 +172,38 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       rawId.includes('manager') ||
       rawId === '9876543220' ||
       rawId === 'manager@femmeflo.com' ||
-      rawId === 'manager@femmeflo.in'
+      rawId === 'manager@femmeflo.in' ||
+      mockDb.managers.some(
+        (m) =>
+          (m.email && m.email.toLowerCase() === rawId) ||
+          (m.phone && m.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
+      )
     ) {
-      selectedUser = MOCK_USERS.manager;
+      const customMgr = mockDb.managers.find(
+        (m) =>
+          (m.email && m.email.toLowerCase() === rawId) ||
+          (m.phone && m.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
+      );
+      selectedUser = customMgr || MOCK_USERS.manager;
     } else if (
       roleHint === 'seller' ||
       cleanEndpoint.startsWith('seller') ||
       rawId.includes('seller') ||
       rawId === '9876543210' ||
       rawId === 'seller@femmeflo.com' ||
-      rawId === 'seller@femmeflo.in'
+      rawId === 'seller@femmeflo.in' ||
+      mockDb.sellers.some(
+        (s) =>
+          (s.email && s.email.toLowerCase() === rawId) ||
+          (s.phone && s.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
+      )
     ) {
-      selectedUser = MOCK_USERS.seller;
+      const customSeller = mockDb.sellers.find(
+        (s) =>
+          (s.email && s.email.toLowerCase() === rawId) ||
+          (s.phone && s.phone.replace(/\D/g, '') === rawId.replace(/\D/g, ''))
+      );
+      selectedUser = (customSeller as unknown as PublicUser) || MOCK_USERS.seller;
     } else {
       throw new ApiError('Invalid login credentials.', 401);
     }
@@ -280,6 +308,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if ((cleanEndpoint === 'seller/customers' || cleanEndpoint === 'manager/customers' || cleanEndpoint === 'admin/customers') && method === 'POST') {
+    if (cleanEndpoint === 'manager/customers' && mockDb.currentUser.role === 'MANAGER' && !canOnboardCustomers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard customers.', 403);
+    }
     const category = mockDb.categories.find((cat) => cat.id === body.categoryId) || mockDb.categories[0];
     const newCustomer: CustomerItem = {
       id: `cust_${Date.now()}`,
@@ -566,6 +597,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'manager/sellers' && method === 'GET') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canViewSellers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to view field officers.', 403);
+    }
     return {
       items: mockDb.sellers,
       pagination: { page: 1, pageSize: 50, total: mockDb.sellers.length, totalPages: 1 },
@@ -573,6 +607,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'manager/sellers' && method === 'POST') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canOnboardSellers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard field officers.', 403);
+    }
     const newSeller: ManagerSellerItem = {
       id: `usr_seller_${Date.now()}`,
       sellerId: `usr_seller_${Date.now()}`,
@@ -602,15 +639,79 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint.startsWith('manager/sellers/') && method === 'GET') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canViewSellers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to view field officers.', 403);
+    }
     const id = cleanEndpoint.replace('manager/sellers/', '');
     const seller = mockDb.sellers.find((s) => s.id === id || s.sellerId === id) || mockDb.sellers[0];
     return { seller } as unknown as T;
   }
 
   if (cleanEndpoint === 'manager/customers') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canViewCustomers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to view customer directory.', 403);
+    }
     return {
       items: mockDb.customers,
       pagination: { page: 1, pageSize: 50, total: mockDb.customers.length, totalPages: 1 },
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === 'manager/customers/bulk' && method === 'POST') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canOnboardCustomers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard customers.', 403);
+    }
+    const rows = (body.customers || []) as any[];
+    const created: CustomerItem[] = [];
+    for (const r of rows) {
+      const cust: CustomerItem = {
+        id: `cust_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        shopName: r.shopName || 'Retail Shop',
+        ownerName: r.ownerName || r.contactName || 'Owner',
+        phone: r.phone || '+91 98765 00000',
+        email: r.email,
+        category: r.category || 'Retail Store',
+        address: r.address || '',
+        district: r.district || 'Indore',
+        village: r.village || undefined,
+        state: r.state || 'Madhya Pradesh',
+        pincode: r.pincode || '452001',
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      mockDb.customers.unshift(cust);
+      created.push(cust);
+    }
+    return {
+      success: true,
+      createdCount: created.length,
+      failedCount: 0,
+      errors: [],
+      items: created,
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === 'manager/inventory') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canMonitorStock(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to monitor territory stock.', 403);
+    }
+    const totalAssigned = mockDb.sellers.length * 100;
+    const totalSold = mockDb.sellers.reduce((acc, s) => acc + (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10), 0);
+    const totalRemaining = Math.max(0, totalAssigned - totalSold);
+    return {
+      summary: {
+        totalSellers: mockDb.sellers.length,
+        totalAssigned,
+        totalSold,
+        totalRemaining,
+      },
+      sellers: mockDb.sellers.map((s) => ({
+        seller: s,
+        assigned: 100,
+        sold: s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10,
+        remaining: Math.max(0, 100 - (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10)),
+      })),
+      products: mockDb.products,
     } as unknown as T;
   }
 

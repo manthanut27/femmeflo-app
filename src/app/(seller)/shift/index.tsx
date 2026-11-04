@@ -829,7 +829,6 @@ export default function ShiftScreen() {
 
             <Input
               label="Starting Odometer (km) *"
-              placeholder="e.g. 14250"
               value={startOdometer}
               onChangeText={setStartOdometer}
               keyboardType="numeric"
@@ -838,7 +837,6 @@ export default function ShiftScreen() {
 
             <Input
               label="Shift Remarks (Optional)"
-              placeholder="e.g. Morning beat - Market Sector 4"
               value={startNotes}
               onChangeText={setStartNotes}
               leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
@@ -896,7 +894,6 @@ export default function ShiftScreen() {
 
             <Input
               label="Visit Purpose / Notes"
-              placeholder="e.g. Routine replenishment, promotional banner delivery"
               value={visitNotes}
               onChangeText={setVisitNotes}
               containerStyle={{ marginTop: Spacing.md }}
@@ -1187,18 +1184,12 @@ export default function ShiftScreen() {
                           'Previous payment pending',
                         ]
                   }
-                  placeholder={
-                    checkoutSaleDone
-                      ? 'e.g. Retailer satisfied with standard pack, asked for next delivery on Friday...'
-                      : 'e.g. Dukaan band thi owner gaon gaya hai, agle hafte aane ko bola...'
-                  }
-                />
+                  />
               </View>
 
               {/* Departure Notes */}
               <Input
                 label="Departure Notes (Optional)"
-                placeholder="e.g. Visit concluded cleanly, samples delivered"
                 value={checkoutNotes}
                 onChangeText={(t) => {
                   setCheckoutNotes(t);
@@ -1253,7 +1244,6 @@ export default function ShiftScreen() {
 
             <Input
               label={`Closing Odometer (km) * (Must be >= ${startKm} km)`}
-              placeholder={`e.g. ${startKm + 25}`}
               value={endOdometer}
               onChangeText={setEndOdometer}
               keyboardType="numeric"
@@ -1262,7 +1252,6 @@ export default function ShiftScreen() {
 
             <Input
               label="Shift Summary / Remarks (Optional)"
-              placeholder="e.g. Completed South beat, covered 12 outlets"
               value={endNotes}
               onChangeText={setEndNotes}
               leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}

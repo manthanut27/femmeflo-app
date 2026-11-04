@@ -104,7 +104,6 @@ export default function ChangePasswordScreen() {
           <Card style={styles.card}>
             <Input
               label="Current Password *"
-              placeholder="Enter current password"
               value={currentPassword}
               onChangeText={setCurrentPassword}
               isPassword
@@ -113,7 +112,6 @@ export default function ChangePasswordScreen() {
 
             <Input
               label="New Password *"
-              placeholder="At least 6 characters"
               value={newPassword}
               onChangeText={setNewPassword}
               isPassword
@@ -122,7 +120,6 @@ export default function ChangePasswordScreen() {
 
             <Input
               label="Confirm New Password *"
-              placeholder="Re-type new password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               isPassword

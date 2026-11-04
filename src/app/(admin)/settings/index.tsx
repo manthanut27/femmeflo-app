@@ -263,7 +263,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Legal Company Name *"
-                placeholder="Enter legal entity / business name"
                 value={companyName}
                 onChangeText={setCompanyName}
                 autoCapitalize="words"
@@ -277,7 +276,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Input
                     label="Company GSTIN"
-                    placeholder="Enter 15-digit GSTIN"
                     value={companyGst}
                     onChangeText={(val) => setCompanyGst(val.toUpperCase())}
                     autoCapitalize="characters"
@@ -289,7 +287,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                   <Input
                     label="Company PAN"
-                    placeholder="Enter 10-digit PAN"
                     value={companyPan}
                     onChangeText={(val) => setCompanyPan(val.toUpperCase())}
                     autoCapitalize="characters"
@@ -302,7 +299,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Registered Corporate Address"
-                placeholder="Enter registered corporate / office address"
                 value={companyAddress}
                 onChangeText={setCompanyAddress}
                 multiline
@@ -317,7 +313,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Input
                     label="Official Phone"
-                    placeholder="Enter billing phone number"
                     value={companyPhone}
                     onChangeText={setCompanyPhone}
                     keyboardType="phone-pad"
@@ -330,7 +325,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                   <Input
                     label="Official Email"
-                    placeholder="Enter billing email address"
                     value={companyEmail}
                     onChangeText={setCompanyEmail}
                     keyboardType="email-address"
@@ -345,7 +339,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Invoice Terms & Conditions"
-                placeholder="Enter standard payment, delivery, or warranty terms"
                 value={invoiceTerms}
                 onChangeText={setInvoiceTerms}
                 multiline
@@ -391,7 +384,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Authoritative Minimum Sale Price (₹) *"
-                placeholder="e.g. 25"
                 value={minPriceRupees}
                 onChangeText={setMinPriceRupees}
                 keyboardType="decimal-pad"
@@ -401,7 +393,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Low Stock Warehouse Warning (Packets)"
-                placeholder="e.g. 50"
                 value={lowStockThreshold}
                 onChangeText={setLowStockThreshold}
                 keyboardType="number-pad"

@@ -115,7 +115,6 @@ export default function ResetPasswordScreen() {
               <>
                 <Input
                   label="Reset Token"
-                  placeholder="Paste token from email"
                   value={token}
                   onChangeText={setToken}
                   autoCapitalize="none"
@@ -124,7 +123,6 @@ export default function ResetPasswordScreen() {
 
                 <Input
                   label="New Password"
-                  placeholder="At least 6 characters"
                   value={newPassword}
                   onChangeText={setNewPassword}
                   isPassword
@@ -133,7 +131,6 @@ export default function ResetPasswordScreen() {
 
                 <Input
                   label="Confirm Password"
-                  placeholder="Re-enter new password"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   isPassword

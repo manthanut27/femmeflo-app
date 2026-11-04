@@ -19,10 +19,21 @@ import { CardSkeleton, StatCardSkeleton } from '@/components/ui/LoadingSkeleton'
 import { StatCard } from '@/components/ui/StatCard';
 import { BorderRadius, BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import {
+  canMonitorStock,
+  canOnboardCustomers,
+  canViewCustomers,
+  canViewSellers,
+} from '@/utils/permissions';
 
 export default function ManagerDashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
+
+  const allowSellers = canViewSellers(user);
+  const allowCustomers = canViewCustomers(user);
+  const allowOnboardCust = canOnboardCustomers(user);
+  const allowStock = canMonitorStock(user);
 
   const [dashboard, setDashboard] = useState<ManagerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,32 +162,32 @@ export default function ManagerDashboardScreen() {
                 />
                 <StatCard
                   title="Packets Distributed"
-                  value={(dashboard?.monthlyPacketsSold || 0).toLocaleString()}
-                  subtitle="Total units sold"
+                  value={allowStock ? (dashboard?.monthlyPacketsSold || 0).toLocaleString() : '—'}
+                  subtitle={allowStock ? 'Total units sold' : 'Permission restricted'}
                   icon="cube-outline"
                   iconColor={Colors.light.info}
                   iconBgColor={Colors.light.infoBg}
-                  onPress={() => router.push('/(manager)/inventory' as any)}
+                  onPress={allowStock ? () => router.push('/(manager)/inventory' as any) : undefined}
                 />
               </View>
               <View style={styles.metricRow}>
                 <StatCard
                   title="Active Field Force"
-                  value={`${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}`}
-                  subtitle="Sellers on active duty"
+                  value={allowSellers ? `${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}` : '—'}
+                  subtitle={allowSellers ? 'Sellers on active duty' : 'Permission restricted'}
                   icon="people-outline"
                   iconColor={BrandColors.green.primary}
                   iconBgColor={BrandColors.green.surface}
-                  onPress={() => router.push('/(manager)/sellers' as any)}
+                  onPress={allowSellers ? () => router.push('/(manager)/sellers' as any) : undefined}
                 />
                 <StatCard
                   title="Retail Stores"
-                  value={(dashboard?.totalCustomers || 0).toLocaleString()}
-                  subtitle="Active customer network"
+                  value={allowCustomers ? (dashboard?.totalCustomers || 0).toLocaleString() : '—'}
+                  subtitle={allowCustomers ? 'Active customer network' : 'Permission restricted'}
                   icon="storefront-outline"
                   iconColor={BrandColors.pink.primary}
                   iconBgColor={BrandColors.pink.subtle}
-                  onPress={() => router.push('/(manager)/customers' as any)}
+                  onPress={allowCustomers ? () => router.push('/(manager)/customers' as any) : undefined}
                 />
               </View>
             </View>
@@ -185,13 +196,15 @@ export default function ManagerDashboardScreen() {
           {/* Quick Links */}
           <Text style={styles.sectionHeading}>Territory Operations & Supervision</Text>
           <View style={styles.actionsCol}>
-            <Button
-              title="Van Stock Supervision"
-              variant="secondary"
-              size="lg"
-              icon={<Ionicons name="cube-outline" size={20} color="#FFFFFF" />}
-              onPress={() => router.push('/(manager)/inventory' as any)}
-            />
+            {allowStock ? (
+              <Button
+                title="Van Stock Supervision"
+                variant="secondary"
+                size="lg"
+                icon={<Ionicons name="cube-outline" size={20} color="#FFFFFF" />}
+                onPress={() => router.push('/(manager)/inventory' as any)}
+              />
+            ) : null}
             <Button
               title="Field Shift Attendance & Route Tracking"
               variant="outline-secondary"
@@ -206,20 +219,24 @@ export default function ManagerDashboardScreen() {
               icon={<Ionicons name="gift-outline" size={18} color={BrandColors.green.primary} />}
               onPress={() => router.push('/(manager)/incentives' as any)}
             />
-            <Button
-              title="Onboard Customer Store (Single / Batch)"
-              variant="outline-secondary"
-              size="md"
-              icon={<Ionicons name="storefront-outline" size={18} color={BrandColors.green.primary} />}
-              onPress={() => router.push('/(manager)/customers/new' as any)}
-            />
-            <Button
-              title="Manage Field Officers (Sellers)"
-              variant="outline-secondary"
-              size="md"
-              icon={<Ionicons name="people-outline" size={18} color={BrandColors.green.primary} />}
-              onPress={() => router.push('/(manager)/sellers' as any)}
-            />
+            {allowOnboardCust ? (
+              <Button
+                title="Onboard Customer Store (Single / Batch)"
+                variant="outline-secondary"
+                size="md"
+                icon={<Ionicons name="storefront-outline" size={18} color={BrandColors.green.primary} />}
+                onPress={() => router.push('/(manager)/customers/new' as any)}
+              />
+            ) : null}
+            {allowSellers ? (
+              <Button
+                title="Manage Field Officers (Sellers)"
+                variant="outline-secondary"
+                size="md"
+                icon={<Ionicons name="people-outline" size={18} color={BrandColors.green.primary} />}
+                onPress={() => router.push('/(manager)/sellers' as any)}
+              />
+            ) : null}
             <Button
               title="Territory Sales Stream"
               variant="ghost"

@@ -59,7 +59,7 @@ export default function AdminUsersScreen() {
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formEmail, setFormEmail] = useState('');
-  const [formPassword, setFormPassword] = useState('FemmeFlo@2026');
+  const [formPassword, setFormPassword] = useState('');
   const [formState, setFormState] = useState('Maharashtra');
   const [formDistrict, setFormDistrict] = useState('Thane');
   const [formManagerId, setFormManagerId] = useState('');
@@ -796,7 +796,6 @@ export default function AdminUsersScreen() {
 
                   <Input
                     label="Full Name *"
-                    placeholder="e.g. Ramesh Patil"
                     value={formName}
                     onChangeText={(val) => {
                       setFormName(val);
@@ -808,7 +807,6 @@ export default function AdminUsersScreen() {
 
                   <Input
                     label="Mobile Phone Number *"
-                    placeholder="e.g. 9876543210"
                     keyboardType="phone-pad"
                     value={formPhone}
                     onChangeText={(val) => {
@@ -822,7 +820,6 @@ export default function AdminUsersScreen() {
 
                   <Input
                     label="Email Address (Optional)"
-                    placeholder="e.g. ramesh@femmeflo.com"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={formEmail}
@@ -836,7 +833,6 @@ export default function AdminUsersScreen() {
 
                   <Input
                     label="Initial Password *"
-                    placeholder="Minimum 12 characters"
                     value={formPassword}
                     onChangeText={(val) => {
                       setFormPassword(val);
@@ -878,7 +874,6 @@ export default function AdminUsersScreen() {
                       <View style={{ flex: 1, marginRight: Spacing.sm }}>
                         <Input
                           label="State"
-                          placeholder="e.g. Maharashtra"
                           value={formState}
                           onChangeText={setFormState}
                         />
@@ -886,7 +881,6 @@ export default function AdminUsersScreen() {
                       <View style={{ flex: 1 }}>
                         <Input
                           label="District"
-                          placeholder="e.g. Thane"
                           value={formDistrict}
                           onChangeText={setFormDistrict}
                         />

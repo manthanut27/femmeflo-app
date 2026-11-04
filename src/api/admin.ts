@@ -380,7 +380,7 @@ export const adminApi = {
     const body: Record<string, any> = {
       name: payload.name.trim(),
       phone,
-      password: payload.password?.trim() || 'FemmeFlo@2026',
+      password: payload.password?.trim() || '',
     };
     if (payload.email?.trim()) body.email = payload.email.trim();
     if (payload.state?.trim()) body.state = payload.state.trim();
@@ -479,7 +479,7 @@ export const adminApi = {
     const body: Record<string, any> = {
       name: payload.name.trim(),
       phone,
-      password: payload.password?.trim() || 'FemmeFlo@2026',
+      password: payload.password?.trim() || '',
       managerId: payload.managerId,
     };
     if (payload.email?.trim()) body.email = payload.email.trim();

@@ -454,7 +454,6 @@ Generated in FemmeFlo Standalone Test Mode.`;
             {collectMode === 'BANK' ? (
               <Input
                 label="Bank Reference / UPI Transaction ID"
-                placeholder="e.g. UPI/1234567890"
                 value={paymentRef}
                 onChangeText={setPaymentRef}
                 containerStyle={{ marginTop: Spacing.sm }}
@@ -507,8 +506,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 onChange={setEditFeedbackText}
                 label="Observation Notes"
                 sublabel="Tap mic to speak — review and accept before saving"
-                placeholder="e.g. Dukaan par stock khatam tha, agle hafte 20 packets ka order chahiye..."
-              />
+                />
 
               <View style={styles.modalBtnRow}>
                 <Button

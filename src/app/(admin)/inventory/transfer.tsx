@@ -409,7 +409,6 @@ export default function StockTransferScreen() {
             <View style={styles.quantitySection}>
               <Input
                 label="Packet Quantity *"
-                placeholder="e.g. 100"
                 value={quantityStr}
                 onChangeText={setQuantityStr}
                 keyboardType="number-pad"
@@ -446,14 +445,12 @@ export default function StockTransferScreen() {
               <>
                 <Input
                   label="Batch / Lot Number (Optional)"
-                  placeholder="e.g. BATCH-2026-OCT-01"
                   value={batchNumber}
                   onChangeText={setBatchNumber}
                   leftIcon={<Ionicons name="barcode-outline" size={18} color={Colors.light.textTertiary} />}
                 />
                 <Input
                   label="Inward Remarks / Delivery Note"
-                  placeholder="Factory truck dispatch note, driver details..."
                   value={notes}
                   onChangeText={setNotes}
                   leftIcon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.light.textTertiary} />}
@@ -462,7 +459,6 @@ export default function StockTransferScreen() {
             ) : (
               <Input
                 label="Transfer Reference / Waybill (Optional)"
-                placeholder="e.g. TRF-2026-881"
                 value={reference}
                 onChangeText={setReference}
                 leftIcon={<Ionicons name="document-text-outline" size={18} color={Colors.light.textTertiary} />}
