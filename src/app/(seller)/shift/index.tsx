@@ -77,14 +77,15 @@ export default function ShiftScreen() {
 
   const filteredCheckInCustomers = useMemo(() => {
     const q = checkInCustomerSearch.trim().toLowerCase();
+    if (!Array.isArray(customers)) return [];
     if (!q) return customers;
     return customers.filter(
       (c) =>
-        c.shopName.toLowerCase().includes(q) ||
-        (c.ownerName && c.ownerName.toLowerCase().includes(q)) ||
-        (c.phone && c.phone.includes(q)) ||
-        (c.district && c.district.toLowerCase().includes(q)) ||
-        (c.village && c.village.toLowerCase().includes(q))
+        (c.shopName ? c.shopName.toLowerCase().includes(q) : false) ||
+        (c.ownerName ? c.ownerName.toLowerCase().includes(q) : false) ||
+        (c.phone ? c.phone.includes(q) : false) ||
+        (c.district ? c.district.toLowerCase().includes(q) : false) ||
+        (c.village ? c.village.toLowerCase().includes(q) : false)
     );
   }, [customers, checkInCustomerSearch]);
 
@@ -127,21 +128,37 @@ export default function ShiftScreen() {
         sellerApi.listProducts().catch(() => ({ items: [] })),
       ]);
 
-      const active = shiftRes.shift;
-      setCurrentShift(active);
-      await draftStorage.saveActiveShift(userId, active);
-
-      setCustomers(custRes.items || []);
-      if (custRes.items?.length > 0) {
-        setSelectedCustomerId((prev) => prev || custRes.items[0].id);
+      let active: any = (shiftRes as any)?.shift;
+      if (active === undefined && (shiftRes as any)?.data !== undefined) {
+        active = (shiftRes as any).data?.shift !== undefined ? (shiftRes as any).data.shift : (shiftRes as any).data;
+      }
+      if (active === undefined) {
+        active = shiftRes;
       }
 
-      setProducts(prodRes.items || []);
-      if (prodRes.items?.length > 0) {
-        setSelectedProductId((prev) => prev || prodRes.items[0].id);
-        const firstBasePrice = prodRes.items[0].basePricePaise / 100;
+      if (active && typeof active === 'object' && ('id' in active || 'startTime' in active)) {
+        setCurrentShift(active);
+        await draftStorage.saveActiveShift(userId, active).catch(() => {});
+      } else if (shiftRes === null || active === null) {
+        setCurrentShift(null);
+        await draftStorage.clearActiveShift(userId).catch(() => {});
+      }
+
+      const custList = Array.isArray(custRes?.items) ? custRes.items : [];
+      setCustomers(custList);
+      if (custList.length > 0) {
+        setSelectedCustomerId((prev) => prev || custList[0].id);
+      }
+
+      const prodList = Array.isArray(prodRes?.items) ? prodRes.items : [];
+      setProducts(prodList);
+      if (prodList.length > 0) {
+        setSelectedProductId((prev) => prev || prodList[0].id);
+        const firstBasePrice = ((prodList[0].basePricePaise ?? 2500) as number) / 100;
         setSaleUnitPrice((prev) => (prev ? prev : firstBasePrice || 25));
       }
+    } catch (err) {
+      console.warn('loadShiftData handled error:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -208,7 +225,9 @@ export default function ShiftScreen() {
           }
 
           // 2. Strict 3-second timeout race so GPS lock never delays closing the shift
-          const positionPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const positionPromise = Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }).catch(() => null);
           const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
           const loc = await Promise.race([positionPromise, timeoutPromise]);
           if (loc && (loc as any).coords) {
@@ -310,17 +329,38 @@ export default function ShiftScreen() {
     }
 
     setIsCheckingIn(true);
+    setFeedback(null);
+
     try {
       const coords = await acquireCoordinates();
       const customer = customers.find((c) => c.id === selectedCustomerId);
 
-      await sellerApi.checkIn({
+      const checkInRes = await sellerApi.checkIn({
         customerId: selectedCustomerId,
         shopName: customer?.shopName || 'Retail Customer Store',
         latitude: coords.latitude,
         longitude: coords.longitude,
         notes: visitNotes.trim() || undefined,
+        shiftId: currentShift?.id,
       });
+
+      const newVisit: ShiftVisit | undefined =
+        (checkInRes as any)?.visit ||
+        (checkInRes as any)?.data?.visit ||
+        (checkInRes as any)?.data ||
+        checkInRes;
+
+      if (newVisit && typeof newVisit === 'object' && ('id' in newVisit || 'checkInTime' in newVisit)) {
+        setCurrentShift((prev) => {
+          if (!prev) return prev;
+          const currentVisits = Array.isArray(prev.visits) ? prev.visits : [];
+          const exists = currentVisits.some((v) => v.id && v.id === newVisit.id);
+          const updatedVisits = exists ? currentVisits : [newVisit, ...currentVisits];
+          const updated = { ...prev, visits: updatedVisits };
+          draftStorage.saveActiveShift(userId, updated).catch(() => {});
+          return updated;
+        });
+      }
 
       setCheckInModalVisible(false);
       setVisitNotes('');
@@ -330,7 +370,7 @@ export default function ShiftScreen() {
         message: `GPS location captured at ${customer?.shopName || 'retail outlet'}. Store timer running.`,
       });
       Alert.alert('Visit Checked In', 'GPS location captured and store visit recorded.');
-      loadShiftData();
+      await loadShiftData().catch(() => {});
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -591,7 +631,7 @@ export default function ShiftScreen() {
     }
   }
 
-  const visits = currentShift?.visits ?? [];
+  const visits = Array.isArray(currentShift?.visits) ? currentShift.visits : [];
   const startKm = currentShift?.startOdometerKm ?? 0;
   const isShiftActive = Boolean(currentShift && currentShift.startTime && !currentShift.endTime);
 
@@ -753,14 +793,30 @@ export default function ShiftScreen() {
             ) : (
               visits.map((v: ShiftVisit, idx: number) => {
                 const customer = customers.find((c) => c.id === v.customerId);
-                const isCheckedOut = Boolean(v.checkOutTime);
-                const hasSale = Boolean(v.saleDone || v.saleId || v.sale);
+                const isCheckedOut = Boolean(v.checkOutTime || (v as any).check_out_time || (v as any).endedAt);
+                const hasSale = Boolean(v.saleDone || (v as any).sale_done || v.saleId || (v as any).sale_id || v.sale);
                 const durationDisplay =
                   v.durationMins != null
                     ? `${Number(v.durationMins).toFixed(1)} mins`
+                    : (v as any).duration_mins != null
+                    ? `${Number((v as any).duration_mins).toFixed(1)} mins`
                     : isCheckedOut
                     ? 'Completed'
                     : 'In store now';
+
+                const formatTimeSafely = (rawDate?: string | number | null): string => {
+                  if (!rawDate) return 'Just now';
+                  const d = new Date(rawDate);
+                  if (isNaN(d.getTime())) return 'Just now';
+                  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                };
+
+                const checkInTimeStr = formatTimeSafely(
+                  v.checkInTime || (v as any).check_in_time || (v as any).createdAt || (v as any).checkInAt
+                );
+                const checkOutTimeStr = (v.checkOutTime || (v as any).check_out_time)
+                  ? formatTimeSafely(v.checkOutTime || (v as any).check_out_time || (v as any).endedAt)
+                  : null;
 
                 return (
                   <Card key={v.id || idx} style={styles.visitCard}>
@@ -788,9 +844,9 @@ export default function ShiftScreen() {
                           {customer?.shopName || v.shopName || 'Retail Customer Store'}
                         </Text>
                         <Text style={styles.visitSub}>
-                          Arrived: {new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          {v.checkOutTime
-                            ? ` • Left: ${new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${durationDisplay})`
+                          Arrived: {checkInTimeStr}
+                          {checkOutTimeStr
+                            ? ` • Left: ${checkOutTimeStr} (${durationDisplay})`
                             : ` • ${durationDisplay}`}
                         </Text>
                       </View>

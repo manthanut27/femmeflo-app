@@ -357,6 +357,7 @@ export const sellerApi = {
     };
     if (payload.customerId) body.customerId = payload.customerId;
     if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
+    if ((payload as any).shiftId) body.shiftId = (payload as any).shiftId;
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-in', {
       method: 'POST',
       body: JSON.stringify(body),

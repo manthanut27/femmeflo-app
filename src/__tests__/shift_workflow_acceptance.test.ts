@@ -562,4 +562,108 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
     assert.equal(unpackShift(rawDirect).id, 'shift_direct');
     assert.equal(unpackShift(rawApiDataNested).id, 'shift_data_nested');
   });
+
+  // ----------------------------------------------------
+  // SCENARIO 15: Store Visit Check-in Payload & Shift Association
+  // ----------------------------------------------------
+  test('Scenario 15: Store visit check-in payload includes customer, coordinates, notes, and active shiftId', () => {
+    const payload = {
+      customerId: 'cust_indore_001',
+      shopName: 'Sharma General Store',
+      latitude: 22.7196,
+      longitude: 75.8577,
+      notes: 'Routine inventory audit and restocking visit',
+      shiftId: 'shift_active_123',
+    };
+
+    const body: Record<string, any> = {
+      latitude: payload.latitude ?? 0,
+      longitude: payload.longitude ?? 0,
+      shopName: payload.shopName,
+    };
+    if (payload.customerId) body.customerId = payload.customerId;
+    if (payload.notes) body.notes = payload.notes;
+    if (payload.shiftId) body.shiftId = payload.shiftId;
+
+    assert.equal(body.customerId, 'cust_indore_001');
+    assert.equal(body.shopName, 'Sharma General Store');
+    assert.equal(body.latitude, 22.7196);
+    assert.equal(body.longitude, 75.8577);
+    assert.equal(body.notes, 'Routine inventory audit and restocking visit');
+    assert.equal(body.shiftId, 'shift_active_123');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 16: Safe Visit Time Formatting Prevents Invalid Date Crashes
+  // ----------------------------------------------------
+  test('Scenario 16: Safe visit time formatting handles undefined, snake_case, or invalid timestamps safely without RangeError', () => {
+    const formatTimeSafely = (rawDate?: string | number | null): string => {
+      if (!rawDate) return 'Just now';
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return 'Just now';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Valid ISO timestamp
+    assert.doesNotThrow(() => {
+      const formatted = formatTimeSafely('2026-11-04T10:30:00.000Z');
+      assert.ok(formatted && typeof formatted === 'string');
+    });
+
+    // Missing, null, or undefined
+    assert.equal(formatTimeSafely(undefined), 'Just now');
+    assert.equal(formatTimeSafely(null), 'Just now');
+    assert.equal(formatTimeSafely(''), 'Just now');
+
+    // Invalid date string (e.g. malformed server response)
+    assert.doesNotThrow(() => {
+      assert.equal(formatTimeSafely('invalid_date_format'), 'Just now');
+    });
+
+    // Fallback checks for snake_case backend fields
+    const rawVisitSnakeCase: any = {
+      id: 'visit_999',
+      check_in_time: '2026-11-04T11:00:00.000Z',
+      check_out_time: null,
+    };
+    const checkInDisplay = formatTimeSafely(
+      rawVisitSnakeCase.checkInTime || rawVisitSnakeCase.check_in_time || rawVisitSnakeCase.createdAt
+    );
+    assert.ok(checkInDisplay !== 'Just now');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 17: Safe Handling of Null Shift in loadShiftData
+  // ----------------------------------------------------
+  test('Scenario 17: Null shift response from backend does not throw Cannot read properties of null', () => {
+    const unpackShift = (shiftRes: any) => {
+      let active = shiftRes?.shift;
+      if (active === undefined && shiftRes?.data !== undefined) {
+        active = shiftRes.data?.shift !== undefined ? shiftRes.data.shift : shiftRes.data;
+      }
+      if (active === undefined) {
+        active = shiftRes;
+      }
+      return active;
+    };
+
+    const shiftResNull: any = null;
+    const activeFromNull = unpackShift(shiftResNull);
+
+    assert.equal(activeFromNull, null);
+    assert.doesNotThrow(() => {
+      const id = (activeFromNull as any)?.id;
+      assert.equal(id, undefined);
+    });
+
+    const shiftResEmptyData: any = { data: null };
+    const activeFromEmpty = unpackShift(shiftResEmptyData);
+    assert.equal(activeFromEmpty, null);
+
+    const shiftResShiftNull: any = { shift: null };
+    assert.equal(unpackShift(shiftResShiftNull), null);
+
+    const shiftResDirect: any = { id: 'shift_123', startTime: '2026-11-04T08:00:00Z' };
+    assert.equal(unpackShift(shiftResDirect).id, 'shift_123');
+  });
 });

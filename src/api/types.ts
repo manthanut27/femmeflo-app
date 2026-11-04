@@ -381,6 +381,7 @@ export interface StartShiftPayload {
 }
 
 export interface CheckInPayload {
+  shiftId?: string;
   customerId?: string;
   shopName?: string;
   latitude?: number;
