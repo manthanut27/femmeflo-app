@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,8 +71,22 @@ export default function ShiftScreen() {
   // Check-in Visit Form State
   const [checkInModalVisible, setCheckInModalVisible] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [checkInCustomerSearch, setCheckInCustomerSearch] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+
+  const filteredCheckInCustomers = useMemo(() => {
+    const q = checkInCustomerSearch.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.shopName.toLowerCase().includes(q) ||
+        (c.ownerName && c.ownerName.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.includes(q)) ||
+        (c.district && c.district.toLowerCase().includes(q)) ||
+        (c.village && c.village.toLowerCase().includes(q))
+    );
+  }, [customers, checkInCustomerSearch]);
 
   // Check-out Visit Form State (Two Branches: No Sale vs Sale Done)
   const [checkOutModalVisible, setCheckOutModalVisible] = useState(false);
@@ -906,8 +921,24 @@ export default function ShiftScreen() {
             </Text>
 
             <Text style={styles.modalFieldLabel}>Select Retail Outlet *</Text>
+            <View style={styles.checkInSearchRow}>
+              <Ionicons name="search" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+              <TextInput
+                style={styles.checkInSearchInput}
+                placeholder="Search shop, owner, phone, district..."
+                placeholderTextColor="#94A3B8"
+                value={checkInCustomerSearch}
+                onChangeText={setCheckInCustomerSearch}
+                autoCorrect={false}
+              />
+              {checkInCustomerSearch ? (
+                <Pressable onPress={() => setCheckInCustomerSearch('')} hitSlop={HitSlop.sm}>
+                  <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                </Pressable>
+              ) : null}
+            </View>
             <ScrollView style={styles.modalCustomerList}>
-              {customers.map((c) => {
+              {filteredCheckInCustomers.map((c) => {
                 const isSelected = selectedCustomerId === c.id;
                 return (
                   <Pressable
@@ -1569,6 +1600,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: Spacing.xs,
+  },
+  checkInSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  checkInSearchInput: {
+    flex: 1,
+    ...Typography.body,
+    fontSize: 13,
+    color: Colors.light.textPrimary,
+    paddingVertical: 0,
   },
   modalCustomerList: {
     maxHeight: 140,

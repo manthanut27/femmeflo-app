@@ -363,9 +363,18 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // Seller: Sales
   // ----------------------------------------------------
   if (cleanEndpoint === 'seller/sales' && method === 'GET') {
+    let list = mockDb.sales;
+    const filterCustomerId = options?.params?.customerId;
+    const filterStatus = options?.params?.status;
+    if (filterCustomerId) {
+      list = list.filter((s: any) => (s.customer?.id || s.customerId) === filterCustomerId);
+    }
+    if (filterStatus) {
+      list = list.filter((s: any) => s.status === filterStatus);
+    }
     return {
-      items: mockDb.sales,
-      pagination: { page: 1, pageSize: 50, total: mockDb.sales.length, totalPages: 1 },
+      items: list,
+      pagination: { page: 1, pageSize: 50, total: list.length, totalPages: 1 },
     } as unknown as T;
   }
 

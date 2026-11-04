@@ -85,10 +85,11 @@ export function SearchableDropdownModal({
       visible={visible}
       animationType="slide"
       transparent
+      statusBarTranslucent
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalBackdrop}
       >
         <Pressable style={styles.backdropDismiss} onPress={handleClose} />
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdropDismiss: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
   },
   modalSheet: {
     backgroundColor: Colors.light.surface,

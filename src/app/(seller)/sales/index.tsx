@@ -9,15 +9,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
-import type { PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
+import type { CustomerItem, PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import {
+  DropdownOption,
+  SearchableDropdownModal,
+} from '@/components/ui/SearchableDropdownModal';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTodayIST, type DailyReportGroup } from '@/utils/dateUtils';
@@ -40,6 +45,9 @@ export default function SalesListScreen() {
 
   const [viewMode, setViewMode] = useState<'DAILY_REPORT' | 'TRANSACTIONS'>('DAILY_REPORT');
   const [sales, setSales] = useState<SaleItem[]>([]);
+  const [customers, setCustomers] = useState<CustomerItem[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [dashboardData, setDashboardData] = useState<SellerDashboardData | null>(null);
@@ -58,6 +66,19 @@ export default function SalesListScreen() {
     [getISTDateKey(new Date())]: true,
   });
 
+  const loadCustomers = useCallback(async () => {
+    try {
+      const res = await sellerApi.listCustomers({ pageSize: 100 });
+      setCustomers(res.items || []);
+    } catch (err) {
+      console.warn('Failed to load customers for sales list', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCustomers();
+  }, [loadCustomers]);
+
   const loadSales = useCallback(
     async (page = 1, append = false) => {
       try {
@@ -68,14 +89,20 @@ export default function SalesListScreen() {
             pageSize: 50,
             status: selectedStatus || undefined,
             period: selectedPeriod === 'this_month' ? 'this_month' : undefined,
+            customerId: selectedCustomerId || undefined,
           }),
           sellerApi.getDashboard().catch(() => null),
         ]);
 
+        let items = salesRes.items || [];
+        if (selectedCustomerId) {
+          items = items.filter((s) => (s.customer?.id || s.customerId) === selectedCustomerId);
+        }
+
         if (append) {
-          setSales((prev) => [...prev, ...salesRes.items]);
+          setSales((prev) => [...prev, ...items]);
         } else {
-          setSales(salesRes.items);
+          setSales(items);
         }
         setPagination(salesRes.pagination);
         if (dashRes) setDashboardData(dashRes);
@@ -87,12 +114,38 @@ export default function SalesListScreen() {
         setLoadingMore(false);
       }
     },
-    [selectedStatus, selectedPeriod]
+    [selectedStatus, selectedPeriod, selectedCustomerId]
   );
 
   useEffect(() => {
     loadSales(1, false);
   }, [loadSales]);
+
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => c.id === selectedCustomerId) || null,
+    [customers, selectedCustomerId]
+  );
+
+  const customerDropdownOptions = useMemo<DropdownOption[]>(() => {
+    const allOpt: DropdownOption = {
+      id: 'ALL',
+      title: 'All Retail Customers',
+      subtitle: `View transactions across all ${customers.length} retail outlets`,
+      badge: `${customers.length} outlets`,
+      icon: 'people-outline',
+    };
+
+    const items: DropdownOption[] = customers.map((c) => ({
+      id: c.id,
+      title: c.shopName,
+      subtitle: `Owner: ${c.ownerName || (c as any).contactName || '—'} • ${c.village || c.district || 'Territory'} • 📞 ${c.phone}`,
+      badge: c.category?.name || 'RETAIL',
+      icon: 'storefront-outline',
+      metadata: `${c.phone || ''} ${c.address || ''} ${c.pincode || ''}`,
+    }));
+
+    return [allOpt, ...items];
+  }, [customers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -194,13 +247,22 @@ export default function SalesListScreen() {
     <View style={styles.container}>
       <Header
         title="Sales & Reports"
-        subtitle={`${sales.length} orders loaded • IST Analytics`}
+        subtitle={
+          selectedCustomer
+            ? `${sales.length} orders for ${selectedCustomer.shopName}`
+            : `${sales.length} orders loaded • IST Analytics`
+        }
         rightAction={
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Create new sale"
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            onPress={() => router.push('/(seller)/sales/new' as any)}
+            onPress={() =>
+              router.push({
+                pathname: '/(seller)/sales/new',
+                params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
+              } as any)
+            }
             hitSlop={HitSlop.md}
           >
             <Ionicons name="cart-outline" size={20} color="#FFFFFF" />
@@ -239,6 +301,61 @@ export default function SalesListScreen() {
             Order Ledger
           </Text>
         </Pressable>
+      </View>
+
+      {/* Retail Customer Dropdown Filter with Search */}
+      <View style={styles.customerFilterRow}>
+        <TouchableOpacity
+          style={[
+            styles.customerFilterTrigger,
+            Boolean(selectedCustomerId) && styles.customerFilterTriggerActive,
+          ]}
+          onPress={() => setCustomerPickerOpen(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Filter sales by retail customer"
+        >
+          <View style={styles.customerFilterLeft}>
+            <View
+              style={[
+                styles.customerFilterIconBox,
+                Boolean(selectedCustomerId) && styles.customerFilterIconBoxActive,
+              ]}
+            >
+              <Ionicons
+                name={selectedCustomerId ? 'storefront' : 'funnel-outline'}
+                size={16}
+                color={selectedCustomerId ? '#FFFFFF' : BrandColors.pink.primary}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.customerFilterLabelText}>Retail Customer Account</Text>
+              <Text style={styles.customerFilterSelectedName} numberOfLines={1}>
+                {selectedCustomer ? selectedCustomer.shopName : 'All Retail Customers'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.customerFilterRight}>
+            {selectedCustomerId ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  setSelectedCustomerId(null);
+                }}
+                hitSlop={HitSlop.md}
+                style={styles.customerFilterClearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color={Colors.light.textSecondary} />
+                <Text style={styles.customerFilterClearText}>Reset</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.customerFilterChevron}>
+                <Text style={styles.customerFilterCountText}>{customers.length}</Text>
+                <Ionicons name="chevron-down" size={16} color={Colors.light.textSecondary} />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* ==================================================== */}
@@ -318,10 +435,19 @@ export default function SalesListScreen() {
             ) : dailyGroups.length === 0 ? (
               <EmptyState
                 icon="calendar-outline"
-                title="No Sales Recorded"
-                description="No orders have been recorded for the selected period."
-                actionTitle="Create New Sale"
-                onAction={() => router.push('/(seller)/sales/new' as any)}
+                title={selectedCustomer ? `No Sales for ${selectedCustomer.shopName}` : 'No Sales Recorded'}
+                description={
+                  selectedCustomer
+                    ? `No orders recorded for ${selectedCustomer.shopName} in this period.`
+                    : 'No orders have been recorded for the selected period.'
+                }
+                actionTitle={selectedCustomer ? 'Create Sale for Customer' : 'Create New Sale'}
+                onAction={() =>
+                  router.push({
+                    pathname: '/(seller)/sales/new',
+                    params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
+                  } as any)
+                }
               />
             ) : (
               dailyGroups.map((group) => {
@@ -431,14 +557,21 @@ export default function SalesListScreen() {
           ) : sales.length === 0 ? (
             <EmptyState
               icon="receipt-outline"
-              title="No Sales Found"
+              title={selectedCustomer ? `No Sales for ${selectedCustomer.shopName}` : 'No Sales Found'}
               description={
-                selectedStatus
+                selectedCustomer
+                  ? `No orders found for ${selectedCustomer.shopName}. Tap below to record a sale.`
+                  : selectedStatus
                   ? `No ${selectedStatus.toLowerCase()} orders found for this filter.`
                   : 'You have not recorded any sales yet.'
               }
-              actionTitle="Create First Sale"
-              onAction={() => router.push('/(seller)/sales/new' as any)}
+              actionTitle={selectedCustomer ? 'Create Sale for Customer' : 'Create First Sale'}
+              onAction={() =>
+                router.push({
+                  pathname: '/(seller)/sales/new',
+                  params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
+                } as any)
+              }
             />
           ) : (
             <FlatList
@@ -467,6 +600,21 @@ export default function SalesListScreen() {
           )}
         </View>
       )}
+
+      {/* Searchable Retail Customer Dropdown Modal */}
+      <SearchableDropdownModal
+        visible={customerPickerOpen}
+        title="Select Retail Customer"
+        searchPlaceholder="Search customer by shop, owner, phone, district..."
+        options={customerDropdownOptions}
+        selectedId={selectedCustomerId || 'ALL'}
+        onSelect={(opt) => {
+          setSelectedCustomerId(opt.id === 'ALL' ? null : opt.id);
+          setCustomerPickerOpen(false);
+        }}
+        onClose={() => setCustomerPickerOpen(false)}
+        emptyMessage="No customers found matching search"
+      />
     </View>
   );
 }
@@ -484,6 +632,94 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
     gap: Spacing.sm,
+  },
+  customerFilterRow: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  customerFilterTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+  },
+  customerFilterTriggerActive: {
+    backgroundColor: '#FFF5F8',
+    borderColor: BrandColors.pink.border,
+  },
+  customerFilterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  customerFilterIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    backgroundColor: BrandColors.pink.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  customerFilterIconBoxActive: {
+    backgroundColor: BrandColors.pink.primary,
+  },
+  customerFilterLabelText: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.light.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  customerFilterSelectedName: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    fontSize: 13,
+  },
+  customerFilterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customerFilterClearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    gap: 4,
+  },
+  customerFilterClearText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  customerFilterChevron: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  customerFilterCountText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textTertiary,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
   },
   modeTab: {
     flex: 1,
