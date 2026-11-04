@@ -337,7 +337,8 @@ export const sellerApi = {
     if (payload.notes) body.notes = payload.notes;
     if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
     if (payload.facePhoto) {
-      body.facePhoto = payload.facePhoto.length > 50000
+      const isLocalUri = payload.facePhoto.startsWith("file:") || payload.facePhoto.startsWith("content:");
+      body.facePhoto = (isLocalUri || payload.facePhoto.length > 50000)
         ? `verified_selfie_start_${Date.now()}`
         : payload.facePhoto;
     }
@@ -393,6 +394,7 @@ export const sellerApi = {
       latitude: lat,
       longitude: lng,
     };
+    if (payload.shiftId) body.shiftId = payload.shiftId;
     if (payload.address) body.address = payload.address;
     if (payload.notes || payload.remarks) {
       body.notes = payload.notes || payload.remarks;
@@ -400,7 +402,8 @@ export const sellerApi = {
     }
     if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
     if (payload.facePhoto) {
-      body.facePhoto = payload.facePhoto.length > 50000
+      const isLocalUri = payload.facePhoto.startsWith("file:") || payload.facePhoto.startsWith("content:");
+      body.facePhoto = (isLocalUri || payload.facePhoto.length > 50000)
         ? `verified_selfie_end_${Date.now()}`
         : payload.facePhoto;
     }

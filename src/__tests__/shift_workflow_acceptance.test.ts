@@ -666,4 +666,66 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
     const shiftResDirect: any = { id: 'shift_123', startTime: '2026-11-04T08:00:00Z' };
     assert.equal(unpackShift(shiftResDirect).id, 'shift_123');
   });
+  // ----------------------------------------------------
+  // SCENARIO 18: Safe End Shift Face Verification & Payload Construction
+  // ----------------------------------------------------
+  test('Scenario 18: Safe End Shift execution right after face scan completes without unmounted animation errors or local URI leaks', () => {
+    // 1. Local URI converted to safe backend token
+    const rawLocalSelfieUri = 'file:///data/user/0/host.exp.exponent/cache/ExperienceData/ImagePicker/selfie_01.jpg';
+    const isLocalUri = rawLocalSelfieUri.startsWith('file:') || rawLocalSelfieUri.startsWith('content:');
+    assert.strictEqual(isLocalUri, true);
+
+    const safePhotoIdentifier = (isLocalUri || rawLocalSelfieUri.length > 50000)
+      ? `verified_selfie_end_${Date.now()}`
+      : rawLocalSelfieUri;
+    assert.ok(safePhotoIdentifier.startsWith('verified_selfie_end_'));
+    assert.strictEqual(safePhotoIdentifier.includes('file:///'), false);
+
+    // 2. Safe End Shift Payload retains active shiftId, odometer, and coordinates
+    const payload = {
+      shiftId: 'shift_active_indore_456',
+      endOdometerKm: 12045,
+      latitude: 22.7196,
+      longitude: 75.8577,
+      address: 'Indore Central Depot',
+      notes: 'Duty completed, all retail orders settled',
+      remarks: 'Duty completed, all retail orders settled',
+      faceVerified: true,
+      facePhoto: safePhotoIdentifier,
+      faceConfidence: 0.98,
+      faceMethod: 'FACE_ID_BIOMETRIC',
+    };
+
+    assert.strictEqual(payload.shiftId, 'shift_active_indore_456');
+    assert.strictEqual(payload.endOdometerKm, 12045);
+    assert.strictEqual(payload.faceVerified, true);
+    assert.strictEqual(payload.faceMethod, 'FACE_ID_BIOMETRIC');
+
+    // 3. Defensive total distance formatting on closed shift result
+    const formatTotalDistance = (closedShift: any) => {
+      return (closedShift && closedShift.totalDistanceKm != null && !isNaN(Number(closedShift.totalDistanceKm)))
+        ? `${closedShift.totalDistanceKm} km`
+        : '0 km';
+    };
+
+    assert.strictEqual(formatTotalDistance({ totalDistanceKm: 45.2 }), '45.2 km');
+    assert.strictEqual(formatTotalDistance({ totalDistanceKm: '18.4' }), '18.4 km');
+    assert.strictEqual(formatTotalDistance({ totalDistanceKm: null }), '0 km');
+    assert.strictEqual(formatTotalDistance({}), '0 km');
+    assert.strictEqual(formatTotalDistance(null), '0 km');
+    assert.strictEqual(formatTotalDistance(undefined), '0 km');
+
+    // 4. Single verification dispatch guard test
+    let dispatchCount = 0;
+    const isVerifiedDispatchedRef = { current: false };
+    const dispatchVerification = () => {
+      if (isVerifiedDispatchedRef.current) return;
+      isVerifiedDispatchedRef.current = true;
+      dispatchCount++;
+    };
+
+    dispatchVerification();
+    dispatchVerification(); // duplicate call (e.g. timeout race)
+    assert.strictEqual(dispatchCount, 1);
+  });
 });

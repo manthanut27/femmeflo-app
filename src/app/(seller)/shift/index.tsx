@@ -594,12 +594,15 @@ export default function ShiftScreen() {
 
     try {
       const coords = await acquireCoordinates();
+      const shiftIdToEnd = currentShift?.id;
       const res = await sellerApi.endShift({
+        shiftId: shiftIdToEnd,
         endOdometerKm: pendingOdometerKm,
         latitude: coords.latitude,
         longitude: coords.longitude,
         address: pendingNotes ? `Closing notes: ${pendingNotes}` : undefined,
         notes: pendingNotes || undefined,
+        remarks: pendingNotes || undefined,
         faceVerified: faceResult?.faceVerified ?? true,
         facePhoto: faceResult?.facePhoto || 'verified_selfie_end',
         faceConfidence: faceResult?.faceConfidence ?? 0.98,
@@ -612,7 +615,9 @@ export default function ShiftScreen() {
       setEndOdometer('');
       setEndNotes('');
 
-      const totalDist = closedShift?.totalDistanceKm != null ? `${closedShift.totalDistanceKm} km` : '0 km';
+      const totalDist = (closedShift && closedShift.totalDistanceKm != null && !isNaN(Number(closedShift.totalDistanceKm)))
+        ? `${closedShift.totalDistanceKm} km`
+        : '0 km';
       setFeedback({
         type: 'success',
         title: 'Duty Shift Completed (Face ID Verified)',

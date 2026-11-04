@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -51,17 +51,45 @@ export function FaceVerificationModal({
 
   const scanAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const scanLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const verificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isVerifiedDispatchedRef = useRef<boolean>(false);
+  const onVerifiedRef = useRef(onVerified);
+
+  useEffect(() => {
+    onVerifiedRef.current = onVerified;
+  }, [onVerified]);
+
+  const stopScanAnimation = useCallback(() => {
+    if (scanLoopRef.current) {
+      scanLoopRef.current.stop();
+      scanLoopRef.current = null;
+    }
+    scanAnim.stopAnimation();
+    scanAnim.setValue(0);
+  }, [scanAnim]);
+
+  const stopPulseAnimation = useCallback(() => {
+    if (pulseLoopRef.current) {
+      pulseLoopRef.current.stop();
+      pulseLoopRef.current = null;
+    }
+    pulseAnim.stopAnimation();
+    pulseAnim.setValue(1);
+  }, [pulseAnim]);
 
   // Reset state when modal opens
   useEffect(() => {
     if (visible) {
+      isVerifiedDispatchedRef.current = false;
       setStep('READY');
       setErrorMessage(null);
       setCapturedPhotoUri(null);
       setScanProgress(0);
       scanAnim.setValue(0);
+      pulseAnim.setValue(1);
 
       // On Android, recover any pending image if MainActivity was killed during camera picker
       if (Platform.OS === 'android' && typeof ImagePicker.getPendingResultAsync === 'function') {
@@ -82,12 +110,16 @@ export function FaceVerificationModal({
     } else {
       if (verificationTimerRef.current) clearTimeout(verificationTimerRef.current);
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      stopScanAnimation();
+      stopPulseAnimation();
     }
     return () => {
       if (verificationTimerRef.current) clearTimeout(verificationTimerRef.current);
       if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      stopScanAnimation();
+      stopPulseAnimation();
     };
-  }, [visible, scanAnim]);
+  }, [visible, scanAnim, pulseAnim, stopScanAnimation, stopPulseAnimation]);
 
   // Pulse animation for scanner frame
   useEffect(() => {
@@ -108,10 +140,18 @@ export function FaceVerificationModal({
           }),
         ])
       );
+      pulseLoopRef.current = pulseLoop;
       pulseLoop.start();
-      return () => pulseLoop.stop();
+      return () => {
+        pulseLoop.stop();
+        if (pulseLoopRef.current === pulseLoop) {
+          pulseLoopRef.current = null;
+        }
+      };
+    } else {
+      stopPulseAnimation();
     }
-  }, [visible, step, pulseAnim]);
+  }, [visible, step, pulseAnim, stopPulseAnimation]);
 
   // Verification step progression once photo is captured or selected
   useEffect(() => {
@@ -125,13 +165,16 @@ export function FaceVerificationModal({
 
         if (progress >= 100) {
           if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+          stopScanAnimation();
           setStep('VERIFIED');
 
           // Hold verified screen briefly (350ms) so user sees the checkmark without frustrating delay
           verificationTimerRef.current = setTimeout(() => {
+            if (isVerifiedDispatchedRef.current) return;
+            isVerifiedDispatchedRef.current = true;
             const photoData = capturedPhotoUri || 'data:image/svg+xml;base64,face_verified_selfie';
 
-            onVerified({
+            onVerifiedRef.current({
               faceVerified: true,
               facePhoto: photoData,
               faceConfidence: 0.98,
@@ -142,7 +185,8 @@ export function FaceVerificationModal({
       }, 30);
 
       // Scan line animation
-      Animated.loop(
+      stopScanAnimation();
+      const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(scanAnim, {
             toValue: 1,
@@ -157,13 +201,18 @@ export function FaceVerificationModal({
             useNativeDriver: Platform.OS !== 'web',
           }),
         ])
-      ).start();
+      );
+      scanLoopRef.current = loop;
+      loop.start();
 
       return () => {
         if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+        stopScanAnimation();
       };
+    } else {
+      stopScanAnimation();
     }
-  }, [step, capturedPhotoUri, onVerified, scanAnim]);
+  }, [step, capturedPhotoUri, scanAnim, stopScanAnimation]);
 
   const handleLaunchCamera = async () => {
     if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
@@ -248,9 +297,12 @@ export function FaceVerificationModal({
   };
 
   const handleUseStandardVerification = () => {
+    stopScanAnimation();
     setStep('VERIFIED');
     verificationTimerRef.current = setTimeout(() => {
-      onVerified({
+      if (isVerifiedDispatchedRef.current) return;
+      isVerifiedDispatchedRef.current = true;
+      onVerifiedRef.current({
         faceVerified: true,
         facePhoto: 'standard_shift_attendance',
         faceConfidence: 0.95,
@@ -320,24 +372,24 @@ export function FaceVerificationModal({
                 </View>
               )}
 
-              {/* Scanning Laser Line */}
-              {step === 'SCANNING' && (
-                <Animated.View
-                  style={[
-                    styles.scanLine,
-                    {
-                      transform: [
-                        {
-                          translateY: scanAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [10, 190],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                />
-              )}
+              {/* Scanning Laser Line - permanently mounted with opacity to avoid native unmount race */}
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.scanLine,
+                  {
+                    opacity: step === 'SCANNING' ? 1 : 0,
+                    transform: [
+                      {
+                        translateY: scanAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [10, 190],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
 
               {/* Verified Checkmark Overlay */}
               {step === 'VERIFIED' && (

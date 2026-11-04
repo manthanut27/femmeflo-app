@@ -404,6 +404,7 @@ export interface CheckOutPayload {
 }
 
 export interface EndShiftPayload {
+  shiftId?: string;
   endOdometerKm?: number;
   endLatitude?: number;
   endLongitude?: number;
