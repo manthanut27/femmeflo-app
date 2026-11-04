@@ -23,6 +23,7 @@ import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanne
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageTransition } from '@/components/ui/PageTransition';
+import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
 import {
   DropdownOption,
   DropdownTrigger,
@@ -47,6 +48,7 @@ import {
   shouldRotateIdempotencyKey,
   type OrderDraftLineItem,
 } from '@/utils/draftStorage';
+import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 interface CartLineItem {
   key: string;
@@ -84,6 +86,7 @@ export default function NewSaleScreen() {
   const [isDraftRestored, setIsDraftRestored] = useState(false);
 
   // Submission State
+  const [hasActiveShift, setHasActiveShift] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{
@@ -100,12 +103,15 @@ export default function NewSaleScreen() {
   useEffect(() => {
     async function initScreen() {
       try {
-        const [custRes, prodRes, invRes, savedDraft] = await Promise.all([
+        const [custRes, prodRes, invRes, savedDraft, shiftRes] = await Promise.all([
           sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
           sellerApi.listProducts().catch(() => ({ items: [] })),
           sellerApi.getInventory().catch(() => ({ balance: 0, products: [] })),
           draftStorage.getOrderDraft(userId).catch(() => null),
+          checkHasActiveShift(userId).catch(() => ({ hasActiveShift: false, shift: null })),
         ]);
+
+        setHasActiveShift(shiftRes.hasActiveShift);
 
         const loadedCustomers = custRes.items || [];
         const loadedProducts = prodRes.items || [];
@@ -399,6 +405,21 @@ export default function NewSaleScreen() {
 
   async function handleConfirmSale() {
     if (isSubmitting) return;
+
+    const shiftCheck = await checkHasActiveShift(userId);
+    if (!shiftCheck.hasActiveShift) {
+      setFeedback({
+        type: 'error',
+        title: 'Duty Shift Required',
+        message: 'You must start your daily duty shift with selfie attendance before recording sales.',
+      });
+      Alert.alert(
+        'Duty Shift Required',
+        'You must start your daily duty shift with selfie attendance before recording sales.'
+      );
+      return;
+    }
+
     if (!validate()) {
       Alert.alert('Incomplete Sale', 'Please review highlighted fields in your cart.');
       return;
@@ -477,6 +498,16 @@ export default function NewSaleScreen() {
 
   if (loading) {
     return <LoadingState message="Loading POS catalog & inventory..." />;
+  }
+
+  if (hasActiveShift === false) {
+    return (
+      <ShiftRequiredGate
+        title="New Store Sale (POS)"
+        subtitle="Daily Duty Shift Required"
+        actionName="record store sales or create new orders"
+      />
+    );
   }
 
   return (

@@ -47,6 +47,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { parseBulkCustomersCsv } from '@/utils/csvParser';
+import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 interface Props {
   role: AuthRole;
@@ -532,6 +533,17 @@ export function BatchCustomerOnboarding({
           };
         }),
       };
+
+      if (role === 'SELLER') {
+        const shiftCheck = await checkHasActiveShift();
+        if (!shiftCheck.hasActiveShift) {
+          const msg = 'You must start your daily duty shift with selfie attendance before batch onboarding retailers.';
+          setSubmissionFeedback({ type: 'error', message: msg });
+          Alert.alert('Duty Shift Required', msg);
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       let result: BulkCustomerResponse;
       if (role === 'SUPER_ADMIN') {

@@ -26,6 +26,7 @@ import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem } from '@/api/types';
 import { ISTClock } from '@/components/common/ISTClock';
+import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -44,11 +45,16 @@ import {
   Typography,
 } from '@/constants/theme';
 import { draftStorage } from '@/utils/draftStorage';
+import { useAuth } from '@/context/AuthContext';
+import { checkHasActiveShift } from '@/utils/shiftGuard';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
 
 export default function AddCustomerScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [hasActiveShift, setHasActiveShift] = useState<boolean | null>(null);
+  const [checkingShift, setCheckingShift] = useState(true);
 
   // Form Fields
   const [shopName, setShopName] = useState('');
@@ -90,6 +96,13 @@ export default function AddCustomerScreen() {
   const [savedCustomer, setSavedCustomer] = useState<CustomerItem | null>(null);
 
   useEffect(() => {
+    checkHasActiveShift(user?.id).then((res) => {
+      setHasActiveShift(res.hasActiveShift);
+      setCheckingShift(false);
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
     // 1. Fetch categories
     categoriesApi
       .listCategories()
@@ -124,6 +137,7 @@ export default function AddCustomerScreen() {
   }, []);
 
   // Auto-save form draft on meaningful edits
+
   useEffect(() => {
     if (shopName || phone || ownerName) {
       const timer = setTimeout(() => {
@@ -245,6 +259,21 @@ export default function AddCustomerScreen() {
 
   async function handleSubmit() {
     if (isSubmitting) return;
+
+    const shiftCheck = await checkHasActiveShift(user?.id);
+    if (!shiftCheck.hasActiveShift) {
+      setFeedback({
+        type: 'error',
+        title: 'Duty Shift Required',
+        message: 'You must start your daily duty shift with selfie attendance before onboarding retailers.',
+      });
+      Alert.alert(
+        'Duty Shift Required',
+        'You must start your daily duty shift with selfie attendance before onboarding retailers.'
+      );
+      return;
+    }
+
     if (!validate()) {
       setFeedback({
         type: 'error',
@@ -340,6 +369,24 @@ export default function AddCustomerScreen() {
           </View>
         </ScrollView>
       </View>
+    );
+  }
+
+  if (checkingShift) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
+      </View>
+    );
+  }
+
+  if (hasActiveShift === false) {
+    return (
+      <ShiftRequiredGate
+        title="Onboard Customer"
+        subtitle="Daily Duty Shift Required"
+        actionName="onboard new retailers or register new stores"
+      />
     );
   }
 

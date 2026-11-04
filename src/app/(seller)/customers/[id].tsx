@@ -24,11 +24,14 @@ import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
+import { requireActiveShift } from '@/utils/shiftGuard';
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
 
   const [customer, setCustomer] = useState<CustomerItem | null>(null);
   const [sales, setSales] = useState<SaleItem[]>([]);
@@ -53,6 +56,11 @@ export default function CustomerDetailScreen() {
 
   async function handleUpdatePhoto() {
     if (!customer?.id || uploadingPhoto) return;
+
+    const hasShift = await requireActiveShift(user?.id, 'capture or update store storefront photos', () => {
+      router.push('/(seller)' as any);
+    });
+    if (!hasShift) return;
 
     Alert.alert('Store Photograph', 'Select photo source', [
       {
@@ -309,12 +317,16 @@ export default function CustomerDetailScreen() {
             title={`Create New Sale for ${customer.shopName.split(' ')[0]}`}
             variant="primary"
             size="lg"
-            onPress={() =>
+            onPress={async () => {
+              const hasShift = await requireActiveShift(user?.id, 'create new store sales', () => {
+                router.push('/(seller)' as any);
+              });
+              if (!hasShift) return;
               router.push({
                 pathname: '/(seller)/sales/new' as any,
                 params: { customerId: customer.id, customerName: customer.shopName },
-              })
-            }
+              });
+            }}
             icon={<Ionicons name="cart-outline" size={20} color="#FFFFFF" />}
             style={{ marginBottom: Spacing.xl }}
           />
@@ -327,7 +339,16 @@ export default function CustomerDetailScreen() {
               title="No Orders Recorded"
               description="No past orders found for this customer. Create their first POS sale now."
               actionTitle="New Store Sale"
-              onAction={() => router.push(`/(seller)/sales/new?customerId=${customer.id}` as any)}
+              onAction={async () => {
+                const hasShift = await requireActiveShift(user?.id, 'create new store sales', () => {
+                  router.push('/(seller)' as any);
+                });
+                if (!hasShift) return;
+                router.push({
+                  pathname: '/(seller)/sales/new' as any,
+                  params: { customerId: customer.id, customerName: customer.shopName },
+                });
+              }}
             />
           ) : (
             sales.map((sale) => (

@@ -126,3 +126,4 @@ describe('Seller Home Page Selfie Attendance Verification Suite', () => {
     assert.equal(payload.remarks, 'All beat visits completed');
   });
 });
+

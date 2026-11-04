@@ -1,23 +1,6 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
 import { sellerApi } from '@/api/seller';
 import type { SellerDashboardData, Shift } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
-import { draftStorage } from '@/utils/draftStorage';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -36,6 +19,23 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { draftStorage } from '@/utils/draftStorage';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 export default function SellerDashboardScreen() {
   const router = useRouter();
@@ -175,7 +175,7 @@ export default function SellerDashboardScreen() {
         };
         setCurrentShift(enrichedShift);
         if (userId) {
-          await draftStorage.saveActiveShift(userId, enrichedShift).catch(() => {});
+          await draftStorage.saveActiveShift(userId, enrichedShift).catch(() => { });
         }
       }
       setOdometerKm('');
@@ -236,7 +236,7 @@ export default function SellerDashboardScreen() {
       const closedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
       setCurrentShift(null);
       if (userId) {
-        await draftStorage.clearActiveShift(userId).catch(() => {});
+        await draftStorage.clearActiveShift(userId).catch(() => { });
       }
       setOdometerKm('');
       setShiftRemarks('');
@@ -254,6 +254,27 @@ export default function SellerDashboardScreen() {
     } finally {
       setIsShiftSubmitting(false);
     }
+  }
+
+  function handleProtectedFieldAction(route: string, actionName: string) {
+    if (!currentShift) {
+      Alert.alert(
+        'Duty Shift Required',
+        `You must start your daily duty shift with selfie attendance verification before you can ${actionName}.`,
+        [
+          {
+            text: 'Start Shift Now',
+            onPress: () => {
+              setOdometerKm('');
+              setStartShiftModalVisible(true);
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+    router.push(route as any);
   }
 
   const formatRupees = (paise: number) => {
@@ -323,8 +344,8 @@ export default function SellerDashboardScreen() {
                 <Text style={styles.shiftSubtitle}>
                   {currentShift
                     ? (currentShift.startOdometerKm != null
-                        ? `Shift Active • Started at ${currentShift.startOdometerKm} KM`
-                        : 'Shift Active • Field Beat Running')
+                      ? `Shift Active • Started at ${currentShift.startOdometerKm} KM`
+                      : 'Shift Active • Field Beat Running')
                     : 'No active shift. Record daily travel & store visits.'}
                 </Text>
               </View>
@@ -442,7 +463,7 @@ export default function SellerDashboardScreen() {
           <View style={styles.actionButtonsCol}>
             <Button
               title="New Store Sale (POS)"
-              onPress={() => router.push('/(seller)/sales/new')}
+              onPress={() => handleProtectedFieldAction('/(seller)/sales/new', 'record new store sales')}
               variant="primary"
               size="lg"
               icon={<Ionicons name="cart" size={20} color="#FFFFFF" />}
@@ -450,7 +471,7 @@ export default function SellerDashboardScreen() {
             />
             <Button
               title="Onboard New Retailer"
-              onPress={() => router.push('/(seller)/customers/new')}
+              onPress={() => handleProtectedFieldAction('/(seller)/customers/new', 'onboard new retailers')}
               variant="outline"
               size="lg"
               icon={<Ionicons name="person-add-outline" size={20} color={BrandColors.pink.primary} />}

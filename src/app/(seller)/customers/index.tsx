@@ -22,9 +22,12 @@ import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { requireActiveShift } from '@/utils/shiftGuard';
 
 export default function CustomerListScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -170,7 +173,14 @@ export default function CustomerListScreen() {
               accessibilityRole="button"
               accessibilityLabel="Batch onboard customers"
               style={({ pressed }) => [styles.batchButton, pressed && styles.addButtonPressed]}
-              onPress={() => router.push('/(seller)/customers/bulk' as any)}
+              onPress={async () => {
+                const hasShift = await requireActiveShift(user?.id, 'onboard retail stores in bulk', () => {
+                  router.push('/(seller)' as any);
+                });
+                if (hasShift) {
+                  router.push('/(seller)/customers/bulk' as any);
+                }
+              }}
               hitSlop={HitSlop.md}
             >
               <Ionicons name="layers-outline" size={18} color="#FFFFFF" />
@@ -179,7 +189,14 @@ export default function CustomerListScreen() {
               accessibilityRole="button"
               accessibilityLabel="Onboard new customer"
               style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-              onPress={() => router.push('/(seller)/customers/new' as any)}
+              onPress={async () => {
+                const hasShift = await requireActiveShift(user?.id, 'onboard a new retail customer', () => {
+                  router.push('/(seller)' as any);
+                });
+                if (hasShift) {
+                  router.push('/(seller)/customers/new' as any);
+                }
+              }}
               hitSlop={HitSlop.md}
             >
               <Ionicons name="add" size={24} color="#FFFFFF" />
