@@ -36,6 +36,7 @@ export default function SellerProfileScreen() {
   const router = useRouter();
 
   const [shiftHistory, setShiftHistory] = useState<Shift[]>([]);
+  const [totalShiftsCount, setTotalShiftsCount] = useState<number>(0);
 
   // Edit Profile Modal States
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -53,7 +54,10 @@ export default function SellerProfileScreen() {
   useEffect(() => {
     sellerApi
       .getShiftHistory({ pageSize: 5 })
-      .then((res) => setShiftHistory(res.items))
+      .then((res) => {
+        setShiftHistory(res.items || []);
+        setTotalShiftsCount(res.pagination?.total ?? (res.items?.length || 0));
+      })
       .catch(() => {});
   }, []);
 
@@ -289,7 +293,7 @@ export default function SellerProfileScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="View all duty shifts"
               >
-                <Text style={styles.viewAllLinkText}>See All ({shiftHistory.length})</Text>
+                <Text style={styles.viewAllLinkText}>See All ({totalShiftsCount || shiftHistory.length})</Text>
                 <Ionicons name="chevron-forward" size={14} color={BrandColors.pink.primary} />
               </Pressable>
             ) : null}
@@ -327,8 +331,8 @@ export default function SellerProfileScreen() {
                 accessibilityLabel="View full shifts history in a separate page"
               >
                 <Text style={styles.seeMoreShiftsText}>
-                  {shiftHistory.length > 5
-                    ? `View All ${shiftHistory.length} Shifts on Dedicated Page`
+                  {totalShiftsCount > 5
+                    ? `View All ${totalShiftsCount} Shifts on Dedicated Page`
                     : 'View Detailed Shifts History'}
                 </Text>
                 <Ionicons name="arrow-forward" size={14} color={BrandColors.pink.primary} />

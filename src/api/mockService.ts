@@ -609,9 +609,19 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'seller/shifts/history') {
+    const page = Number(options.params?.page || 1);
+    const pageSize = options.params?.pageSize ? Number(options.params.pageSize) : 20;
+    const all = mockDb.shiftHistory;
+    const startIndex = (page - 1) * pageSize;
+    const items = options.params?.pageSize ? all.slice(startIndex, startIndex + pageSize) : all;
     return {
-      items: mockDb.shiftHistory,
-      pagination: { page: 1, pageSize: 20, total: mockDb.shiftHistory.length, totalPages: 1 },
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total: all.length,
+        totalPages: Math.ceil(all.length / pageSize) || 1,
+      },
     } as unknown as T;
   }
 
