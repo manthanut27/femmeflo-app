@@ -1,5 +1,14 @@
+import {
+  BorderRadius,
+  BrandColors,
+  Colors,
+  MaxContentWidth,
+  Shadows,
+  Spacing,
+  Typography
+} from '@/constants/theme';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -13,15 +22,6 @@ import {
   View,
 } from 'react-native';
 import { Badge, type BadgeVariant } from './Badge';
-import {
-  BorderRadius,
-  BrandColors,
-  Colors,
-  MaxContentWidth,
-  Shadows,
-  Spacing,
-  Typography,
-} from '@/constants/theme';
 
 export interface DropdownOption {
   id: string;
