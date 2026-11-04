@@ -22,6 +22,15 @@ export interface ManagerSellerItem extends PublicUser {
 
 export const managerApi = {
   // ----------------------------------------------------
+  // Profile & Settings
+  // ----------------------------------------------------
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('manager/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+  // ----------------------------------------------------
   // Dashboard
   // ----------------------------------------------------
   async getDashboard(): Promise<ManagerDashboardData> {
@@ -71,6 +80,8 @@ export const managerApi = {
     return { seller: (raw?.seller ?? raw?.user)! };
   },
 
+  
+
   async createSeller(payload: {
     name: string;
     email?: string;
@@ -118,6 +129,20 @@ export const managerApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    return { seller: (raw?.seller ?? raw?.user)! };
+  },
+
+  async updateSeller(
+    sellerId: string,
+    payload: Partial<PublicUser> & { dailyTarget?: number }
+  ): Promise<{ seller: ManagerSellerItem }> {
+    const raw = await apiRequest<{ seller?: ManagerSellerItem; user?: ManagerSellerItem }>(
+      `manager/sellers/${sellerId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
     return { seller: (raw?.seller ?? raw?.user)! };
   },
 

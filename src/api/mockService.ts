@@ -215,6 +215,33 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     } as unknown as T;
   }
 
+  if (
+    (cleanEndpoint === 'auth/me' ||
+      cleanEndpoint === 'seller/profile' ||
+      cleanEndpoint === 'manager/profile' ||
+      cleanEndpoint === 'admin/profile') &&
+    method === 'PATCH'
+  ) {
+    if (mockDb.currentUser) {
+      if (body.name !== undefined) mockDb.currentUser.name = body.name;
+      if (body.email !== undefined) mockDb.currentUser.email = body.email;
+      if (body.phone !== undefined) mockDb.currentUser.phone = body.phone;
+      if (body.alternatePhone !== undefined) mockDb.currentUser.alternatePhone = body.alternatePhone;
+      if (body.state !== undefined) mockDb.currentUser.state = body.state;
+      if (body.district !== undefined) mockDb.currentUser.district = body.district;
+      if (body.village !== undefined) mockDb.currentUser.village = body.village;
+      if (body.address !== undefined) mockDb.currentUser.address = body.address;
+      if (body.pincode !== undefined) mockDb.currentUser.pincode = body.pincode;
+      if (body.isSeller !== undefined) mockDb.currentUser.isSeller = Boolean(body.isSeller);
+
+      const s = mockDb.sellers.find((x) => x.id === mockDb.currentUser.id);
+      if (s) Object.assign(s, body);
+      const m = mockDb.managers.find((x) => x.id === mockDb.currentUser.id);
+      if (m) Object.assign(m, body);
+    }
+    return { user: mockDb.currentUser, success: true } as unknown as T;
+  }
+
   if (cleanEndpoint === 'auth/me') {
     if (!mockDb.currentUser || !mockDb.currentUser.id) {
       throw new ApiError('Unauthenticated in mock engine', 401);
@@ -948,7 +975,33 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       if (body.phone !== undefined) mgr.phone = body.phone;
       if (body.state !== undefined) mgr.state = body.state;
       if (body.district !== undefined) mgr.district = body.district;
+      if (body.village !== undefined) mgr.village = body.village;
+      if (body.address !== undefined) mgr.address = body.address;
+      if (body.pincode !== undefined) mgr.pincode = body.pincode;
+      if (body.alternatePhone !== undefined) mgr.alternatePhone = body.alternatePhone;
+      if (body.active !== undefined) mgr.active = Boolean(body.active);
       return { manager: mgr, user: mgr } as unknown as T;
+    }
+    return { success: true } as unknown as T;
+  }
+
+  if ((cleanEndpoint.startsWith('admin/sellers/') || cleanEndpoint.startsWith('manager/sellers/')) && method === 'PATCH') {
+    const targetId = cleanEndpoint.replace('admin/sellers/', '').replace('manager/sellers/', '');
+    const s = mockDb.sellers.find((x) => x.id === targetId || (x as any).sellerId === targetId);
+    if (s) {
+      if (body.name !== undefined) s.name = body.name;
+      if (body.email !== undefined) s.email = body.email;
+      if (body.phone !== undefined) s.phone = body.phone;
+      if (body.alternatePhone !== undefined) s.alternatePhone = body.alternatePhone;
+      if (body.state !== undefined) s.state = body.state;
+      if (body.district !== undefined) s.district = body.district;
+      if (body.village !== undefined) s.village = body.village;
+      if (body.address !== undefined) s.address = body.address;
+      if (body.pincode !== undefined) s.pincode = body.pincode;
+      if (body.active !== undefined) s.active = Boolean(body.active);
+      if (body.dailyTarget !== undefined) (s as any).dailyTarget = body.dailyTarget;
+      if (body.managerId !== undefined) s.managerId = body.managerId;
+      return { seller: s, user: s, success: true } as unknown as T;
     }
     return { success: true } as unknown as T;
   }

@@ -12,6 +12,7 @@ import type {
   PaginationMeta,
   PincodeLookupResponse,
   ProductItem,
+  PublicUser,
   SaleItem,
   SellerDashboardData,
   SellerIncentiveData,
@@ -24,6 +25,15 @@ import type {
 } from './types';
 
 export const sellerApi = {
+  // ----------------------------------------------------
+  // Profile & Settings
+  // ----------------------------------------------------
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('seller/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
   // ----------------------------------------------------
   // Dashboard
   // ----------------------------------------------------

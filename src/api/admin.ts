@@ -69,6 +69,15 @@ export function normalizeApprovalItem(raw: any): PendingApprovalItem {
 
 export const adminApi = {
   // ----------------------------------------------------
+  // Profile & Settings
+  // ----------------------------------------------------
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('admin/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+  // ----------------------------------------------------
   // Dashboard
   // ----------------------------------------------------
   async getDashboard(filters?: {
@@ -440,9 +449,12 @@ export const adminApi = {
       name?: string;
       email?: string;
       phone?: string;
+      alternatePhone?: string;
       state?: string;
       district?: string;
       village?: string;
+      address?: string;
+      pincode?: string;
       permissions?: string[];
       isSeller?: boolean;
       active?: boolean;
@@ -458,6 +470,9 @@ export const adminApi = {
     if (payload.state !== undefined) body.state = payload.state.trim();
     if (payload.district !== undefined) body.district = payload.district.trim();
     if (payload.village !== undefined) body.village = payload.village.trim();
+    if (payload.alternatePhone !== undefined) body.alternatePhone = payload.alternatePhone.trim();
+    if (payload.address !== undefined) body.address = payload.address.trim();
+    if (payload.pincode !== undefined) body.pincode = payload.pincode.trim();
     if (payload.permissions !== undefined) body.permissions = payload.permissions;
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
     if (payload.active !== undefined) body.active = payload.active;
@@ -532,6 +547,17 @@ export const adminApi = {
     const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>('admin/sellers', {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+    return { seller: (res.seller ?? res.user)! };
+  },
+
+  async updateSeller(
+    sellerId: string,
+    payload: Partial<PublicUser> & { dailyTarget?: number }
+  ): Promise<{ seller: PublicUser }> {
+    const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>(`admin/sellers/${sellerId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
     return { seller: (res.seller ?? res.user)! };
   },

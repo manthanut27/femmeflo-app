@@ -71,6 +71,27 @@ export default function AdminUsersScreen() {
   const [editIsSeller, setEditIsSeller] = useState(false);
   const [isUpdatingPersona, setIsUpdatingPersona] = useState(false);
   const [editPersonaError, setEditPersonaError] = useState<string | null>(null);
+  const [editMgrName, setEditMgrName] = useState('');
+  const [editMgrPhone, setEditMgrPhone] = useState('');
+  const [editMgrAlternatePhone, setEditMgrAlternatePhone] = useState('');
+  const [editMgrState, setEditMgrState] = useState('');
+  const [editMgrDistrict, setEditMgrDistrict] = useState('');
+  const [editMgrAddress, setEditMgrAddress] = useState('');
+  const [editMgrActive, setEditMgrActive] = useState(true);
+
+  // Edit Seller Modal State for Admin
+  const [editingSeller, setEditingSeller] = useState<PublicUser | null>(null);
+  const [editSellerName, setEditSellerName] = useState('');
+  const [editSellerPhone, setEditSellerPhone] = useState('');
+  const [editSellerAlternatePhone, setEditSellerAlternatePhone] = useState('');
+  const [editSellerVillage, setEditSellerVillage] = useState('');
+  const [editSellerState, setEditSellerState] = useState('');
+  const [editSellerDistrict, setEditSellerDistrict] = useState('');
+  const [editSellerDailyTarget, setEditDailyTarget] = useState('30');
+  const [editSellerAddress, setEditSellerAddress] = useState('');
+  const [editSellerActive, setEditSellerActive] = useState(true);
+  const [isUpdatingSeller, setIsUpdatingSeller] = useState(false);
+  const [editSellerError, setEditSellerError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [modalError, setModalError] = useState<string | null>(null);
@@ -184,31 +205,128 @@ export default function AdminUsersScreen() {
   function handleOpenEditModal(manager: PublicUser) {
     setEditingManager(manager);
     setEditIsSeller(Boolean(manager.isSeller));
+    setEditMgrName(manager.name || '');
+    setEditMgrPhone((manager.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
+    setEditMgrAlternatePhone(manager.alternatePhone || '');
+    setEditMgrState(manager.state || '');
+    setEditMgrDistrict(manager.district || '');
+    setEditMgrAddress(manager.address || '');
+    setEditMgrActive(manager.active !== false);
     setEditPersonaError(null);
   }
 
   function handleCloseEditModal() {
+    if (isUpdatingPersona) return;
     setEditingManager(null);
     setEditPersonaError(null);
   }
 
   async function handleSavePersona() {
     if (!editingManager || isUpdatingPersona) return;
+    if (!editMgrName.trim()) {
+      setEditPersonaError('Manager name is required.');
+      return;
+    }
+    const cleanPhone = editMgrPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setEditPersonaError('Valid 10-digit mobile phone is required.');
+      return;
+    }
+
     setIsUpdatingPersona(true);
     setEditPersonaError(null);
     try {
-      await adminApi.updateManager(editingManager.id, { isSeller: editIsSeller });
+      const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
+        ? `+${cleanPhone}`
+        : `+91${cleanPhone.slice(-10)}`;
+
+      await adminApi.updateManager(editingManager.id, {
+        name: editMgrName.trim(),
+        phone: formattedPhone,
+        alternatePhone: editMgrAlternatePhone.trim() || undefined,
+        state: editMgrState.trim() || undefined,
+        district: editMgrDistrict.trim() || undefined,
+        address: editMgrAddress.trim() || undefined,
+        isSeller: editIsSeller,
+        active: editMgrActive,
+      });
+
       setScreenFeedback({
         type: 'success',
-        message: `Dual-Role Persona ${editIsSeller ? 'enabled' : 'disabled'} for ${editingManager.name}. Van stock allocation updated.`,
+        message: `Details updated for Manager ${editMgrName.trim()}.`,
       });
       setEditingManager(null);
       loadUsers(false);
       loadManagersList();
     } catch (err: any) {
-      setEditPersonaError(err.message || 'Failed to update manager persona.');
+      setEditPersonaError(err.message || 'Failed to update manager details.');
     } finally {
       setIsUpdatingPersona(false);
+    }
+  }
+
+  function handleOpenEditSellerModal(seller: PublicUser) {
+    setEditingSeller(seller);
+    setEditSellerName(seller.name || '');
+    setEditSellerPhone((seller.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
+    setEditSellerAlternatePhone(seller.alternatePhone || '');
+    setEditSellerVillage(seller.village || '');
+    setEditSellerState(seller.state || '');
+    setEditSellerDistrict(seller.district || '');
+    setEditDailyTarget(String((seller as any).dailyTarget || 30));
+    setEditSellerAddress(seller.address || '');
+    setEditSellerActive(seller.active !== false);
+    setEditSellerError(null);
+  }
+
+  function handleCloseEditSellerModal() {
+    if (isUpdatingSeller) return;
+    setEditingSeller(null);
+    setEditSellerError(null);
+  }
+
+  async function handleSaveSeller() {
+    if (!editingSeller || isUpdatingSeller) return;
+    if (!editSellerName.trim()) {
+      setEditSellerError('Seller name is required.');
+      return;
+    }
+    const cleanPhone = editSellerPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setEditSellerError('Valid 10-digit phone number is required.');
+      return;
+    }
+    const targetNum = parseInt(editSellerDailyTarget, 10);
+
+    setIsUpdatingSeller(true);
+    setEditSellerError(null);
+    try {
+      const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
+        ? `+${cleanPhone}`
+        : `+91${cleanPhone.slice(-10)}`;
+
+      await adminApi.updateSeller(editingSeller.id, {
+        name: editSellerName.trim(),
+        phone: formattedPhone,
+        alternatePhone: editSellerAlternatePhone.trim() || undefined,
+        village: editSellerVillage.trim() || undefined,
+        state: editSellerState.trim() || undefined,
+        district: editSellerDistrict.trim() || undefined,
+        address: editSellerAddress.trim() || undefined,
+        dailyTarget: isNaN(targetNum) ? 30 : targetNum,
+        active: editSellerActive,
+      });
+
+      setScreenFeedback({
+        type: 'success',
+        message: `Details updated for Field Officer ${editSellerName.trim()}.`,
+      });
+      setEditingSeller(null);
+      loadUsers(false);
+    } catch (err: any) {
+      setEditSellerError(err.message || 'Failed to update seller.');
+    } finally {
+      setIsUpdatingSeller(false);
     }
   }
 
@@ -376,20 +494,35 @@ export default function AdminUsersScreen() {
               style={styles.configurePersonaBtn}
               onPress={() => handleOpenEditModal(item)}
               accessibilityRole="button"
-              accessibilityLabel={`Configure persona for ${item.name}`}
+              accessibilityLabel={`Configure persona and edit ${item.name}`}
             >
               <Ionicons
-                name="swap-horizontal"
+                name="create-outline"
                 size={14}
-                color={isDualRole ? BrandColors.pink.primary : BrandColors.green.primary}
+                color={BrandColors.green.primary}
               />
-              <Text
-                style={[
-                  styles.configurePersonaBtnText,
-                  isDualRole && { color: BrandColors.pink.dark },
-                ]}
-              >
-                {isDualRole ? 'Manage Dual-Role Persona' : '+ Enable Dual-Role Persona'}
+              <Text style={styles.configurePersonaBtnText}>
+                Edit Details & Persona
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {tab === 'SELLERS' && (
+          <View style={styles.managerCardActionRow}>
+            <Pressable
+              style={styles.configurePersonaBtn}
+              onPress={() => handleOpenEditSellerModal(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit details for ${item.name}`}
+            >
+              <Ionicons
+                name="create-outline"
+                size={14}
+                color={BrandColors.pink.dark}
+              />
+              <Text style={[styles.configurePersonaBtnText, { color: BrandColors.pink.dark }]}>
+                Edit Officer Details
               </Text>
             </Pressable>
           </View>
@@ -1027,6 +1160,85 @@ export default function AdminUsersScreen() {
                 </View>
               )}
 
+                            {/* Editable Manager Details */}
+              <Input
+                label="Manager Full Name *"
+                value={editMgrName}
+                onChangeText={setEditMgrName}
+                placeholder="Full legal name"
+                autoCapitalize="words"
+                leftIcon={<Ionicons name="person-outline" size={18} color={Colors.light.textTertiary} />}
+              />
+
+              <View style={styles.formRow}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Input
+                    label="Primary Mobile *"
+                    value={editMgrPhone}
+                    onChangeText={setEditMgrPhone}
+                    placeholder="10-digit phone"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Input
+                    label="Alternate Phone"
+                    value={editMgrAlternatePhone}
+                    onChangeText={setEditMgrAlternatePhone}
+                    placeholder="Secondary contact"
+                    keyboardType="phone-pad"
+                    maxLength={15}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Input
+                    label="Assigned State"
+                    value={editMgrState}
+                    onChangeText={setEditMgrState}
+                    placeholder="e.g. Maharashtra"
+                    autoCapitalize="words"
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Input
+                    label="Assigned District"
+                    value={editMgrDistrict}
+                    onChangeText={setEditMgrDistrict}
+                    placeholder="e.g. Thane"
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              <Input
+                label="Office / Address"
+                value={editMgrAddress}
+                onChangeText={setEditMgrAddress}
+                placeholder="Regional headquarters or office"
+                multiline
+                numberOfLines={2}
+                leftIcon={<Ionicons name="business-outline" size={18} color={Colors.light.textTertiary} />}
+              />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F8FAFC', borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.light.border, marginBottom: Spacing.md }}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={{ ...Typography.bodyMedium, fontWeight: '700', color: Colors.light.heading }}>Account Status</Text>
+                  <Text style={{ ...Typography.caption, color: Colors.light.textSecondary }}>{editMgrActive ? 'Manager is Active with full territory access' : 'Manager is Deactivated'}</Text>
+                </View>
+                <Pressable
+                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full, backgroundColor: editMgrActive ? '#DCFCE7' : '#FEE2E2', borderWidth: 1, borderColor: editMgrActive ? '#86EFAC' : '#FCA5A5' }}
+                  onPress={() => setEditMgrActive(!editMgrActive)}
+                  accessibilityRole="button"
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: editMgrActive ? '#15803D' : '#B91C1C' }}>{editMgrActive ? 'ACTIVE' : 'INACTIVE'}</Text>
+                </Pressable>
+              </View>
+
               {/* Dual-Role Setting Toggle Card */}
               <Pressable
                 style={[
@@ -1142,6 +1354,10 @@ export default function AdminUsersScreen() {
 }
 
 const styles = StyleSheet.create({
+  formRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
