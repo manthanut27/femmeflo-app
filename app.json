@@ -69,8 +69,9 @@
           "android": {
             "usesCleartextTraffic": true,
             "targetSdkVersion": 35,
-            "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableProguardInReleaseBuilds": false,
+            "enableShrinkResourcesInReleaseBuilds": false,
+            "extraProguardRules": "-keep class expo.modules.** { *; }\n-dontwarn expo.modules.**\n-keep class com.facebook.react.** { *; }\n-dontwarn com.facebook.react.**\n-keep class com.facebook.jni.** { *; }\n-keepattributes *Annotation*,InnerClasses,Signature,EnclosingMethod",
             "useLegacyPackaging": false,
             "buildArchs": [
               "arm64-v8a",
