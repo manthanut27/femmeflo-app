@@ -489,7 +489,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const id = cleanEndpoint.replace('seller/sales/', '').replace('/payment', '');
     const sale = mockDb.sales.find((s) => s.id === id);
     if (sale) {
-      sale.paymentMode = body.paymentMode || 'CASH';
+      sale.paymentMode = (body.mode || body.paymentMode || 'CASH');
       sale.paymentReference = body.paymentReference || 'COLLECTED-IN-PERSON';
       sale.paidAt = new Date().toISOString();
       return { sale } as unknown as T;

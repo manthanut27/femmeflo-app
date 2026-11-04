@@ -292,9 +292,13 @@ export const sellerApi = {
   },
 
   async collectPayment(saleId: string, payload: CollectPaymentPayload): Promise<{ sale: SaleItem }> {
+    const mode = (payload.mode || payload.paymentMode || 'CASH') as 'CASH' | 'BANK';
+    const body: Record<string, any> = {
+      mode,
+    };
     return apiRequest<{ sale: SaleItem }>(`seller/sales/${saleId}/payment`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 

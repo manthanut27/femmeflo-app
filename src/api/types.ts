@@ -302,8 +302,10 @@ export interface UpdateSalePayload {
 }
 
 export interface CollectPaymentPayload {
-  paymentMode: 'CASH' | 'BANK';
+  paymentMode?: 'CASH' | 'BANK';
+  mode?: 'CASH' | 'BANK';
   paymentReference?: string;
+  amountPaise?: number;
 }
 
 // ----------------------------------------------------

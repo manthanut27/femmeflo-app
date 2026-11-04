@@ -355,8 +355,8 @@ export default function CustomerDetailScreen() {
                 </View>
 
                 <View style={styles.saleFooter}>
-                  <Text style={styles.packetCount}>{sale.packetCount} packets</Text>
-                  <Text style={styles.saleAmount}>{formatRupees(sale.totalAmountPaise)}</Text>
+                  <Text style={styles.packetCount}>{sale.packetCount ?? (sale as any).quantity ?? 0} packets</Text>
+                  <Text style={styles.saleAmount}>{formatRupees(sale.totalAmountPaise ?? (sale as any).totalPaise ?? 0)}</Text>
                 </View>
               </Card>
             ))

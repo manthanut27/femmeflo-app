@@ -30,6 +30,53 @@ import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
+function normalizeSale(raw: any): SaleItem {
+  if (!raw || typeof raw !== 'object') return raw;
+  const totalAmountPaise = raw.totalAmountPaise ?? raw.totalPaise ?? raw.amountPaise ?? 0;
+  const packetCount = raw.packetCount ?? raw.quantity ?? 0;
+
+  const rawItems = Array.isArray(raw.items) && raw.items.length > 0
+    ? raw.items
+    : Array.isArray(raw.lineItems) && raw.lineItems.length > 0
+      ? raw.lineItems
+      : [];
+
+  const items = rawItems.map((it: any, index: number) => {
+    const qty = it.quantity ?? (rawItems.length === 1 ? packetCount : 1);
+    const unitPrice = it.unitPricePaise ?? (qty > 0 ? Math.round((it.totalPricePaise ?? totalAmountPaise) / qty) : 0);
+    const totalPrice = it.totalPricePaise ?? (qty * unitPrice);
+    const name = it.productName || it.product?.name || (it.product?.sku ? `SKU: ${it.product.sku}` : 'FemmeFlo Sanitary Napkins');
+
+    return {
+      id: it.id || `item_${index}`,
+      productId: it.productId || it.product?.id || 'prod',
+      productName: name,
+      quantity: qty,
+      unitPricePaise: unitPrice,
+      totalPricePaise: totalPrice,
+    };
+  });
+
+  return {
+    ...raw,
+    totalAmountPaise,
+    totalPaise: raw.totalPaise ?? totalAmountPaise,
+    packetCount: packetCount || items.reduce((sum: number, it: any) => sum + (it.quantity || 0), 0),
+    quantity: raw.quantity ?? packetCount,
+    items: items.length > 0 ? items : [
+      {
+        id: '1',
+        productId: 'prod_default',
+        productName: 'FemmeFlo Sanitary Napkins',
+        quantity: packetCount || 1,
+        unitPricePaise: packetCount > 0 ? Math.round(totalAmountPaise / packetCount) : totalAmountPaise,
+        totalPricePaise: totalAmountPaise,
+      },
+    ],
+    lineItems: items,
+  };
+}
+
 export default function SaleDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -56,7 +103,8 @@ export default function SaleDetailScreen() {
     if (!id) return;
     try {
       const res = await sellerApi.getSale(id);
-      setSale(res.sale);
+      const rawSale = res.sale || (res as any)?.data?.sale || (res as any)?.data || res;
+      setSale(normalizeSale(rawSale));
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to load sale details.');
     } finally {
@@ -69,17 +117,23 @@ export default function SaleDetailScreen() {
   }, [loadSale]);
 
   async function handleCollectPayment() {
-    if (isCollecting) return;
+    if (isCollecting || !id) return;
     setIsCollecting(true);
     try {
-      const res = await sellerApi.collectPayment(id!, {
+      const res = await sellerApi.collectPayment(id, {
         paymentMode: collectMode,
+        mode: collectMode,
         paymentReference: paymentRef.trim() || undefined,
       });
 
-      setSale(res.sale);
+      const updatedSale = (res as any)?.sale || (res as any)?.data?.sale || (res as any)?.data || res;
+      const normalized = normalizeSale(updatedSale);
+      setSale(normalized);
       setPaymentModalVisible(false);
-      Alert.alert('Payment Recorded', `Payment of ${formatRupees(res.sale.totalAmountPaise)} confirmed via ${collectMode}.`);
+      Alert.alert(
+        'Payment Recorded',
+        `Payment of ${formatRupees(normalized.totalAmountPaise)} confirmed via ${collectMode}. Order marked as paid.`
+      );
     } catch (err: any) {
       Alert.alert('Payment Error', err.message || 'Unable to update payment status.');
     } finally {
@@ -218,8 +272,8 @@ Generated in FemmeFlo Standalone Test Mode.`;
     }
   }
 
-  const formatRupees = (paise: number) => {
-    return `₹${((paise || 0) / 100).toLocaleString('en-IN', {
+  const formatRupees = (paise?: number | null) => {
+    return `₹${(((paise ?? 0)) / 100).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -247,7 +301,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
   }
 
   const isConfirmed = sale.status === 'CONFIRMED' || sale.status === 'APPROVED';
-  const isPendingApproval = sale.status === 'PENDING';
+  const isPendingApproval = sale.status === 'PENDING' || sale.status === 'PENDING_APPROVAL';
   const isRejected = sale.status === 'REJECTED';
   const isPendingPayment = sale.paymentMode === 'PENDING';
 
@@ -325,13 +379,16 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Text style={styles.paymentActionTitle}>Payment Outstanding</Text>
                   <Text style={styles.paymentActionDesc}>
-                    Customer has not paid for this order yet.
+                    {isPendingApproval
+                      ? 'Order is awaiting Super Admin authorization. Payment can be collected once approved.'
+                      : 'Customer has not paid for this order yet. Collect cash or verify UPI payment.'}
                   </Text>
                 </View>
                 <Button
                   title="Collect Payment"
                   variant="primary"
                   size="sm"
+                  disabled={isPendingApproval}
                   onPress={() => setPaymentModalVisible(true)}
                   icon={<Ionicons name="cash-outline" size={16} color="#FFFFFF" />}
                 />
