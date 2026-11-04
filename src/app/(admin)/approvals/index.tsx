@@ -145,18 +145,44 @@ export default function AdminApprovalsScreen() {
 
   const renderItem = ({ item }: { item: PendingApprovalItem }) => {
     const isProcessing = actionId === item.id;
-    const effectivePricePerPktPaise =
-      item.packetCount > 0 ? Math.round(item.totalAmountPaise / item.packetCount) : 0;
+    const totalPaise = Number(item.totalPaise ?? item.totalAmountPaise ?? 0);
+    const quantity = Number(item.quantity ?? item.packetCount ?? 0);
+    const unitPricePaise = Number(
+      item.unitPricePaise ??
+        (quantity > 0 ? Math.round(totalPaise / quantity) : 0)
+    );
+    const minThresholdPaise = item.minimumPricePaise ?? minPricePaise ?? 2500;
+    const orderNumber =
+      item.saleNumber ||
+      (item.id && typeof item.id === 'string'
+        ? `#${item.id.slice(0, 8).toUpperCase()}`
+        : 'ORDER');
+
+    const lineItems =
+      Array.isArray(item.lineItems) && item.lineItems.length > 0
+        ? item.lineItems
+        : Array.isArray(item.items) && item.items.length > 0
+        ? item.items
+        : null;
 
     return (
       <Card
         style={styles.card}
         accessibilityRole="summary"
-        accessibilityLabel={`Pending approval for ${item.customer?.shopName || 'Retail Customer'}, ${formatRupees(item.totalAmountPaise)} for ${item.packetCount} packets`}
+        accessibilityLabel={`Pending approval for ${item.customer?.shopName || 'Retail Customer'}, order ${orderNumber}, ${formatRupees(totalPaise)} for ${quantity} packets`}
       >
         <View style={styles.cardHeader}>
           <View style={{ flex: 1, marginRight: Spacing.sm }}>
+            <View style={styles.orderNumberRow}>
+              <Ionicons name="receipt-outline" size={13} color={BrandColors.pink.dark} />
+              <Text style={styles.orderNumberText}>{orderNumber}</Text>
+            </View>
             <Text style={styles.customerName}>{item.customer?.shopName || 'Retail Customer'}</Text>
+            {item.customer?.contactName || item.customer?.phone ? (
+              <Text style={styles.customerContact}>
+                {[item.customer?.contactName, item.customer?.phone].filter(Boolean).join(' • ')}
+              </Text>
+            ) : null}
             <View style={styles.officerRow}>
               <Ionicons name="person-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
               <Text style={styles.sellerName}>Field Officer: {item.seller?.name || 'Seller'}</Text>
@@ -169,25 +195,81 @@ export default function AdminApprovalsScreen() {
         <View style={styles.thresholdNotice}>
           <Ionicons name="alert-circle-outline" size={16} color={Colors.light.warning} />
           <Text style={styles.thresholdText}>
-            Priced at {formatRupees(effectivePricePerPktPaise)}/pkt (Below {formatRupees(item.minimumPricePaise ?? 2500)} min threshold)
+            Priced at {formatRupees(unitPricePaise)}/pkt (Below {formatRupees(minThresholdPaise)} min threshold)
           </Text>
         </View>
 
+        {/* Products in this Order */}
+        <View style={styles.productsSection}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="cube-outline" size={13} color={Colors.light.textSecondary} />
+            <Text style={styles.sectionTitle}>PRODUCTS IN ORDER</Text>
+          </View>
+
+          {lineItems && lineItems.length > 0 ? (
+            lineItems.map((line, idx) => {
+              const pName = line.product?.name || line.productName || 'FemmeFlo Sanitary Napkins';
+              const pSku = line.product?.sku || (line.productId ? line.productId.slice(0, 8).toUpperCase() : null);
+              const pQty = Number(line.quantity || 0);
+              const pPrice = Number(line.unitPricePaise || unitPricePaise || 0);
+              const pTotal = Number(line.totalPaise || line.totalPricePaise || pQty * pPrice);
+
+              return (
+                <View key={line.id || `line_${idx}`} style={styles.productRow}>
+                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                    <Text style={styles.productName}>{pName}</Text>
+                    <View style={styles.skuRow}>
+                      {pSku ? (
+                        <View style={styles.skuBadge}>
+                          <Text style={styles.skuText}>{pSku}</Text>
+                        </View>
+                      ) : null}
+                      <Text style={styles.productQtyPrice}>
+                        {pQty} pkts × {formatRupees(pPrice)}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.productTotalText}>{formatRupees(pTotal)}</Text>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.productRow}>
+              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <Text style={styles.productName}>FemmeFlo Sanitary Napkins</Text>
+                <Text style={styles.productQtyPrice}>
+                  {quantity} pkts × {formatRupees(unitPricePaise)}
+                </Text>
+              </View>
+              <Text style={styles.productTotalText}>{formatRupees(totalPaise)}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Customer Feedback / Remarks Note */}
+        {item.customerFeedback ? (
+          <View style={styles.feedbackBox}>
+            <Ionicons name="chatbubble-ellipses-outline" size={14} color={BrandColors.pink.dark} />
+            <Text style={styles.feedbackText}>"{item.customerFeedback}"</Text>
+          </View>
+        ) : null}
+
+        {/* Order Summary KPIs Row */}
         <View style={styles.priceBreakdown}>
           <View style={styles.priceCol}>
-            <Text style={styles.priceLabel}>Total Order</Text>
-            <Text style={styles.orderVal}>{formatRupees(item.totalAmountPaise)}</Text>
+            <Text style={styles.priceLabel}>Total Value</Text>
+            <Text style={[styles.orderVal, { color: BrandColors.pink.dark }]}>{formatRupees(totalPaise)}</Text>
           </View>
 
           <View style={styles.priceCol}>
             <Text style={styles.priceLabel}>Quantity</Text>
-            <Text style={styles.orderVal}>{item.packetCount} pkts</Text>
+            <Text style={styles.orderVal}>{quantity} pkts</Text>
           </View>
 
           <View style={styles.priceCol}>
             <Text style={styles.priceLabel}>Payment Mode</Text>
             <View style={{ marginTop: 2 }}>
-              <Badge label={item.paymentMode} variant={item.paymentMode as any} size="sm" showDot={false} />
+              <Badge label={item.paymentMode || 'PENDING'} variant={(item.paymentMode as any) || 'PENDING'} size="sm" showDot={false} />
             </View>
           </View>
         </View>
@@ -216,7 +298,8 @@ export default function AdminApprovalsScreen() {
     );
   };
 
-  const totalFlaggedPaise = approvals.reduce((sum, a) => sum + (a.totalAmountPaise || 0), 0);
+  const totalFlaggedPaise = approvals.reduce((sum, a) => sum + Number(a.totalPaise ?? a.totalAmountPaise ?? 0), 0);
+  const totalFlaggedPackets = approvals.reduce((sum, a) => sum + Number(a.quantity ?? a.packetCount ?? 0), 0);
 
   return (
     <View style={styles.container}>
@@ -232,9 +315,10 @@ export default function AdminApprovalsScreen() {
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Pending</Text>
               <Text style={styles.kpiValue}>{approvals.length} Orders</Text>
+              <Text style={styles.kpiSubValue}>({totalFlaggedPackets} pkts)</Text>
             </View>
             <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Shown Value</Text>
+              <Text style={styles.kpiLabel}>Total Value</Text>
               <Text style={styles.kpiValue}>{formatRupees(totalFlaggedPaise)}</Text>
             </View>
             <View style={styles.kpiCard}>
@@ -319,6 +403,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 2,
   },
+  kpiSubValue: {
+    fontSize: 10,
+    color: Colors.light.textSecondary,
+    fontWeight: '600',
+    marginTop: 1,
+  },
   loadingContainer: {
     padding: Spacing.lg,
   },
@@ -341,9 +431,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: Spacing.sm,
   },
+  orderNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  orderNumberText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+    letterSpacing: 0.5,
+  },
   customerName: {
     ...Typography.h3,
     color: Colors.light.textPrimary,
+  },
+  customerContact: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginTop: 1,
   },
   officerRow: {
     flexDirection: 'row',
@@ -368,6 +476,84 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.warningText,
     fontWeight: '600',
+  },
+  productsSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginVertical: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  sectionTitle: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    letterSpacing: 0.5,
+  },
+  productRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  productName: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  skuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  skuBadge: {
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  skuText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  productQtyPrice: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+  },
+  productTotalText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  feedbackBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BrandColors.pink.subtle,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginVertical: Spacing.xs,
+  },
+  feedbackText: {
+    ...Typography.caption,
+    fontStyle: 'italic',
+    color: Colors.light.textPrimary,
+    flex: 1,
   },
   priceBreakdown: {
     flexDirection: 'row',

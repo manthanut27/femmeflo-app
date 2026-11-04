@@ -31,6 +31,42 @@ export interface PendingApprovalItem extends SaleItem {
   minimumPricePaise?: number;
 }
 
+export function normalizeApprovalItem(raw: any): PendingApprovalItem {
+  const totalPaise = Number(raw.totalPaise ?? raw.totalAmountPaise ?? 0);
+  const totalAmountPaise = Number(raw.totalAmountPaise ?? raw.totalPaise ?? totalPaise);
+  const quantity = Number(raw.quantity ?? raw.packetCount ?? 0);
+  const packetCount = Number(raw.packetCount ?? raw.quantity ?? quantity);
+  const unitPricePaise = Number(
+    raw.unitPricePaise ?? (quantity > 0 ? Math.round(totalPaise / quantity) : 0)
+  );
+  const lineItems = Array.isArray(raw.lineItems)
+    ? raw.lineItems
+    : Array.isArray(raw.items)
+    ? raw.items
+    : [];
+
+  const saleNumber =
+    raw.saleNumber ||
+    (raw.id && typeof raw.id === 'string'
+      ? `#${raw.id.slice(0, 8).toUpperCase()}`
+      : undefined);
+
+  return {
+    ...raw,
+    id: String(raw.id || ''),
+    saleNumber,
+    totalPaise,
+    totalAmountPaise,
+    quantity,
+    packetCount,
+    unitPricePaise,
+    lineItems,
+    items: lineItems,
+    requestedUnitPricePaise: raw.requestedUnitPricePaise ?? unitPricePaise,
+    minimumPricePaise: raw.minimumPricePaise ?? 2500,
+  };
+}
+
 export const adminApi = {
   // ----------------------------------------------------
   // Dashboard
@@ -133,14 +169,15 @@ export const adminApi = {
   // Price Approvals Queue
   // ----------------------------------------------------
   async listApprovals(params?: { page?: number; pageSize?: number }): Promise<{ items: PendingApprovalItem[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ items?: PendingApprovalItem[]; approvals?: PendingApprovalItem[]; pagination: PaginationMeta }>(
+    const raw = await apiRequest<{ items?: any[]; approvals?: any[]; pendingSales?: any[]; pagination: PaginationMeta }>(
       'admin/approvals',
       {
         method: 'GET',
         params,
       }
     );
-    const list = raw?.items ?? raw?.approvals ?? [];
+    const rawList = raw?.items ?? raw?.approvals ?? raw?.pendingSales ?? [];
+    const list = rawList.map(normalizeApprovalItem);
     return {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },

@@ -828,14 +828,29 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'admin/approvals' && method === 'GET') {
-    const pendingSales = mockDb.sales.filter((s) => s.status === 'PENDING');
-    const items: PendingApprovalItem[] = pendingSales.map((sale) => ({
-      ...sale,
-      requestedUnitPricePaise: sale.items?.[0]?.unitPricePaise || 2200,
-      minimumPricePaise: mockDb.settings.minimumSalePricePaise,
-    }));
+    const pendingSales = mockDb.sales.filter((s) => s.status === 'PENDING' || s.status === 'PENDING_APPROVAL');
+    const items: PendingApprovalItem[] = pendingSales.map((sale) => {
+      const totalPaise = sale.totalPaise ?? sale.totalAmountPaise ?? 0;
+      const quantity = sale.quantity ?? sale.packetCount ?? 0;
+      const unitPricePaise = sale.unitPricePaise || sale.items?.[0]?.unitPricePaise || (quantity > 0 ? Math.round(totalPaise / quantity) : 2200);
+      const lineItems = sale.items || sale.lineItems || [];
+      return {
+        ...sale,
+        totalPaise,
+        totalAmountPaise: totalPaise,
+        quantity,
+        packetCount: quantity,
+        unitPricePaise,
+        lineItems,
+        items: lineItems,
+        saleNumber: sale.saleNumber || `#${sale.id.slice(0, 8).toUpperCase()}`,
+        requestedUnitPricePaise: unitPricePaise,
+        minimumPricePaise: mockDb.settings.minimumSalePricePaise,
+      };
+    });
     return {
       items,
+      pendingSales: items,
       pagination: { page: 1, pageSize: 20, total: items.length, totalPages: 1 },
     } as unknown as T;
   }
