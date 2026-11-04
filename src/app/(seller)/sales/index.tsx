@@ -30,6 +30,7 @@ import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTod
 const STATUS_FILTERS: Array<{ label: string; value: string | null }> = [
   { label: 'All Orders', value: null },
   { label: 'Confirmed', value: 'CONFIRMED' },
+  { label: 'Uncollected Payments', value: 'PAYMENT_PENDING' },
   { label: 'Pending Approval', value: 'PENDING_APPROVAL' },
   { label: 'Rejected', value: 'REJECTED' },
 ];
@@ -87,7 +88,8 @@ export default function SalesListScreen() {
           sellerApi.listSales({
             page,
             pageSize: 50,
-            status: selectedStatus || undefined,
+            status: selectedStatus === 'PAYMENT_PENDING' ? undefined : (selectedStatus || undefined),
+            paymentMode: selectedStatus === 'PAYMENT_PENDING' ? 'PENDING' : undefined,
             period: selectedPeriod === 'this_month' ? 'this_month' : undefined,
             customerId: selectedCustomerId || undefined,
           }),
@@ -97,6 +99,9 @@ export default function SalesListScreen() {
         let items = salesRes.items || [];
         if (selectedCustomerId) {
           items = items.filter((s) => (s.customer?.id || s.customerId) === selectedCustomerId);
+        }
+        if (selectedStatus === 'PAYMENT_PENDING') {
+          items = items.filter((s) => s.paymentMode === 'PENDING' && s.status !== 'REJECTED');
         }
 
         if (append) {
@@ -236,6 +241,11 @@ export default function SalesListScreen() {
           <View style={styles.leftFooter}>
             <Text style={styles.packetText}>{packets} packets</Text>
             <Badge label={item.paymentMode} variant={item.paymentMode as any} size="sm" showDot={false} />
+            {item.paymentMode === 'PENDING' && item.status !== 'REJECTED' && (
+              <View style={styles.uncollectedPill}>
+                <Text style={styles.uncollectedPillText}>Collect ›</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.amountText}>{formatCurrencyINR(totalAmount)}</Text>
         </View>
@@ -369,14 +379,36 @@ export default function SalesListScreen() {
           <View style={styles.contentWrapper}>
             {/* Today's KPI Metric Cards */}
             <View style={styles.kpiGrid}>
-              <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Today&apos;s Revenue</Text>
+              <Card
+                onPress={() => {
+                  setSelectedPeriod('today');
+                  setSelectedStatus(null);
+                  setViewMode('TRANSACTIONS');
+                }}
+                accessibilityLabel={`Today's Revenue: ${formatCurrencyINR(todayMetrics.totalPaise)}. Tap to view transactions.`}
+                style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}
+              >
+                <View style={styles.kpiTitleRow}>
+                  <Text style={styles.kpiLabel}>Today&apos;s Revenue</Text>
+                  <Ionicons name="chevron-forward" size={13} color={BrandColors.green.primary} />
+                </View>
                 <Text style={styles.kpiValueGreen}>{formatCurrencyINR(todayMetrics.totalPaise)}</Text>
                 <Text style={styles.kpiSub}>{todayMetrics.orderCount} orders recorded today</Text>
               </Card>
 
-              <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Today&apos;s Volume</Text>
+              <Card
+                onPress={() => {
+                  setSelectedPeriod('today');
+                  setSelectedStatus(null);
+                  setViewMode('TRANSACTIONS');
+                }}
+                accessibilityLabel={`Today's Volume: ${todayMetrics.totalPackets} packets. Tap to view transactions.`}
+                style={[styles.kpiCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}
+              >
+                <View style={styles.kpiTitleRow}>
+                  <Text style={styles.kpiLabel}>Today&apos;s Volume</Text>
+                  <Ionicons name="chevron-forward" size={13} color={BrandColors.pink.primary} />
+                </View>
                 <Text style={styles.kpiValuePink}>{todayMetrics.totalPackets} pkts</Text>
                 <Text style={styles.kpiSub}>Dispatched to retailers</Text>
               </Card>
@@ -384,22 +416,62 @@ export default function SalesListScreen() {
 
             {/* Payment Summary Box */}
             <Card style={styles.paymentSummaryCard}>
-              <Text style={styles.paymentSummaryTitle}>Today&apos;s Payment Collection Summary</Text>
+              <View style={styles.paymentSummaryHeader}>
+                <Text style={styles.paymentSummaryTitle}>Today&apos;s Payment Collection Summary</Text>
+                <Pressable
+                  onPress={() => router.push('/(seller)/sales/pending' as any)}
+                  hitSlop={HitSlop.sm}
+                  style={styles.viewPendingHeaderLink}
+                >
+                  <Text style={styles.viewPendingHeaderLinkText}>All Uncollected ›</Text>
+                </Pressable>
+              </View>
               <View style={styles.paymentRow}>
-                <View style={styles.paymentBox}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Cash collection: ${formatCurrencyINR(todayMetrics.cashPaise)}`}
+                  onPress={() => {
+                    setSelectedPeriod('today');
+                    setViewMode('TRANSACTIONS');
+                  }}
+                  style={({ pressed }) => [styles.paymentBox, pressed && styles.paymentBoxPressed]}
+                >
                   <Text style={styles.paymentBoxLabel}>CASH</Text>
                   <Text style={styles.paymentBoxVal}>{formatCurrencyINR(todayMetrics.cashPaise)}</Text>
-                </View>
-                <View style={styles.paymentBox}>
+                  <Text style={styles.paymentBoxHint}>View ›</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`UPI and bank collection: ${formatCurrencyINR(todayMetrics.bankPaise)}`}
+                  onPress={() => {
+                    setSelectedPeriod('today');
+                    setViewMode('TRANSACTIONS');
+                  }}
+                  style={({ pressed }) => [styles.paymentBox, pressed && styles.paymentBoxPressed]}
+                >
                   <Text style={styles.paymentBoxLabel}>UPI / BANK</Text>
                   <Text style={styles.paymentBoxVal}>{formatCurrencyINR(todayMetrics.bankPaise)}</Text>
-                </View>
-                <View style={styles.paymentBox}>
-                  <Text style={styles.paymentBoxLabel}>PENDING</Text>
-                  <Text style={[styles.paymentBoxVal, { color: '#D97706' }]}>
+                  <Text style={styles.paymentBoxHint}>View ›</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Pending uncollected amount: ${formatCurrencyINR(todayMetrics.pendingPaise)}. Tap to view uncollected shop amounts.`}
+                  onPress={() => router.push('/(seller)/sales/pending' as any)}
+                  style={({ pressed }) => [
+                    styles.paymentBox,
+                    styles.paymentBoxPending,
+                    pressed && styles.paymentBoxPressed,
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <Text style={[styles.paymentBoxLabel, { color: '#B45309' }]}>PENDING</Text>
+                    <Ionicons name="arrow-forward-circle" size={14} color="#D97706" />
+                  </View>
+                  <Text style={[styles.paymentBoxVal, { color: '#D97706', fontWeight: '800' }]}>
                     {formatCurrencyINR(todayMetrics.pendingPaise)}
                   </Text>
-                </View>
+                  <Text style={styles.pendingActionLabel}>Collect & Close ›</Text>
+                </Pressable>
               </View>
             </Card>
 
@@ -508,6 +580,11 @@ export default function SalesListScreen() {
                                 <View style={{ alignItems: 'flex-end' }}>
                                   <Text style={styles.amountText}>{formatCurrencyINR(totalAmt)}</Text>
                                   <Badge label={item.paymentMode} variant={item.paymentMode as any} size="sm" showDot={false} />
+            {item.paymentMode === 'PENDING' && item.status !== 'REJECTED' && (
+              <View style={styles.uncollectedPill}>
+                <Text style={styles.uncollectedPillText}>Collect ›</Text>
+              </View>
+            )}
                                 </View>
                               </View>
 
@@ -779,6 +856,19 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
   },
+  uncollectedPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  uncollectedPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
   paymentSummaryCard: {
     padding: Spacing.md,
     marginBottom: Spacing.sm,
@@ -811,6 +901,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
+    marginTop: 2,
+  },
+  kpiTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  paymentSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  viewPendingHeaderLink: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  viewPendingHeaderLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  paymentBoxPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  paymentBoxPending: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  paymentBoxHint: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  pendingActionLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
     marginTop: 2,
   },
   periodChipsRow: {
