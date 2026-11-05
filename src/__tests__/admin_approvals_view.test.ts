@@ -23,6 +23,14 @@ describe('Admin Approvals Display & Data Integrity Suite', () => {
         ? `#${raw.id.slice(0, 8).toUpperCase()}`
         : undefined);
 
+    const isResubmitted = Boolean(
+      raw.isResubmitted ||
+      raw.resubmitForApproval ||
+      raw.resubmittedAt ||
+      (typeof raw.customerFeedback === 'string' && (raw.customerFeedback.includes('Price Revised') || raw.customerFeedback.includes('Resubmitted'))) ||
+      (typeof raw.approvalReason === 'string' && raw.approvalReason.includes('revised'))
+    );
+
     return {
       ...raw,
       id: String(raw.id || ''),
@@ -36,8 +44,46 @@ describe('Admin Approvals Display & Data Integrity Suite', () => {
       items: lineItems,
       requestedUnitPricePaise: raw.requestedUnitPricePaise ?? unitPricePaise,
       minimumPricePaise: raw.minimumPricePaise ?? 2500,
+      isResubmitted,
+      resubmitForApproval: isResubmitted,
     };
   }
+
+  it('detects resubmitted sales and sets isResubmitted and resubmitForApproval', () => {
+    const rawResubmittedSale = {
+      id: 'resub-123',
+      totalPaise: 44000,
+      quantity: 20,
+      unitPricePaise: 2200,
+      customerFeedback: '[Price Revised: ₹22.00] Customer agreed to discount price',
+      status: 'PENDING_APPROVAL',
+      createdAt: '2026-11-01T10:00:00Z',
+    };
+
+    const normalized = normalizeApprovalItem(rawResubmittedSale);
+    assert.equal(normalized.isResubmitted, true);
+    assert.equal(normalized.resubmitForApproval, true);
+  });
+
+  it('correctly sorts resubmitted orders at the top of the queue', () => {
+    const items = [
+      normalizeApprovalItem({ id: 'old-first-time', createdAt: '2026-11-01T10:00:00Z', isResubmitted: false }),
+      normalizeApprovalItem({ id: 'new-resubmitted', createdAt: '2026-10-25T10:00:00Z', isResubmitted: true, resubmittedAt: '2026-11-05T12:00:00Z' }),
+      normalizeApprovalItem({ id: 'recent-first-time', createdAt: '2026-11-04T10:00:00Z', isResubmitted: false }),
+    ];
+
+    items.sort((a, b) => {
+      if (a.isResubmitted && !b.isResubmitted) return -1;
+      if (!a.isResubmitted && b.isResubmitted) return 1;
+      const timeA = new Date(a.resubmittedAt || a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.resubmittedAt || b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    assert.equal(items[0].id, 'new-resubmitted');
+    assert.equal(items[1].id, 'recent-first-time');
+    assert.equal(items[2].id, 'old-first-time');
+  });
 
   it('normalizes raw backend sale with totalPaise and quantity into approval item', () => {
     const rawBackendSale = {

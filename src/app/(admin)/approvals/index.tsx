@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   DeviceEventEmitter,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { adminApi, PendingApprovalItem } from '@/api/admin';
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
   BorderRadius,
@@ -29,12 +31,15 @@ import {
 import { useAuth } from '@/context/AuthContext';
 
 export default function AdminApprovalsScreen() {
+  const router = useRouter();
   const { isOffline } = useAuth();
   const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [minPricePaise, setMinPricePaise] = useState<number>(2500);
+  const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'RESUBMITTED' | 'FIRST_TIME'>('ALL');
 
   const loadApprovals = useCallback(async () => {
     try {
@@ -197,8 +202,22 @@ export default function AdminApprovalsScreen() {
               <Text style={styles.sellerName}>Field Officer: {item.seller?.name || 'Seller'}</Text>
             </View>
           </View>
-          <Badge label="APPROVAL REQUIRED" variant="warning" />
+          {item.isResubmitted ? (
+            <Badge label="RESUBMITTED FOR APPROVAL" variant="purple" />
+          ) : (
+            <Badge label="APPROVAL REQUIRED" variant="warning" />
+          )}
         </View>
+
+        {/* Resubmission Banner if Revised */}
+        {item.isResubmitted ? (
+          <View style={styles.resubmittedNotice}>
+            <Ionicons name="refresh-circle" size={16} color="#7C3AED" />
+            <Text style={styles.resubmittedNoticeText}>
+              Price revised after rejection • Resubmitted for Super Admin re-approval
+            </Text>
+          </View>
+        ) : null}
 
         {/* Price Threshold Comparison Banner */}
         <View style={styles.thresholdNotice}>
@@ -309,6 +328,27 @@ export default function AdminApprovalsScreen() {
 
   const totalFlaggedPaise = approvals.reduce((sum, a) => sum + Number(a.totalPaise ?? a.totalAmountPaise ?? 0), 0);
   const totalFlaggedPackets = approvals.reduce((sum, a) => sum + Number(a.quantity ?? a.packetCount ?? 0), 0);
+  const resubmittedCount = approvals.filter((a) => a.isResubmitted).length;
+  const firstTimeCount = approvals.filter((a) => !a.isResubmitted).length;
+
+  const filteredApprovals = useMemo(() => {
+    let list = [...approvals];
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((item) => {
+        const orderNum = (item.saleNumber || item.id || '').toLowerCase();
+        const cust = (item.customer?.shopName || '').toLowerCase();
+        const seller = (item.seller?.name || '').toLowerCase();
+        return orderNum.includes(q) || cust.includes(q) || seller.includes(q);
+      });
+    }
+    if (activeTab === 'RESUBMITTED') {
+      list = list.filter((i) => i.isResubmitted);
+    } else if (activeTab === 'FIRST_TIME') {
+      list = list.filter((i) => !i.isResubmitted);
+    }
+    return list;
+  }, [approvals, search, activeTab]);
 
   return (
     <View style={styles.container}>
@@ -326,6 +366,13 @@ export default function AdminApprovalsScreen() {
               <Text style={styles.kpiValue}>{approvals.length} Orders</Text>
               <Text style={styles.kpiSubValue}>({totalFlaggedPackets} pkts)</Text>
             </View>
+            {resubmittedCount > 0 ? (
+              <View style={[styles.kpiCard, { borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }]}>
+                <Text style={[styles.kpiLabel, { color: '#6D28D9' }]}>Resubmitted</Text>
+                <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>{resubmittedCount} Orders</Text>
+                <Text style={[styles.kpiSubValue, { color: '#7C3AED' }]}>For Re-Approval</Text>
+              </View>
+            ) : null}
             <View style={styles.kpiCard}>
               <Text style={styles.kpiLabel}>Total Value</Text>
               <Text style={styles.kpiValue}>{formatRupees(totalFlaggedPaise)}</Text>
@@ -336,6 +383,54 @@ export default function AdminApprovalsScreen() {
                 ₹{(minPricePaise / 100).toFixed(2)}/pkt
               </Text>
             </View>
+          </View>
+        ) : null}
+
+        {/* Tab Filters for All, Resubmitted, and First-Time */}
+        {approvals.length > 0 ? (
+          <View style={styles.tabsRow}>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'ALL' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('ALL')}
+            >
+              <Text style={[styles.tabBtnText, activeTab === 'ALL' && styles.tabBtnTextActive]}>
+                All ({approvals.length})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'RESUBMITTED' && styles.tabBtnActivePurple]}
+              onPress={() => setActiveTab('RESUBMITTED')}
+            >
+              <Ionicons
+                name="refresh-circle"
+                size={14}
+                color={activeTab === 'RESUBMITTED' ? '#FFFFFF' : '#7C3AED'}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'RESUBMITTED' && styles.tabBtnTextActiveWhite]}>
+                Resubmitted for Approval ({resubmittedCount})
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'FIRST_TIME' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('FIRST_TIME')}
+            >
+              <Text style={[styles.tabBtnText, activeTab === 'FIRST_TIME' && styles.tabBtnTextActive]}>
+                First-Time ({firstTimeCount})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* Quick Search Bar */}
+        {approvals.length > 0 ? (
+          <View style={styles.searchContainer}>
+            <Input
+              placeholder="Search order ID, shop, or field officer..."
+              value={search}
+              onChangeText={setSearch}
+              leftIcon={<Ionicons name="search" size={16} color={Colors.light.textMuted} />}
+            />
           </View>
         ) : null}
 
@@ -353,12 +448,41 @@ export default function AdminApprovalsScreen() {
             iconBgColor={BrandColors.pink.subtle}
             iconBorderColor={BrandColors.pink.tint}
           />
+        ) : filteredApprovals.length === 0 ? (
+          <EmptyState
+            icon="search-outline"
+            title={activeTab === 'RESUBMITTED' ? 'No Resubmitted Requests' : 'No Matching Requests'}
+            description={
+              activeTab === 'RESUBMITTED'
+                ? 'There are currently no rejected sales resubmitted for approval.'
+                : 'No orders match your search criteria.'
+            }
+            iconColor={activeTab === 'RESUBMITTED' ? '#7C3AED' : BrandColors.pink.dark}
+            iconBgColor={activeTab === 'RESUBMITTED' ? '#F5F3FF' : BrandColors.pink.subtle}
+            iconBorderColor={activeTab === 'RESUBMITTED' ? '#DDD6FE' : BrandColors.pink.tint}
+          />
         ) : (
           <FlatList
-            data={approvals}
+            data={filteredApprovals}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
+            ListFooterComponent={
+              <TouchableOpacity
+                style={styles.confirmedNoticeCard}
+                onPress={() => router.push('/(admin)/sales' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="information-circle-outline" size={20} color="#15803D" />
+                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                  <Text style={styles.confirmedNoticeTitle}>Looking for auto-approved orders?</Text>
+                  <Text style={styles.confirmedNoticeSub}>
+                    Orders revised to ≥ ₹{(minPricePaise / 100).toFixed(2)}/pkt meet the policy floor and are automatically confirmed without needing admin approval. Tap to view the Sales Directory.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#15803D" />
+              </TouchableOpacity>
+            }
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -601,5 +725,85 @@ const styles = StyleSheet.create({
   },
   approveBtn: {
     minWidth: 130,
+  },
+  resubmittedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F5F3FF',
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    marginVertical: Spacing.xs,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  resubmittedNoticeText: {
+    ...Typography.caption,
+    color: '#6D28D9',
+    fontWeight: '700',
+    flex: 1,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  tabBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tabBtnActive: {
+    backgroundColor: BrandColors.pink.dark,
+    borderColor: BrandColors.pink.dark,
+  },
+  tabBtnActivePurple: {
+    backgroundColor: '#7C3AED',
+    borderColor: '#7C3AED',
+  },
+  tabBtnText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+  },
+  tabBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  tabBtnTextActiveWhite: {
+    color: '#FFFFFF',
+  },
+  searchContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  confirmedNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  confirmedNoticeTitle: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  confirmedNoticeSub: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: '#166534',
+    marginTop: 2,
   },
 });

@@ -9,6 +9,8 @@ export type BadgeVariant =
   | 'danger'
   | 'info'
   | 'neutral'
+  | 'purple'
+  | 'RESUBMITTED'
   | 'PENDING'
   | 'PENDING_APPROVAL'
   | 'APPROVED'
@@ -73,7 +75,7 @@ export function Badge({
   );
 }
 
-function getNormalizedVariant(v: BadgeVariant): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+function getNormalizedVariant(v: BadgeVariant): 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' {
   switch (v) {
     case 'CONFIRMED':
     case 'APPROVED':
@@ -89,6 +91,9 @@ function getNormalizedVariant(v: BadgeVariant): 'success' | 'warning' | 'danger'
       return 'danger';
     case 'info':
       return 'info';
+    case 'purple':
+    case 'RESUBMITTED':
+      return 'purple';
     case 'success':
       return 'success';
     case 'warning':
@@ -205,6 +210,18 @@ const badgeStyles = {
     },
     text: {
       color: '#334155',
+    },
+  }),
+  purple: StyleSheet.create({
+    container: {
+      backgroundColor: '#F5F3FF',
+      borderColor: '#DDD6FE',
+    },
+    dot: {
+      backgroundColor: '#7C3AED',
+    },
+    text: {
+      color: '#5B21B6',
     },
   }),
 };

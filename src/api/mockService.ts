@@ -935,6 +935,8 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
         saleNumber: sale.saleNumber || `#${sale.id.slice(0, 8).toUpperCase()}`,
         requestedUnitPricePaise: unitPricePaise,
         minimumPricePaise: mockDb.settings.minimumSalePricePaise,
+        isResubmitted: Boolean(sale.resubmittedAt || (sale as any).isResubmitted || (sale as any).resubmitForApproval || (typeof sale.customerFeedback === 'string' && sale.customerFeedback.includes('Price Revised'))),
+        resubmitForApproval: Boolean(sale.resubmittedAt || (sale as any).isResubmitted || (sale as any).resubmitForApproval || (typeof sale.customerFeedback === 'string' && sale.customerFeedback.includes('Price Revised'))),
       };
     });
     return {

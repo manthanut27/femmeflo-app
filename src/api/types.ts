@@ -276,6 +276,9 @@ export interface SaleItem {
   requestedAt?: string;
   confirmedAt?: string | null;
   resubmittedAt?: string | null;
+  isResubmitted?: boolean;
+  resubmitForApproval?: boolean;
+  updatedAt?: string;
 }
 
 export interface CreateSalePayload {

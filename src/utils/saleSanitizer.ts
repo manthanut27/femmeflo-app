@@ -36,3 +36,4 @@ export function sanitizeUpdateSalePayload(
   }
   return sanitized;
 }
+

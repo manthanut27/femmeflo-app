@@ -30,6 +30,37 @@ import type {
 export interface PendingApprovalItem extends SaleItem {
   requestedUnitPricePaise?: number;
   minimumPricePaise?: number;
+  isResubmitted?: boolean;
+  resubmitForApproval?: boolean;
+}
+
+export function isSaleResubmitted(raw: any): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  if (raw.isResubmitted === true || raw.resubmitForApproval === true) return true;
+  if (raw.resubmittedAt) return true;
+  if (
+    typeof raw.customerFeedback === 'string' &&
+    (raw.customerFeedback.includes('Price Revised') ||
+      raw.customerFeedback.includes('Manager Price Revised') ||
+      raw.customerFeedback.includes('Resubmitted'))
+  ) {
+    return true;
+  }
+  if (
+    typeof raw.approvalReason === 'string' &&
+    (raw.approvalReason.toLowerCase().includes('revised') ||
+      raw.approvalReason.toLowerCase().includes('reapproval'))
+  ) {
+    return true;
+  }
+  if (raw.status === 'PENDING_APPROVAL' && raw.updatedAt && raw.createdAt) {
+    const created = new Date(raw.createdAt).getTime();
+    const updated = new Date(raw.updatedAt).getTime();
+    if (!isNaN(created) && !isNaN(updated) && updated - created > 2000) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function normalizeApprovalItem(raw: any): PendingApprovalItem {
@@ -52,6 +83,8 @@ export function normalizeApprovalItem(raw: any): PendingApprovalItem {
       ? `#${raw.id.slice(0, 8).toUpperCase()}`
       : undefined);
 
+  const isResubmitted = isSaleResubmitted(raw);
+
   return {
     ...raw,
     id: String(raw.id || ''),
@@ -65,6 +98,8 @@ export function normalizeApprovalItem(raw: any): PendingApprovalItem {
     items: lineItems,
     requestedUnitPricePaise: raw.requestedUnitPricePaise ?? unitPricePaise,
     minimumPricePaise: raw.minimumPricePaise ?? 2500,
+    isResubmitted,
+    resubmitForApproval: isResubmitted,
   };
 }
 
@@ -188,6 +223,13 @@ export const adminApi = {
     );
     const rawList = raw?.items ?? raw?.approvals ?? raw?.pendingSales ?? [];
     const list = rawList.map(normalizeApprovalItem);
+    list.sort((a, b) => {
+      if (a.isResubmitted && !b.isResubmitted) return -1;
+      if (!a.isResubmitted && b.isResubmitted) return 1;
+      const timeA = new Date(a.resubmittedAt || a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.resubmittedAt || b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
     return {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
