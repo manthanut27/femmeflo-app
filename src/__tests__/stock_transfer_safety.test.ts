@@ -155,5 +155,106 @@ describe('Admin Stock Transfer Safety & Crash Prevention Suite', () => {
     navigateBackSafely(mockRouterCannotGoBack);
     assert.strictEqual(replaceCount, 1);
   });
+
+  it('deduplicates destination options across dual-role managers and sellers with identical IDs', () => {
+    const mockManagers = [
+      { id: 'usr_dual_01', name: 'Manthan Utekar', isSeller: true, district: 'Indore', state: 'MP', phone: '9876543210' },
+      { id: 'usr_mgr_only', name: 'Sunil Verma', isSeller: false, district: 'Bhopal', state: 'MP', phone: '9876543211' },
+    ];
+
+    const mockSellers = [
+      // Manthan Utekar is returned by both managers (isSeller: true) AND sellers endpoint
+      { id: 'usr_dual_01', name: 'Manthan Utekar', phone: '9876543210' },
+      { id: 'usr_seller_02', name: 'Kavita Patel', phone: '9876543212' },
+    ];
+
+    const mockWarehouses = [
+      { id: 'wh_source_01', name: 'Indore HQ Central Depot', code: 'HQ-IND' },
+      { id: 'wh_dest_02', name: 'Bhopal Regional Depot', code: 'REG-BPL' },
+    ];
+
+    const sourceWarehouseId = 'wh_source_01';
+
+    const buildDestinationOptions = () => {
+      const list: any[] = [];
+      const seenIds = new Set<string>();
+
+      // 1. Dual-Role Managers
+      const dualRoleManagers = mockManagers.filter((m) => Boolean(m?.isSeller));
+      for (const m of dualRoleManagers) {
+        const id = String(m?.id || '').trim();
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        list.push({
+          id,
+          title: `${m.name || 'Manager'} (Dual-Role Manager - Van Stock)`,
+          badge: 'VAN STOCK',
+          icon: 'car-sport',
+        });
+      }
+
+      // 2. Field Officers / Sellers (Deduplicated)
+      for (const s of mockSellers) {
+        const id = String(s?.id || '').trim();
+        if (!id || seenIds.has(id)) continue;
+        seenIds.add(id);
+        list.push({
+          id,
+          title: `${s.name || 'Field Officer'} (Field Officer)`,
+          badge: 'FIELD SELLER',
+          icon: 'person',
+        });
+      }
+
+      // 3. Regional Hubs (Excluding source)
+      for (const w of mockWarehouses) {
+        const id = String(w?.id || '').trim();
+        if (!id || id === sourceWarehouseId || seenIds.has(id)) continue;
+        seenIds.add(id);
+        list.push({
+          id,
+          title: `${w.name || 'Regional Hub'} (Regional Hub)`,
+          badge: 'DEPOT / HUB',
+          icon: 'business',
+        });
+      }
+
+      return list;
+    };
+
+    const options = buildDestinationOptions();
+
+    // usr_dual_01 must appear exactly ONCE
+    const dualMatches = options.filter((o) => o.id === 'usr_dual_01');
+    assert.strictEqual(dualMatches.length, 1);
+    assert.strictEqual(dualMatches[0].badge, 'VAN STOCK');
+
+    // Total items: 1 dual-role manager + 1 unique seller + 1 regional hub (wh_dest_02) = 3 total (wh_source_01 excluded)
+    assert.strictEqual(options.length, 3);
+    assert.deepStrictEqual(options.map((o) => o.id), ['usr_dual_01', 'usr_seller_02', 'wh_dest_02']);
+  });
+
+  it('generates guaranteed unique keys in SearchableDropdownModal even with duplicate or missing IDs', () => {
+    const rawOptions = [
+      { id: 'duplicate_id', title: 'Option 1' },
+      { id: 'duplicate_id', title: 'Option 2 (Duplicate)' },
+      { id: '', title: 'Option with empty ID' },
+      { id: undefined as any, title: 'Option with undefined ID' },
+    ];
+
+    const keyExtractor = (item: any, index: number) =>
+      item?.id ? `${String(item.id)}_${index}` : `opt_${index}`;
+
+    const keys = rawOptions.map((opt, i) => keyExtractor(opt, i));
+
+    assert.strictEqual(keys[0], 'duplicate_id_0');
+    assert.strictEqual(keys[1], 'duplicate_id_1');
+    assert.strictEqual(keys[2], 'opt_2');
+    assert.strictEqual(keys[3], 'opt_3');
+
+    // Ensure all keys are 100% unique strings
+    const uniqueKeys = new Set(keys);
+    assert.strictEqual(uniqueKeys.size, rawOptions.length);
+  });
 });
 

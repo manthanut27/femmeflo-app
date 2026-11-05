@@ -140,45 +140,63 @@ export default function StockTransferScreen() {
 
   // Dropdown Options: Warehouses
   const warehouseOptions: DropdownOption[] = useMemo(() => {
-    return warehouses.map((wh) => {
+    const list: DropdownOption[] = [];
+    const seenIds = new Set<string>();
+
+    for (const wh of warehouses) {
+      const id = String(wh?.id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       const isHq = wh.type === 'HQ';
       const bal = typeof (wh as any).balance === 'number' ? (wh as any).balance : 0;
-      return {
-        id: wh.id,
-        title: wh.name,
+      list.push({
+        id,
+        title: wh.name || 'Warehouse',
         subtitle: `Code: ${wh.code || 'WH'} • Stock Balance: ${bal.toLocaleString('en-IN')} pkts`,
         badge: isHq ? 'CENTRAL HQ' : 'REGIONAL',
         badgeVariant: isHq ? 'ACTIVE' : 'neutral',
         metadata: `${wh.state || ''} ${wh.district || ''} ${wh.code || ''}`,
         icon: 'cube',
-      };
-    });
+      });
+    }
+
+    return list;
   }, [warehouses]);
 
   // Dropdown Options: Destination Targets (Field Officers, Dual-Role Managers & Regional Depots)
   const destinationOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [];
+    const seenIds = new Set<string>();
 
     // 1. Dual-Role Managers (Dedicated Field Van Stock)
-    const dualRoleManagers = managers.filter((m) => Boolean(m.isSeller));
+    const dualRoleManagers = managers.filter((m) => Boolean(m?.isSeller));
     for (const m of dualRoleManagers) {
+      const id = String(m?.id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       list.push({
-        id: m.id,
+        id,
         title: `${m.name || 'Manager'} (Dual-Role Manager - Van Stock)`,
         subtitle: `Manager Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
         badge: 'VAN STOCK',
         badgeVariant: 'ACTIVE',
         metadata: `${m.phone || ''} ${m.email || ''} ${m.district || ''} dual role van stock manager`,
-        icon: 'car',
+        icon: 'car-sport',
       });
     }
 
-    // 2. Field Officers / Sellers
+    // 2. Field Officers / Sellers (Skip if already added as dual-role manager)
     for (const s of sellers) {
+      const id = String(s?.id || (s as any)?.sellerId || (s as any)?.userId || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       list.push({
-        id: s.id,
+        id,
         title: `${s.name || 'Field Officer'} (Field Officer)`,
-        subtitle: `Seller ID: ${s.id ? String(s.id).slice(0, 8) : 'N/A'} • Phone: ${s.phone || 'N/A'}`,
+        subtitle: `Seller ID: ${id ? id.slice(0, 8) : 'N/A'} • Phone: ${s.phone || 'N/A'}`,
         badge: 'FIELD SELLER',
         badgeVariant: 'ACTIVE',
         metadata: `${s.phone || ''} ${s.email || ''}`,
@@ -186,20 +204,22 @@ export default function StockTransferScreen() {
       });
     }
 
-    // 3. Regional Hubs / Other Warehouses
+    // 3. Regional Hubs / Other Warehouses (Exclude current source warehouse and already added IDs)
     for (const w of warehouses) {
-      if (w.id !== sourceWarehouseId) {
-        const bal = typeof (w as any).balance === 'number' ? (w as any).balance : 0;
-        list.push({
-          id: w.id,
-          title: `${w.name || 'Regional Hub'} (Regional Hub)`,
-          subtitle: `Code: ${w.code || 'WH'} • Balance: ${bal.toLocaleString('en-IN')} pkts`,
-          badge: 'DEPOT / HUB',
-          badgeVariant: 'neutral',
-          metadata: `${w.code || ''} ${w.district || ''}`,
-          icon: 'business',
-        });
-      }
+      const id = String(w?.id || '').trim();
+      if (!id || id === sourceWarehouseId || seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      const bal = typeof (w as any).balance === 'number' ? (w as any).balance : 0;
+      list.push({
+        id,
+        title: `${w.name || 'Regional Hub'} (Regional Hub)`,
+        subtitle: `Code: ${w.code || 'WH'} • Balance: ${bal.toLocaleString('en-IN')} pkts`,
+        badge: 'DEPOT / HUB',
+        badgeVariant: 'neutral',
+        metadata: `${w.code || ''} ${w.district || ''}`,
+        icon: 'business',
+      });
     }
 
     return list;
@@ -211,19 +231,28 @@ export default function StockTransferScreen() {
 
   // Dropdown Options: Products
   const productOptions: DropdownOption[] = useMemo(() => {
-    return products.map((p) => {
+    const list: DropdownOption[] = [];
+    const seenIds = new Set<string>();
+
+    for (const p of products) {
+      const id = String(p?.id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       const minFloor = ((p.minimumPricePaise ?? 2500) / 100).toFixed(2);
       const basePrice = ((p.basePricePaise ?? 3000) / 100).toFixed(2);
-      return {
-        id: p.id,
+      list.push({
+        id,
         title: p.name || 'Product SKU',
-        subtitle: `SKU: ${p.sku || (p.id ? String(p.id).slice(0, 8) : 'SKU')} • Base: ₹${basePrice} • Min Floor: ₹${minFloor}`,
+        subtitle: `SKU: ${p.sku || id.slice(0, 8)} • Base: ₹${basePrice} • Min Floor: ₹${minFloor}`,
         badge: p.sku || 'SKU',
         badgeVariant: 'ACTIVE',
         metadata: `${p.sku || ''} ${p.description || ''}`,
         icon: 'pricetag',
-      };
-    });
+      });
+    }
+
+    return list;
   }, [products]);
 
   const navigateBackSafely = () => {

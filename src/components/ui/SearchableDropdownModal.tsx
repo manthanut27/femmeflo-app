@@ -49,7 +49,7 @@ export function SearchableDropdownModal({
   visible,
   title,
   searchPlaceholder = 'Search options...',
-  options,
+  options = [],
   selectedId,
   onSelect,
   onClose,
@@ -58,13 +58,27 @@ export function SearchableDropdownModal({
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredOptions = useMemo(() => {
+    const raw = Array.isArray(options)
+      ? options.filter((opt): opt is DropdownOption => Boolean(opt && typeof opt === 'object' && opt.id))
+      : [];
+    // Deduplicate options by id to prevent duplicate keys in lists
+    const seen = new Set<string>();
+    const deduped: DropdownOption[] = [];
+    for (const opt of raw) {
+      const idStr = String(opt.id).trim();
+      if (idStr && !seen.has(idStr)) {
+        seen.add(idStr);
+        deduped.push(opt);
+      }
+    }
+
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((opt) => {
-      const matchTitle = opt.title ? opt.title.toLowerCase().includes(q) : false;
-      const matchSubtitle = opt.subtitle ? opt.subtitle.toLowerCase().includes(q) : false;
-      const matchBadge = opt.badge ? opt.badge.toLowerCase().includes(q) : false;
-      const matchMeta = opt.metadata ? opt.metadata.toLowerCase().includes(q) : false;
+    if (!q) return deduped;
+    return deduped.filter((opt) => {
+      const matchTitle = opt.title ? String(opt.title).toLowerCase().includes(q) : false;
+      const matchSubtitle = opt.subtitle ? String(opt.subtitle).toLowerCase().includes(q) : false;
+      const matchBadge = opt.badge ? String(opt.badge).toLowerCase().includes(q) : false;
+      const matchMeta = opt.metadata ? String(opt.metadata).toLowerCase().includes(q) : false;
       return matchTitle || matchSubtitle || matchBadge || matchMeta;
     });
   }, [options, searchQuery]);
@@ -79,6 +93,8 @@ export function SearchableDropdownModal({
     onSelect(item);
   };
 
+  const optionsCount = Array.isArray(options) ? options.length : 0;
+
   return (
     <Modal
       visible={visible}
@@ -87,136 +103,141 @@ export function SearchableDropdownModal({
       statusBarTranslucent
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalBackdrop}
-      >
-        <Pressable style={styles.backdropDismiss} onPress={handleClose} />
+      {visible ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalBackdrop}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={handleClose} />
 
-        <View style={styles.modalSheet}>
-          {/* Header */}
-          <View style={styles.sheetHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sheetTitle}>{title}</Text>
-              <Text style={styles.sheetSubtitle}>
-                {options.length} {options.length === 1 ? 'option' : 'options'} available
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={handleClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close selection modal"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={20} color={Colors.light.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Search Bar */}
-          <View style={styles.searchBarContainer}>
-            <Ionicons name="search" size={18} color={Colors.light.textTertiary} style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={searchPlaceholder}
-              placeholderTextColor={Colors.light.textPlaceholder}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-              autoCapitalize="none"
-              clearButtonMode="while-editing"
-            />
-            {searchQuery.length > 0 ? (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+          <View style={styles.modalSheet}>
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle}>{title}</Text>
+                <Text style={styles.sheetSubtitle}>
+                  {optionsCount} {optionsCount === 1 ? 'option' : 'options'} available
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={handleClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close selection modal"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={Colors.light.textPrimary} />
               </TouchableOpacity>
-            ) : null}
-          </View>
+            </View>
 
-          {/* Options List */}
-          <FlatList
-            data={filteredOptions}
-            keyExtractor={(item) => item.id}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => {
-              const isSelected = item.id === selectedId;
-              return (
-                <TouchableOpacity
-                  style={[
-                    styles.optionItem,
-                    isSelected && styles.optionItemSelected,
-                    item.disabled && styles.optionItemDisabled,
-                  ]}
-                  onPress={() => !item.disabled && handleSelect(item)}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected, disabled: item.disabled }}
-                >
-                  <View style={styles.optionLeft}>
-                    <View
-                      style={[
-                        styles.optionIconBox,
-                        isSelected && styles.optionIconBoxSelected,
-                      ]}
-                    >
-                      <Ionicons
-                        name={item.icon || 'layers-outline'}
-                        size={18}
-                        color={isSelected ? '#FFFFFF' : BrandColors.pink.primary}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.titleRow}>
-                        <Text
-                          style={[
-                            styles.optionTitle,
-                            isSelected && styles.optionTitleSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {item.title}
-                        </Text>
-                        {item.badge ? (
-                          <Badge
-                            label={item.badge}
-                            variant={item.badgeVariant || (isSelected ? 'ACTIVE' : 'neutral')}
-                            size="sm"
-                          />
+            {/* Search Bar */}
+            <View style={styles.searchBarContainer}>
+              <Ionicons name="search" size={18} color={Colors.light.textTertiary} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={Colors.light.textPlaceholder}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+              />
+              {searchQuery.length > 0 ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Options List */}
+            <FlatList
+              data={filteredOptions}
+              keyExtractor={(item, index) => (item?.id ? `${String(item.id)}_${index}` : `opt_${index}`)}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.listContent}
+              renderItem={({ item, index }) => {
+                if (!item) return null;
+                const isSelected = item.id === selectedId;
+                const iconName = item.icon && item.icon in Ionicons.glyphMap ? item.icon : 'layers-outline';
+                return (
+                  <TouchableOpacity
+                    key={item.id ? `${String(item.id)}_${index}` : `opt_${index}`}
+                    style={[
+                      styles.optionItem,
+                      isSelected && styles.optionItemSelected,
+                      item.disabled && styles.optionItemDisabled,
+                    ]}
+                    onPress={() => !item.disabled && handleSelect(item)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected, disabled: item.disabled }}
+                  >
+                    <View style={styles.optionLeft}>
+                      <View
+                        style={[
+                          styles.optionIconBox,
+                          isSelected && styles.optionIconBoxSelected,
+                        ]}
+                      >
+                        <Ionicons
+                          name={iconName}
+                          size={18}
+                          color={isSelected ? '#FFFFFF' : BrandColors.pink.primary}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.titleRow}>
+                          <Text
+                            style={[
+                              styles.optionTitle,
+                              isSelected && styles.optionTitleSelected,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.title || 'Option'}
+                          </Text>
+                          {item.badge ? (
+                            <Badge
+                              label={String(item.badge)}
+                              variant={item.badgeVariant || (isSelected ? 'ACTIVE' : 'neutral')}
+                              size="sm"
+                            />
+                          ) : null}
+                        </View>
+                        {item.subtitle ? (
+                          <Text
+                            style={[
+                              styles.optionSubtitle,
+                              isSelected && styles.optionSubtitleSelected,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {String(item.subtitle)}
+                          </Text>
                         ) : null}
                       </View>
-                      {item.subtitle ? (
-                        <Text
-                          style={[
-                            styles.optionSubtitle,
-                            isSelected && styles.optionSubtitleSelected,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {item.subtitle}
-                        </Text>
-                      ) : null}
                     </View>
-                  </View>
 
-                  {isSelected ? (
-                    <View style={styles.checkBadge}>
-                      <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
-                    </View>
-                  ) : null}
-                </TouchableOpacity>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="search-outline" size={36} color={Colors.light.textTertiary} />
-                <Text style={styles.emptyTitle}>{emptyMessage}</Text>
-                <Text style={styles.emptySub}>Try searching with different keywords</Text>
-              </View>
-            }
-          />
-        </View>
-      </KeyboardAvoidingView>
+                    {isSelected ? (
+                      <View style={styles.checkBadge}>
+                        <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="search-outline" size={36} color={Colors.light.textTertiary} />
+                  <Text style={styles.emptyTitle}>{emptyMessage}</Text>
+                  <Text style={styles.emptySub}>Try searching with different keywords</Text>
+                </View>
+              }
+            />
+          </View>
+        </KeyboardAvoidingView>
+      ) : null}
     </Modal>
   );
 }
