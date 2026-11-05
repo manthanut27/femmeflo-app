@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SaleItem, UpdateSalePayload } from '../api/types';
+import type { SaleItem, UpdateSalePayload } from '../api/types.ts';
+import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer.ts';
 
 describe('Rejected Sale Price Editing for Reapproval Suite', () => {
   it('Scenario 1: Seller revises price on a rejected sale and resubmits for reapproval', () => {
@@ -35,28 +36,31 @@ describe('Rejected Sale Price Editing for Reapproval Suite', () => {
     const qty = rejectedSale.packetCount || rejectedSale.quantity || 1;
     const newTotalPaise = qty * newUnitPricePaise;
 
+    // Client only sends strictly recognized backend keys
     const updatePayload: UpdateSalePayload = {
       unitPricePaise: newUnitPricePaise,
-      totalAmountPaise: newTotalPaise,
-      totalPaise: newTotalPaise,
-      status: 'PENDING_APPROVAL',
-      resubmitForApproval: true,
-      notes: 'Customer agreed to revised ₹26.50/pkt rate.',
+      customerFeedback: 'Customer agreed to revised ₹26.50/pkt rate.',
     };
 
     assert.strictEqual(updatePayload.unitPricePaise, 2650);
-    assert.strictEqual(updatePayload.totalAmountPaise, 53000);
-    assert.strictEqual(updatePayload.status, 'PENDING_APPROVAL');
+    assert.strictEqual(updatePayload.customerFeedback, 'Customer agreed to revised ₹26.50/pkt rate.');
 
-    // Simulate backend PATCH update
+    // Ensure forbidden backend keys do not exist in the payload
+    const rawKeys = Object.keys(updatePayload);
+    assert.strictEqual(rawKeys.includes('totalAmountPaise'), false);
+    assert.strictEqual(rawKeys.includes('totalPaise'), false);
+    assert.strictEqual(rawKeys.includes('status'), false);
+    assert.strictEqual(rawKeys.includes('resubmitForApproval'), false);
+
+    // Simulate backend PATCH update and client response normalization
     const updatedSale: SaleItem = {
       ...rejectedSale,
       unitPricePaise: updatePayload.unitPricePaise,
-      totalAmountPaise: updatePayload.totalAmountPaise!,
-      totalPaise: updatePayload.totalPaise!,
+      totalAmountPaise: newTotalPaise,
+      totalPaise: newTotalPaise,
       status: 'PENDING_APPROVAL',
       rejectionReason: undefined,
-      approvalReason: updatePayload.notes,
+      approvalReason: updatePayload.customerFeedback,
       resubmittedAt: new Date().toISOString(),
       items: (rejectedSale.items || []).map((it) => ({
         ...it,
@@ -100,24 +104,20 @@ describe('Rejected Sale Price Editing for Reapproval Suite', () => {
 
     const managerPayload: UpdateSalePayload = {
       unitPricePaise: newUnitPricePaise,
-      totalAmountPaise: newTotalPaise,
-      totalPaise: newTotalPaise,
-      status: 'PENDING_APPROVAL',
-      resubmitForApproval: true,
-      notes: 'Territory Manager authorized ₹27.00/pkt bulk rate.',
+      customerFeedback: 'Territory Manager authorized ₹27.00/pkt bulk rate.',
     };
 
     assert.strictEqual(managerPayload.unitPricePaise, 2700);
-    assert.strictEqual(managerPayload.totalAmountPaise, 67500);
+    assert.strictEqual(managerPayload.customerFeedback, 'Territory Manager authorized ₹27.00/pkt bulk rate.');
 
     const reapprovedSale: SaleItem = {
       ...officerRejectedSale,
       unitPricePaise: managerPayload.unitPricePaise,
-      totalAmountPaise: managerPayload.totalAmountPaise!,
-      totalPaise: managerPayload.totalPaise!,
+      totalAmountPaise: newTotalPaise,
+      totalPaise: newTotalPaise,
       status: 'PENDING_APPROVAL',
       rejectionReason: undefined,
-      approvalReason: managerPayload.notes,
+      approvalReason: managerPayload.customerFeedback,
       resubmittedAt: new Date().toISOString(),
     };
 
@@ -127,7 +127,35 @@ describe('Rejected Sale Price Editing for Reapproval Suite', () => {
     assert.strictEqual(reapprovedSale.rejectionReason, undefined);
   });
 
-  it('Scenario 3: Resubmitted sales transition into the Super Admin Approvals review pipeline', () => {
+  it('Scenario 3: sanitizeUpdateSalePayload scrubs unrecognized keys to prevent Zod validation errors', () => {
+    const rawDirtyPayload = {
+      unitPricePaise: 2650,
+      totalAmountPaise: 53000, // Forbidden by backend
+      totalPaise: 53000, // Forbidden by backend
+      status: 'PENDING_APPROVAL', // Forbidden by backend
+      resubmitForApproval: true, // Forbidden by backend
+      notes: 'Customer agreed', // Forbidden by backend
+      arbitraryField: 'test', // Forbidden by backend
+      customerFeedback: 'Revised price',
+    };
+
+    const cleanPayload = sanitizeUpdateSalePayload(rawDirtyPayload);
+
+    assert.deepStrictEqual(cleanPayload, {
+      unitPricePaise: 2650,
+      customerFeedback: 'Revised price',
+    });
+
+    // Ensure all unrecognized keys are omitted
+    assert.strictEqual('totalAmountPaise' in cleanPayload, false);
+    assert.strictEqual('totalPaise' in cleanPayload, false);
+    assert.strictEqual('status' in cleanPayload, false);
+    assert.strictEqual('resubmitForApproval' in cleanPayload, false);
+    assert.strictEqual('notes' in cleanPayload, false);
+    assert.strictEqual('arbitraryField' in cleanPayload, false);
+  });
+
+  it('Scenario 4: Resubmitted sales transition into the Super Admin Approvals review pipeline', () => {
     const allSales: SaleItem[] = [
       {
         id: 'sale_01',
@@ -172,7 +200,7 @@ describe('Rejected Sale Price Editing for Reapproval Suite', () => {
     assert.strictEqual(pendingApprovals[0].totalAmountPaise, 52000);
   });
 
-  it('Scenario 4: Strict validation rejects invalid, zero, or negative prices', () => {
+  it('Scenario 5: Strict validation rejects invalid, zero, or negative prices', () => {
     const validatePriceInput = (priceStr: string): { valid: boolean; pricePaise?: number; error?: string } => {
       const num = parseFloat(priceStr);
       if (isNaN(num) || num <= 0) {
@@ -191,3 +219,4 @@ describe('Rejected Sale Price Editing for Reapproval Suite', () => {
     assert.strictEqual(validCase.pricePaise, 2850);
   });
 });
+

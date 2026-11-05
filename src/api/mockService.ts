@@ -547,19 +547,16 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
             it.totalPricePaise = (it.quantity || 1) * unitPrice;
           });
         }
-      }
-      if (body.status) {
-        sale.status = body.status;
-      } else if (body.resubmitForApproval) {
-        sale.status = 'PENDING_APPROVAL';
+        // If sale was rejected or below threshold, revising unit price transitions it to PENDING_APPROVAL
+        if (sale.status === 'REJECTED' || !sale.status) {
+          sale.status = 'PENDING_APPROVAL';
+          sale.rejectionReason = undefined;
+          sale.approvalReason = `Price revised to ₹${(unitPrice / 100).toFixed(2)} for reapproval.`;
+          sale.resubmittedAt = new Date().toISOString();
+        }
       }
       if (body.customerFeedback) {
         sale.customerFeedback = body.customerFeedback;
-      }
-      if (sale.status === 'PENDING_APPROVAL' || sale.status === 'PENDING') {
-        sale.rejectionReason = undefined;
-        sale.approvalReason = body.notes || `Price revised to ₹${((sale.unitPricePaise || 2500) / 100).toFixed(2)} for reapproval.`;
-        sale.resubmittedAt = new Date().toISOString();
       }
       return { sale } as unknown as T;
     }

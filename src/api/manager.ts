@@ -1,4 +1,5 @@
 import { apiRequest, uploadFileMultipart } from './client';
+import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import type {
   BulkCustomerResponse,
   CreateBulkCustomersPayload,
@@ -255,15 +256,16 @@ export const managerApi = {
   },
 
   async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
+    const cleanPayload = sanitizeUpdateSalePayload(payload);
     try {
       return await apiRequest<{ sale: SaleItem }>(`manager/sales/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(cleanPayload),
       });
     } catch {
       return await apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(cleanPayload),
       });
     }
   },

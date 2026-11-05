@@ -24,6 +24,10 @@ import type {
   UpdateSalePayload,
 } from './types';
 
+import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
+
+export { sanitizeUpdateSalePayload };
+
 export const sellerApi = {
   // ----------------------------------------------------
   // Profile & Settings
@@ -295,9 +299,10 @@ export const sellerApi = {
   },
 
   async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
+    const cleanPayload = sanitizeUpdateSalePayload(payload);
     return apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
   },
 

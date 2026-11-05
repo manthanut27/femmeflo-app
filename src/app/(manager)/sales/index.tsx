@@ -143,13 +143,11 @@ export default function ManagerSalesScreen() {
 
     setIsManagerSubmitting(true);
     try {
-      await managerApi.updateSale(selectedRejectedSale.id, {
+      const res = await managerApi.updateSale(selectedRejectedSale.id, {
         unitPricePaise: newUnitPricePaise,
-        totalAmountPaise: newTotalPaise,
-        totalPaise: newTotalPaise,
-        status: 'PENDING_APPROVAL',
-        resubmitForApproval: true,
-        notes: managerEditNotes.trim() || undefined,
+        customerFeedback: managerEditNotes.trim()
+          ? `[Manager Price Revised: ₹${priceNum.toFixed(2)}] ${managerEditNotes.trim()}`
+          : selectedRejectedSale.customerFeedback || undefined,
       });
 
       // Update state locally
@@ -158,7 +156,8 @@ export default function ManagerSalesScreen() {
           s.id === selectedRejectedSale.id
             ? {
                 ...s,
-                status: 'PENDING_APPROVAL',
+                ...(res?.sale || {}),
+                status: (res?.sale && res.sale.status) ? res.sale.status : 'PENDING_APPROVAL',
                 unitPricePaise: newUnitPricePaise,
                 totalAmountPaise: newTotalPaise,
                 totalPaise: newTotalPaise,

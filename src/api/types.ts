@@ -300,16 +300,6 @@ export interface UpdateSalePayload {
   unitPricePaise?: number;
   paymentMode?: PaymentMode;
   customerFeedback?: string;
-  status?: SaleStatus;
-  resubmitForApproval?: boolean;
-  totalAmountPaise?: number;
-  totalPaise?: number;
-  notes?: string;
-  items?: Array<{
-    productId: string;
-    quantity: number;
-    unitPricePaise: number;
-  }>;
 }
 
 export interface CollectPaymentPayload {

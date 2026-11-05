@@ -310,11 +310,9 @@ Generated in FemmeFlo Standalone Test Mode.`;
     try {
       const res = await sellerApi.updateSale(id, {
         unitPricePaise: newUnitPricePaise,
-        totalAmountPaise: newTotalPaise,
-        totalPaise: newTotalPaise,
-        status: 'PENDING_APPROVAL',
-        resubmitForApproval: true,
-        notes: editPriceNotes.trim() || undefined,
+        customerFeedback: editPriceNotes.trim()
+          ? `[Price Revised: ₹${priceNum.toFixed(2)}] ${editPriceNotes.trim()}`
+          : sale.customerFeedback || undefined,
       });
 
       const updatedSale = normalizeSale({
@@ -323,7 +321,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
         unitPricePaise: newUnitPricePaise,
         totalAmountPaise: newTotalPaise,
         totalPaise: newTotalPaise,
-        status: 'PENDING_APPROVAL',
+        status: (res.sale && res.sale.status) ? res.sale.status : 'PENDING_APPROVAL',
         rejectionReason: null,
       });
 
