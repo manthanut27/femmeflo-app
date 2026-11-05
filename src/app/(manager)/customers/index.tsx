@@ -18,9 +18,15 @@ import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { canOnboardCustomers, canViewCustomers } from '@/utils/permissions';
 
 export default function ManagerCustomersScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const allowView = canViewCustomers(user);
+  const allowOnboard = canOnboardCustomers(user);
+
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -41,6 +47,11 @@ export default function ManagerCustomersScreen() {
   }, [search]);
 
   const loadCustomers = useCallback(async () => {
+    if (!allowView) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const res = await managerApi.listCustomers({
         page: 1,
@@ -55,7 +66,7 @@ export default function ManagerCustomersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [debouncedSearch]);
+  }, [allowView, debouncedSearch]);
 
   useEffect(() => {
     loadCustomers();
@@ -90,30 +101,52 @@ export default function ManagerCustomersScreen() {
     </Card>
   );
 
+  if (!allowView) {
+    return (
+      <View style={styles.container}>
+        <Header title="Territory Customers" subtitle="Store Directory" showBack />
+        <View style={styles.restrictedContainer}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Access Restricted"
+            description="You do not have permission to view the customer directory. Please contact your administrator to request 'View customer directory' permission."
+            iconColor={Colors.light.danger}
+            iconBgColor={Colors.light.dangerBg}
+            actionTitle="Back to Dashboard"
+            buttonVariant="secondary"
+            onAction={() => router.replace('/(manager)' as any)}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Header
         title="Territory Customers"
         subtitle={`${pagination.total} registered stores across sellers`}
         rightAction={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Batch onboard customers"
-              style={styles.batchBtn}
-              onPress={() => router.push('/(manager)/customers/bulk' as any)}
-            >
-              <Ionicons name="layers-outline" size={18} color="#FFFFFF" />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Onboard new customer"
-              style={styles.addBtn}
-              onPress={() => router.push('/(manager)/customers/new' as any)}
-            >
-              <Ionicons name="add" size={24} color="#FFFFFF" />
-            </Pressable>
-          </View>
+          allowOnboard ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Batch onboard customers"
+                style={styles.batchBtn}
+                onPress={() => router.push('/(manager)/customers/bulk' as any)}
+              >
+                <Ionicons name="layers-outline" size={18} color="#FFFFFF" />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Onboard new customer"
+                style={styles.addBtn}
+                onPress={() => router.push('/(manager)/customers/new' as any)}
+              >
+                <Ionicons name="add" size={24} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          ) : undefined
         }
       />
 
@@ -250,5 +283,14 @@ const styles = StyleSheet.create({
   sellerTag: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
+  },
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });

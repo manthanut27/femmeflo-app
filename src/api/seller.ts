@@ -12,6 +12,7 @@ import type {
   PaginationMeta,
   PincodeLookupResponse,
   ProductItem,
+  PublicUser,
   SaleItem,
   SellerDashboardData,
   SellerIncentiveData,
@@ -23,7 +24,20 @@ import type {
   UpdateSalePayload,
 } from './types';
 
+import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
+
+export { sanitizeUpdateSalePayload };
+
 export const sellerApi = {
+  // ----------------------------------------------------
+  // Profile & Settings
+  // ----------------------------------------------------
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('seller/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
   // ----------------------------------------------------
   // Dashboard
   // ----------------------------------------------------
@@ -32,19 +46,19 @@ export const sellerApi = {
       method: 'GET',
     });
     const metrics = raw?.metrics;
-    const remainingPackets = metrics?.remainingPackets ?? raw?.stockBalance ?? 305;
-    const soldPackets = metrics?.soldPackets ?? raw?.todayPacketsSold ?? 45;
+    const remainingPackets = metrics?.remainingPackets ?? raw?.stockBalance ?? 0;
+    const soldPackets = metrics?.soldPackets ?? raw?.todayPacketsSold ?? 0;
     const salesPaise =
       raw?.todaySalesPaise ??
       raw?.todaySalesAmountPaise ??
-      (metrics?.soldPackets ? metrics.soldPackets * 3500 : 147500);
+      (metrics?.soldPackets !== undefined ? metrics.soldPackets * 3500 : 0);
 
     return {
       todaySalesPaise: salesPaise,
       todaySalesAmountPaise: salesPaise,
-      todayOrdersCount: raw?.todayOrdersCount ?? (raw?.recentSales?.length ? raw.recentSales.length : 18),
+      todayOrdersCount: raw?.todayOrdersCount ?? (Array.isArray(raw?.recentSales) ? raw.recentSales.length : 0),
       todayPacketsSold: soldPackets,
-      monthSalesPaise: raw?.monthSalesPaise ?? (salesPaise * 4),
+      monthSalesPaise: raw?.monthSalesPaise ?? salesPaise,
       lowStockCount: raw?.lowStockCount ?? (remainingPackets < 20 ? 1 : 0),
       stockBalance: remainingPackets,
       metrics: metrics,
@@ -285,16 +299,21 @@ export const sellerApi = {
   },
 
   async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
+    const cleanPayload = sanitizeUpdateSalePayload(payload);
     return apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(cleanPayload),
     });
   },
 
   async collectPayment(saleId: string, payload: CollectPaymentPayload): Promise<{ sale: SaleItem }> {
+    const mode = (payload.mode || payload.paymentMode || 'CASH') as 'CASH' | 'BANK';
+    const body: Record<string, any> = {
+      mode,
+    };
     return apiRequest<{ sale: SaleItem }>(`seller/sales/${saleId}/payment`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   },
 
@@ -321,19 +340,34 @@ export const sellerApi = {
   },
 
   async startShift(payload: StartShiftPayload): Promise<{ shift: Shift }> {
+    const lat = Number(payload.latitude ?? payload.startLatitude ?? 0);
+    const lng = Number(payload.longitude ?? payload.startLongitude ?? 0);
+
+    // Backend startShiftSchema is z.strictObject:
+    // Strictly allows only: latitude, longitude, address, faceVerified, facePhoto, faceConfidence, faceMethod.
+    // Unrecognized keys like startOdometerKm, odometerKm, startLatitude, startLongitude trigger Zod errors.
     const body: Record<string, any> = {
-      latitude: payload.latitude ?? payload.startLatitude ?? 0,
-      longitude: payload.longitude ?? payload.startLongitude ?? 0,
+      latitude: lat,
+      longitude: lng,
     };
-    if (payload.address) body.address = payload.address;
-    if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
+    if (payload.address) {
+      body.address = payload.address.slice(0, 500);
+    }
+    if (payload.faceVerified !== undefined) {
+      body.faceVerified = payload.faceVerified;
+    }
     if (payload.facePhoto) {
-      body.facePhoto = payload.facePhoto.length > 50000
+      const isLocalUri = payload.facePhoto.startsWith("file:") || payload.facePhoto.startsWith("content:");
+      body.facePhoto = (isLocalUri || payload.facePhoto.length > 50000)
         ? `verified_selfie_start_${Date.now()}`
         : payload.facePhoto;
     }
-    if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
-    if (payload.faceMethod) body.faceMethod = payload.faceMethod;
+    if (payload.faceConfidence !== undefined) {
+      body.faceConfidence = payload.faceConfidence;
+    }
+    if (payload.faceMethod) {
+      body.faceMethod = payload.faceMethod;
+    }
     return apiRequest<{ shift: Shift }>('seller/shifts/start', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -341,13 +375,19 @@ export const sellerApi = {
   },
 
   async checkIn(payload: CheckInPayload): Promise<{ visit: ShiftVisit }> {
+    // Backend checkInSchema is z.strictObject({ latitude, longitude, shopName, customerId?, notes? })
     const body: Record<string, any> = {
-      latitude: payload.latitude ?? 0,
-      longitude: payload.longitude ?? 0,
-      shopName: payload.shopName || (payload as any).customer?.shopName || 'Retail Customer',
+      latitude: Number(payload.latitude ?? 0),
+      longitude: Number(payload.longitude ?? 0),
+      shopName: (payload.shopName || (payload as any).customer?.shopName || 'Retail Customer').slice(0, 200),
     };
-    if (payload.customerId) body.customerId = payload.customerId;
-    if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
+    if (payload.customerId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.customerId)) {
+      body.customerId = payload.customerId;
+    }
+    const notesText = payload.notes || payload.summary;
+    if (notesText) {
+      body.notes = notesText.slice(0, 1000);
+    }
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-in', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -355,15 +395,25 @@ export const sellerApi = {
   },
 
   async checkOut(payload: CheckOutPayload): Promise<{ visit: ShiftVisit }> {
+    // Backend checkOutSchema is z.strictObject({ visitId, latitude, longitude, notes?, saleDone?, customerFeedback?, saleId? })
     const body: Record<string, any> = {
       visitId: payload.visitId,
-      latitude: payload.latitude ?? 0,
-      longitude: payload.longitude ?? 0,
+      latitude: Number(payload.latitude ?? 0),
+      longitude: Number(payload.longitude ?? 0),
     };
-    if (payload.notes || payload.summary) body.notes = payload.notes || payload.summary;
-    if (payload.saleDone !== undefined) body.saleDone = payload.saleDone;
-    if (payload.customerFeedback) body.customerFeedback = payload.customerFeedback;
-    if (payload.saleId) body.saleId = payload.saleId;
+    const notesText = payload.notes || payload.summary;
+    if (notesText) {
+      body.notes = notesText.slice(0, 1000);
+    }
+    if (payload.saleDone !== undefined) {
+      body.saleDone = payload.saleDone;
+    }
+    if (payload.customerFeedback) {
+      body.customerFeedback = payload.customerFeedback.slice(0, 1000);
+    }
+    if (payload.saleId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.saleId)) {
+      body.saleId = payload.saleId;
+    }
     return apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-out', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -371,20 +421,38 @@ export const sellerApi = {
   },
 
   async endShift(payload: EndShiftPayload): Promise<{ shift: Shift }> {
+    const lat = Number(payload.latitude ?? payload.endLatitude ?? 0);
+    const lng = Number(payload.longitude ?? payload.endLongitude ?? 0);
+
+    // Backend endShiftSchema is z.strictObject:
+    // Strictly allows only: latitude, longitude, address, notes, faceVerified, facePhoto, faceConfidence, faceMethod.
+    // Unrecognized keys like endOdometerKm, odometerKm, endLatitude, endLongitude, shiftId, remarks trigger Zod errors.
     const body: Record<string, any> = {
-      latitude: payload.latitude ?? payload.endLatitude ?? 0,
-      longitude: payload.longitude ?? payload.endLongitude ?? 0,
+      latitude: lat,
+      longitude: lng,
     };
-    if (payload.address) body.address = payload.address;
-    if (payload.notes || payload.remarks) body.notes = payload.notes || payload.remarks;
-    if (payload.faceVerified !== undefined) body.faceVerified = payload.faceVerified;
+    if (payload.address) {
+      body.address = payload.address.slice(0, 500);
+    }
+    const endNotesText = payload.notes || payload.remarks;
+    if (endNotesText) {
+      body.notes = endNotesText.slice(0, 1000);
+    }
+    if (payload.faceVerified !== undefined) {
+      body.faceVerified = payload.faceVerified;
+    }
     if (payload.facePhoto) {
-      body.facePhoto = payload.facePhoto.length > 50000
+      const isLocalUri = payload.facePhoto.startsWith("file:") || payload.facePhoto.startsWith("content:");
+      body.facePhoto = (isLocalUri || payload.facePhoto.length > 50000)
         ? `verified_selfie_end_${Date.now()}`
         : payload.facePhoto;
     }
-    if (payload.faceConfidence !== undefined) body.faceConfidence = payload.faceConfidence;
-    if (payload.faceMethod) body.faceMethod = payload.faceMethod;
+    if (payload.faceConfidence !== undefined) {
+      body.faceConfidence = payload.faceConfidence;
+    }
+    if (payload.faceMethod) {
+      body.faceMethod = payload.faceMethod;
+    }
     return apiRequest<{ shift: Shift }>('seller/shifts/end', {
       method: 'POST',
       body: JSON.stringify(body),

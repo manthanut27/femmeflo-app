@@ -30,8 +30,81 @@ import {
 import { useAuth } from '@/context/AuthContext';
 
 export default function AdminSettingsScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const router = useRouter();
+
+    // Executive Profile Editing
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [adminName, setAdminName] = useState(user?.name || '');
+  const [adminPhone, setAdminPhone] = useState((user?.phone || '').replace(/^\+91\s*/, ''));
+  const [adminEmail, setAdminEmail] = useState(user?.email || '');
+  const [adminAlternatePhone, setAdminAlternatePhone] = useState(user?.alternatePhone || '');
+  const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
+
+  function handleStartEditingProfile() {
+    setAdminName(user?.name || '');
+    const cleanPhone = (user?.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, '');
+    setAdminPhone(cleanPhone);
+    setAdminEmail(user?.email || '');
+    setAdminAlternatePhone(user?.alternatePhone || '');
+    setProfileErrors({});
+    setIsEditingProfile(true);
+  }
+
+  function handleCancelProfileEdit() {
+    setIsEditingProfile(false);
+    setProfileErrors({});
+  }
+
+  async function handleSaveAdminProfile() {
+    const errors: Record<string, string> = {};
+    const trimmedName = adminName.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      errors.name = 'Administrator name is required (minimum 2 characters)';
+    }
+
+    const trimmedEmail = adminEmail.trim();
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = 'Valid corporate email is required';
+    }
+
+    const cleanPhone = adminPhone.replace(/\D/g, '');
+    if (cleanPhone && cleanPhone.length < 10) {
+      errors.phone = 'Phone number must be at least 10 digits';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setProfileErrors(errors);
+      return;
+    }
+
+    setSavingProfile(true);
+    setProfileErrors({});
+
+    try {
+      const formattedPhone = cleanPhone
+        ? (cleanPhone.startsWith('91') && cleanPhone.length === 12 ? `+${cleanPhone}` : `+91${cleanPhone.slice(-10)}`)
+        : undefined;
+
+      await updateProfile({
+        name: trimmedName,
+        email: trimmedEmail,
+        phone: formattedPhone,
+        alternatePhone: adminAlternatePhone.trim() || undefined,
+      });
+
+      setIsEditingProfile(false);
+      Alert.alert(
+        'Executive Profile Saved',
+        'Super Admin profile and credentials have been updated successfully.'
+      );
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to update executive profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   // Price Invariants
   const [minPriceRupees, setMinPriceRupees] = useState('25');
@@ -218,16 +291,142 @@ export default function AdminSettingsScreen() {
           <View style={styles.contentWrapper}>
             {/* Executive Profile Card */}
             <Card style={styles.card}>
-              <View style={styles.profileRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>SA</Text>
+              <View style={styles.cardHeaderWithAction}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Text style={styles.cardHeaderTitle}>Super Admin Profile</Text>
+                  <Text style={styles.cardHeaderSubtitle}>
+                    Executive identity, contact credentials & superuser authority
+                  </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{user?.name || 'Super Admin'}</Text>
-                  <Text style={styles.userEmail}>{user?.email}</Text>
-                  <Badge label="SUPERUSER AUTHORITY" variant="ACTIVE" style={{ marginTop: 6 }} />
-                </View>
+                {!isEditingProfile ? (
+                  <Button
+                    title="Edit Profile"
+                    variant="outline"
+                    size="sm"
+                    onPress={handleStartEditingProfile}
+                    icon={<Ionicons name="create-outline" size={15} color={BrandColors.pink.dark} />}
+                  />
+                ) : (
+                  <Badge label="EDITING PROFILE" variant="warning" size="sm" />
+                )}
               </View>
+
+              {!isEditingProfile ? (
+                <>
+                  <View style={styles.profileRow}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>
+                        {user?.name?.slice(0, 2).toUpperCase() || 'SA'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName}>{user?.name || 'Super Admin'}</Text>
+                      <Text style={styles.userEmail}>{user?.email}</Text>
+                      <Badge label="SUPERUSER AUTHORITY" variant="ACTIVE" style={{ marginTop: 6 }} />
+                    </View>
+                  </View>
+
+                  <View style={styles.profileDivider} />
+
+                  <View style={styles.profileInfoRow}>
+                    <Text style={styles.profileInfoLabel}>Official Phone</Text>
+                    <Text style={styles.profileInfoVal}>{user?.phone || 'Not configured'}</Text>
+                  </View>
+
+                  {user?.alternatePhone ? (
+                    <View style={styles.profileInfoRow}>
+                      <Text style={styles.profileInfoLabel}>Alternate Phone</Text>
+                      <Text style={styles.profileInfoVal}>{user.alternatePhone}</Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <View style={styles.ruleNotice}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.dark} />
+                    <Text style={styles.ruleNoticeText}>
+                      Update your administrator credentials below. Changes are saved across your executive session.
+                    </Text>
+                  </View>
+
+                  <Input
+                    label="Administrator Name *"
+                    value={adminName}
+                    onChangeText={(val) => {
+                      setAdminName(val);
+                      if (profileErrors.name) setProfileErrors((p) => ({ ...p, name: '' }));
+                    }}
+                    placeholder="Enter full administrator name"
+                    autoCapitalize="words"
+                    error={profileErrors.name}
+                    leftIcon={<Ionicons name="person-outline" size={18} color={Colors.light.textTertiary} />}
+                  />
+
+                  <Input
+                    label="Official Corporate Email *"
+                    value={adminEmail}
+                    onChangeText={(val) => {
+                      setAdminEmail(val);
+                      if (profileErrors.email) setProfileErrors((p) => ({ ...p, email: '' }));
+                    }}
+                    placeholder="admin@masako.co.in"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    error={profileErrors.email}
+                    helperText="Official email used for audit alerts and reporting"
+                    leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.light.textTertiary} />}
+                  />
+
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                      <Input
+                        label="Primary Phone"
+                        value={adminPhone}
+                        onChangeText={(val) => {
+                          setAdminPhone(val);
+                          if (profileErrors.phone) setProfileErrors((p) => ({ ...p, phone: '' }));
+                        }}
+                        placeholder="10-digit number"
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                        error={profileErrors.phone}
+                        leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
+                      />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                      <Input
+                        label="Alternate Phone"
+                        value={adminAlternatePhone}
+                        onChangeText={setAdminAlternatePhone}
+                        placeholder="Emergency contact"
+                        keyboardType="phone-pad"
+                        maxLength={15}
+                        leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.legalActionRow}>
+                    <Button
+                      title="Cancel"
+                      variant="outline"
+                      size="md"
+                      style={{ flex: 1, marginRight: Spacing.sm }}
+                      onPress={handleCancelProfileEdit}
+                      disabled={savingProfile}
+                    />
+                    <Button
+                      title={savingProfile ? 'Saving...' : 'Save Profile'}
+                      variant="admin"
+                      size="md"
+                      style={{ flex: 1.5 }}
+                      loading={savingProfile}
+                      onPress={handleSaveAdminProfile}
+                      icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}
+                    />
+                  </View>
+                </View>
+              )}
             </Card>
 
             {/* Legal Entity & Invoice Details Card */}
@@ -263,7 +462,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Legal Company Name *"
-                placeholder="Enter legal entity / business name"
                 value={companyName}
                 onChangeText={setCompanyName}
                 autoCapitalize="words"
@@ -277,7 +475,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Input
                     label="Company GSTIN"
-                    placeholder="Enter 15-digit GSTIN"
                     value={companyGst}
                     onChangeText={(val) => setCompanyGst(val.toUpperCase())}
                     autoCapitalize="characters"
@@ -289,7 +486,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                   <Input
                     label="Company PAN"
-                    placeholder="Enter 10-digit PAN"
                     value={companyPan}
                     onChangeText={(val) => setCompanyPan(val.toUpperCase())}
                     autoCapitalize="characters"
@@ -302,7 +498,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Registered Corporate Address"
-                placeholder="Enter registered corporate / office address"
                 value={companyAddress}
                 onChangeText={setCompanyAddress}
                 multiline
@@ -317,7 +512,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Input
                     label="Official Phone"
-                    placeholder="Enter billing phone number"
                     value={companyPhone}
                     onChangeText={setCompanyPhone}
                     keyboardType="phone-pad"
@@ -330,7 +524,6 @@ export default function AdminSettingsScreen() {
                 <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                   <Input
                     label="Official Email"
-                    placeholder="Enter billing email address"
                     value={companyEmail}
                     onChangeText={setCompanyEmail}
                     keyboardType="email-address"
@@ -345,7 +538,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Invoice Terms & Conditions"
-                placeholder="Enter standard payment, delivery, or warranty terms"
                 value={invoiceTerms}
                 onChangeText={setInvoiceTerms}
                 multiline
@@ -391,7 +583,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Authoritative Minimum Sale Price (₹) *"
-                placeholder="e.g. 25"
                 value={minPriceRupees}
                 onChangeText={setMinPriceRupees}
                 keyboardType="decimal-pad"
@@ -401,7 +592,6 @@ export default function AdminSettingsScreen() {
 
               <Input
                 label="Low Stock Warehouse Warning (Packets)"
-                placeholder="e.g. 50"
                 value={lowStockThreshold}
                 onChangeText={setLowStockThreshold}
                 keyboardType="number-pad"
@@ -423,6 +613,22 @@ export default function AdminSettingsScreen() {
             {/* Navigation to Invoices, Categories & Shared Features */}
             <Text style={styles.sectionHeading}>Catalog & Administration</Text>
             <Card style={styles.menuCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Manage Field Team and Users"
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => router.push('/(admin)/users' as any)}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.menuIconCircle}>
+                    <Ionicons name="people-outline" size={18} color={BrandColors.pink.dark} />
+                  </View>
+                  <Text style={styles.menuText}>Manage Team (Sellers & Managers)</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
+              </Pressable>
+
+              <View style={styles.menuDivider} />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Central Invoice Directory"
@@ -608,6 +814,25 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
     marginTop: Spacing.xs,
+  },
+  profileDivider: {
+    height: 1,
+    backgroundColor: Colors.light.border,
+    marginVertical: Spacing.md,
+  },
+  profileInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  profileInfoLabel: {
+    ...Typography.bodySmall,
+    color: Colors.light.textSecondary,
+  },
+  profileInfoVal: {
+    ...Typography.bodySmall,
+    fontWeight: '600',
+    color: Colors.light.textPrimary,
   },
   rupeeSymbol: {
     fontSize: 16,

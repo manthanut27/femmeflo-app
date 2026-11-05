@@ -40,6 +40,7 @@ const QUALIFICATION_OPTIONS = [
   '10th Standard / SSC / Matriculation',
   'Diploma / ITI',
   'Post Graduate (M.A. / M.Com / M.Sc / MBA)',
+  'Other Qualification',
 ];
 
 function formatAadhaar(raw: string): string {
@@ -71,13 +72,14 @@ export default function AdminOnboardSellerScreen() {
   const [phone, setPhone] = useState('');
   const [alternatePhone, setAlternatePhone] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('FemmeFlo@2026');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Section 3: Identification Documents & Qualification
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState('');
   const [qualification, setQualification] = useState('12th Standard / HSC / Intermediate');
+  const [customQualification, setCustomQualification] = useState('');
   const [isQualDropdownOpen, setIsQualDropdownOpen] = useState(false);
 
   // Section 4: Complete Address & Territory
@@ -194,7 +196,8 @@ export default function AdminOnboardSellerScreen() {
       errs.email = 'Please provide a valid email format.';
     }
 
-    if (!password || password.length < 8) {
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword || trimmedPassword.length < 8) {
       errs.password = 'Initial password must be at least 8 characters.';
     }
 
@@ -206,6 +209,10 @@ export default function AdminOnboardSellerScreen() {
 
     if (!drivingLicenseNumber.trim()) {
       errs.drivingLicenseNumber = 'Valid Indian Driving License number is mandatory.';
+    }
+
+    if (qualification === 'Other Qualification' && !customQualification.trim()) {
+      errs.customQualification = 'Please specify the custom qualification.';
     }
 
     // 4. Address & Territory
@@ -234,6 +241,11 @@ export default function AdminOnboardSellerScreen() {
     const formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
     const cleanAlt = alternatePhone.trim() ? `+91 ${alternatePhone.replace(/\D/g, '').slice(-10)}` : undefined;
 
+    const resolvedQualification =
+      qualification === 'Other Qualification'
+        ? (customQualification.trim() || undefined)
+        : (qualification.trim() || undefined);
+
     try {
       const res = await adminApi.createSeller({
         name: name.trim(),
@@ -244,10 +256,10 @@ export default function AdminOnboardSellerScreen() {
         phone: formattedPhone,
         alternatePhone: cleanAlt,
         email: email.trim() || undefined,
-        password: password.trim() || 'FemmeFlo@2026',
+        password: password.trim(),
         aadhaarNumber: aadhaarNumber.replace(/\s+/g, '').trim(),
         drivingLicenseNumber: drivingLicenseNumber.trim(),
-        qualification: qualification.trim(),
+        qualification: resolvedQualification,
         address: address.trim() || undefined,
         pincode: pincode.trim(),
         village: village.trim(),
@@ -272,9 +284,11 @@ export default function AdminOnboardSellerScreen() {
               setPhone('');
               setAlternatePhone('');
               setEmail('');
-              setPassword('FemmeFlo@2026');
+              setPassword('');
               setAadhaarNumber('');
               setDrivingLicenseNumber('');
+              setQualification('12th Standard / HSC / Intermediate');
+              setCustomQualification('');
               setAddress('');
               setPincode('');
               setFeedback(null);
@@ -439,18 +453,17 @@ export default function AdminOnboardSellerScreen() {
 
               <DropdownTrigger
                 label=""
-                required
                 value={selectedManager?.name}
                 subtitle={
                   selectedManager
-                    ? `${selectedManager.name} (${selectedManager.territory || selectedManager.district || 'Territory'}) · ${selectedManager.phone || '+91 98765 00000'}`
+                    ? `${selectedManager.territory || selectedManager.district || selectedManager.state || 'Territory'} · ${selectedManager.phone || '+91 98765 00000'}`
                     : loadingManagers
                     ? 'Loading active managers...'
                     : 'Tap to select supervising manager...'
                 }
                 placeholder="Select assigned reporting manager..."
                 icon="people"
-                badge={selectedManager ? 'REPORTING MANAGER' : undefined}
+                badge={selectedManager ? 'MANAGER' : undefined}
                 onPress={() => {
                   setManagerSearchQuery('');
                   setIsManagerPickerOpen(true);
@@ -493,12 +506,16 @@ export default function AdminOnboardSellerScreen() {
                             color={isChosen ? '#9F2545' : '#94A3B8'}
                             style={{ marginRight: 10 }}
                           />
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.managerOptionName, isChosen && { color: '#9F2545', fontWeight: '700' }]}>
+                          <View style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
+                            <Text
+                              style={[styles.managerOptionName, isChosen && { color: '#9F2545', fontWeight: '700' }]}
+                              numberOfLines={1}
+                              ellipsizeMode="tail"
+                            >
                               {m.name}
                             </Text>
-                            <Text style={styles.managerOptionSub}>
-                              ({m.territory || m.district || 'Territory'}) · {m.phone || '+91 98765 00000'}
+                            <Text style={styles.managerOptionSub} numberOfLines={1} ellipsizeMode="tail">
+                              ({m.territory || m.district || m.state || 'Territory'}) · {m.phone || '+91 98765 00000'}
                             </Text>
                           </View>
                         </Pressable>
@@ -582,7 +599,6 @@ export default function AdminOnboardSellerScreen() {
                 Initial Account Password <Text style={styles.requiredStar}>*</Text>
               </Text>
               <Input
-                placeholder="Minimum 8 characters"
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
@@ -696,6 +712,21 @@ export default function AdminOnboardSellerScreen() {
                 </View>
               )}
               <Text style={styles.inputHelperSub}>Officer background</Text>
+
+              {qualification === 'Other Qualification' && (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <Input
+                    placeholder="Enter other qualification (e.g. B.Tech, LLB, Ph.D, B.Ed)"
+                    value={customQualification}
+                    onChangeText={(val) => {
+                      setCustomQualification(val);
+                      if (errors.customQualification) setErrors((p) => ({ ...p, customQualification: '' }));
+                    }}
+                    error={errors.customQualification}
+                    leftIcon={<Ionicons name="school-outline" size={16} color="#94A3B8" />}
+                  />
+                </View>
+              )}
             </View>
           </Card>
 

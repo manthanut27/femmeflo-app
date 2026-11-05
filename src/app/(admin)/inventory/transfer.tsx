@@ -1,13 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
-import type { ProductItem, PublicUser, StockTransactionItem, WarehouseItem } from '@/api/types';
+import type { ProductItem, PublicUser, WarehouseItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
@@ -31,12 +29,14 @@ import {
   BorderRadius,
   BrandColors,
   Colors,
+  Elevation,
   MaxContentWidth,
   Shadows,
   Spacing,
+  Typography,
 } from '@/constants/theme';
 
-type TransferMode = 'RECEIPT' | 'TRANSFER' | 'HISTORY';
+type TransferMode = 'TRANSFER' | 'RECEIPT';
 
 // Guaranteed default locations so source warehouse is NEVER blank or empty
 const DEFAULT_WAREHOUSES: WarehouseItem[] = [
@@ -64,24 +64,12 @@ const DEFAULT_WAREHOUSES: WarehouseItem[] = [
 
 export default function StockTransferScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string }>();
 
-  // Default to Inward Stock (RECEIPT) or query parameter if provided
-  const initialMode: TransferMode =
-    params.mode === 'TRANSFER' || params.mode === 'HISTORY'
-      ? (params.mode as TransferMode)
-      : 'RECEIPT';
-
-  const [mode, setMode] = useState<TransferMode>(initialMode);
+  const [mode, setMode] = useState<TransferMode>('TRANSFER');
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>(DEFAULT_WAREHOUSES);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [sellers, setSellers] = useState<PublicUser[]>([]);
   const [managers, setManagers] = useState<PublicUser[]>([]);
-
-  // Transactions History State
-  const [transactions, setTransactions] = useState<StockTransactionItem[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<'ALL' | 'INWARD' | 'TRANSFER'>('ALL');
 
   // Form Fields
   const [sourceWarehouseId, setSourceWarehouseId] = useState(DEFAULT_WAREHOUSES[0].id);
@@ -99,33 +87,16 @@ export default function StockTransferScreen() {
   const [productPickerOpen, setProductPickerOpen] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
-    try {
-      setTransactionsLoading(true);
-      const res = await adminApi.listTransactions({ pageSize: 50 });
-      if (res && res.items) {
-        setTransactions(res.items);
-      }
-    } catch (err) {
-      console.warn('Failed to load stock transactions:', err);
-    } finally {
-      setTransactionsLoading(false);
-    }
-  }, []);
-
-  const loadFormData = useCallback(async () => {
-    try {
-      const [whRes, prodRes, sellRes, mgrRes] = await Promise.all([
-        adminApi.getWarehouses().catch(() => ({ items: DEFAULT_WAREHOUSES })),
-        adminApi.listProducts().catch(() => ({ items: [] as ProductItem[] })),
-        adminApi.listSellers({ pageSize: 100 }).catch(() => ({ items: [] as PublicUser[] })),
-        adminApi.listManagers({ pageSize: 100 }).catch(() => ({ items: [] as PublicUser[] })),
-      ]);
-
-      const liveWarehouses: WarehouseItem[] =
-        whRes.items && whRes.items.length > 0 ? whRes.items : DEFAULT_WAREHOUSES;
+  useEffect(() => {
+    Promise.all([
+      adminApi.getWarehouses().catch(() => ({ items: DEFAULT_WAREHOUSES })),
+      adminApi.listProducts().catch(() => ({ items: [] as ProductItem[] })),
+      adminApi.listSellers({ pageSize: 100 }).catch(() => ({ items: [] as PublicUser[] })),
+      adminApi.listManagers({ pageSize: 100 }).catch(() => ({ items: [] as PublicUser[] })),
+      adminApi.getInventorySummary().catch(() => null),
+    ]).then(([whRes, prodRes, sellRes, mgrRes, summary]) => {
+      const liveWarehouses: WarehouseItem[] = whRes.items && whRes.items.length > 0 ? whRes.items : DEFAULT_WAREHOUSES;
       setWarehouses(liveWarehouses);
 
       const prodItems = prodRes.items || [];
@@ -139,16 +110,12 @@ export default function StockTransferScreen() {
 
       // Initialize source warehouse
       if (liveWarehouses.length > 0) {
-        setSourceWarehouseId((prev) =>
-          prev && liveWarehouses.some((w) => w.id === prev) ? prev : liveWarehouses[0].id
-        );
+        setSourceWarehouseId((prev) => (prev && liveWarehouses.some((w) => w.id === prev) ? prev : liveWarehouses[0].id));
       }
 
       // Initialize product
       if (prodItems.length > 0) {
-        setSelectedProductId((prev) =>
-          prev && prodItems.some((p) => p.id === prev) ? prev : prodItems[0].id
-        );
+        setSelectedProductId((prev) => (prev && prodItems.some((p) => p.id === prev) ? prev : prodItems[0].id));
       }
 
       // Initialize destination
@@ -157,21 +124,8 @@ export default function StockTransferScreen() {
       } else if (liveWarehouses.length > 1) {
         setTargetLocationId(liveWarehouses[1].id);
       }
-    } catch (err) {
-      console.warn('Failed to load form data:', err);
-    }
+    });
   }, []);
-
-  useEffect(() => {
-    loadFormData();
-    loadTransactions();
-  }, [loadFormData, loadTransactions]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([loadFormData(), loadTransactions()]);
-    setRefreshing(false);
-  }, [loadFormData, loadTransactions]);
 
   // Selected item lookups
   const selectedWarehouse = useMemo(
@@ -186,66 +140,86 @@ export default function StockTransferScreen() {
 
   // Dropdown Options: Warehouses
   const warehouseOptions: DropdownOption[] = useMemo(() => {
-    return warehouses.map((wh) => {
+    const list: DropdownOption[] = [];
+    const seenIds = new Set<string>();
+
+    for (const wh of warehouses) {
+      const id = String(wh?.id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       const isHq = wh.type === 'HQ';
       const bal = typeof (wh as any).balance === 'number' ? (wh as any).balance : 0;
-      return {
-        id: wh.id,
-        title: wh.name,
-        subtitle: `Code: ${wh.code || 'WH'} • Balance: ${bal.toLocaleString('en-IN')} pkts`,
+      list.push({
+        id,
+        title: wh.name || 'Warehouse',
+        subtitle: `Code: ${wh.code || 'WH'} • Stock Balance: ${bal.toLocaleString('en-IN')} pkts`,
         badge: isHq ? 'CENTRAL HQ' : 'REGIONAL',
         badgeVariant: isHq ? 'ACTIVE' : 'neutral',
         metadata: `${wh.state || ''} ${wh.district || ''} ${wh.code || ''}`,
         icon: 'cube',
-      };
-    });
+      });
+    }
+
+    return list;
   }, [warehouses]);
 
   // Dropdown Options: Destination Targets (Field Officers, Dual-Role Managers & Regional Depots)
   const destinationOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [];
+    const seenIds = new Set<string>();
 
     // 1. Dual-Role Managers (Dedicated Field Van Stock)
-    const dualRoleManagers = managers.filter((m) => Boolean(m.isSeller));
+    const dualRoleManagers = managers.filter((m) => Boolean(m?.isSeller));
     for (const m of dualRoleManagers) {
+      const id = String(m?.id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       list.push({
-        id: m.id,
-        title: `${m.name} (Manager Van Stock)`,
-        subtitle: `Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Zone'}`,
+        id,
+        title: `${m.name || 'Manager'} (Dual-Role Manager - Van Stock)`,
+        subtitle: `Manager Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
         badge: 'VAN STOCK',
         badgeVariant: 'ACTIVE',
         metadata: `${m.phone || ''} ${m.email || ''} ${m.district || ''} dual role van stock manager`,
-        icon: 'car',
+        icon: 'car-sport',
       });
     }
 
-    // 2. Field Officers / Sellers
+    // 2. Field Officers / Sellers (Skip if already added as dual-role manager)
     for (const s of sellers) {
+      const id = String(s?.id || (s as any)?.sellerId || (s as any)?.userId || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       list.push({
-        id: s.id,
-        title: `${s.name} (Field Officer)`,
-        subtitle: `Phone: ${s.phone || 'N/A'} • ID: ${s.id.slice(0, 8)}`,
-        badge: 'FIELD OFFICER',
+        id,
+        title: `${s.name || 'Field Officer'} (Field Officer)`,
+        subtitle: `Seller ID: ${id ? id.slice(0, 8) : 'N/A'} • Phone: ${s.phone || 'N/A'}`,
+        badge: 'FIELD SELLER',
         badgeVariant: 'ACTIVE',
         metadata: `${s.phone || ''} ${s.email || ''}`,
         icon: 'person',
       });
     }
 
-    // 3. Regional Hubs / Other Warehouses
+    // 3. Regional Hubs / Other Warehouses (Exclude current source warehouse and already added IDs)
     for (const w of warehouses) {
-      if (w.id !== sourceWarehouseId) {
-        const bal = typeof (w as any).balance === 'number' ? (w as any).balance : 0;
-        list.push({
-          id: w.id,
-          title: `${w.name} (Regional Hub)`,
-          subtitle: `Code: ${w.code || 'WH'} • Balance: ${bal.toLocaleString('en-IN')} pkts`,
-          badge: 'REGIONAL DEPOT',
-          badgeVariant: 'neutral',
-          metadata: `${w.code || ''} ${w.district || ''}`,
-          icon: 'business',
-        });
-      }
+      const id = String(w?.id || '').trim();
+      if (!id || id === sourceWarehouseId || seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      const bal = typeof (w as any).balance === 'number' ? (w as any).balance : 0;
+      list.push({
+        id,
+        title: `${w.name || 'Regional Hub'} (Regional Hub)`,
+        subtitle: `Code: ${w.code || 'WH'} • Balance: ${bal.toLocaleString('en-IN')} pkts`,
+        badge: 'DEPOT / HUB',
+        badgeVariant: 'neutral',
+        metadata: `${w.code || ''} ${w.district || ''}`,
+        icon: 'business',
+      });
     }
 
     return list;
@@ -257,36 +231,37 @@ export default function StockTransferScreen() {
 
   // Dropdown Options: Products
   const productOptions: DropdownOption[] = useMemo(() => {
-    return products.map((p) => {
+    const list: DropdownOption[] = [];
+    const seenIds = new Set<string>();
+
+    for (const p of products) {
+      const id = String(p?.id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+
       const minFloor = ((p.minimumPricePaise ?? 2500) / 100).toFixed(2);
       const basePrice = ((p.basePricePaise ?? 3000) / 100).toFixed(2);
-      return {
-        id: p.id,
-        title: p.name,
-        subtitle: `SKU: ${p.sku || p.id.slice(0, 8)} • Base: ₹${basePrice} • Min: ₹${minFloor}`,
+      list.push({
+        id,
+        title: p.name || 'Product SKU',
+        subtitle: `SKU: ${p.sku || id.slice(0, 8)} • Base: ₹${basePrice} • Min Floor: ₹${minFloor}`,
         badge: p.sku || 'SKU',
         badgeVariant: 'ACTIVE',
         metadata: `${p.sku || ''} ${p.description || ''}`,
         icon: 'pricetag',
-      };
-    });
+      });
+    }
+
+    return list;
   }, [products]);
 
-  // Filtered History Transactions
-  const filteredTransactions = useMemo(() => {
-    if (historyFilter === 'ALL') return transactions;
-    if (historyFilter === 'TRANSFER') {
-      return transactions.filter(
-        (t) => t.type === 'TRANSFER' || t.type === 'DISPATCH' || t.type === 'OUTWARD'
-      );
+  const navigateBackSafely = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(admin)/inventory' as any);
     }
-    if (historyFilter === 'INWARD') {
-      return transactions.filter(
-        (t) => t.type === 'RECEIPT' || t.type === 'INWARD' || t.type === 'FACTORY'
-      );
-    }
-    return transactions;
-  }, [transactions, historyFilter]);
+  };
 
   async function handleSubmit() {
     if (isSubmitting) return;
@@ -297,8 +272,8 @@ export default function StockTransferScreen() {
     }
 
     if (!selectedProductId) {
-      setFeedback({ type: 'error', message: 'Please select a product.' });
-      Alert.alert('Missing Product', 'Please select a product.');
+      setFeedback({ type: 'error', message: 'Please select a product SKU.' });
+      Alert.alert('Missing Product', 'Please select a product SKU.');
       return;
     }
 
@@ -307,8 +282,8 @@ export default function StockTransferScreen() {
     try {
       if (mode === 'RECEIPT') {
         if (!sourceWarehouseId) {
-          setFeedback({ type: 'error', message: 'Please select a warehouse.' });
-          Alert.alert('Missing Warehouse', 'Please select a warehouse.');
+          setFeedback({ type: 'error', message: 'Please select receiving warehouse.' });
+          Alert.alert('Missing Warehouse', 'Please select receiving warehouse.');
           setIsSubmitting(false);
           return;
         }
@@ -321,25 +296,17 @@ export default function StockTransferScreen() {
           notes: notes.trim() || undefined,
         });
 
+        // Notify executive and stock views to update
         DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { action: 'RECEIPT' });
 
-        setFeedback({
-          type: 'success',
-          message: `Stock Added: Successfully added ${qty.toLocaleString('en-IN')} packets into warehouse inventory.`,
-        });
-        loadTransactions();
-        Alert.alert(
-          'Stock Added',
-          `Successfully added ${qty.toLocaleString('en-IN')} packets to warehouse.`,
-          [{ text: 'OK' }]
-        );
+        setFeedback({ type: 'success', message: `Stock Inward Recorded: Received ${qty} packets into warehouse.` });
+        Alert.alert('Stock Inward Recorded', `Received ${qty} packets into warehouse.`, [
+          { text: 'OK', onPress: navigateBackSafely },
+        ]);
       } else {
         if (!sourceWarehouseId || !targetLocationId) {
-          setFeedback({
-            type: 'error',
-            message: 'Please select source warehouse and destination.',
-          });
-          Alert.alert('Missing Details', 'Please select source warehouse and destination.');
+          setFeedback({ type: 'error', message: 'Please select source warehouse and destination location.' });
+          Alert.alert('Missing Details', 'Please select source warehouse and destination location.');
           setIsSubmitting(false);
           return;
         }
@@ -352,21 +319,16 @@ export default function StockTransferScreen() {
           reference: reference.trim() || undefined,
         });
 
+        // Notify executive and stock views to update
         DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { action: 'TRANSFER' });
 
-        setFeedback({
-          type: 'success',
-          message: `Stock Transferred: Successfully sent ${qty.toLocaleString('en-IN')} packets.`,
-        });
-        loadTransactions();
-        Alert.alert(
-          'Stock Transferred',
-          `Successfully sent ${qty.toLocaleString('en-IN')} packets.`,
-          [{ text: 'OK' }]
-        );
+        setFeedback({ type: 'success', message: `Stock Transfer Dispatched: Transferred ${qty} packets successfully.` });
+        Alert.alert('Stock Transfer Dispatched', `Transferred ${qty} packets successfully.`, [
+          { text: 'OK', onPress: navigateBackSafely },
+        ]);
       }
     } catch (err: any) {
-      const msg = err.message || 'Failed to complete stock operation.';
+      const msg = err.message || 'Failed to complete stock movement.';
       setFeedback({ type: 'error', message: msg });
       Alert.alert('Operation Failed', msg);
     } finally {
@@ -374,32 +336,12 @@ export default function StockTransferScreen() {
     }
   }
 
-  // Clear, friendly 3-tab layout
   const modeTabs = [
-    { key: 'RECEIPT', label: 'Inward Stock' },
-    { key: 'TRANSFER', label: 'Transfer Stock' },
-    { key: 'HISTORY', label: 'History' },
+    { key: 'TRANSFER', label: 'Stock Transfer' },
+    { key: 'RECEIPT', label: 'Inward Factory Receipt' },
   ];
 
-  const quickQtyOptions =
-    mode === 'RECEIPT' ? [100, 500, 1000, 2500, 5000] : [50, 100, 200, 500, 1000];
-
-  function formatTxDate(dateStr?: string) {
-    if (!dateStr) return 'Recent';
-    try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      return d.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
-  }
+  const quickQtyOptions = mode === 'RECEIPT' ? [100, 500, 1000, 2500, 5000] : [50, 100, 200, 500, 1000];
 
   return (
     <KeyboardAvoidingView
@@ -407,28 +349,12 @@ export default function StockTransferScreen() {
       style={styles.container}
     >
       <Header
-        title="Headquarter Stock"
-        subtitle={
-          mode === 'RECEIPT'
-            ? 'Add factory inward stock into warehouse'
-            : mode === 'HISTORY'
-            ? 'History of all stock added and transferred'
-            : 'Transfer stock to field officers or regional hubs'
-        }
+        title="Stock Movement Hub"
+        subtitle={mode === 'RECEIPT' ? 'Factory Inward & Inventory Reception' : 'Van Stock & Field Seller Transfers'}
         showBack
       />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[BrandColors.pink.dark]}
-          />
-        }
-      >
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrapper}>
           {feedback && (
             <FeedbackBanner
@@ -439,7 +365,7 @@ export default function StockTransferScreen() {
             />
           )}
 
-          {/* 3 Simple Tabs: Inward Stock | Transfer Stock | History */}
+          {/* Mode Selector */}
           <View style={styles.modeTabsWrap}>
             <SegmentedTabs
               tabs={modeTabs}
@@ -449,416 +375,161 @@ export default function StockTransferScreen() {
             />
           </View>
 
-          {/* TAB 3: HISTORY */}
-          {mode === 'HISTORY' ? (
-            <View style={styles.historyContainer}>
-              {/* History Sub-Filter Pills */}
-              <View style={styles.historyFilterRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.historyFilterPill,
-                    historyFilter === 'ALL' && styles.historyFilterPillActive,
-                  ]}
-                  onPress={() => setHistoryFilter('ALL')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.historyFilterPillText,
-                      historyFilter === 'ALL' && styles.historyFilterPillTextActive,
-                    ]}
-                  >
-                    All ({transactions.length})
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.historyFilterPill,
-                    historyFilter === 'INWARD' && styles.historyFilterPillActive,
-                  ]}
-                  onPress={() => setHistoryFilter('INWARD')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.historyFilterPillText,
-                      historyFilter === 'INWARD' && styles.historyFilterPillTextActive,
-                    ]}
-                  >
-                    Inward Stock (+)
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.historyFilterPill,
-                    historyFilter === 'TRANSFER' && styles.historyFilterPillActive,
-                  ]}
-                  onPress={() => setHistoryFilter('TRANSFER')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.historyFilterPillText,
-                      historyFilter === 'TRANSFER' && styles.historyFilterPillTextActive,
-                    ]}
-                  >
-                    Transfer (-)
-                  </Text>
-                </TouchableOpacity>
+          {/* Form Card */}
+          <Card style={styles.formCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardIconBox}>
+                <Ionicons
+                  name={mode === 'RECEIPT' ? 'download-outline' : 'swap-horizontal-outline'}
+                  size={20}
+                  color={BrandColors.pink.primary}
+                />
               </View>
-
-              {transactionsLoading ? (
-                <View style={styles.historyLoadingBox}>
-                  <ActivityIndicator size="small" color={BrandColors.pink.primary} />
-                  <Text style={styles.historyLoadingText}>Loading stock history...</Text>
-                </View>
-              ) : filteredTransactions.length === 0 ? (
-                <Card style={styles.emptyCard}>
-                  <Ionicons name="cube-outline" size={36} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No Stock History Yet</Text>
-                  <Text style={styles.emptySubtitle}>
-                    All inward stock additions and transfers will appear here in the history log.
-                  </Text>
-                </Card>
-              ) : (
-                <View style={styles.transactionList}>
-                  {filteredTransactions.map((tx) => {
-                    const isInward =
-                      tx.type === 'RECEIPT' || tx.type === 'INWARD' || tx.type === 'FACTORY';
-                    const productName = tx.product?.name || 'Sanitary Napkins';
-                    const sku = tx.product?.sku || '';
-                    const fromLoc =
-                      (tx as any).source?.name || tx.sourceLocation || 'Factory Production';
-                    const toLoc =
-                      (tx as any).destination?.name || tx.targetLocation || 'Central Warehouse';
-
-                    return (
-                      <Card key={tx.id} style={styles.txCard}>
-                        <View style={styles.txTopRow}>
-                          <View style={styles.txTypeBox}>
-                            <View
-                              style={[
-                                styles.txIconBubble,
-                                { backgroundColor: isInward ? '#ECFDF5' : '#FFF5F7' },
-                              ]}
-                            >
-                              <Ionicons
-                                name={isInward ? 'arrow-down-circle' : 'swap-horizontal'}
-                                size={18}
-                                color={isInward ? '#059669' : '#E61C5D'}
-                              />
-                            </View>
-                            <View>
-                              <Text style={styles.txTypeLabel}>
-                                {isInward ? 'INWARD STOCK' : 'TRANSFERRED'}
-                              </Text>
-                              <Text style={styles.txDateText}>{formatTxDate(tx.createdAt)}</Text>
-                            </View>
-                          </View>
-
-                          <View
-                            style={[
-                              styles.txQtyBadge,
-                              { backgroundColor: isInward ? '#ECFDF5' : '#FFF5F7' },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.txQtyText,
-                                { color: isInward ? '#059669' : '#E61C5D' },
-                              ]}
-                            >
-                              {isInward ? '+' : '-'}
-                              {tx.quantity.toLocaleString('en-IN')} pkts
-                            </Text>
-                          </View>
-                        </View>
-
-                        <Text style={styles.txProductName} numberOfLines={1}>
-                          {productName}
-                        </Text>
-                        {sku ? <Text style={styles.txSkuText}>SKU: {sku}</Text> : null}
-
-                        <View style={styles.txRouteBox}>
-                          <View style={styles.txRouteCol}>
-                            <Text style={styles.txRouteLabel}>FROM</Text>
-                            <Text style={styles.txRouteValue} numberOfLines={1}>
-                              {fromLoc}
-                            </Text>
-                          </View>
-
-                          <Ionicons
-                            name="arrow-forward"
-                            size={14}
-                            color="#94A3B8"
-                            style={{ marginHorizontal: 8 }}
-                          />
-
-                          <View style={styles.txRouteCol}>
-                            <Text style={styles.txRouteLabel}>TO</Text>
-                            <Text style={styles.txRouteValue} numberOfLines={1}>
-                              {toLoc}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {tx.reference ? (
-                          <View style={styles.txRefRow}>
-                            <Text style={styles.txRefText}>Reference: {tx.reference}</Text>
-                          </View>
-                        ) : null}
-                      </Card>
-                    );
-                  })}
-                </View>
-              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>
+                  {mode === 'RECEIPT' ? 'Inward Factory Receipt Form' : 'Inter-Location Stock Transfer'}
+                </Text>
+                <Text style={styles.cardHeaderSub}>
+                  {mode === 'RECEIPT'
+                    ? 'Log incoming batches received from manufacturer into central warehouse'
+                    : 'Dispatch inventory from central warehouse to field seller vans or regional hubs'}
+                </Text>
+              </View>
             </View>
-          ) : (
-            /* TAB 1 & 2: INWARD STOCK & TRANSFER FORMS */
-            <>
-              <Card style={styles.formCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View
-                    style={[
-                      styles.cardIconBox,
-                      mode === 'RECEIPT' && { backgroundColor: '#ECFDF5' },
-                    ]}
-                  >
-                    <Ionicons
-                      name={mode === 'RECEIPT' ? 'arrow-down-circle-outline' : 'swap-horizontal-outline'}
-                      size={20}
-                      color={mode === 'RECEIPT' ? '#059669' : BrandColors.pink.primary}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardHeaderTitle}>
-                      {mode === 'RECEIPT' ? 'Add Inward Stock' : 'Transfer Stock'}
-                    </Text>
-                    <Text style={styles.cardHeaderSub}>
-                      {mode === 'RECEIPT'
-                        ? 'Add factory inward stock into headquarter warehouse'
-                        : 'Send stock to field officers or regional hubs'}
-                    </Text>
-                  </View>
-                </View>
 
-                {/* 1. Warehouse Selection */}
-                <DropdownTrigger
-                  label={mode === 'RECEIPT' ? 'Warehouse' : 'From Warehouse'}
-                  required
-                  value={selectedWarehouse?.name}
-                  subtitle={
-                    selectedWarehouse
-                      ? `Code: ${selectedWarehouse.code || 'HQ'} • Available Balance: ${(
-                          (selectedWarehouse as any).balance ?? 0
-                        ).toLocaleString('en-IN')} pkts`
-                      : 'Tap to select warehouse'
-                  }
-                  badge={selectedWarehouse?.type === 'HQ' ? 'CENTRAL HQ' : 'REGIONAL'}
-                  icon="cube"
-                  onPress={() => setWarehousePickerOpen(true)}
-                />
+            {/* 1. Source / Receiving Warehouse (Searchable Dropdown) */}
+            <DropdownTrigger
+              label={mode === 'RECEIPT' ? 'Receiving Warehouse' : 'Source Warehouse'}
+              required
+              value={selectedWarehouse?.name}
+              subtitle={
+                selectedWarehouse
+                  ? `Code: ${selectedWarehouse.code || 'HQ'} • Available Balance: ${((selectedWarehouse as any).balance ?? 0).toLocaleString('en-IN')} pkts`
+                  : 'Tap to search & select warehouse'
+              }
+              badge={selectedWarehouse?.type === 'HQ' ? 'CENTRAL HQ' : 'REGIONAL'}
+              icon="cube"
+              onPress={() => setWarehousePickerOpen(true)}
+            />
 
-                {/* 2. Target Destination (for Transfers) */}
-                {mode === 'TRANSFER' ? (
-                  <DropdownTrigger
-                    label="Send To (Officer / Depot)"
-                    required
-                    value={selectedDestination?.title}
-                    subtitle={selectedDestination?.subtitle || 'Tap to select recipient'}
-                    badge={selectedDestination?.badge}
-                    icon={selectedDestination?.badge === 'FIELD OFFICER' ? 'person' : 'business'}
-                    onPress={() => setDestinationPickerOpen(true)}
-                  />
-                ) : null}
+            {/* 2. Target Destination (for Transfers, Searchable Dropdown) */}
+            {mode === 'TRANSFER' ? (
+              <DropdownTrigger
+                label="Target Destination (Field Officer / Regional Hub)"
+                required
+                value={selectedDestination?.title}
+                subtitle={selectedDestination?.subtitle || 'Tap to search & select recipient'}
+                badge={selectedDestination?.badge}
+                icon={selectedDestination?.badge === 'FIELD SELLER' ? 'person' : 'business'}
+                onPress={() => setDestinationPickerOpen(true)}
+              />
+            ) : null}
 
-                {/* 3. Product Selection */}
-                <DropdownTrigger
-                  label="Select Product"
-                  required
-                  value={selectedProduct?.name}
-                  subtitle={
-                    selectedProduct
-                      ? `SKU: ${selectedProduct.sku || selectedProduct.id.slice(0, 8)} • Floor: ₹${(
-                          (selectedProduct.minimumPricePaise ?? 2500) / 100
-                        ).toFixed(2)}`
-                      : 'Tap to select product'
-                  }
-                  badge={selectedProduct?.sku || undefined}
-                  icon="pricetag"
-                  onPress={() => setProductPickerOpen(true)}
-                />
+            {/* 3. Product SKU (Searchable Dropdown) */}
+            <DropdownTrigger
+              label="Product SKU (Sanitary Napkin Spec)"
+              required
+              value={selectedProduct?.name}
+              subtitle={
+                selectedProduct
+                  ? `SKU: ${selectedProduct.sku || selectedProduct.id.slice(0, 8)} • Floor: ₹${((selectedProduct.minimumPricePaise ?? 2500) / 100).toFixed(2)}`
+                  : 'Tap to search & select SKU'
+              }
+              badge={selectedProduct?.sku || undefined}
+              icon="pricetag"
+              onPress={() => setProductPickerOpen(true)}
+            />
 
-                {/* 4. Quantity Input & Quick Chips */}
-                <View style={styles.quantitySection}>
-                  <Input
-                    label="Quantity (Packets) *"
-                    placeholder="e.g. 100"
-                    value={quantityStr}
-                    onChangeText={setQuantityStr}
-                    keyboardType="number-pad"
-                    leftIcon={
-                      <Ionicons
-                        name="cube-outline"
-                        size={18}
-                        color={Colors.light.textTertiary}
-                      />
-                    }
-                  />
-
-                  <View style={styles.quickChipsRow}>
-                    <Text style={styles.quickChipsLabel}>Quick Add:</Text>
-                    {quickQtyOptions.map((qty) => (
-                      <TouchableOpacity
-                        key={qty}
-                        style={[
-                          styles.quickQtyChip,
-                          quantityStr === String(qty) && styles.quickQtyChipActive,
-                        ]}
-                        onPress={() => setQuantityStr(String(qty))}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.quickQtyText,
-                            quantityStr === String(qty) && styles.quickQtyTextActive,
-                          ]}
-                        >
-                          +{qty}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* 5. Optional Fields */}
-                {mode === 'RECEIPT' ? (
-                  <>
-                    <Input
-                      label="Batch Number (Optional)"
-                      placeholder="e.g. BATCH-2026-OCT-01"
-                      value={batchNumber}
-                      onChangeText={setBatchNumber}
-                      leftIcon={
-                        <Ionicons
-                          name="barcode-outline"
-                          size={18}
-                          color={Colors.light.textTertiary}
-                        />
-                      }
-                    />
-                    <Input
-                      label="Delivery Notes (Optional)"
-                      placeholder="Truck dispatch note, driver details..."
-                      value={notes}
-                      onChangeText={setNotes}
-                      leftIcon={
-                        <Ionicons
-                          name="chatbubble-ellipses-outline"
-                          size={18}
-                          color={Colors.light.textTertiary}
-                        />
-                      }
-                    />
-                  </>
-                ) : (
-                  <Input
-                    label="Waybill / Reference (Optional)"
-                    placeholder="e.g. TRF-2026-881"
-                    value={reference}
-                    onChangeText={setReference}
-                    leftIcon={
-                      <Ionicons
-                        name="document-text-outline"
-                        size={18}
-                        color={Colors.light.textTertiary}
-                      />
-                    }
-                  />
-                )}
-              </Card>
-
-              {/* Action Button with Clear Wording */}
-              <Button
-                title={
-                  isSubmitting
-                    ? 'Processing...'
-                    : mode === 'RECEIPT'
-                    ? 'Add Stock to Warehouse'
-                    : 'Confirm & Transfer Stock'
-                }
-                variant="admin"
-                size="lg"
-                onPress={handleSubmit}
-                loading={isSubmitting}
-                icon={
-                  mode === 'RECEIPT' ? (
-                    <Ionicons name="add-circle-outline" size={20} color="#FFFFFF" />
-                  ) : (
-                    <Ionicons name="swap-horizontal-outline" size={20} color="#FFFFFF" />
-                  )
-                }
-                style={{ marginTop: Spacing.xs, marginBottom: Spacing.md }}
+            {/* 4. Quantity Input & Quick Chips */}
+            <View style={styles.quantitySection}>
+              <Input
+                label="Packet Quantity *"
+                value={quantityStr}
+                onChangeText={setQuantityStr}
+                keyboardType="number-pad"
+                leftIcon={<Ionicons name="cube-outline" size={18} color={Colors.light.textTertiary} />}
               />
 
-              {/* Quick History Preview */}
-              {transactions.length > 0 && (
-                <View style={styles.recentSection}>
-                  <View style={styles.recentHeaderRow}>
-                    <Text style={styles.recentSectionTitle}>Recent History</Text>
-                    <TouchableOpacity
-                      onPress={() => setMode('HISTORY')}
-                      hitSlop={6}
-                      style={styles.viewHistoryBtn}
+              <View style={styles.quickChipsRow}>
+                <Text style={styles.quickChipsLabel}>Quick Add:</Text>
+                {quickQtyOptions.map((qty) => (
+                  <TouchableOpacity
+                    key={qty}
+                    style={[
+                      styles.quickQtyChip,
+                      quantityStr === String(qty) && styles.quickQtyChipActive,
+                    ]}
+                    onPress={() => setQuantityStr(String(qty))}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.quickQtyText,
+                        quantityStr === String(qty) && styles.quickQtyTextActive,
+                      ]}
                     >
-                      <Text style={styles.viewHistoryBtnText}>View Full History</Text>
-                      <Ionicons name="chevron-forward" size={14} color="#E61C5D" />
-                    </TouchableOpacity>
-                  </View>
+                      +{qty}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-                  {transactions.slice(0, 3).map((tx) => {
-                    const isInward =
-                      tx.type === 'RECEIPT' || tx.type === 'INWARD' || tx.type === 'FACTORY';
-                    return (
-                      <View key={tx.id} style={styles.recentMiniCard}>
-                        <View style={styles.recentMiniLeft}>
-                          <Ionicons
-                            name={isInward ? 'arrow-down-circle' : 'swap-horizontal'}
-                            size={16}
-                            color={isInward ? '#059669' : '#E61C5D'}
-                          />
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={styles.recentMiniProduct} numberOfLines={1}>
-                              {tx.product?.name || 'Sanitary Napkins'}
-                            </Text>
-                            <Text style={styles.recentMiniDate}>{formatTxDate(tx.createdAt)}</Text>
-                          </View>
-                        </View>
-                        <Text
-                          style={[
-                            styles.recentMiniQty,
-                            { color: isInward ? '#059669' : '#E61C5D' },
-                          ]}
-                        >
-                          {isInward ? '+' : '-'}
-                          {tx.quantity} pkts
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </>
-          )}
+            {/* 5. Mode-Specific Inputs */}
+            {mode === 'RECEIPT' ? (
+              <>
+                <Input
+                  label="Batch / Lot Number (Optional)"
+                  value={batchNumber}
+                  onChangeText={setBatchNumber}
+                  leftIcon={<Ionicons name="barcode-outline" size={18} color={Colors.light.textTertiary} />}
+                />
+                <Input
+                  label="Inward Remarks / Delivery Note"
+                  value={notes}
+                  onChangeText={setNotes}
+                  leftIcon={<Ionicons name="chatbubble-ellipses-outline" size={18} color={Colors.light.textTertiary} />}
+                />
+              </>
+            ) : (
+              <Input
+                label="Transfer Reference / Waybill (Optional)"
+                value={reference}
+                onChangeText={setReference}
+                leftIcon={<Ionicons name="document-text-outline" size={18} color={Colors.light.textTertiary} />}
+              />
+            )}
+          </Card>
+
+          {/* Submit Action Button */}
+          <Button
+            title={
+              isSubmitting
+                ? 'Processing Stock Movement...'
+                : mode === 'RECEIPT'
+                ? 'Confirm Factory Inward Receipt'
+                : 'Dispatch Stock Transfer'
+            }
+            variant="admin"
+            size="lg"
+            onPress={handleSubmit}
+            loading={isSubmitting}
+            icon={
+              mode === 'RECEIPT' ? (
+                <Ionicons name="download-outline" size={20} color="#FFFFFF" />
+              ) : (
+                <Ionicons name="swap-horizontal-outline" size={20} color="#FFFFFF" />
+              )
+            }
+            style={{ marginTop: Spacing.sm, marginBottom: Spacing.xl }}
+          />
         </View>
       </ScrollView>
 
       {/* 1. Searchable Warehouse Picker Modal */}
       <SearchableDropdownModal
         visible={warehousePickerOpen}
-        title={mode === 'RECEIPT' ? 'Select Warehouse' : 'Select Source Warehouse'}
+        title={mode === 'RECEIPT' ? 'Select Receiving Warehouse' : 'Select Source Warehouse'}
         searchPlaceholder="Search warehouse by name, code, or city..."
         options={warehouseOptions}
         selectedId={sourceWarehouseId}
@@ -873,7 +544,7 @@ export default function StockTransferScreen() {
       {/* 2. Searchable Destination Picker Modal */}
       <SearchableDropdownModal
         visible={destinationPickerOpen}
-        title="Select Target (Officer / Depot)"
+        title="Select Target Recipient (Seller / Depot)"
         searchPlaceholder="Search officer by name, phone, or regional hub..."
         options={destinationOptions}
         selectedId={targetLocationId}
@@ -882,14 +553,14 @@ export default function StockTransferScreen() {
           setDestinationPickerOpen(false);
         }}
         onClose={() => setDestinationPickerOpen(false)}
-        emptyMessage="No officers or depots matching your query"
+        emptyMessage="No sellers or depots matching your query"
       />
 
-      {/* 3. Searchable Product Picker Modal */}
+      {/* 3. Searchable Product SKU Picker Modal */}
       <SearchableDropdownModal
         visible={productPickerOpen}
-        title="Select Product"
-        searchPlaceholder="Search product by name or SKU..."
+        title="Select Product SKU"
+        searchPlaceholder="Search SKU by name, code, or floor price..."
         options={productOptions}
         selectedId={selectedProductId}
         onSelect={(opt) => {
@@ -906,11 +577,11 @@ export default function StockTransferScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF8F5',
+    backgroundColor: Colors.light.background,
   },
   scrollContent: {
-    padding: Spacing.md,
-    paddingBottom: 110,
+    padding: Spacing.lg,
+    paddingBottom: Spacing.huge,
   },
   contentWrapper: {
     width: '100%',
@@ -921,39 +592,41 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
   },
   formCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.card,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
+    padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.light.border,
     marginBottom: Spacing.md,
     ...Shadows.sm,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-    paddingBottom: Spacing.sm,
+    marginBottom: Spacing.lg,
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.light.border,
   },
   cardIconBox: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: BorderRadius.md,
     backgroundColor: BrandColors.pink.subtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
+    marginRight: Spacing.md,
   },
   cardHeaderTitle: {
-    fontSize: 15,
+    ...Typography.title,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: Colors.light.heading,
   },
   cardHeaderSub: {
+    ...Typography.caption,
     fontSize: 12,
-    color: '#64748B',
+    color: Colors.light.textSecondary,
     marginTop: 2,
   },
   quantitySection: {
@@ -963,249 +636,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     marginTop: -4,
     marginBottom: Spacing.md,
   },
   quickChipsLabel: {
-    fontSize: 11,
+    ...Typography.caption,
     fontWeight: '600',
-    color: '#64748B',
+    color: Colors.light.textTertiary,
     marginRight: 4,
   },
   quickQtyChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: BorderRadius.sm,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.light.surfaceMuted,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.light.border,
   },
   quickQtyChipActive: {
     backgroundColor: BrandColors.pink.subtle,
-    borderColor: BrandColors.pink.primary,
+    borderColor: BrandColors.pink.border,
   },
   quickQtyText: {
-    fontSize: 11,
+    ...Typography.caption,
     fontWeight: '600',
-    color: '#475569',
+    color: Colors.light.textSecondary,
+    fontSize: 12,
   },
   quickQtyTextActive: {
-    color: BrandColors.pink.primary,
+    color: BrandColors.pink.dark,
     fontWeight: '700',
-  },
-
-  // Recent preview strip
-  recentSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    ...Shadows.sm,
-  },
-  recentHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
-  },
-  recentSectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  viewHistoryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  viewHistoryBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#E61C5D',
-  },
-  recentMiniCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  recentMiniLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    marginRight: 8,
-  },
-  recentMiniProduct: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  recentMiniDate: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  recentMiniQty: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  // History Tab Styles
-  historyContainer: {
-    width: '100%',
-  },
-  historyFilterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.md,
-  },
-  historyFilterPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: BorderRadius.full,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  historyFilterPillActive: {
-    backgroundColor: BrandColors.pink.primary,
-    borderColor: BrandColors.pink.primary,
-  },
-  historyFilterPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  historyFilterPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  historyLoadingBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  historyLoadingText: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  emptyCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    backgroundColor: '#FFFFFF',
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: Spacing.sm,
-  },
-  emptySubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: Spacing.md,
-  },
-  transactionList: {
-    gap: 10,
-  },
-  txCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Shadows.sm,
-  },
-  txTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  txTypeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  txIconBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  txTypeLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    color: '#0F172A',
-  },
-  txDateText: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  txQtyBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: BorderRadius.sm,
-  },
-  txQtyText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  txProductName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  txSkuText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginBottom: 8,
-  },
-  txRouteBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: BorderRadius.md,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  txRouteCol: {
-    flex: 1,
-  },
-  txRouteLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#94A3B8',
-    letterSpacing: 0.5,
-  },
-  txRouteValue: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  txRefRow: {
-    marginTop: 6,
-  },
-  txRefText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    fontStyle: 'italic',
   },
 });

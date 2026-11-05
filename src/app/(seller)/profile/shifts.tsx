@@ -220,6 +220,13 @@ export default function SellerAllShiftsScreen() {
         title="Duty Shifts History"
         subtitle={`Total: ${shifts.length} shifts • ${user?.name || 'Field Officer'}`}
         showBack
+        onBack={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(seller)/profile' as any);
+          }
+        }}
       />
 
       <FlatList

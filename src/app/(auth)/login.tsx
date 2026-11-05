@@ -2,7 +2,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -32,7 +31,6 @@ interface RoleConfig {
   primaryColor: string;
   subtleBg: string;
   borderColor: string;
-  placeholder: string;
 }
 
 const ROLES: Record<LoginRole, RoleConfig> = {
@@ -46,7 +44,6 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     primaryColor: BrandColors.pink.primary,
     subtleBg: BrandColors.pink.subtle,
     borderColor: BrandColors.pink.tint,
-    placeholder: 'seller@femmeflo.com or mobile number',
   },
   manager: {
     key: 'manager',
@@ -58,7 +55,6 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     primaryColor: BrandColors.green.primary,
     subtleBg: BrandColors.green.surface,
     borderColor: BrandColors.green.tint,
-    placeholder: 'manager@femmeflo.com or mobile number',
   },
   admin: {
     key: 'admin',
@@ -70,7 +66,6 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     primaryColor: BrandColors.pink.dark,
     subtleBg: '#FFE4E6',
     borderColor: '#FDA4AF',
-    placeholder: 'admin@femmeflo.in or mobile number',
   },
 };
 
@@ -154,11 +149,7 @@ export default function LoginScreen() {
           {/* Brand Header */}
           <View style={styles.header}>
             <View style={styles.logoBadge}>
-              <Image
-                source={require('../../../assets/images/femmeflo-mark.png')}
-                style={styles.logoMark}
-                resizeMode="contain"
-              />
+              <Ionicons name="flower-outline" size={34} color={BrandColors.pink.primary} />
             </View>
             <Text style={styles.title}>FemmeFlo</Text>
             <Text style={styles.subtitle}>Enterprise Field Operations & Sales</Text>
@@ -263,7 +254,6 @@ export default function LoginScreen() {
             {/* Input 1: Email or Mobile */}
             <Input
               label="Email Address or Mobile Number"
-              placeholder={activeRole.placeholder}
               value={identifier}
               onChangeText={(text) => {
                 setIdentifier(text);
@@ -285,7 +275,6 @@ export default function LoginScreen() {
             <Input
               inputRef={passwordInputRef}
               label="Password"
-              placeholder="Enter password"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -359,20 +348,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   logoBadge: {
-    width: 72,
-    height: 72,
+    width: 64,
+    height: 64,
     borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: BrandColors.pink.subtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.sm,
     borderWidth: 1.5,
-    borderColor: '#D1FAE5',
+    borderColor: BrandColors.pink.tint,
     ...Shadows.sm,
-  },
-  logoMark: {
-    width: 48,
-    height: 48,
   },
   title: {
     fontSize: Typography.headlineSm.fontSize,

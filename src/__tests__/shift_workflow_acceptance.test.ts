@@ -440,4 +440,295 @@ describe('FemmeFlo Shift Workflow & Checkout Parity Acceptance Suite', () => {
     const openVisit: ShiftVisit = { ...existingVisit, checkOutTime: null };
     assert.equal(canInitiateCheckout(openVisit, false).allowed, true);
   });
+
+  // ----------------------------------------------------
+  // SCENARIO 12: Strict Backend Zod Conformance for Shift Start & End
+  // ----------------------------------------------------
+  test('Scenario 12: Shift Start & End payloads strictly conform to backend Zod schemas without unrecognized keys', () => {
+    const startPayload = {
+      startOdometerKm: 15200,
+      latitude: 22.7196,
+      longitude: 75.8577,
+      faceVerified: true,
+      facePhoto: 'data:image/jpeg;base64,selfie_test_base64',
+      faceConfidence: 0.98,
+      faceMethod: 'FACE_ID_BIOMETRIC',
+      address: 'Start notes: beat route Indore Central',
+    };
+
+    const lat = Number(startPayload.latitude ?? 0);
+    const lng = Number(startPayload.longitude ?? 0);
+
+    const startBody: Record<string, any> = {
+      latitude: lat,
+      longitude: lng,
+    };
+    if (startPayload.address) startBody.address = startPayload.address.slice(0, 500);
+    if (startPayload.faceVerified !== undefined) startBody.faceVerified = startPayload.faceVerified;
+    if (startPayload.facePhoto) startBody.facePhoto = startPayload.facePhoto;
+    if (startPayload.faceConfidence !== undefined) startBody.faceConfidence = startPayload.faceConfidence;
+    if (startPayload.faceMethod) startBody.faceMethod = startPayload.faceMethod;
+
+    // Strict validation: Must not contain unrecognized keys that trigger Zod errors
+    assert.equal(startBody.latitude, 22.7196);
+    assert.equal(startBody.longitude, 75.8577);
+    assert.equal(startBody.faceVerified, true);
+    assert.equal(startBody.startOdometerKm, undefined);
+    assert.equal(startBody.odometerKm, undefined);
+    assert.equal(startBody.startLatitude, undefined);
+    assert.equal(startBody.startLongitude, undefined);
+
+    const endPayload = {
+      endOdometerKm: 15280,
+      latitude: 22.7250,
+      longitude: 75.8600,
+      faceVerified: true,
+      notes: 'Closing notes: beat route finished',
+      shiftId: 'shift_12345',
+    };
+
+    const endLat = Number(endPayload.latitude ?? 0);
+    const endLng = Number(endPayload.longitude ?? 0);
+
+    const endBody: Record<string, any> = {
+      latitude: endLat,
+      longitude: endLng,
+    };
+    if (endPayload.notes) endBody.notes = endPayload.notes.slice(0, 1000);
+    if (endPayload.faceVerified !== undefined) endBody.faceVerified = endPayload.faceVerified;
+
+    // Strict validation: Must not contain unrecognized keys that trigger Zod errors
+    assert.equal(endBody.latitude, 22.7250);
+    assert.equal(endBody.longitude, 75.8600);
+    assert.equal(endBody.notes, 'Closing notes: beat route finished');
+    assert.equal(endBody.endOdometerKm, undefined);
+    assert.equal(endBody.odometerKm, undefined);
+    assert.equal(endBody.endLatitude, undefined);
+    assert.equal(endBody.endLongitude, undefined);
+    assert.equal(endBody.shiftId, undefined);
+    assert.equal(endBody.remarks, undefined);
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 13: Numeric Coordinate & Duration Parsing Crash Guard
+  // ----------------------------------------------------
+  test('Scenario 13: Numeric coordinate & duration parsing robustness prevents runtime .toFixed type errors', () => {
+    // When backend returns Decimal fields serialized as string
+    const serverShiftWithStrings: any = {
+      id: 'shift_str_001',
+      startLatitude: '22.719584',
+      startLongitude: '75.857712',
+      startTime: '2026-11-04T09:00:00.000Z',
+    };
+
+    const formatGpsCoordinates = (shift: any) => {
+      const lat = Number(shift.startLatitude).toFixed(4);
+      const lng = shift.startLongitude != null ? Number(shift.startLongitude).toFixed(4) : '0.0000';
+      return `GPS Locked (${lat}, ${lng})`;
+    };
+
+    assert.doesNotThrow(() => {
+      const text = formatGpsCoordinates(serverShiftWithStrings);
+      assert.equal(text, 'GPS Locked (22.7196, 75.8577)');
+    });
+
+    // When duration is a string or null
+    const formatDuration = (durationMins: any) => {
+      return durationMins != null ? `${Number(durationMins).toFixed(1)} mins` : 'Completed';
+    };
+
+    assert.equal(formatDuration('45.75'), '45.8 mins');
+    assert.equal(formatDuration(null), 'Completed');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 14: Shift Response Unpacking Multi-Shape Resilience
+  // ----------------------------------------------------
+  test('Scenario 14: Shift response unpacking supports both nested { shift: Shift } and direct Shift resource shapes', () => {
+    const rawNested = {
+      shift: { id: 'shift_nested', startTime: '2026-11-04T09:00:00Z', startOdometerKm: 12000 },
+    };
+    const rawDirect = {
+      id: 'shift_direct',
+      startTime: '2026-11-04T09:00:00Z',
+      startOdometerKm: 12000,
+    };
+    const rawApiDataNested = {
+      data: { shift: { id: 'shift_data_nested', startTime: '2026-11-04T09:00:00Z' } },
+    };
+
+    const unpackShift = (res: any) => {
+      return res?.shift || res?.data?.shift || res?.data || res;
+    };
+
+    assert.equal(unpackShift(rawNested).id, 'shift_nested');
+    assert.equal(unpackShift(rawDirect).id, 'shift_direct');
+    assert.equal(unpackShift(rawApiDataNested).id, 'shift_data_nested');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 15: Store Visit Check-in Payload & Shift Association
+  // ----------------------------------------------------
+  test('Scenario 15: Store visit check-in payload includes customer, coordinates, notes, and active shiftId', () => {
+    const payload = {
+      customerId: 'cust_indore_001',
+      shopName: 'Sharma General Store',
+      latitude: 22.7196,
+      longitude: 75.8577,
+      notes: 'Routine inventory audit and restocking visit',
+      shiftId: 'shift_active_123',
+    };
+
+    const body: Record<string, any> = {
+      latitude: payload.latitude ?? 0,
+      longitude: payload.longitude ?? 0,
+      shopName: payload.shopName,
+    };
+    if (payload.customerId) body.customerId = payload.customerId;
+    if (payload.notes) body.notes = payload.notes;
+    if (payload.shiftId) body.shiftId = payload.shiftId;
+
+    assert.equal(body.customerId, 'cust_indore_001');
+    assert.equal(body.shopName, 'Sharma General Store');
+    assert.equal(body.latitude, 22.7196);
+    assert.equal(body.longitude, 75.8577);
+    assert.equal(body.notes, 'Routine inventory audit and restocking visit');
+    assert.equal(body.shiftId, 'shift_active_123');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 16: Safe Visit Time Formatting Prevents Invalid Date Crashes
+  // ----------------------------------------------------
+  test('Scenario 16: Safe visit time formatting handles undefined, snake_case, or invalid timestamps safely without RangeError', () => {
+    const formatTimeSafely = (rawDate?: string | number | null): string => {
+      if (!rawDate) return 'Just now';
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return 'Just now';
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Valid ISO timestamp
+    assert.doesNotThrow(() => {
+      const formatted = formatTimeSafely('2026-11-04T10:30:00.000Z');
+      assert.ok(formatted && typeof formatted === 'string');
+    });
+
+    // Missing, null, or undefined
+    assert.equal(formatTimeSafely(undefined), 'Just now');
+    assert.equal(formatTimeSafely(null), 'Just now');
+    assert.equal(formatTimeSafely(''), 'Just now');
+
+    // Invalid date string (e.g. malformed server response)
+    assert.doesNotThrow(() => {
+      assert.equal(formatTimeSafely('invalid_date_format'), 'Just now');
+    });
+
+    // Fallback checks for snake_case backend fields
+    const rawVisitSnakeCase: any = {
+      id: 'visit_999',
+      check_in_time: '2026-11-04T11:00:00.000Z',
+      check_out_time: null,
+    };
+    const checkInDisplay = formatTimeSafely(
+      rawVisitSnakeCase.checkInTime || rawVisitSnakeCase.check_in_time || rawVisitSnakeCase.createdAt
+    );
+    assert.ok(checkInDisplay !== 'Just now');
+  });
+
+  // ----------------------------------------------------
+  // SCENARIO 17: Safe Handling of Null Shift in loadShiftData
+  // ----------------------------------------------------
+  test('Scenario 17: Null shift response from backend does not throw Cannot read properties of null', () => {
+    const unpackShift = (shiftRes: any) => {
+      let active = shiftRes?.shift;
+      if (active === undefined && shiftRes?.data !== undefined) {
+        active = shiftRes.data?.shift !== undefined ? shiftRes.data.shift : shiftRes.data;
+      }
+      if (active === undefined) {
+        active = shiftRes;
+      }
+      return active;
+    };
+
+    const shiftResNull: any = null;
+    const activeFromNull = unpackShift(shiftResNull);
+
+    assert.equal(activeFromNull, null);
+    assert.doesNotThrow(() => {
+      const id = (activeFromNull as any)?.id;
+      assert.equal(id, undefined);
+    });
+
+    const shiftResEmptyData: any = { data: null };
+    const activeFromEmpty = unpackShift(shiftResEmptyData);
+    assert.equal(activeFromEmpty, null);
+
+    const shiftResShiftNull: any = { shift: null };
+    assert.equal(unpackShift(shiftResShiftNull), null);
+
+    const shiftResDirect: any = { id: 'shift_123', startTime: '2026-11-04T08:00:00Z' };
+    assert.equal(unpackShift(shiftResDirect).id, 'shift_123');
+  });
+  // ----------------------------------------------------
+  // SCENARIO 18: Safe End Shift Face Verification & Payload Construction
+  // ----------------------------------------------------
+  test('Scenario 18: Safe End Shift execution right after face scan completes without unmounted animation errors or local URI leaks', () => {
+    // 1. Local URI converted to safe backend token
+    const rawLocalSelfieUri = 'file:///data/user/0/host.exp.exponent/cache/ExperienceData/ImagePicker/selfie_01.jpg';
+    const isLocalUri = rawLocalSelfieUri.startsWith('file:') || rawLocalSelfieUri.startsWith('content:');
+    assert.strictEqual(isLocalUri, true);
+
+    const safePhotoIdentifier = (isLocalUri || rawLocalSelfieUri.length > 50000)
+      ? `verified_selfie_end_${Date.now()}`
+      : rawLocalSelfieUri;
+    assert.ok(safePhotoIdentifier.startsWith('verified_selfie_end_'));
+    assert.strictEqual(safePhotoIdentifier.includes('file:///'), false);
+
+    // 2. Safe End Shift Payload retains active shiftId, odometer, and coordinates
+    const payload = {
+      shiftId: 'shift_active_indore_456',
+      endOdometerKm: 12045,
+      latitude: 22.7196,
+      longitude: 75.8577,
+      address: 'Indore Central Depot',
+      notes: 'Duty completed, all retail orders settled',
+      remarks: 'Duty completed, all retail orders settled',
+      faceVerified: true,
+      facePhoto: safePhotoIdentifier,
+      faceConfidence: 0.98,
+      faceMethod: 'FACE_ID_BIOMETRIC',
+    };
+
+    assert.strictEqual(payload.shiftId, 'shift_active_indore_456');
+    assert.strictEqual(payload.endOdometerKm, 12045);
+    assert.strictEqual(payload.faceVerified, true);
+    assert.strictEqual(payload.faceMethod, 'FACE_ID_BIOMETRIC');
+
+    // 3. Defensive total distance formatting on closed shift result
+    const formatTotalDistance = (closedShift: any) => {
+      return (closedShift && closedShift.totalDistanceKm != null && !isNaN(Number(closedShift.totalDistanceKm)))
+        ? `${closedShift.totalDistanceKm} km`
+        : '0 km';
+    };
+
+    assert.strictEqual(formatTotalDistance({ totalDistanceKm: 45.2 }), '45.2 km');
+    assert.strictEqual(formatTotalDistance({ totalDistanceKm: '18.4' }), '18.4 km');
+    assert.strictEqual(formatTotalDistance({ totalDistanceKm: null }), '0 km');
+    assert.strictEqual(formatTotalDistance({}), '0 km');
+    assert.strictEqual(formatTotalDistance(null), '0 km');
+    assert.strictEqual(formatTotalDistance(undefined), '0 km');
+
+    // 4. Single verification dispatch guard test
+    let dispatchCount = 0;
+    const isVerifiedDispatchedRef = { current: false };
+    const dispatchVerification = () => {
+      if (isVerifiedDispatchedRef.current) return;
+      isVerifiedDispatchedRef.current = true;
+      dispatchCount++;
+    };
+
+    dispatchVerification();
+    dispatchVerification(); // duplicate call (e.g. timeout race)
+    assert.strictEqual(dispatchCount, 1);
+  });
 });

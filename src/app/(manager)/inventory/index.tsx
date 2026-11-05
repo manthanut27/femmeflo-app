@@ -31,6 +31,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { canMonitorStock } from '@/utils/permissions';
 
 interface SellerInventoryItem {
   seller: {
@@ -49,6 +50,7 @@ interface SellerInventoryItem {
 export default function ManagerInventoryScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const allowStock = canMonitorStock(user);
 
   const [summary, setSummary] = useState({
     totalSellers: 0,
@@ -64,6 +66,11 @@ export default function ManagerInventoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (!allowStock) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const [invRes, prodRes] = await Promise.all([
         managerApi.getInventory(),
@@ -86,7 +93,7 @@ export default function ManagerInventoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [allowStock]);
 
   useEffect(() => {
     loadData();
@@ -108,6 +115,30 @@ export default function ManagerInventoryScreen() {
       return name.includes(q) || phone.includes(q) || village.includes(q);
     });
   }, [sellers, searchQuery]);
+
+  if (!allowStock) {
+    return (
+      <View style={styles.container}>
+        <Header
+          title="Territory Van Stock"
+          subtitle={`Territory: ${user?.district || 'Field Operations'} • ${user?.name}`}
+          showBack
+        />
+        <View style={styles.restrictedContainer}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Access Restricted"
+            description="You do not have permission to monitor territory stock. Please contact your administrator to request 'Monitor territory stock' permission."
+            iconColor={Colors.light.danger}
+            iconBgColor={Colors.light.dangerBg}
+            actionTitle="Back to Dashboard"
+            buttonVariant="secondary"
+            onAction={() => router.replace('/(manager)' as any)}
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -635,5 +666,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.light.textTertiary,
     marginTop: 2,
+  },
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });

@@ -4,10 +4,14 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { canViewCustomers, canViewSellers } from '@/utils/permissions';
 
 export default function ManagerTabsLayout() {
   const { user, state, isLoading } = useAuth();
   const router = useRouter();
+
+  const allowSellers = canViewSellers(user);
+  const allowCustomers = canViewCustomers(user);
 
   useEffect(() => {
     if (isLoading || state === 'INITIALIZING') return;
@@ -57,6 +61,12 @@ export default function ManagerTabsLayout() {
         name="sellers"
         options={{
           title: 'Team',
+          ...(allowSellers
+            ? {}
+            : {
+                tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+                tabBarButton: () => null,
+              }),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'people' : 'people-outline'}
@@ -70,6 +80,12 @@ export default function ManagerTabsLayout() {
         name="customers"
         options={{
           title: 'Stores',
+          ...(allowCustomers
+            ? {}
+            : {
+                tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+                tabBarButton: () => null,
+              }),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'storefront' : 'storefront-outline'}

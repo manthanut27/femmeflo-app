@@ -1,6 +1,14 @@
 import type { PendingApprovalItem } from './admin';
 import type { ManagerSellerItem } from './manager';
-import { ALL_BACKEND_PERMISSIONS } from '../utils/permissions';
+import {
+  ALL_BACKEND_PERMISSIONS,
+  canMonitorStock,
+  canOnboardCustomers,
+  canOnboardSellers,
+  canViewCustomers,
+  canViewSellers,
+  syncPermissionAliases,
+} from '../utils/permissions';
 import {
   MOCK_ADMIN_DASHBOARD,
   MOCK_ALL_MANAGERS,
@@ -92,6 +100,16 @@ function sleep(ms = 80): Promise<void> {
 /**
  * Handle incoming API requests in offline UI mock mode
  */
+function matchesLoginIdentifier(u: { email?: string | null; phone?: string | null }, rawId: string): boolean {
+  if (u.email && u.email.toLowerCase() === rawId) return true;
+  const rawDigits = rawId.replace(/\D/g, '').slice(-10);
+  if (rawDigits.length === 10 && u.phone) {
+    const userDigits = u.phone.replace(/\D/g, '').slice(-10);
+    if (userDigits.length === 10 && userDigits === rawDigits) return true;
+  }
+  return false;
+}
+
 export async function handleMockRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   await sleep(60);
 
@@ -148,6 +166,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const roleHint = (body.roleHint || '').trim().toLowerCase();
     let selectedUser: PublicUser | null = null;
 
+    const customMgr = mockDb.managers.find((m) => matchesLoginIdentifier(m, rawId));
+    const customSeller = mockDb.sellers.find((s) => matchesLoginIdentifier(s, rawId));
+
     if (
       roleHint === 'admin' ||
       cleanEndpoint.startsWith('admin') ||
@@ -164,18 +185,20 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       rawId.includes('manager') ||
       rawId === '9876543220' ||
       rawId === 'manager@femmeflo.com' ||
-      rawId === 'manager@femmeflo.in'
+      rawId === 'manager@femmeflo.in' ||
+      Boolean(customMgr)
     ) {
-      selectedUser = MOCK_USERS.manager;
+      selectedUser = customMgr || MOCK_USERS.manager;
     } else if (
       roleHint === 'seller' ||
       cleanEndpoint.startsWith('seller') ||
       rawId.includes('seller') ||
       rawId === '9876543210' ||
       rawId === 'seller@femmeflo.com' ||
-      rawId === 'seller@femmeflo.in'
+      rawId === 'seller@femmeflo.in' ||
+      Boolean(customSeller)
     ) {
-      selectedUser = MOCK_USERS.seller;
+      selectedUser = (customSeller as unknown as PublicUser) || MOCK_USERS.seller;
     } else {
       throw new ApiError('Invalid login credentials.', 401);
     }
@@ -185,6 +208,33 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       token: `mock_jwt_token_${selectedUser.role.toLowerCase()}_${Date.now()}`,
       user: selectedUser,
     } as unknown as T;
+  }
+
+  if (
+    (cleanEndpoint === 'auth/me' ||
+      cleanEndpoint === 'seller/profile' ||
+      cleanEndpoint === 'manager/profile' ||
+      cleanEndpoint === 'admin/profile') &&
+    method === 'PATCH'
+  ) {
+    if (mockDb.currentUser) {
+      if (body.name !== undefined) mockDb.currentUser.name = body.name;
+      if (body.email !== undefined) mockDb.currentUser.email = body.email;
+      if (body.phone !== undefined) mockDb.currentUser.phone = body.phone;
+      if (body.alternatePhone !== undefined) mockDb.currentUser.alternatePhone = body.alternatePhone;
+      if (body.state !== undefined) mockDb.currentUser.state = body.state;
+      if (body.district !== undefined) mockDb.currentUser.district = body.district;
+      if (body.village !== undefined) mockDb.currentUser.village = body.village;
+      if (body.address !== undefined) mockDb.currentUser.address = body.address;
+      if (body.pincode !== undefined) mockDb.currentUser.pincode = body.pincode;
+      if (body.isSeller !== undefined) mockDb.currentUser.isSeller = Boolean(body.isSeller);
+
+      const s = mockDb.sellers.find((x) => x.id === mockDb.currentUser.id);
+      if (s) Object.assign(s, body);
+      const m = mockDb.managers.find((x) => x.id === mockDb.currentUser.id);
+      if (m) Object.assign(m, body);
+    }
+    return { user: mockDb.currentUser, success: true } as unknown as T;
   }
 
   if (cleanEndpoint === 'auth/me') {
@@ -215,14 +265,14 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // ----------------------------------------------------
   if (cleanEndpoint === 'seller/dashboard') {
     const todaySales = mockDb.sales.filter((s) => s.status === 'CONFIRMED');
-    const todayAmountPaise = todaySales.reduce((acc, s) => acc + s.totalAmountPaise, 0) || 147500;
-    const todayPackets = todaySales.reduce((acc, s) => acc + s.packetCount, 0) || 45;
+    const todayAmountPaise = todaySales.reduce((acc, s) => acc + s.totalAmountPaise, 0);
+    const todayPackets = todaySales.reduce((acc, s) => acc + s.packetCount, 0);
     const pendingApprovalsCount = mockDb.sales.filter((s) => s.status === 'PENDING').length;
 
     const data: SellerDashboardData = {
       todaySalesPaise: todayAmountPaise,
       todaySalesAmountPaise: todayAmountPaise,
-      todayOrdersCount: todaySales.length || 18,
+      todayOrdersCount: todaySales.length,
       todayPacketsSold: todayPackets,
       monthSalesPaise: todayAmountPaise * 4,
       lowStockCount: mockDb.inventory.balance < 50 ? 1 : 0,
@@ -280,6 +330,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if ((cleanEndpoint === 'seller/customers' || cleanEndpoint === 'manager/customers' || cleanEndpoint === 'admin/customers') && method === 'POST') {
+    if (cleanEndpoint === 'manager/customers' && mockDb.currentUser.role === 'MANAGER' && !canOnboardCustomers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard customers.', 403);
+    }
     const category = mockDb.categories.find((cat) => cat.id === body.categoryId) || mockDb.categories[0];
     const newCustomer: CustomerItem = {
       id: `cust_${Date.now()}`,
@@ -332,9 +385,18 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // Seller: Sales
   // ----------------------------------------------------
   if (cleanEndpoint === 'seller/sales' && method === 'GET') {
+    let list = mockDb.sales;
+    const filterCustomerId = options?.params?.customerId;
+    const filterStatus = options?.params?.status;
+    if (filterCustomerId) {
+      list = list.filter((s: any) => (s.customer?.id || s.customerId) === filterCustomerId);
+    }
+    if (filterStatus) {
+      list = list.filter((s: any) => s.status === filterStatus);
+    }
     return {
-      items: mockDb.sales,
-      pagination: { page: 1, pageSize: 50, total: mockDb.sales.length, totalPages: 1 },
+      items: list,
+      pagination: { page: 1, pageSize: 50, total: list.length, totalPages: 1 },
     } as unknown as T;
   }
 
@@ -449,9 +511,53 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const id = cleanEndpoint.replace('seller/sales/', '').replace('/payment', '');
     const sale = mockDb.sales.find((s) => s.id === id);
     if (sale) {
-      sale.paymentMode = body.paymentMode || 'CASH';
+      sale.paymentMode = (body.mode || body.paymentMode || 'CASH');
       sale.paymentReference = body.paymentReference || 'COLLECTED-IN-PERSON';
       sale.paidAt = new Date().toISOString();
+      return { sale } as unknown as T;
+    }
+    return { sale: mockDb.sales[0] } as unknown as T;
+  }
+
+  // Seller / Manager: Update Sale Price & Resubmit for Reapproval
+  if (
+    (cleanEndpoint.startsWith('seller/sales/') || cleanEndpoint.startsWith('manager/sales/')) &&
+    !cleanEndpoint.endsWith('/payment') &&
+    method === 'PATCH'
+  ) {
+    const segments = cleanEndpoint.split('/');
+    const id = segments[2];
+    const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
+    if (sale) {
+      if (body.unitPricePaise) {
+        const unitPrice = Number(body.unitPricePaise);
+        sale.unitPricePaise = unitPrice;
+        const qty = sale.packetCount || sale.quantity || 1;
+        sale.totalAmountPaise = qty * unitPrice;
+        sale.totalPaise = sale.totalAmountPaise;
+        if (sale.items && sale.items.length > 0) {
+          sale.items.forEach((it: any) => {
+            it.unitPricePaise = unitPrice;
+            it.totalPricePaise = (it.quantity || 1) * unitPrice;
+          });
+        }
+        if (sale.lineItems && sale.lineItems.length > 0) {
+          sale.lineItems.forEach((it: any) => {
+            it.unitPricePaise = unitPrice;
+            it.totalPricePaise = (it.quantity || 1) * unitPrice;
+          });
+        }
+        // If sale was rejected or below threshold, revising unit price transitions it to PENDING_APPROVAL
+        if (sale.status === 'REJECTED' || !sale.status) {
+          sale.status = 'PENDING_APPROVAL';
+          sale.rejectionReason = undefined;
+          sale.approvalReason = `Price revised to ₹${(unitPrice / 100).toFixed(2)} for reapproval.`;
+          sale.resubmittedAt = new Date().toISOString();
+        }
+      }
+      if (body.customerFeedback) {
+        sale.customerFeedback = body.customerFeedback;
+      }
       return { sale } as unknown as T;
     }
     return { sale: mockDb.sales[0] } as unknown as T;
@@ -547,9 +653,19 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'seller/shifts/history') {
+    const page = Number(options.params?.page || 1);
+    const pageSize = options.params?.pageSize ? Number(options.params.pageSize) : 20;
+    const all = mockDb.shiftHistory;
+    const startIndex = (page - 1) * pageSize;
+    const items = options.params?.pageSize ? all.slice(startIndex, startIndex + pageSize) : all;
     return {
-      items: mockDb.shiftHistory,
-      pagination: { page: 1, pageSize: 20, total: mockDb.shiftHistory.length, totalPages: 1 },
+      items,
+      pagination: {
+        page,
+        pageSize,
+        total: all.length,
+        totalPages: Math.ceil(all.length / pageSize) || 1,
+      },
     } as unknown as T;
   }
 
@@ -566,6 +682,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'manager/sellers' && method === 'GET') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canViewSellers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to view field officers.', 403);
+    }
     return {
       items: mockDb.sellers,
       pagination: { page: 1, pageSize: 50, total: mockDb.sellers.length, totalPages: 1 },
@@ -573,6 +692,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'manager/sellers' && method === 'POST') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canOnboardSellers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard field officers.', 403);
+    }
     const newSeller: ManagerSellerItem = {
       id: `usr_seller_${Date.now()}`,
       sellerId: `usr_seller_${Date.now()}`,
@@ -602,15 +724,92 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint.startsWith('manager/sellers/') && method === 'GET') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canViewSellers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to view field officers.', 403);
+    }
     const id = cleanEndpoint.replace('manager/sellers/', '');
     const seller = mockDb.sellers.find((s) => s.id === id || s.sellerId === id) || mockDb.sellers[0];
     return { seller } as unknown as T;
   }
 
   if (cleanEndpoint === 'manager/customers') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canViewCustomers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to view customer directory.', 403);
+    }
     return {
       items: mockDb.customers,
       pagination: { page: 1, pageSize: 50, total: mockDb.customers.length, totalPages: 1 },
+    } as unknown as T;
+  }
+
+  if ((cleanEndpoint === 'manager/customers/bulk' || cleanEndpoint === 'seller/customers/bulk' || cleanEndpoint === 'admin/customers/bulk') && method === 'POST') {
+    if (cleanEndpoint === 'manager/customers/bulk' && mockDb.currentUser.role === 'MANAGER' && !canOnboardCustomers(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to onboard customers.', 403);
+    }
+    const rows = (body.customers || []) as any[];
+    const created: CustomerItem[] = [];
+    for (const r of rows) {
+      const categoryId = r.categoryId || body.defaultCategoryId;
+      const matchedCategory = mockDb.categories.find(
+        (cat) => cat.id === categoryId || cat.name?.toLowerCase() === (r.category || '').toLowerCase()
+      ) || mockDb.categories[0];
+
+      const sellerId = r.sellerId || body.defaultSellerId || mockDb.currentUser.id;
+      const assignedSeller = mockDb.sellers.find((s) => s.id === sellerId || (s as any).sellerId === sellerId);
+      const sellerInfo = assignedSeller
+        ? { id: assignedSeller.id, name: assignedSeller.name }
+        : { id: mockDb.currentUser.id, name: mockDb.currentUser.name };
+
+      const cust: CustomerItem = {
+        id: `cust_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        shopName: r.shopName || 'Retail Shop',
+        ownerName: r.ownerName || r.contactName || 'Owner',
+        phone: r.phone || '+91 98765 00000',
+        email: r.email,
+        categoryId: matchedCategory?.id || categoryId,
+        category: matchedCategory || r.category || 'Retail Store',
+        sellerId,
+        seller: sellerInfo,
+        address: r.address || r.streetName || '',
+        district: r.district || body.defaultDistrict || 'Indore',
+        village: r.village || body.defaultVillage || undefined,
+        state: r.state || body.defaultState || 'Madhya Pradesh',
+        pincode: r.pincode || body.defaultPincode || '452001',
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      mockDb.customers.unshift(cust);
+      created.push(cust);
+    }
+    return {
+      success: true,
+      createdCount: created.length,
+      failedCount: 0,
+      errors: [],
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === 'manager/inventory') {
+    if (mockDb.currentUser.role === 'MANAGER' && !canMonitorStock(mockDb.currentUser)) {
+      throw new ApiError('Forbidden: Your territory manager account does not have permission to monitor territory stock.', 403);
+    }
+    const totalAssigned = mockDb.sellers.length * 100;
+    const totalSold = mockDb.sellers.reduce((acc, s) => acc + (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10), 0);
+    const totalRemaining = Math.max(0, totalAssigned - totalSold);
+    return {
+      summary: {
+        totalSellers: mockDb.sellers.length,
+        totalAssigned,
+        totalSold,
+        totalRemaining,
+      },
+      sellers: mockDb.sellers.map((s) => ({
+        seller: s,
+        assigned: 100,
+        sold: s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10,
+        remaining: Math.max(0, 100 - (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10)),
+      })),
+      products: mockDb.products,
     } as unknown as T;
   }
 
@@ -668,40 +867,16 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return {
       categories: mockDb.categories,
       customerLocations: [
-        { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
-        { state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' },
-        { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
         { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
         { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
-        { state: 'Maharashtra', district: 'Thane', village: 'Diva' },
-        { state: 'Maharashtra', district: 'Mumbai', village: 'Andheri' },
-        { state: 'Bihar', district: 'Patna', village: 'Danapur' },
-        { state: 'Rajasthan', district: 'Jaipur', village: 'Sanganer' },
+        { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
+        { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
       ],
       managers: mockDb.managers,
       sellers: mockDb.sellers,
-      states: ['Bihar', 'Madhya Pradesh', 'Maharashtra', 'Rajasthan', 'Uttar Pradesh'],
-      districts: [
-        { state: 'Madhya Pradesh', district: 'Indore' },
-        { state: 'Madhya Pradesh', district: 'Bhopal' },
-        { state: 'Uttar Pradesh', district: 'Varanasi' },
-        { state: 'Maharashtra', district: 'Thane' },
-        { state: 'Maharashtra', district: 'Mumbai' },
-        { state: 'Bihar', district: 'Patna' },
-        { state: 'Rajasthan', district: 'Jaipur' },
-      ],
-      rawDistricts: ['Bhopal', 'Danapur', 'Indore', 'Jaipur', 'Mumbai', 'Patna', 'Thane', 'Varanasi'],
-      villages: [
-        { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
-        { state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' },
-        { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
-        { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
-        { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
-        { state: 'Maharashtra', district: 'Thane', village: 'Diva' },
-        { state: 'Maharashtra', district: 'Mumbai', village: 'Andheri' },
-        { state: 'Bihar', district: 'Patna', village: 'Danapur' },
-        { state: 'Rajasthan', district: 'Jaipur', village: 'Sanganer' },
-      ],
+      states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
+      districts: ['Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
+      villages: ['Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
     } as unknown as T;
   }
 
@@ -742,14 +917,31 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'admin/approvals' && method === 'GET') {
-    const pendingSales = mockDb.sales.filter((s) => s.status === 'PENDING');
-    const items: PendingApprovalItem[] = pendingSales.map((sale) => ({
-      ...sale,
-      requestedUnitPricePaise: sale.items?.[0]?.unitPricePaise || 2200,
-      minimumPricePaise: mockDb.settings.minimumSalePricePaise,
-    }));
+    const pendingSales = mockDb.sales.filter((s) => s.status === 'PENDING' || s.status === 'PENDING_APPROVAL');
+    const items: PendingApprovalItem[] = pendingSales.map((sale) => {
+      const totalPaise = sale.totalPaise ?? sale.totalAmountPaise ?? 0;
+      const quantity = sale.quantity ?? sale.packetCount ?? 0;
+      const unitPricePaise = sale.unitPricePaise || sale.items?.[0]?.unitPricePaise || (quantity > 0 ? Math.round(totalPaise / quantity) : 2200);
+      const lineItems = sale.items || sale.lineItems || [];
+      return {
+        ...sale,
+        totalPaise,
+        totalAmountPaise: totalPaise,
+        quantity,
+        packetCount: quantity,
+        unitPricePaise,
+        lineItems,
+        items: lineItems,
+        saleNumber: sale.saleNumber || `#${sale.id.slice(0, 8).toUpperCase()}`,
+        requestedUnitPricePaise: unitPricePaise,
+        minimumPricePaise: mockDb.settings.minimumSalePricePaise,
+        isResubmitted: Boolean(sale.resubmittedAt || (sale as any).isResubmitted || (sale as any).resubmitForApproval || (typeof sale.customerFeedback === 'string' && sale.customerFeedback.includes('Price Revised'))),
+        resubmitForApproval: Boolean(sale.resubmittedAt || (sale as any).isResubmitted || (sale as any).resubmitForApproval || (typeof sale.customerFeedback === 'string' && sale.customerFeedback.includes('Price Revised'))),
+      };
+    });
     return {
       items,
+      pendingSales: items,
       pagination: { page: 1, pageSize: 20, total: items.length, totalPages: 1 },
     } as unknown as T;
   }
@@ -804,14 +996,6 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { success: true, message: 'Stock transfer recorded and dispatched.' } as unknown as T;
   }
 
-  if (cleanEndpoint === 'admin/inventory/transactions') {
-    return {
-      items: mockDb.transactions,
-      transactions: mockDb.transactions,
-      pagination: { page: 1, pageSize: 20, total: mockDb.transactions.length, totalPages: 1 },
-    } as unknown as T;
-  }
-
   if (cleanEndpoint === 'admin/managers' && method === 'GET') {
     return {
       items: mockDb.managers,
@@ -845,16 +1029,6 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { manager: newManager, user: newManager } as unknown as T;
   }
 
-  if (cleanEndpoint.startsWith('admin/managers/') && method === 'GET' && !cleanEndpoint.includes('/permissions')) {
-    const targetId = cleanEndpoint.replace('admin/managers/', '');
-    const mgr =
-      mockDb.managers.find((m) => m.id === targetId) ||
-      mockDb.sellers.find((s) => s.id === targetId || (s as any).sellerId === targetId);
-    if (mgr) {
-      return { manager: mgr, user: mgr } as unknown as T;
-    }
-  }
-
   if (cleanEndpoint.startsWith('admin/managers/') && method === 'PATCH' && !cleanEndpoint.includes('/permissions')) {
     const targetId = cleanEndpoint.replace('admin/managers/', '');
     const mgr = mockDb.managers.find((m) => m.id === targetId);
@@ -865,8 +1039,33 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       if (body.phone !== undefined) mgr.phone = body.phone;
       if (body.state !== undefined) mgr.state = body.state;
       if (body.district !== undefined) mgr.district = body.district;
+      if (body.village !== undefined) mgr.village = body.village;
+      if (body.address !== undefined) mgr.address = body.address;
+      if (body.pincode !== undefined) mgr.pincode = body.pincode;
+      if (body.alternatePhone !== undefined) mgr.alternatePhone = body.alternatePhone;
       if (body.active !== undefined) mgr.active = Boolean(body.active);
       return { manager: mgr, user: mgr } as unknown as T;
+    }
+    return { success: true } as unknown as T;
+  }
+
+  if ((cleanEndpoint.startsWith('admin/sellers/') || cleanEndpoint.startsWith('manager/sellers/')) && method === 'PATCH') {
+    const targetId = cleanEndpoint.replace('admin/sellers/', '').replace('manager/sellers/', '');
+    const s = mockDb.sellers.find((x) => x.id === targetId || (x as any).sellerId === targetId);
+    if (s) {
+      if (body.name !== undefined) s.name = body.name;
+      if (body.email !== undefined) s.email = body.email;
+      if (body.phone !== undefined) s.phone = body.phone;
+      if (body.alternatePhone !== undefined) s.alternatePhone = body.alternatePhone;
+      if (body.state !== undefined) s.state = body.state;
+      if (body.district !== undefined) s.district = body.district;
+      if (body.village !== undefined) s.village = body.village;
+      if (body.address !== undefined) s.address = body.address;
+      if (body.pincode !== undefined) s.pincode = body.pincode;
+      if (body.active !== undefined) s.active = Boolean(body.active);
+      if (body.dailyTarget !== undefined) (s as any).dailyTarget = body.dailyTarget;
+      if (body.managerId !== undefined) s.managerId = body.managerId;
+      return { seller: s, user: s, success: true } as unknown as T;
     }
     return { success: true } as unknown as T;
   }
@@ -876,32 +1075,6 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       items: mockDb.sellers,
       pagination: { page: 1, pageSize: 50, total: mockDb.sellers.length, totalPages: 1 },
     } as unknown as T;
-  }
-
-  if (cleanEndpoint.startsWith('admin/sellers/') && method === 'GET') {
-    const targetId = cleanEndpoint.replace('admin/sellers/', '');
-    const seller =
-      mockDb.sellers.find((s) => s.id === targetId || (s as any).sellerId === targetId) ||
-      mockDb.managers.find((m) => m.id === targetId);
-    if (seller) {
-      return { seller, user: seller } as unknown as T;
-    }
-  }
-
-  if (cleanEndpoint.startsWith('admin/sellers/') && method === 'PATCH') {
-    const targetId = cleanEndpoint.replace('admin/sellers/', '');
-    const seller = mockDb.sellers.find((s) => s.id === targetId || (s as any).sellerId === targetId);
-    if (seller) {
-      if (body.name !== undefined) seller.name = body.name;
-      if (body.email !== undefined) seller.email = body.email;
-      if (body.phone !== undefined) seller.phone = body.phone;
-      if (body.state !== undefined) seller.state = body.state;
-      if (body.district !== undefined) seller.district = body.district;
-      if (body.village !== undefined) seller.village = body.village;
-      if (body.active !== undefined) seller.active = Boolean(body.active);
-      return { seller, user: seller } as unknown as T;
-    }
-    return { success: true } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/sellers' && method === 'POST') {

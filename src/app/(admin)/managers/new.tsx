@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { sanitizeBackendPermissions } from '@/utils/permissions';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -37,6 +38,7 @@ const QUALIFICATION_OPTIONS = [
   'Diploma / Polytech',
   'Higher Secondary (12th Pass)',
   'Secondary (10th Pass)',
+  'Other Qualification',
 ];
 
 const DEFAULT_PERMISSIONS = [
@@ -64,7 +66,7 @@ export default function AdminOnboardManagerScreen() {
   const [employeeCode, setEmployeeCode] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('FemmeFlo@2026');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [state, setState] = useState('Maharashtra');
   const [district, setDistrict] = useState('Thane');
@@ -74,6 +76,7 @@ export default function AdminOnboardManagerScreen() {
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState('');
   const [qualification, setQualification] = useState('Graduate (B.A. / B.Com / B.Sc / BBA)');
+  const [customQualification, setCustomQualification] = useState('');
   const [alternatePhone, setAlternatePhone] = useState('');
   const [address, setAddress] = useState('');
   const [pincode, setPincode] = useState('');
@@ -125,7 +128,8 @@ export default function AdminOnboardManagerScreen() {
       errs.email = 'Please provide a valid login email address.';
     }
 
-    if (!password || password.length < 12) {
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword || trimmedPassword.length < 12) {
       errs.password = 'Initial password must be at least 12 characters.';
     }
 
@@ -173,24 +177,29 @@ export default function AdminOnboardManagerScreen() {
     const formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
     const cleanAltPhone = alternatePhone.trim() ? `+91 ${alternatePhone.replace(/\D/g, '').slice(-10)}` : undefined;
 
+    const resolvedQualification =
+      qualification === 'Other Qualification'
+        ? (customQualification.trim() || undefined)
+        : (qualification.trim() || undefined);
+
     try {
       const res = await adminApi.createManager({
         name: name.trim(),
         employeeCode: employeeCode.trim() || undefined,
         phone: formattedPhone,
         email: email.trim() || undefined,
-        password: password.trim() || 'FemmeFlo@2026',
+        password: password.trim(),
         state: state.trim(),
         district: district.trim(),
         village: town.trim() || undefined,
         aadhaarNumber: aadhaarNumber.replace(/\s+/g, '').trim(),
         drivingLicenseNumber: drivingLicenseNumber.trim(),
-        qualification: qualification.trim(),
+        qualification: resolvedQualification,
         alternatePhone: cleanAltPhone,
         address: address.trim() || undefined,
         pincode: pincode.trim() || undefined,
         isSeller,
-        permissions: selectedPermissions,
+        permissions: sanitizeBackendPermissions(selectedPermissions),
       });
 
       setFeedback({
@@ -211,9 +220,11 @@ export default function AdminOnboardManagerScreen() {
               setEmployeeCode('');
               setPhone('');
               setEmail('');
-              setPassword('FemmeFlo@2026');
+              setPassword('');
               setAadhaarNumber('');
               setDrivingLicenseNumber('');
+              setQualification('Graduate (B.A. / B.Com / B.Sc / BBA)');
+              setCustomQualification('');
               setAlternatePhone('');
               setAddress('');
               setPincode('');
@@ -358,7 +369,6 @@ export default function AdminOnboardManagerScreen() {
                 Initial password <Text style={styles.requiredStar}>*</Text>
               </Text>
               <Input
-                placeholder="At least 12 characters"
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
@@ -376,7 +386,7 @@ export default function AdminOnboardManagerScreen() {
                     />
                   </Pressable>
                 }
-                helperText="At least 12 characters (FemmeFlo@2026 default)"
+                helperText="At least 12 characters"
               />
             </View>
 
@@ -520,6 +530,17 @@ export default function AdminOnboardManagerScreen() {
                       </Pressable>
                     );
                   })}
+                </View>
+              )}
+
+              {qualification === 'Other Qualification' && (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <Input
+                    placeholder="Enter other qualification (e.g. B.Tech, LLB, Ph.D, B.Ed)"
+                    value={customQualification}
+                    onChangeText={setCustomQualification}
+                    leftIcon={<Ionicons name="school-outline" size={16} color="#94A3B8" />}
+                  />
                 </View>
               )}
             </View>

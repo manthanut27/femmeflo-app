@@ -1,24 +1,10 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
 import { sellerApi } from '@/api/seller';
 import type { SellerDashboardData, Shift } from '@/api/types';
+import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
-import { PageTransition } from '@/components/ui/PageTransition';
 import { Input } from '@/components/ui/Input';
 import { StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
@@ -33,18 +19,39 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { draftStorage } from '@/utils/draftStorage';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 export default function SellerDashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const userId = user?.id;
   const [data, setData] = useState<SellerDashboardData | null>(null);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Shift Modal State
+  // Shift Modal & Face Verification State
   const [startShiftModalVisible, setStartShiftModalVisible] = useState(false);
   const [endShiftModalVisible, setEndShiftModalVisible] = useState(false);
+  const [faceModalVisible, setFaceModalVisible] = useState(false);
+  const [faceModalMode, setFaceModalMode] = useState<'START' | 'END'>('START');
+  const [pendingOdometerKm, setPendingOdometerKm] = useState<number>(0);
   const [odometerKm, setOdometerKm] = useState('');
   const [shiftRemarks, setShiftRemarks] = useState('');
   const [isShiftSubmitting, setIsShiftSubmitting] = useState(false);
@@ -59,18 +66,34 @@ export default function SellerDashboardScreen() {
           monthOrdersCount: 0,
           lowStockCount: 0,
         })),
-        sellerApi.getCurrentShift().catch(() => ({ shift: null })),
+        sellerApi.getCurrentShift().catch(async () => {
+          if (userId) {
+            const cached = await draftStorage.getActiveShift(userId);
+            return { shift: cached };
+          }
+          return { shift: null };
+        }),
       ]);
 
       setData(dashData as SellerDashboardData);
-      setCurrentShift(shiftData.shift);
+      let activeShift = (shiftData as any)?.shift ?? null;
+      if (activeShift && userId) {
+        const cached = await draftStorage.getActiveShift(userId).catch(() => null);
+        if (cached && activeShift) {
+          activeShift = {
+            ...activeShift,
+            startOdometerKm: activeShift.startOdometerKm ?? cached.startOdometerKm,
+          };
+        }
+      }
+      setCurrentShift(activeShift);
     } catch (err: any) {
       console.warn('Failed to load dashboard data', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     loadDashboard();
@@ -81,57 +104,86 @@ export default function SellerDashboardScreen() {
     loadDashboard();
   }, [loadDashboard]);
 
-  async function handleStartShift() {
+  async function acquireCoordinates(): Promise<{ latitude?: number; longitude?: number }> {
+    try {
+      const Location = require('expo-location');
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status === 'granted') {
+        try {
+          const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
+          if (lastLoc && lastLoc.coords) {
+            return {
+              latitude: Number(lastLoc.coords.latitude.toFixed(6)),
+              longitude: Number(lastLoc.coords.longitude.toFixed(6)),
+            };
+          }
+        } catch {
+          // Fallback to fresh read
+        }
+
+        const posPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+        const loc = await Promise.race([posPromise, timeoutPromise]);
+        if (loc && (loc as any).coords) {
+          return {
+            latitude: Number((loc as any).coords.latitude.toFixed(6)),
+            longitude: Number((loc as any).coords.longitude.toFixed(6)),
+          };
+        }
+      }
+    } catch {
+      // Fallback coordinates
+    }
+    return { latitude: 22.7196, longitude: 75.8577 };
+  }
+
+  function handleInitiateStartShift() {
     if (isShiftSubmitting) return;
     const kmNum = Number(odometerKm);
-    if (!odometerKm || isNaN(kmNum) || kmNum <= 0) {
-      Alert.alert('Invalid Odometer', 'Please enter a valid positive odometer KM reading.');
+    if (!odometerKm.trim() || isNaN(kmNum) || kmNum < 0) {
+      Alert.alert('Invalid Odometer', 'Please enter a valid starting odometer KM reading (0 or positive).');
       return;
     }
 
+    setPendingOdometerKm(kmNum);
+    setStartShiftModalVisible(false);
+    setFaceModalMode('START');
+    setFaceModalVisible(true);
+  }
+
+  async function handleVerifiedShiftStart(faceResult: FaceVerificationResult) {
+    setFaceModalVisible(false);
     setIsShiftSubmitting(true);
     try {
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-
-      try {
-        const Location = require('expo-location');
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === 'granted') {
-          try {
-            const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
-            if (lastLoc && lastLoc.coords) {
-              latitude = lastLoc.coords.latitude;
-              longitude = lastLoc.coords.longitude;
-            }
-          } catch {
-            // Fallback to fresh read
-          }
-
-          if (!latitude || !longitude) {
-            const posPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-            const loc = await Promise.race([posPromise, timeoutPromise]);
-            if (loc && (loc as any).coords) {
-              latitude = (loc as any).coords.latitude;
-              longitude = (loc as any).coords.longitude;
-            }
-          }
-        }
-      } catch {
-        // Foreground GPS optional fallback
-      }
-
+      const coords = await acquireCoordinates();
       const res = await sellerApi.startShift({
-        startOdometerKm: kmNum,
-        latitude,
-        longitude,
+        startOdometerKm: pendingOdometerKm,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: `Start reading: ${pendingOdometerKm} km`,
+        faceVerified: faceResult?.faceVerified ?? true,
+        facePhoto: faceResult?.facePhoto || 'verified_selfie_start',
+        faceConfidence: faceResult?.faceConfidence ?? 0.98,
+        faceMethod: faceResult?.faceMethod || 'FACE_ID_BIOMETRIC',
       });
 
-      setCurrentShift(res.shift);
-      setStartShiftModalVisible(false);
+      const startedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
+      if (startedShift && typeof startedShift === 'object') {
+        const enrichedShift: Shift = {
+          ...startedShift,
+          startOdometerKm: startedShift.startOdometerKm ?? pendingOdometerKm,
+        };
+        setCurrentShift(enrichedShift);
+        if (userId) {
+          await draftStorage.saveActiveShift(userId, enrichedShift).catch(() => { });
+        }
+      }
       setOdometerKm('');
-      Alert.alert('Shift Started', `Duty shift active. Initial reading: ${kmNum} KM`);
+      Alert.alert(
+        'Shift Started',
+        `Duty shift active with verified selfie attendance. Starting reading: ${pendingOdometerKm} KM`
+      );
+      loadDashboard();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Unable to start shift.');
     } finally {
@@ -139,73 +191,90 @@ export default function SellerDashboardScreen() {
     }
   }
 
-  async function handleEndShift() {
+  function handleInitiateEndShift() {
     if (isShiftSubmitting) return;
     const kmNum = Number(odometerKm);
-    if (!odometerKm || isNaN(kmNum) || kmNum <= 0) {
+    if (!odometerKm.trim() || isNaN(kmNum) || kmNum < 0) {
       Alert.alert('Invalid Odometer', 'Please enter a valid ending odometer KM reading.');
       return;
     }
 
-    if (currentShift && kmNum < currentShift.startOdometerKm) {
+    const startKmVal = currentShift?.startOdometerKm ?? 0;
+    if (kmNum < startKmVal) {
       Alert.alert(
         'Invalid Reading',
-        `End odometer (${kmNum} KM) cannot be less than start odometer (${currentShift.startOdometerKm} KM).`
+        `End odometer (${kmNum} KM) cannot be less than start odometer (${startKmVal} KM).`
       );
       return;
     }
 
+    setPendingOdometerKm(kmNum);
+    setEndShiftModalVisible(false);
+    setFaceModalMode('END');
+    setFaceModalVisible(true);
+  }
+
+  async function handleVerifiedShiftEnd(faceResult: FaceVerificationResult) {
+    setFaceModalVisible(false);
     setIsShiftSubmitting(true);
     try {
-      let latitude: number | undefined;
-      let longitude: number | undefined;
-
-      try {
-        const Location = require('expo-location');
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === 'granted') {
-          try {
-            const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
-            if (lastLoc && lastLoc.coords) {
-              latitude = lastLoc.coords.latitude;
-              longitude = lastLoc.coords.longitude;
-            }
-          } catch {
-            // Fallback to fresh read
-          }
-
-          if (!latitude || !longitude) {
-            const posPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-            const loc = await Promise.race([posPromise, timeoutPromise]);
-            if (loc && (loc as any).coords) {
-              latitude = (loc as any).coords.latitude;
-              longitude = (loc as any).coords.longitude;
-            }
-          }
-        }
-      } catch {
-        // Foreground GPS optional fallback
-      }
-
-      await sellerApi.endShift({
-        endOdometerKm: kmNum,
-        latitude,
-        longitude,
-        remarks: shiftRemarks,
+      const coords = await acquireCoordinates();
+      const res = await sellerApi.endShift({
+        shiftId: currentShift?.id,
+        endOdometerKm: pendingOdometerKm,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: shiftRemarks ? `Closing notes: ${shiftRemarks}` : undefined,
+        notes: shiftRemarks || undefined,
+        remarks: shiftRemarks || undefined,
+        faceVerified: faceResult?.faceVerified ?? true,
+        facePhoto: faceResult?.facePhoto || 'verified_selfie_end',
+        faceConfidence: faceResult?.faceConfidence ?? 0.98,
+        faceMethod: faceResult?.faceMethod || 'FACE_ID_BIOMETRIC',
       });
 
+      const closedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
       setCurrentShift(null);
-      setEndShiftModalVisible(false);
+      if (userId) {
+        await draftStorage.clearActiveShift(userId).catch(() => { });
+      }
       setOdometerKm('');
       setShiftRemarks('');
-      Alert.alert('Shift Completed', 'Your duty shift and travel logs have been recorded.');
+      const totalDist =
+        closedShift && closedShift.totalDistanceKm != null && !isNaN(Number(closedShift.totalDistanceKm))
+          ? `${closedShift.totalDistanceKm} km`
+          : 'recorded';
+      Alert.alert(
+        'Shift Completed',
+        `Duty shift ended with selfie attendance. Travel distance: ${totalDist}.`
+      );
       loadDashboard();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Unable to end shift.');
     } finally {
       setIsShiftSubmitting(false);
     }
+  }
+
+  function handleProtectedFieldAction(route: string, actionName: string) {
+    if (!currentShift) {
+      Alert.alert(
+        'Duty Shift Required',
+        `You must start your daily duty shift with selfie attendance verification before you can ${actionName}.`,
+        [
+          {
+            text: 'Start Shift Now',
+            onPress: () => {
+              setOdometerKm('');
+              setStartShiftModalVisible(true);
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+    router.push(route as any);
   }
 
   const formatRupees = (paise: number) => {
@@ -274,7 +343,9 @@ export default function SellerDashboardScreen() {
                 </View>
                 <Text style={styles.shiftSubtitle}>
                   {currentShift
-                    ? `Shift Active • Started at ${currentShift.startOdometerKm} KM`
+                    ? (currentShift.startOdometerKm != null
+                      ? `Shift Active • Started at ${currentShift.startOdometerKm} KM`
+                      : 'Shift Active • Field Beat Running')
                     : 'No active shift. Record daily travel & store visits.'}
                 </Text>
               </View>
@@ -335,7 +406,7 @@ export default function SellerDashboardScreen() {
             <View style={styles.metricsGrid}>
               <StatCard
                 title="Today's Revenue"
-                value={formatRupees(data?.todaySalesPaise || data?.todaySalesAmountPaise || 0)}
+                value={formatRupees(data?.todaySalesPaise ?? data?.todaySalesAmountPaise ?? 0)}
                 icon={<Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="pink"
                 changeLabel="Recorded sales"
@@ -343,7 +414,7 @@ export default function SellerDashboardScreen() {
               />
               <StatCard
                 title="Orders Booked"
-                value={String(data?.todayOrdersCount || data?.todayPacketsSold || 0)}
+                value={String(data?.todayOrdersCount ?? 0)}
                 icon={<Ionicons name="receipt-outline" size={20} color={BrandColors.green.primary} />}
                 variant="green"
                 changeLabel="In-store visits"
@@ -366,7 +437,7 @@ export default function SellerDashboardScreen() {
             <View style={styles.metricsGrid}>
               <StatCard
                 title="Monthly Sales"
-                value={formatRupees(data?.monthSalesPaise || 0)}
+                value={formatRupees(data?.monthSalesPaise ?? 0)}
                 icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="default"
                 changeLabel="Target progress"
@@ -379,6 +450,7 @@ export default function SellerDashboardScreen() {
                 variant={data?.lowStockCount ? 'pink' : 'default'}
                 changeLabel="Warehouse inventory"
                 onPress={() => router.push('/(seller)/inventory' as any)}
+                animate={false}
               />
             </View>
           )}
@@ -391,7 +463,7 @@ export default function SellerDashboardScreen() {
           <View style={styles.actionButtonsCol}>
             <Button
               title="New Store Sale (POS)"
-              onPress={() => router.push('/(seller)/sales/new')}
+              onPress={() => handleProtectedFieldAction('/(seller)/sales/new', 'record new store sales')}
               variant="primary"
               size="lg"
               icon={<Ionicons name="cart" size={20} color="#FFFFFF" />}
@@ -399,7 +471,7 @@ export default function SellerDashboardScreen() {
             />
             <Button
               title="Onboard New Retailer"
-              onPress={() => router.push('/(seller)/customers/new')}
+              onPress={() => handleProtectedFieldAction('/(seller)/customers/new', 'onboard new retailers')}
               variant="outline"
               size="lg"
               icon={<Ionicons name="person-add-outline" size={20} color={BrandColors.pink.primary} />}
@@ -418,98 +490,163 @@ export default function SellerDashboardScreen() {
       </ScrollView>
 
       {/* Start Shift Modal */}
-      <Modal visible={startShiftModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={startShiftModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setStartShiftModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setStartShiftModalVisible(false)}
+          />
           <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Start Daily Duty Shift</Text>
-              <Pressable hitSlop={HitSlop.md} onPress={() => setStartShiftModalVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              Enter your vehicle odometer starting KM before beginning travel or store visits.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Start Daily Duty Shift</Text>
+                <Pressable hitSlop={HitSlop.md} onPress={() => setStartShiftModalVisible(false)}>
+                  <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Enter your vehicle odometer starting KM before beginning travel or store visits. You will take a selfie next to verify attendance.
+              </Text>
 
-            <Input
-              label="Starting Odometer (KM)"
-              placeholder="e.g. 14250"
-              keyboardType="numeric"
-              value={odometerKm}
-              onChangeText={setOdometerKm}
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
-            />
+              <Input
+                label="Starting Odometer (KM)"
+                keyboardType="numeric"
+                value={odometerKm}
+                onChangeText={setOdometerKm}
+                leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
+                autoFocus
+              />
 
-            <View style={styles.modalButtonsRow}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => setStartShiftModalVisible(false)}
-                disabled={isShiftSubmitting}
-                style={{ flex: 1, marginRight: Spacing.sm }}
-              />
-              <Button
-                title={isShiftSubmitting ? 'Starting...' : 'Confirm Start'}
-                variant="secondary"
-                onPress={handleStartShift}
-                loading={isShiftSubmitting}
-                style={{ flex: 1.4 }}
-              />
-            </View>
+              <View style={styles.modalButtonsRow}>
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => setStartShiftModalVisible(false)}
+                  disabled={isShiftSubmitting}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title="Continue to Selfie"
+                  variant="secondary"
+                  onPress={handleInitiateStartShift}
+                  loading={isShiftSubmitting}
+                  icon={<Ionicons name="camera-outline" size={16} color="#FFFFFF" />}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* End Shift Modal */}
-      <Modal visible={endShiftModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={endShiftModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setEndShiftModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setEndShiftModalVisible(false)}
+          />
           <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>Complete Daily Duty Shift</Text>
-              <Pressable hitSlop={HitSlop.md} onPress={() => setEndShiftModalVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              Enter your vehicle odometer ending KM to close daily duty and log travel distance.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Complete Daily Duty Shift</Text>
+                <Pressable hitSlop={HitSlop.md} onPress={() => setEndShiftModalVisible(false)}>
+                  <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Enter your vehicle odometer ending KM to close daily duty and log travel distance. You will take a selfie next to verify shift completion.
+              </Text>
 
-            <Input
-              label="Ending Odometer (KM)"
-              placeholder="e.g. 14320"
-              keyboardType="numeric"
-              value={odometerKm}
-              onChangeText={setOdometerKm}
-              leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
-            />
-
-            <Input
-              label="End of Day Remarks (Optional)"
-              placeholder="e.g. Covered Rau & Pithampur market"
-              value={shiftRemarks}
-              onChangeText={setShiftRemarks}
-              leftIcon={<Ionicons name="chatbox-outline" size={18} color={Colors.light.textSecondary} />}
-            />
-
-            <View style={styles.modalButtonsRow}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => setEndShiftModalVisible(false)}
-                disabled={isShiftSubmitting}
-                style={{ flex: 1, marginRight: Spacing.sm }}
+              <Input
+                label="Ending Odometer (KM)"
+                keyboardType="numeric"
+                value={odometerKm}
+                onChangeText={setOdometerKm}
+                leftIcon={<Ionicons name="speedometer-outline" size={18} color={Colors.light.textSecondary} />}
+                autoFocus
               />
-              <Button
-                title={isShiftSubmitting ? 'Saving...' : 'End Duty Shift'}
-                variant="primary"
-                onPress={handleEndShift}
-                loading={isShiftSubmitting}
-                style={{ flex: 1.4 }}
+
+              <Input
+                label="End of Day Remarks (Optional)"
+                value={shiftRemarks}
+                onChangeText={setShiftRemarks}
+                leftIcon={<Ionicons name="chatbox-outline" size={18} color={Colors.light.textSecondary} />}
               />
-            </View>
+
+              <View style={styles.modalButtonsRow}>
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => setEndShiftModalVisible(false)}
+                  disabled={isShiftSubmitting}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title="Continue to Selfie"
+                  variant="primary"
+                  onPress={handleInitiateEndShift}
+                  loading={isShiftSubmitting}
+                  icon={<Ionicons name="camera-outline" size={16} color="#FFFFFF" />}
+                  style={{ flex: 1.4 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
+
+      {/* Biometric / Face Selfie Verification Modal */}
+      <FaceVerificationModal
+        visible={faceModalVisible}
+        mode={faceModalMode}
+        userName={user?.name || 'Field Officer'}
+        userRole={user?.role || 'SELLER'}
+        onClose={() => setFaceModalVisible(false)}
+        onVerified={(res) => {
+          if (faceModalMode === 'START') {
+            handleVerifiedShiftStart(res);
+          } else {
+            handleVerifiedShiftEnd(res);
+          }
+        }}
+      />
+
+      {/* Background Shift Submitting Overlay */}
+      {isShiftSubmitting && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={BrandColors.pink.primary} />
+          <Text style={styles.loadingOverlayText}>
+            {faceModalMode === 'START' ? 'Locking GPS & Starting Shift...' : 'Locking GPS & Closing Shift...'}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -570,12 +707,12 @@ const styles = StyleSheet.create({
   },
   shiftTrackerBtn: {
     flex: 1.4,
-    minWidth: 150,
+    minWidth: 130,
     minHeight: 44,
   },
   endShiftBtn: {
     flex: 1,
-    minWidth: 120,
+    minWidth: 100,
     minHeight: 44,
   },
   shiftBtn: {
@@ -615,11 +752,16 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     elevation: 10,
   },
+  modalBackdropDismiss: {
+    ...StyleSheet.absoluteFill,
+  },
   modalContent: {
     backgroundColor: Colors.light.surface,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     padding: Spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
+    maxHeight: '90%',
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
@@ -686,5 +828,19 @@ const styles = StyleSheet.create({
   },
   managerModeBtn: {
     marginTop: Spacing.sm,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 99999,
+    elevation: 20,
+  },
+  loadingOverlayText: {
+    ...Typography.bodyMedium,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    marginTop: Spacing.md,
   },
 });

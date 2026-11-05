@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { adminApi } from '@/api/admin';
+import { adminApi, isSaleResubmitted } from '@/api/admin';
 import type { SaleItem, PaymentMode } from '@/api/types';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -60,7 +60,7 @@ export default function AdminSalesScreen() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'PENDING_APPROVAL' | 'REJECTED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'PENDING_APPROVAL' | 'RESUBMITTED' | 'REJECTED'>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<PaymentMode | 'ALL'>('ALL');
   const [periodFilter, setPeriodFilter] = useState<'all' | 'this_month' | 'last_month'>('all');
 
@@ -69,15 +69,26 @@ export default function AdminSalesScreen() {
 
   const fetchSales = useCallback(async () => {
     try {
+      const backendStatus =
+        statusFilter === 'RESUBMITTED'
+          ? 'PENDING_APPROVAL'
+          : statusFilter !== 'ALL'
+          ? statusFilter
+          : undefined;
+
       const res = await adminApi.listSales({
         page: 1,
         pageSize: 100,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        status: backendStatus,
         paymentMode: paymentFilter !== 'ALL' ? paymentFilter : undefined,
         period: periodFilter,
         search: search.trim() || undefined,
       });
-      setSales(res.items || res.sales || []);
+      let fetched = res.items || res.sales || [];
+      if (statusFilter === 'RESUBMITTED') {
+        fetched = fetched.filter((s) => isSaleResubmitted(s));
+      }
+      setSales(fetched);
     } catch (err: any) {
       console.warn('Failed to load sales list', err);
     } finally {
@@ -116,6 +127,7 @@ export default function AdminSalesScreen() {
     const customerName = item.customer?.shopName || 'Retail Customer';
     const sellerName = item.seller?.name || 'Field Officer';
     const createdAt = formatISTDateTime(item.createdAt || (item as any).requestedAt);
+    const isResubmitted = isSaleResubmitted(item);
 
     return (
       <Card style={styles.saleCard}>
@@ -127,7 +139,11 @@ export default function AdminSalesScreen() {
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Badge label={item.status} variant={item.status as BadgeVariant} size="sm" />
+            {isResubmitted ? (
+              <Badge label="RESUBMITTED FOR APPROVAL" variant="purple" size="sm" />
+            ) : (
+              <Badge label={item.status} variant={item.status as BadgeVariant} size="sm" />
+            )}
             <Badge label={item.paymentMode} variant={item.paymentMode as BadgeVariant} size="sm" />
           </View>
         </View>
@@ -209,14 +225,17 @@ export default function AdminSalesScreen() {
 
         {/* Status filters */}
         <View style={styles.filterTabsRow}>
-          {(['ALL', 'CONFIRMED', 'PENDING_APPROVAL', 'REJECTED'] as const).map((st) => (
+          {(['ALL', 'CONFIRMED', 'PENDING_APPROVAL', 'RESUBMITTED', 'REJECTED'] as const).map((st) => (
             <TouchableOpacity
               key={st}
-              style={[styles.filterTab, statusFilter === st && styles.filterTabActive]}
+              style={[
+                styles.filterTab,
+                statusFilter === st && (st === 'RESUBMITTED' ? styles.filterTabActivePurple : styles.filterTabActive),
+              ]}
               onPress={() => setStatusFilter(st)}
             >
               <Text style={[styles.filterTabText, statusFilter === st && styles.filterTabTextActive]}>
-                {st === 'PENDING_APPROVAL' ? 'PENDING' : st}
+                {st === 'PENDING_APPROVAL' ? 'PENDING' : st === 'RESUBMITTED' ? 'RESUBMITTED' : st}
               </Text>
             </TouchableOpacity>
           ))}
@@ -432,6 +451,9 @@ const styles = StyleSheet.create({
   },
   filterTabActive: {
     backgroundColor: BrandColors.pink.primary,
+  },
+  filterTabActivePurple: {
+    backgroundColor: '#7C3AED',
   },
   filterTabText: {
     ...Typography.caption,

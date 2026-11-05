@@ -26,6 +26,7 @@ import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem } from '@/api/types';
 import { ISTClock } from '@/components/common/ISTClock';
+import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -44,11 +45,16 @@ import {
   Typography,
 } from '@/constants/theme';
 import { draftStorage } from '@/utils/draftStorage';
+import { useAuth } from '@/context/AuthContext';
+import { checkHasActiveShift } from '@/utils/shiftGuard';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
 
 export default function AddCustomerScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [hasActiveShift, setHasActiveShift] = useState<boolean | null>(null);
+  const [checkingShift, setCheckingShift] = useState(true);
 
   // Form Fields
   const [shopName, setShopName] = useState('');
@@ -90,6 +96,13 @@ export default function AddCustomerScreen() {
   const [savedCustomer, setSavedCustomer] = useState<CustomerItem | null>(null);
 
   useEffect(() => {
+    checkHasActiveShift(user?.id).then((res) => {
+      setHasActiveShift(res.hasActiveShift);
+      setCheckingShift(false);
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
     // 1. Fetch categories
     categoriesApi
       .listCategories()
@@ -124,6 +137,7 @@ export default function AddCustomerScreen() {
   }, []);
 
   // Auto-save form draft on meaningful edits
+
   useEffect(() => {
     if (shopName || phone || ownerName) {
       const timer = setTimeout(() => {
@@ -245,6 +259,21 @@ export default function AddCustomerScreen() {
 
   async function handleSubmit() {
     if (isSubmitting) return;
+
+    const shiftCheck = await checkHasActiveShift(user?.id);
+    if (!shiftCheck.hasActiveShift) {
+      setFeedback({
+        type: 'error',
+        title: 'Duty Shift Required',
+        message: 'You must start your daily duty shift with selfie attendance before onboarding retailers.',
+      });
+      Alert.alert(
+        'Duty Shift Required',
+        'You must start your daily duty shift with selfie attendance before onboarding retailers.'
+      );
+      return;
+    }
+
     if (!validate()) {
       setFeedback({
         type: 'error',
@@ -340,6 +369,24 @@ export default function AddCustomerScreen() {
           </View>
         </ScrollView>
       </View>
+    );
+  }
+
+  if (checkingShift) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={BrandColors.pink.primary} />
+      </View>
+    );
+  }
+
+  if (hasActiveShift === false) {
+    return (
+      <ShiftRequiredGate
+        title="Onboard Customer"
+        subtitle="Daily Duty Shift Required"
+        actionName="onboard new retailers or register new stores"
+      />
     );
   }
 
@@ -502,7 +549,6 @@ export default function AddCustomerScreen() {
                 </View>
                 <Input
                   label="Custom Exemption Reason Details *"
-                  placeholder="e.g. Remote rural location, Owner unavailable"
                   value={noPhotoReason}
                   onChangeText={setNoPhotoReason}
                   error={errors.noPhotoReason}
@@ -520,7 +566,6 @@ export default function AddCustomerScreen() {
           <Card style={styles.card}>
             <Input
               label="Shop / Store Name *"
-              placeholder="e.g. Shree Ganesh General Stores"
               value={shopName}
               onChangeText={setShopName}
               error={errors.shopName}
@@ -529,7 +574,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Contact Person / Owner Name *"
-              placeholder="e.g. Ramesh Patel"
               value={ownerName}
               onChangeText={setOwnerName}
               error={errors.ownerName}
@@ -538,7 +582,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Mobile Number *"
-              placeholder="e.g. 9876543210"
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
@@ -549,7 +592,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Customer Email Address *"
-              placeholder="e.g. ramesh@example.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -587,7 +629,6 @@ export default function AddCustomerScreen() {
           <Card style={styles.card}>
             <Input
               label="PIN Code *"
-              placeholder="e.g. 452001"
               value={pincode}
               onChangeText={handlePincodeChange}
               keyboardType="numeric"
@@ -604,7 +645,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="Street Address / Shop No. *"
-              placeholder="e.g. Shop 4, Main Market Road"
               value={address}
               onChangeText={setAddress}
               error={errors.address}
@@ -615,7 +655,6 @@ export default function AddCustomerScreen() {
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
                 <Input
                   label="Village / Ward"
-                  placeholder="e.g. Rau"
                   value={village}
                   onChangeText={setVillage}
                 />
@@ -623,7 +662,6 @@ export default function AddCustomerScreen() {
               <View style={{ flex: 1 }}>
                 <Input
                   label="District *"
-                  placeholder="e.g. Indore"
                   value={district}
                   onChangeText={setDistrict}
                   error={errors.district}
@@ -633,7 +671,6 @@ export default function AddCustomerScreen() {
 
             <Input
               label="State *"
-              placeholder="e.g. Madhya Pradesh"
               value={stateName}
               onChangeText={setStateName}
               error={errors.stateName}

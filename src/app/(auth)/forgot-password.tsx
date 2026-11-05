@@ -107,7 +107,6 @@ export default function ForgotPasswordScreen() {
               <>
                 <Input
                   label="Registered Email"
-                  placeholder="e.g. yourname@femmeflo.com"
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"

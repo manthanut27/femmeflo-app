@@ -1,6 +1,7 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { BrandColors, Colors, Radius, Spacing, Typography } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
@@ -35,11 +36,7 @@ export default function StartupScreen() {
           accessibilityRole="image"
           accessibilityLabel="FemmeFlo logo"
         >
-          <Image
-            source={require('../../assets/images/femmeflo-mark.png')}
-            style={styles.logoMark}
-            resizeMode="contain"
-          />
+          <Ionicons name="flower-outline" size={42} color={BrandColors.pink.primary} />
         </View>
         <Text style={styles.brandTitle}>FemmeFlo</Text>
         <Text style={styles.brandSubtitle}>Operations & Field Distribution</Text>
@@ -66,24 +63,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl,
   },
   logoBadge: {
-    width: 88,
-    height: 88,
+    width: 80,
+    height: 80,
     borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: BrandColors.pink.subtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
     borderWidth: 1.5,
-    borderColor: '#D1FAE5',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  logoMark: {
-    width: 58,
-    height: 58,
+    borderColor: BrandColors.pink.tint,
   },
   brandTitle: {
     ...Typography.display,

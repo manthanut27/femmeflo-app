@@ -2,7 +2,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  DeviceEventEmitter,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,12 +14,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
 import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
@@ -65,6 +71,13 @@ export default function ManagerSalesScreen() {
     totalPages: 1,
   });
 
+  const insets = useSafeAreaInsets();
+  const [selectedRejectedSale, setSelectedRejectedSale] = useState<SaleItem | null>(null);
+  const [managerPriceModalVisible, setManagerPriceModalVisible] = useState(false);
+  const [managerEditPriceStr, setManagerEditPriceStr] = useState('');
+  const [managerEditNotes, setManagerEditNotes] = useState('');
+  const [isManagerSubmitting, setIsManagerSubmitting] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -91,6 +104,84 @@ export default function ManagerSalesScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      loadData();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [loadData]);
+
+  const handleOpenManagerPriceModal = (item: SaleItem) => {
+    setSelectedRejectedSale(item);
+    const qty = item.quantity || item.packetCount || 1;
+    const currentPricePaise =
+      item.unitPricePaise ||
+      (item.items?.[0]?.unitPricePaise
+        ? item.items[0].unitPricePaise
+        : qty > 0
+          ? Math.round((item.totalAmountPaise ?? item.totalPaise ?? 0) / qty)
+          : 2500);
+    setManagerEditPriceStr(((currentPricePaise || 2500) / 100).toFixed(2));
+    setManagerEditNotes('');
+    setManagerPriceModalVisible(true);
+  };
+
+  const handleManagerResubmitPrice = async () => {
+    if (!selectedRejectedSale || isManagerSubmitting) return;
+    const priceNum = parseFloat(managerEditPriceStr);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      Alert.alert('Invalid Price', 'Please enter a valid price greater than ₹0.00');
+      return;
+    }
+
+    const newUnitPricePaise = Math.round(priceNum * 100);
+    const qty = selectedRejectedSale.quantity || selectedRejectedSale.packetCount || 1;
+    const newTotalPaise = qty * newUnitPricePaise;
+
+    setIsManagerSubmitting(true);
+    try {
+      const res = await managerApi.updateSale(selectedRejectedSale.id, {
+        unitPricePaise: newUnitPricePaise,
+        customerFeedback: managerEditNotes.trim()
+          ? `[Manager Price Revised: ₹${priceNum.toFixed(2)}] ${managerEditNotes.trim()}`
+          : selectedRejectedSale.customerFeedback || undefined,
+      });
+
+      // Update state locally
+      setSales((prev) =>
+        prev.map((s) =>
+          s.id === selectedRejectedSale.id
+            ? {
+                ...s,
+                ...(res?.sale || {}),
+                status: (res?.sale && res.sale.status) ? res.sale.status : 'PENDING_APPROVAL',
+                unitPricePaise: newUnitPricePaise,
+                totalAmountPaise: newTotalPaise,
+                totalPaise: newTotalPaise,
+                rejectionReason: null,
+                approvalReason: `Manager revised price to ₹${priceNum.toFixed(2)}/pkt`,
+              }
+            : s
+        )
+      );
+
+      setManagerPriceModalVisible(false);
+
+      DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { saleId: selectedRejectedSale.id, action: 'RESUBMIT' });
+
+      Alert.alert(
+        'Price Updated & Resubmitted',
+        `Order #${selectedRejectedSale.id.slice(0, 8)} price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Sent to Super Admin for reapproval.`
+      );
+    } catch (err: any) {
+      Alert.alert('Update Failed', err.message || 'Unable to update price and resubmit.');
+    } finally {
+      setIsManagerSubmitting(false);
+    }
+  };
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -203,6 +294,28 @@ export default function ManagerSalesScreen() {
             </Text>
           </View>
         ) : null}
+
+        {/* Rejected Sale: Reapproval Action Banner */}
+        {item.status === 'REJECTED' && (
+          <View style={styles.managerRejectedBanner}>
+            <View style={{ flex: 1, marginRight: Spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="close-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
+                <Text style={styles.managerRejectedTitle}>Price Rejected by Admin</Text>
+              </View>
+              <Text style={styles.managerRejectedReason} numberOfLines={2}>
+                {item.rejectionReason || 'Price below threshold. Edit price to resubmit for reapproval.'}
+              </Text>
+            </View>
+            <Button
+              title="Edit Price"
+              variant="outline"
+              size="sm"
+              icon={<Ionicons name="pricetag-outline" size={14} color={BrandColors.pink.primary} />}
+              onPress={() => handleOpenManagerPriceModal(item)}
+            />
+          </View>
+        )}
 
         <View style={styles.footer}>
           <View style={styles.sellerInfo}>
@@ -411,6 +524,28 @@ export default function ManagerSalesScreen() {
                                   </Text>
                                 </View>
                               ) : null}
+
+                              {/* Rejected Sale Action Banner */}
+                              {item.status === 'REJECTED' && (
+                                <View style={[styles.managerRejectedBanner, { marginTop: 8 }]}>
+                                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                      <Ionicons name="close-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
+                                      <Text style={styles.managerRejectedTitle}>Price Rejected</Text>
+                                    </View>
+                                    <Text style={styles.managerRejectedReason} numberOfLines={2}>
+                                      {item.rejectionReason || 'Price below minimum floor.'}
+                                    </Text>
+                                  </View>
+                                  <Button
+                                    title="Edit Price"
+                                    variant="outline"
+                                    size="sm"
+                                    icon={<Ionicons name="pricetag-outline" size={14} color={BrandColors.pink.primary} />}
+                                    onPress={() => handleOpenManagerPriceModal(item)}
+                                  />
+                                </View>
+                              )}
                             </Card>
                           );
                         })}
@@ -494,6 +629,117 @@ export default function ManagerSalesScreen() {
             />
           )}
         </View>
+      )}
+
+      {/* Manager Price Edit & Reapproval Modal */}
+      {selectedRejectedSale && (
+        <Modal visible={managerPriceModalVisible} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.modalHeaderRow}>
+                  <Text style={styles.modalTitle}>Edit Price for Reapproval</Text>
+                  <Pressable
+                    onPress={() => setManagerPriceModalVisible(false)}
+                    hitSlop={HitSlop.md}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close"
+                  >
+                    <Ionicons name="close" size={24} color="#64748B" />
+                  </Pressable>
+                </View>
+                <Text style={styles.modalSubtitle}>
+                  Order #{selectedRejectedSale.id.slice(0, 8)} • Officer: {selectedRejectedSale.seller?.name || 'Field Officer'}
+                </Text>
+
+                {/* Rejection context box */}
+                {selectedRejectedSale.rejectionReason ? (
+                  <View style={styles.rejectionContextBox}>
+                    <Ionicons name="alert-circle" size={18} color="#B4234D" style={{ marginRight: 8, marginTop: 1 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rejectionContextTitle}>Admin Rejection Reason</Text>
+                      <Text style={styles.rejectionContextText}>{selectedRejectedSale.rejectionReason}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Order & Pricing Summary Box */}
+                <View style={styles.priceSummaryBox}>
+                  <View style={styles.priceSummaryItem}>
+                    <Text style={styles.priceSummaryLabel}>Order Qty</Text>
+                    <Text style={styles.priceSummaryValue}>
+                      {selectedRejectedSale.quantity || selectedRejectedSale.packetCount || 1} pkts
+                    </Text>
+                  </View>
+                  <View style={styles.priceSummaryDivider} />
+                  <View style={styles.priceSummaryItem}>
+                    <Text style={styles.priceSummaryLabel}>Previous Price</Text>
+                    <Text style={styles.priceSummaryValue}>
+                      ₹{(((selectedRejectedSale.unitPricePaise || Math.round((selectedRejectedSale.totalAmountPaise ?? selectedRejectedSale.totalPaise ?? 0) / (selectedRejectedSale.quantity || selectedRejectedSale.packetCount || 1))) || 0) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.priceSummaryDivider} />
+                  <View style={styles.priceSummaryItem}>
+                    <Text style={styles.priceSummaryLabel}>Min Floor</Text>
+                    <Text style={[styles.priceSummaryValue, { color: BrandColors.pink.primary }]}>₹25.00</Text>
+                  </View>
+                </View>
+
+                {/* Revised Unit Price Input */}
+                <Input
+                  label="Manager Revised Unit Price (₹ per packet)"
+                  placeholder="e.g. 26.50"
+                  value={managerEditPriceStr}
+                  onChangeText={setManagerEditPriceStr}
+                  keyboardType="decimal-pad"
+                  leftIcon={<Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.pink.primary }}>₹</Text>}
+                  containerStyle={{ marginTop: Spacing.sm }}
+                />
+
+                {/* Live Calculation Preview */}
+                {(() => {
+                  const p = parseFloat(managerEditPriceStr);
+                  const isValid = !isNaN(p) && p > 0;
+                  const total = isValid ? p * (selectedRejectedSale.quantity || selectedRejectedSale.packetCount || 1) : 0;
+                  return (
+                    <View style={styles.calculationPreview}>
+                      <Text style={styles.calcLabel}>Revised Total Order Value:</Text>
+                      <Text style={styles.calcValue}>₹{total.toFixed(2)}</Text>
+                    </View>
+                  );
+                })()}
+
+                {/* Reapproval Notes / Justification */}
+                <Input
+                  label="Manager Justification / Authorization Notes"
+                  placeholder="e.g. Approved price revision for territory beat"
+                  value={managerEditNotes}
+                  onChangeText={setManagerEditNotes}
+                  containerStyle={{ marginTop: Spacing.xs }}
+                  leftIcon={<Ionicons name="document-text-outline" size={18} color="#94A3B8" />}
+                />
+
+                <View style={styles.modalButtonsRow}>
+                  <Button
+                    title="Cancel"
+                    variant="ghost"
+                    onPress={() => setManagerPriceModalVisible(false)}
+                    disabled={isManagerSubmitting}
+                    style={{ flex: 1, marginRight: Spacing.sm }}
+                  />
+                  <Button
+                    title={isManagerSubmitting ? 'Resubmitting...' : 'Resubmit for Approval'}
+                    variant="primary"
+                    onPress={handleManagerResubmitPrice}
+                    loading={isManagerSubmitting}
+                    disabled={!managerEditPriceStr || isNaN(parseFloat(managerEditPriceStr)) || parseFloat(managerEditPriceStr) <= 0 || isManagerSubmitting}
+                    style={{ flex: 1.6 }}
+                  />
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -831,5 +1077,134 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: Spacing.lg,
     gap: Spacing.md,
+  },
+  managerRejectedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FECDD3',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  managerRejectedTitle: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  managerRejectedReason: {
+    ...Typography.caption,
+    color: '#BE123C',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.light.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.xxl,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
+    ...Shadows.lg,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  modalTitle: {
+    ...Typography.h2,
+    color: Colors.light.heading,
+  },
+  modalSubtitle: {
+    ...Typography.bodyMedium,
+    color: BrandColors.pink.primary,
+    marginBottom: Spacing.lg,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    marginTop: Spacing.md,
+  },
+  rejectionContextBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FDA4AF',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  rejectionContextTitle: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#9F1239',
+    textTransform: 'uppercase',
+  },
+  rejectionContextText: {
+    ...Typography.bodySmall,
+    color: '#BE123C',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  priceSummaryBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  priceSummaryItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  priceSummaryLabel: {
+    ...Typography.caption,
+    color: '#64748B',
+  },
+  priceSummaryValue: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  priceSummaryDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#CBD5E1',
+  },
+  calculationPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginVertical: Spacing.sm,
+  },
+  calcLabel: {
+    ...Typography.bodySmall,
+    color: '#166534',
+    fontWeight: '600',
+  },
+  calcValue: {
+    ...Typography.bodyMedium,
+    fontWeight: '800',
+    color: '#15803D',
   },
 });

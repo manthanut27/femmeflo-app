@@ -148,6 +148,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   titleWrapper: {
+    minWidth: 0,
     flex: 1,
   },
   title: {
@@ -162,6 +163,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   rightContainer: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,

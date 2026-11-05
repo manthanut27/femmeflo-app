@@ -26,6 +26,16 @@ export const authApi = {
   },
 
   /**
+   * Update current user's profile details
+   */
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
    * Change current user's password
    */
   async changePassword(payload: { currentPassword: string; newPassword: string }): Promise<{ success: boolean; message: string }> {

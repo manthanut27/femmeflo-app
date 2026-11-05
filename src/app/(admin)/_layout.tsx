@@ -45,10 +45,10 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Executive',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'home' : 'home-outline'}
+              name={focused ? 'pie-chart' : 'pie-chart-outline'}
               size={size}
               color={typeof color === 'string' ? color : undefined}
             />
@@ -84,7 +84,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'Stock',
+          title: 'HQ Stock',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'cube' : 'cube-outline'}
@@ -97,10 +97,10 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="users/index"
         options={{
-          title: 'Team',
+          title: 'Users',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'people' : 'people-outline'}
+              name={focused ? 'people-circle' : 'people-circle-outline'}
               size={size}
               color={typeof color === 'string' ? color : undefined}
             />
@@ -142,15 +142,6 @@ export default function AdminTabsLayout() {
         name="users/new"
         options={{
           title: 'Onboard User',
-          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="users/[id]"
-        options={{
-          title: 'User Details',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },
@@ -277,7 +268,7 @@ const styles = StyleSheet.create({
   },
   tabBarLabel: {
     ...Typography.caption,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
 });

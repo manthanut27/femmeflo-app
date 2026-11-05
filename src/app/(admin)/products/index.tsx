@@ -414,7 +414,6 @@ export default function AdminProductsScreen() {
               <Text style={styles.inputLabel}>Product Name *</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. FemmeFlo Anion Wings Ultra 280mm"
                 value={formName}
                 onChangeText={setFormName}
               />
@@ -424,7 +423,6 @@ export default function AdminProductsScreen() {
                   <Text style={styles.inputLabel}>SKU Code</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="e.g. FF-WNG-280"
                     value={formSku}
                     onChangeText={setFormSku}
                     autoCapitalize="characters"
@@ -444,7 +442,6 @@ export default function AdminProductsScreen() {
               <Text style={styles.inputLabel}>Base Selling Price (₹) *</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. 35.00"
                 value={formBasePrice}
                 onChangeText={(val) => {
                   setFormBasePrice(val);
@@ -458,7 +455,6 @@ export default function AdminProductsScreen() {
               <Text style={styles.inputLabel}>Minimum Floor Price (₹) *</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. 25.00"
                 value={formMinPrice}
                 onChangeText={setFormMinPrice}
                 keyboardType="numeric"

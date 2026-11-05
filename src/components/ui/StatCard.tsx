@@ -29,6 +29,7 @@ export interface StatCardProps {
   style?: StyleProp<ViewStyle>;
   accentColor?: string;
   variant?: 'pink' | 'green' | 'default' | 'neutral';
+  animate?: boolean;
 }
 
 export function StatCard({
@@ -47,6 +48,7 @@ export function StatCard({
   style,
   accentColor,
   variant,
+  animate = true,
 }: StatCardProps) {
   const isCustomIcon = React.isValidElement(icon);
   const resolvedAccentColor =
@@ -85,6 +87,7 @@ export function StatCard({
         numberOfLines={1}
         adjustsFontSizeToFit
         minimumFontScale={0.75}
+        animate={animate}
       />
 
       {trend ? (
@@ -151,7 +154,7 @@ export function StatCard({
 const styles = StyleSheet.create({
   pressableWrapper: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 110,
   },
   card: {
     backgroundColor: Colors.light.surface,

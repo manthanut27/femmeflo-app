@@ -275,6 +275,10 @@ export interface SaleItem {
   createdAt: string;
   requestedAt?: string;
   confirmedAt?: string | null;
+  resubmittedAt?: string | null;
+  isResubmitted?: boolean;
+  resubmitForApproval?: boolean;
+  updatedAt?: string;
 }
 
 export interface CreateSalePayload {
@@ -302,8 +306,10 @@ export interface UpdateSalePayload {
 }
 
 export interface CollectPaymentPayload {
-  paymentMode: 'CASH' | 'BANK';
+  paymentMode?: 'CASH' | 'BANK';
+  mode?: 'CASH' | 'BANK';
   paymentReference?: string;
+  amountPaise?: number;
 }
 
 // ----------------------------------------------------
@@ -381,6 +387,7 @@ export interface StartShiftPayload {
 }
 
 export interface CheckInPayload {
+  shiftId?: string;
   customerId?: string;
   shopName?: string;
   latitude?: number;
@@ -403,6 +410,7 @@ export interface CheckOutPayload {
 }
 
 export interface EndShiftPayload {
+  shiftId?: string;
   endOdometerKm?: number;
   endLatitude?: number;
   endLongitude?: number;

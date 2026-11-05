@@ -1,4 +1,5 @@
 import { apiRequest, uploadFileMultipart } from './client';
+import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import type {
   BulkCustomerResponse,
   CreateBulkCustomersPayload,
@@ -12,6 +13,7 @@ import type {
   PublicUser,
   SaleItem,
   Shift,
+  UpdateSalePayload,
 } from './types';
 
 export interface ManagerSellerItem extends PublicUser {
@@ -21,6 +23,15 @@ export interface ManagerSellerItem extends PublicUser {
 }
 
 export const managerApi = {
+  // ----------------------------------------------------
+  // Profile & Settings
+  // ----------------------------------------------------
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('manager/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
   // ----------------------------------------------------
   // Dashboard
   // ----------------------------------------------------
@@ -71,6 +82,8 @@ export const managerApi = {
     return { seller: (raw?.seller ?? raw?.user)! };
   },
 
+  
+
   async createSeller(payload: {
     name: string;
     email?: string;
@@ -96,7 +109,7 @@ export const managerApi = {
     const body: Record<string, any> = {
       name: payload.name.trim(),
       phone,
-      password: payload.password?.trim() || 'FemmeFlo@2026',
+      password: payload.password?.trim() || '',
     };
     if (payload.email?.trim()) body.email = payload.email.trim();
     if (payload.state?.trim()) body.state = payload.state.trim();
@@ -108,9 +121,6 @@ export const managerApi = {
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
     if (payload.active !== undefined) body.active = payload.active;
     if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
-    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
-    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
-    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
     if (payload.address?.trim()) body.address = payload.address.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
 
@@ -118,6 +128,20 @@ export const managerApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    return { seller: (raw?.seller ?? raw?.user)! };
+  },
+
+  async updateSeller(
+    sellerId: string,
+    payload: Partial<PublicUser> & { dailyTarget?: number }
+  ): Promise<{ seller: ManagerSellerItem }> {
+    const raw = await apiRequest<{ seller?: ManagerSellerItem; user?: ManagerSellerItem }>(
+      `manager/sellers/${sellerId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
     return { seller: (raw?.seller ?? raw?.user)! };
   },
 
@@ -229,6 +253,21 @@ export const managerApi = {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
     };
+  },
+
+  async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
+    const cleanPayload = sanitizeUpdateSalePayload(payload);
+    try {
+      return await apiRequest<{ sale: SaleItem }>(`manager/sales/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(cleanPayload),
+      });
+    } catch {
+      return await apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(cleanPayload),
+      });
+    }
   },
 
   // ----------------------------------------------------

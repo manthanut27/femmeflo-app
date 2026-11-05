@@ -33,6 +33,7 @@ import {
   MANAGER_PERMISSIONS,
   PERMISSION_METADATA,
   hasPermission,
+  sanitizeBackendPermissions,
   syncPermissionAliases,
 } from '@/utils/permissions';
 
@@ -114,7 +115,7 @@ export default function AdminPermissionsScreen() {
   const handleSavePermissions = () => {
     const isOverall = scopeMode === 'overall';
     const rawList = isOverall ? overallPermissions : activePermissions;
-    const finalPermissions = syncPermissionAliases(rawList);
+    const finalPermissions = sanitizeBackendPermissions(rawList);
 
     const targetTitle = isOverall
       ? `all ${managers.length} Territory Managers`

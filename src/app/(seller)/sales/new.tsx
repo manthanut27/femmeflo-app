@@ -23,6 +23,12 @@ import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanne
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageTransition } from '@/components/ui/PageTransition';
+import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
+import {
+  DropdownOption,
+  DropdownTrigger,
+  SearchableDropdownModal,
+} from '@/components/ui/SearchableDropdownModal';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
   BrandColors,
@@ -42,6 +48,7 @@ import {
   shouldRotateIdempotencyKey,
   type OrderDraftLineItem,
 } from '@/utils/draftStorage';
+import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 interface CartLineItem {
   key: string;
@@ -64,6 +71,7 @@ export default function NewSaleScreen() {
 
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState(params.customerId || '');
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartLineItem[]>([
     { key: 'line_1', productId: '', quantity: 10, unitPriceRupees: 35 },
   ]);
@@ -78,6 +86,7 @@ export default function NewSaleScreen() {
   const [isDraftRestored, setIsDraftRestored] = useState(false);
 
   // Submission State
+  const [hasActiveShift, setHasActiveShift] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{
@@ -94,12 +103,15 @@ export default function NewSaleScreen() {
   useEffect(() => {
     async function initScreen() {
       try {
-        const [custRes, prodRes, invRes, savedDraft] = await Promise.all([
+        const [custRes, prodRes, invRes, savedDraft, shiftRes] = await Promise.all([
           sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
           sellerApi.listProducts().catch(() => ({ items: [] })),
           sellerApi.getInventory().catch(() => ({ balance: 0, products: [] })),
           draftStorage.getOrderDraft(userId).catch(() => null),
+          checkHasActiveShift(userId).catch(() => ({ hasActiveShift: false, shift: null })),
         ]);
+
+        setHasActiveShift(shiftRes.hasActiveShift);
 
         const loadedCustomers = custRes.items || [];
         const loadedProducts = prodRes.items || [];
@@ -393,6 +405,21 @@ export default function NewSaleScreen() {
 
   async function handleConfirmSale() {
     if (isSubmitting) return;
+
+    const shiftCheck = await checkHasActiveShift(userId);
+    if (!shiftCheck.hasActiveShift) {
+      setFeedback({
+        type: 'error',
+        title: 'Duty Shift Required',
+        message: 'You must start your daily duty shift with selfie attendance before recording sales.',
+      });
+      Alert.alert(
+        'Duty Shift Required',
+        'You must start your daily duty shift with selfie attendance before recording sales.'
+      );
+      return;
+    }
+
     if (!validate()) {
       Alert.alert('Incomplete Sale', 'Please review highlighted fields in your cart.');
       return;
@@ -458,8 +485,29 @@ export default function NewSaleScreen() {
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
+  const customerDropdownOptions = useMemo<DropdownOption[]>(() => {
+    return customers.map((c) => ({
+      id: c.id,
+      title: c.shopName,
+      subtitle: `Owner: ${c.ownerName || (c as any).contactName || '—'} • ${c.village || c.district || 'Territory'} • 📞 ${c.phone}`,
+      badge: c.category?.name || 'RETAIL',
+      icon: 'storefront-outline',
+      metadata: `${c.phone || ''} ${c.address || ''} ${c.pincode || ''}`,
+    }));
+  }, [customers]);
+
   if (loading) {
     return <LoadingState message="Loading POS catalog & inventory..." />;
+  }
+
+  if (hasActiveShift === false) {
+    return (
+      <ShiftRequiredGate
+        title="New Store Sale (POS)"
+        subtitle="Daily Duty Shift Required"
+        actionName="record store sales or create new orders"
+      />
+    );
   }
 
   return (
@@ -499,39 +547,83 @@ export default function NewSaleScreen() {
 
           {/* CUSTOMER SELECTION CARD */}
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>1. Select Retail Customer</Text>
-            <Text style={styles.sectionSubtitle}>
-              Customer must be assigned to your field route.
-            </Text>
+            <View style={styles.customerHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>1. Select Retail Customer</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Customer must be assigned to your field route.
+                </Text>
+              </View>
+              {selectedCustomer && (
+                <Pressable
+                  onPress={() => setCustomerPickerOpen(true)}
+                  hitSlop={HitSlop.md}
+                  style={styles.searchCustomerPill}
+                >
+                  <Ionicons name="search-outline" size={13} color={BrandColors.pink.primary} />
+                  <Text style={styles.searchCustomerPillText}>Change / Search</Text>
+                </Pressable>
+              )}
+            </View>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {customers.map((c) => {
-                const isSelected = c.id === selectedCustomerId;
-                return (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => setSelectedCustomerId(c.id)}
-                    style={[styles.customerChip, isSelected && styles.customerChipActive]}
-                    hitSlop={HitSlop.sm}
-                  >
-                    <Ionicons
-                      name="storefront-outline"
-                      size={14}
-                      color={isSelected ? '#FFFFFF' : Colors.light.textSecondary}
-                    />
-                    <Text
-                      style={[
-                        styles.customerChipText,
-                        isSelected && styles.customerChipTextActive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {c.shopName}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            {/* Searchable Dropdown Trigger */}
+            <DropdownTrigger
+              label="Assigned Retail Outlet"
+              required
+              value={selectedCustomer?.shopName}
+              subtitle={
+                selectedCustomer
+                  ? `Owner: ${selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'} • ${selectedCustomer.village || selectedCustomer.district || 'Territory'}`
+                  : 'Tap to search & select retail customer'
+              }
+              placeholder="Tap to search & select retail customer..."
+              badge={selectedCustomer ? 'ASSIGNED' : undefined}
+              icon="storefront"
+              onPress={() => setCustomerPickerOpen(true)}
+              error={errors.customer}
+            />
+
+            {/* Quick Pick Chips */}
+            {customers.length > 0 && (
+              <View style={styles.quickChipsWrapper}>
+                <Text style={styles.quickChipsTitle}>Quick Pick Outlet:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                  {customers.map((c) => {
+                    const isSelected = c.id === selectedCustomerId;
+                    return (
+                      <Pressable
+                        key={c.id}
+                        onPress={() => {
+                          setSelectedCustomerId(c.id);
+                          setErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.customer;
+                            return next;
+                          });
+                        }}
+                        style={[styles.customerChip, isSelected && styles.customerChipActive]}
+                        hitSlop={HitSlop.sm}
+                      >
+                        <Ionicons
+                          name="storefront-outline"
+                          size={14}
+                          color={isSelected ? '#FFFFFF' : Colors.light.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.customerChipText,
+                            isSelected && styles.customerChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {c.shopName}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
 
             {selectedCustomer && (
               <View style={styles.selectedCustomerDetail}>
@@ -539,8 +631,11 @@ export default function NewSaleScreen() {
                   <Text style={styles.customerName}>{selectedCustomer.shopName}</Text>
                   <Text style={styles.customerSub}>
                     Owner: {selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'} •{' '}
-                    {selectedCustomer.district}
+                    {selectedCustomer.district || selectedCustomer.village || 'Territory'}
                   </Text>
+                  {selectedCustomer.phone ? (
+                    <Text style={styles.customerPhone}>📞 {selectedCustomer.phone}</Text>
+                  ) : null}
                 </View>
                 <Badge label="ASSIGNED" variant="ACTIVE" />
               </View>
@@ -747,7 +842,6 @@ export default function NewSaleScreen() {
               <View style={styles.bankInputBox}>
                 <Text style={styles.inputLabel}>UPI / Bank Transaction Reference</Text>
                 <TextInput
-                  placeholder="e.g. UPI/1234567890/HDFC"
                   value={paymentReference}
                   onChangeText={setPaymentReference}
                   style={styles.textInput}
@@ -764,7 +858,6 @@ export default function NewSaleScreen() {
             </Text>
 
             <TextInput
-              placeholder="e.g. Owner requested 50 more packets next week due to festival demand."
               value={customerFeedback}
               onChangeText={setCustomerFeedback}
               multiline
@@ -795,6 +888,26 @@ export default function NewSaleScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Searchable Retail Customer Dropdown Modal */}
+      <SearchableDropdownModal
+        visible={customerPickerOpen}
+        title="Select Retail Customer"
+        searchPlaceholder="Search customer by shop, owner, phone, district..."
+        options={customerDropdownOptions}
+        selectedId={selectedCustomerId}
+        onSelect={(opt) => {
+          setSelectedCustomerId(opt.id);
+          setCustomerPickerOpen(false);
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next.customer;
+            return next;
+          });
+        }}
+        onClose={() => setCustomerPickerOpen(false)}
+        emptyMessage="No retail customers matching your query"
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -903,10 +1016,49 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: BrandColors.pink.dark,
   },
+  customerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+  },
+  searchCustomerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FCE7F3',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    gap: 4,
+  },
+  searchCustomerPillText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
+  },
+  quickChipsWrapper: {
+    marginTop: Spacing.sm,
+  },
+  quickChipsTitle: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textTertiary,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   customerSub: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
     marginTop: 1,
+  },
+  customerPhone: {
+    ...Typography.caption,
+    color: BrandColors.pink.dark,
+    fontWeight: '600',
+    marginTop: 2,
   },
   cartHeaderRow: {
     flexDirection: 'row',
@@ -990,14 +1142,17 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
   },
   controlsRow: {
+    flexWrap: 'wrap',
     flexDirection: 'row',
     gap: Spacing.md,
     marginTop: Spacing.xs,
   },
   qtyContainer: {
+    minWidth: 120,
     flex: 1,
   },
   priceContainer: {
+    minWidth: 120,
     flex: 1,
   },
   inputLabel: {

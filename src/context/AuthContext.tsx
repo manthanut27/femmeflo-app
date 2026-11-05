@@ -22,6 +22,7 @@ interface AuthContextType {
   login: (identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') => Promise<{ user: PublicUser; token: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<PublicUser | null>;
+  updateProfile: (updates: Partial<PublicUser>) => Promise<PublicUser>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -185,6 +186,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function updateProfile(updates: Partial<PublicUser>): Promise<PublicUser> {
+    if (!user) throw new Error('No active user session to update');
+    const mergedUser: PublicUser = {
+      ...user,
+      ...updates,
+      id: user.id,
+      role: user.role,
+    };
+    try {
+      const res = await authApi.updateProfile(updates);
+      const finalUser = res?.user ? { ...mergedUser, ...res.user } : mergedUser;
+      setUser(finalUser);
+      await tokenStorage.setCachedUser(finalUser);
+      syncMockServiceUser(finalUser);
+      return finalUser;
+    } catch (err: any) {
+      console.warn('[AuthContext] Remote profile update failed, applying optimistic update:', err);
+      setUser(mergedUser);
+      await tokenStorage.setCachedUser(mergedUser);
+      syncMockServiceUser(mergedUser);
+      return mergedUser;
+    }
+  }
+
   const role = user?.role ?? null;
   const isLoading = state === 'INITIALIZING' || isActionLoading;
   const isOffline = state === 'OFFLINE_AUTHENTICATED';
@@ -201,6 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         refreshUser,
+        updateProfile,
       }}
     >
       {children}

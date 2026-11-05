@@ -9,15 +9,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
-import type { PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
+import type { CustomerItem, PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import {
+  DropdownOption,
+  SearchableDropdownModal,
+} from '@/components/ui/SearchableDropdownModal';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTodayIST, type DailyReportGroup } from '@/utils/dateUtils';
@@ -25,6 +30,7 @@ import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTod
 const STATUS_FILTERS: Array<{ label: string; value: string | null }> = [
   { label: 'All Orders', value: null },
   { label: 'Confirmed', value: 'CONFIRMED' },
+  { label: 'Uncollected Payments', value: 'PAYMENT_PENDING' },
   { label: 'Pending Approval', value: 'PENDING_APPROVAL' },
   { label: 'Rejected', value: 'REJECTED' },
 ];
@@ -40,6 +46,9 @@ export default function SalesListScreen() {
 
   const [viewMode, setViewMode] = useState<'DAILY_REPORT' | 'TRANSACTIONS'>('DAILY_REPORT');
   const [sales, setSales] = useState<SaleItem[]>([]);
+  const [customers, setCustomers] = useState<CustomerItem[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
   const [dashboardData, setDashboardData] = useState<SellerDashboardData | null>(null);
@@ -58,6 +67,19 @@ export default function SalesListScreen() {
     [getISTDateKey(new Date())]: true,
   });
 
+  const loadCustomers = useCallback(async () => {
+    try {
+      const res = await sellerApi.listCustomers({ pageSize: 100 });
+      setCustomers(res.items || []);
+    } catch (err) {
+      console.warn('Failed to load customers for sales list', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCustomers();
+  }, [loadCustomers]);
+
   const loadSales = useCallback(
     async (page = 1, append = false) => {
       try {
@@ -66,16 +88,26 @@ export default function SalesListScreen() {
           sellerApi.listSales({
             page,
             pageSize: 50,
-            status: selectedStatus || undefined,
+            status: selectedStatus === 'PAYMENT_PENDING' ? undefined : (selectedStatus || undefined),
+            paymentMode: selectedStatus === 'PAYMENT_PENDING' ? 'PENDING' : undefined,
             period: selectedPeriod === 'this_month' ? 'this_month' : undefined,
+            customerId: selectedCustomerId || undefined,
           }),
           sellerApi.getDashboard().catch(() => null),
         ]);
 
+        let items = salesRes.items || [];
+        if (selectedCustomerId) {
+          items = items.filter((s) => (s.customer?.id || s.customerId) === selectedCustomerId);
+        }
+        if (selectedStatus === 'PAYMENT_PENDING') {
+          items = items.filter((s) => s.paymentMode === 'PENDING' && s.status !== 'REJECTED');
+        }
+
         if (append) {
-          setSales((prev) => [...prev, ...salesRes.items]);
+          setSales((prev) => [...prev, ...items]);
         } else {
-          setSales(salesRes.items);
+          setSales(items);
         }
         setPagination(salesRes.pagination);
         if (dashRes) setDashboardData(dashRes);
@@ -87,12 +119,38 @@ export default function SalesListScreen() {
         setLoadingMore(false);
       }
     },
-    [selectedStatus, selectedPeriod]
+    [selectedStatus, selectedPeriod, selectedCustomerId]
   );
 
   useEffect(() => {
     loadSales(1, false);
   }, [loadSales]);
+
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => c.id === selectedCustomerId) || null,
+    [customers, selectedCustomerId]
+  );
+
+  const customerDropdownOptions = useMemo<DropdownOption[]>(() => {
+    const allOpt: DropdownOption = {
+      id: 'ALL',
+      title: 'All Retail Customers',
+      subtitle: `View transactions across all ${customers.length} retail outlets`,
+      badge: `${customers.length} outlets`,
+      icon: 'people-outline',
+    };
+
+    const items: DropdownOption[] = customers.map((c) => ({
+      id: c.id,
+      title: c.shopName,
+      subtitle: `Owner: ${c.ownerName || (c as any).contactName || '—'} • ${c.village || c.district || 'Territory'} • 📞 ${c.phone}`,
+      badge: c.category?.name || 'RETAIL',
+      icon: 'storefront-outline',
+      metadata: `${c.phone || ''} ${c.address || ''} ${c.pincode || ''}`,
+    }));
+
+    return [allOpt, ...items];
+  }, [customers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -183,6 +241,16 @@ export default function SalesListScreen() {
           <View style={styles.leftFooter}>
             <Text style={styles.packetText}>{packets} packets</Text>
             <Badge label={item.paymentMode} variant={item.paymentMode as any} size="sm" showDot={false} />
+            {item.paymentMode === 'PENDING' && item.status !== 'REJECTED' && (
+              <View style={styles.uncollectedPill}>
+                <Text style={styles.uncollectedPillText}>Collect ›</Text>
+              </View>
+            )}
+            {item.status === 'REJECTED' && (
+              <View style={styles.revisePricePill}>
+                <Text style={styles.revisePricePillText}>Revise Price ›</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.amountText}>{formatCurrencyINR(totalAmount)}</Text>
         </View>
@@ -194,13 +262,22 @@ export default function SalesListScreen() {
     <View style={styles.container}>
       <Header
         title="Sales & Reports"
-        subtitle={`${sales.length} orders loaded • IST Analytics`}
+        subtitle={
+          selectedCustomer
+            ? `${sales.length} orders for ${selectedCustomer.shopName}`
+            : `${sales.length} orders loaded • IST Analytics`
+        }
         rightAction={
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Create new sale"
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            onPress={() => router.push('/(seller)/sales/new' as any)}
+            onPress={() =>
+              router.push({
+                pathname: '/(seller)/sales/new',
+                params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
+              } as any)
+            }
             hitSlop={HitSlop.md}
           >
             <Ionicons name="cart-outline" size={20} color="#FFFFFF" />
@@ -241,6 +318,61 @@ export default function SalesListScreen() {
         </Pressable>
       </View>
 
+      {/* Retail Customer Dropdown Filter with Search */}
+      <View style={styles.customerFilterRow}>
+        <TouchableOpacity
+          style={[
+            styles.customerFilterTrigger,
+            Boolean(selectedCustomerId) && styles.customerFilterTriggerActive,
+          ]}
+          onPress={() => setCustomerPickerOpen(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Filter sales by retail customer"
+        >
+          <View style={styles.customerFilterLeft}>
+            <View
+              style={[
+                styles.customerFilterIconBox,
+                Boolean(selectedCustomerId) && styles.customerFilterIconBoxActive,
+              ]}
+            >
+              <Ionicons
+                name={selectedCustomerId ? 'storefront' : 'funnel-outline'}
+                size={16}
+                color={selectedCustomerId ? '#FFFFFF' : BrandColors.pink.primary}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.customerFilterLabelText}>Retail Customer Account</Text>
+              <Text style={styles.customerFilterSelectedName} numberOfLines={1}>
+                {selectedCustomer ? selectedCustomer.shopName : 'All Retail Customers'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.customerFilterRight}>
+            {selectedCustomerId ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  setSelectedCustomerId(null);
+                }}
+                hitSlop={HitSlop.md}
+                style={styles.customerFilterClearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color={Colors.light.textSecondary} />
+                <Text style={styles.customerFilterClearText}>Reset</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.customerFilterChevron}>
+                <Text style={styles.customerFilterCountText}>{customers.length}</Text>
+                <Ionicons name="chevron-down" size={16} color={Colors.light.textSecondary} />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
+
       {/* ==================================================== */}
       {/* 1. DAILY SALES REPORT VIEW */}
       {/* ==================================================== */}
@@ -252,14 +384,36 @@ export default function SalesListScreen() {
           <View style={styles.contentWrapper}>
             {/* Today's KPI Metric Cards */}
             <View style={styles.kpiGrid}>
-              <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Today&apos;s Revenue</Text>
+              <Card
+                onPress={() => {
+                  setSelectedPeriod('today');
+                  setSelectedStatus(null);
+                  setViewMode('TRANSACTIONS');
+                }}
+                accessibilityLabel={`Today's Revenue: ${formatCurrencyINR(todayMetrics.totalPaise)}. Tap to view transactions.`}
+                style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}
+              >
+                <View style={styles.kpiTitleRow}>
+                  <Text style={styles.kpiLabel}>Today&apos;s Revenue</Text>
+                  <Ionicons name="chevron-forward" size={13} color={BrandColors.green.primary} />
+                </View>
                 <Text style={styles.kpiValueGreen}>{formatCurrencyINR(todayMetrics.totalPaise)}</Text>
                 <Text style={styles.kpiSub}>{todayMetrics.orderCount} orders recorded today</Text>
               </Card>
 
-              <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Today&apos;s Volume</Text>
+              <Card
+                onPress={() => {
+                  setSelectedPeriod('today');
+                  setSelectedStatus(null);
+                  setViewMode('TRANSACTIONS');
+                }}
+                accessibilityLabel={`Today's Volume: ${todayMetrics.totalPackets} packets. Tap to view transactions.`}
+                style={[styles.kpiCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}
+              >
+                <View style={styles.kpiTitleRow}>
+                  <Text style={styles.kpiLabel}>Today&apos;s Volume</Text>
+                  <Ionicons name="chevron-forward" size={13} color={BrandColors.pink.primary} />
+                </View>
                 <Text style={styles.kpiValuePink}>{todayMetrics.totalPackets} pkts</Text>
                 <Text style={styles.kpiSub}>Dispatched to retailers</Text>
               </Card>
@@ -267,22 +421,62 @@ export default function SalesListScreen() {
 
             {/* Payment Summary Box */}
             <Card style={styles.paymentSummaryCard}>
-              <Text style={styles.paymentSummaryTitle}>Today&apos;s Payment Collection Summary</Text>
+              <View style={styles.paymentSummaryHeader}>
+                <Text style={styles.paymentSummaryTitle}>Today&apos;s Payment Collection Summary</Text>
+                <Pressable
+                  onPress={() => router.push('/(seller)/sales/pending' as any)}
+                  hitSlop={HitSlop.sm}
+                  style={styles.viewPendingHeaderLink}
+                >
+                  <Text style={styles.viewPendingHeaderLinkText}>All Uncollected ›</Text>
+                </Pressable>
+              </View>
               <View style={styles.paymentRow}>
-                <View style={styles.paymentBox}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Cash collection: ${formatCurrencyINR(todayMetrics.cashPaise)}`}
+                  onPress={() => {
+                    setSelectedPeriod('today');
+                    setViewMode('TRANSACTIONS');
+                  }}
+                  style={({ pressed }) => [styles.paymentBox, pressed && styles.paymentBoxPressed]}
+                >
                   <Text style={styles.paymentBoxLabel}>CASH</Text>
                   <Text style={styles.paymentBoxVal}>{formatCurrencyINR(todayMetrics.cashPaise)}</Text>
-                </View>
-                <View style={styles.paymentBox}>
+                  <Text style={styles.paymentBoxHint}>View ›</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`UPI and bank collection: ${formatCurrencyINR(todayMetrics.bankPaise)}`}
+                  onPress={() => {
+                    setSelectedPeriod('today');
+                    setViewMode('TRANSACTIONS');
+                  }}
+                  style={({ pressed }) => [styles.paymentBox, pressed && styles.paymentBoxPressed]}
+                >
                   <Text style={styles.paymentBoxLabel}>UPI / BANK</Text>
                   <Text style={styles.paymentBoxVal}>{formatCurrencyINR(todayMetrics.bankPaise)}</Text>
-                </View>
-                <View style={styles.paymentBox}>
-                  <Text style={styles.paymentBoxLabel}>PENDING</Text>
-                  <Text style={[styles.paymentBoxVal, { color: '#D97706' }]}>
+                  <Text style={styles.paymentBoxHint}>View ›</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Pending uncollected amount: ${formatCurrencyINR(todayMetrics.pendingPaise)}. Tap to view uncollected shop amounts.`}
+                  onPress={() => router.push('/(seller)/sales/pending' as any)}
+                  style={({ pressed }) => [
+                    styles.paymentBox,
+                    styles.paymentBoxPending,
+                    pressed && styles.paymentBoxPressed,
+                  ]}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <Text style={[styles.paymentBoxLabel, { color: '#B45309' }]}>PENDING</Text>
+                    <Ionicons name="arrow-forward-circle" size={14} color="#D97706" />
+                  </View>
+                  <Text style={[styles.paymentBoxVal, { color: '#D97706', fontWeight: '800' }]}>
                     {formatCurrencyINR(todayMetrics.pendingPaise)}
                   </Text>
-                </View>
+                  <Text style={styles.pendingActionLabel}>Collect & Close ›</Text>
+                </Pressable>
               </View>
             </Card>
 
@@ -318,10 +512,19 @@ export default function SalesListScreen() {
             ) : dailyGroups.length === 0 ? (
               <EmptyState
                 icon="calendar-outline"
-                title="No Sales Recorded"
-                description="No orders have been recorded for the selected period."
-                actionTitle="Create New Sale"
-                onAction={() => router.push('/(seller)/sales/new' as any)}
+                title={selectedCustomer ? `No Sales for ${selectedCustomer.shopName}` : 'No Sales Recorded'}
+                description={
+                  selectedCustomer
+                    ? `No orders recorded for ${selectedCustomer.shopName} in this period.`
+                    : 'No orders have been recorded for the selected period.'
+                }
+                actionTitle={selectedCustomer ? 'Create Sale for Customer' : 'Create New Sale'}
+                onAction={() =>
+                  router.push({
+                    pathname: '/(seller)/sales/new',
+                    params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
+                  } as any)
+                }
               />
             ) : (
               dailyGroups.map((group) => {
@@ -382,6 +585,16 @@ export default function SalesListScreen() {
                                 <View style={{ alignItems: 'flex-end' }}>
                                   <Text style={styles.amountText}>{formatCurrencyINR(totalAmt)}</Text>
                                   <Badge label={item.paymentMode} variant={item.paymentMode as any} size="sm" showDot={false} />
+            {item.paymentMode === 'PENDING' && item.status !== 'REJECTED' && (
+              <View style={styles.uncollectedPill}>
+                <Text style={styles.uncollectedPillText}>Collect ›</Text>
+              </View>
+            )}
+            {item.status === 'REJECTED' && (
+              <View style={styles.revisePricePill}>
+                <Text style={styles.revisePricePillText}>Revise Price ›</Text>
+              </View>
+            )}
                                 </View>
                               </View>
 
@@ -431,14 +644,21 @@ export default function SalesListScreen() {
           ) : sales.length === 0 ? (
             <EmptyState
               icon="receipt-outline"
-              title="No Sales Found"
+              title={selectedCustomer ? `No Sales for ${selectedCustomer.shopName}` : 'No Sales Found'}
               description={
-                selectedStatus
+                selectedCustomer
+                  ? `No orders found for ${selectedCustomer.shopName}. Tap below to record a sale.`
+                  : selectedStatus
                   ? `No ${selectedStatus.toLowerCase()} orders found for this filter.`
                   : 'You have not recorded any sales yet.'
               }
-              actionTitle="Create First Sale"
-              onAction={() => router.push('/(seller)/sales/new' as any)}
+              actionTitle={selectedCustomer ? 'Create Sale for Customer' : 'Create First Sale'}
+              onAction={() =>
+                router.push({
+                  pathname: '/(seller)/sales/new',
+                  params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
+                } as any)
+              }
             />
           ) : (
             <FlatList
@@ -467,6 +687,21 @@ export default function SalesListScreen() {
           )}
         </View>
       )}
+
+      {/* Searchable Retail Customer Dropdown Modal */}
+      <SearchableDropdownModal
+        visible={customerPickerOpen}
+        title="Select Retail Customer"
+        searchPlaceholder="Search customer by shop, owner, phone, district..."
+        options={customerDropdownOptions}
+        selectedId={selectedCustomerId || 'ALL'}
+        onSelect={(opt) => {
+          setSelectedCustomerId(opt.id === 'ALL' ? null : opt.id);
+          setCustomerPickerOpen(false);
+        }}
+        onClose={() => setCustomerPickerOpen(false)}
+        emptyMessage="No customers found matching search"
+      />
     </View>
   );
 }
@@ -484,6 +719,94 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
     gap: Spacing.sm,
+  },
+  customerFilterRow: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  customerFilterTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+  },
+  customerFilterTriggerActive: {
+    backgroundColor: '#FFF5F8',
+    borderColor: BrandColors.pink.border,
+  },
+  customerFilterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  customerFilterIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    backgroundColor: BrandColors.pink.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  customerFilterIconBoxActive: {
+    backgroundColor: BrandColors.pink.primary,
+  },
+  customerFilterLabelText: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.light.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  customerFilterSelectedName: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+    fontSize: 13,
+  },
+  customerFilterRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  customerFilterClearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    gap: 4,
+  },
+  customerFilterClearText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  customerFilterChevron: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  customerFilterCountText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textTertiary,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
   },
   modeTab: {
     flex: 1,
@@ -543,6 +866,32 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
   },
+  uncollectedPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  uncollectedPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  revisePricePill: {
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+  },
+  revisePricePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9F1239',
+  },
   paymentSummaryCard: {
     padding: Spacing.md,
     marginBottom: Spacing.sm,
@@ -575,6 +924,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
+    marginTop: 2,
+  },
+  kpiTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  paymentSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  viewPendingHeaderLink: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  viewPendingHeaderLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  paymentBoxPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  paymentBoxPending: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  paymentBoxHint: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  pendingActionLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
     marginTop: 2,
   },
   periodChipsRow: {

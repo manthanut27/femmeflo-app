@@ -17,6 +17,7 @@ import { sellerApi } from '@/api/seller';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
@@ -32,6 +33,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { canOnboardSellers } from '@/utils/permissions';
 
 const QUALIFICATION_OPTIONS = [
   '12th Standard / HSC / Intermediate',
@@ -39,6 +41,7 @@ const QUALIFICATION_OPTIONS = [
   '10th Standard / SSC / Matriculation',
   'Diploma / ITI',
   'Post Graduate (M.A. / M.Com / M.Sc / MBA)',
+  'Other Qualification',
 ];
 
 function formatAadhaar(raw: string): string {
@@ -64,13 +67,14 @@ export default function ManagerOnboardSellerScreen() {
   const [phone, setPhone] = useState('');
   const [alternatePhone, setAlternatePhone] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('FemmeFlo@2026');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Section 3: Identification Documents & Qualification
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState('');
   const [qualification, setQualification] = useState('12th Standard / HSC / Intermediate');
+  const [customQualification, setCustomQualification] = useState('');
   const [isQualDropdownOpen, setIsQualDropdownOpen] = useState(false);
 
   // Section 4: Complete Address & Territory
@@ -139,7 +143,8 @@ export default function ManagerOnboardSellerScreen() {
       errs.email = 'Please provide a valid operational email.';
     }
 
-    if (!password || password.length < 8) {
+    const trimmedPassword = password.trim();
+    if (!trimmedPassword || trimmedPassword.length < 8) {
       errs.password = 'Initial password must be at least 8 characters.';
     }
 
@@ -151,6 +156,10 @@ export default function ManagerOnboardSellerScreen() {
 
     if (!drivingLicenseNumber.trim()) {
       errs.drivingLicenseNumber = 'Valid Indian Driving License number is mandatory.';
+    }
+
+    if (qualification === 'Other Qualification' && !customQualification.trim()) {
+      errs.customQualification = 'Please specify the custom qualification.';
     }
 
     // 4. Address & Territory
@@ -171,6 +180,10 @@ export default function ManagerOnboardSellerScreen() {
 
   async function handleSubmit() {
     if (isSubmitting) return;
+    if (!canOnboardSellers(user)) {
+      Alert.alert('Access Denied', 'You do not have permission to onboard new field officers.');
+      return;
+    }
     setFeedback(null);
     if (!validate()) return;
 
@@ -178,6 +191,11 @@ export default function ManagerOnboardSellerScreen() {
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
     const formattedPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
     const cleanAlt = alternatePhone.trim() ? `+91 ${alternatePhone.replace(/\D/g, '').slice(-10)}` : undefined;
+
+    const resolvedQualification =
+      qualification === 'Other Qualification'
+        ? (customQualification.trim() || undefined)
+        : (qualification.trim() || undefined);
 
     try {
       const res = await managerApi.createSeller({
@@ -188,10 +206,10 @@ export default function ManagerOnboardSellerScreen() {
         phone: formattedPhone,
         alternatePhone: cleanAlt,
         email: email.trim() || undefined,
-        password: password.trim() || 'FemmeFlo@2026',
+        password: password.trim(),
         aadhaarNumber: aadhaarNumber.replace(/\s+/g, '').trim(),
         drivingLicenseNumber: drivingLicenseNumber.trim(),
-        qualification: qualification.trim(),
+        qualification: resolvedQualification,
         address: address.trim() || undefined,
         pincode: pincode.trim(),
         village: village.trim(),
@@ -216,9 +234,11 @@ export default function ManagerOnboardSellerScreen() {
               setPhone('');
               setAlternatePhone('');
               setEmail('');
-              setPassword('FemmeFlo@2026');
+              setPassword('');
               setAadhaarNumber('');
               setDrivingLicenseNumber('');
+              setQualification('12th Standard / HSC / Intermediate');
+              setCustomQualification('');
               setAddress('');
               setPincode('');
               setFeedback(null);
@@ -237,6 +257,26 @@ export default function ManagerOnboardSellerScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (!canOnboardSellers(user)) {
+    return (
+      <View style={styles.container}>
+        <Header title="Officer information" subtitle="Onboard field officer" showBack />
+        <View style={styles.restrictedContainer}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Access Restricted"
+            description="You do not have permission to onboard new field officers. Please contact your administrator to request 'Onboard new field officers' permission."
+            iconColor={Colors.light.danger}
+            iconBgColor={Colors.light.dangerBg}
+            actionTitle="Back to Field Force"
+            buttonVariant="secondary"
+            onAction={() => router.replace('/(manager)/sellers' as any)}
+          />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -464,7 +504,6 @@ export default function ManagerOnboardSellerScreen() {
                 Initial Account Password <Text style={styles.requiredStar}>*</Text>
               </Text>
               <Input
-                placeholder="Minimum 8 characters"
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
@@ -578,6 +617,21 @@ export default function ManagerOnboardSellerScreen() {
                 </View>
               )}
               <Text style={styles.inputHelperSub}>Officer background</Text>
+
+              {qualification === 'Other Qualification' && (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <Input
+                    placeholder="Enter other qualification (e.g. B.Tech, LLB, Ph.D, B.Ed)"
+                    value={customQualification}
+                    onChangeText={(val) => {
+                      setCustomQualification(val);
+                      if (errors.customQualification) setErrors((p) => ({ ...p, customQualification: '' }));
+                    }}
+                    error={errors.customQualification}
+                    leftIcon={<Ionicons name="school-outline" size={16} color="#94A3B8" />}
+                  />
+                </View>
+              )}
             </View>
           </Card>
 
@@ -921,5 +975,14 @@ const styles = StyleSheet.create({
   submitSection: {
     marginTop: Spacing.xs,
     marginBottom: Spacing.xl,
+  },
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.xl,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
   },
 });

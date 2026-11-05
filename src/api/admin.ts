@@ -1,4 +1,5 @@
 import { apiRequest, API_BASE_URL, uploadFileMultipart } from './client';
+import { sanitizeBackendPermissions } from '../utils/permissions';
 import type {
   AdminDashboardData,
   AdminIncentiveListResponse,
@@ -20,7 +21,6 @@ import type {
   SalesReportData,
   SalesReportQuery,
   Shift,
-  StockTransactionItem,
   UpdateProductPayload,
   UpdateUserRatePayload,
   UserIncentiveDetails,
@@ -30,9 +30,89 @@ import type {
 export interface PendingApprovalItem extends SaleItem {
   requestedUnitPricePaise?: number;
   minimumPricePaise?: number;
+  isResubmitted?: boolean;
+  resubmitForApproval?: boolean;
+}
+
+export function isSaleResubmitted(raw: any): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  if (raw.isResubmitted === true || raw.resubmitForApproval === true) return true;
+  if (raw.resubmittedAt) return true;
+  if (
+    typeof raw.customerFeedback === 'string' &&
+    (raw.customerFeedback.includes('Price Revised') ||
+      raw.customerFeedback.includes('Manager Price Revised') ||
+      raw.customerFeedback.includes('Resubmitted'))
+  ) {
+    return true;
+  }
+  if (
+    typeof raw.approvalReason === 'string' &&
+    (raw.approvalReason.toLowerCase().includes('revised') ||
+      raw.approvalReason.toLowerCase().includes('reapproval'))
+  ) {
+    return true;
+  }
+  if (raw.status === 'PENDING_APPROVAL' && raw.updatedAt && raw.createdAt) {
+    const created = new Date(raw.createdAt).getTime();
+    const updated = new Date(raw.updatedAt).getTime();
+    if (!isNaN(created) && !isNaN(updated) && updated - created > 2000) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function normalizeApprovalItem(raw: any): PendingApprovalItem {
+  const totalPaise = Number(raw.totalPaise ?? raw.totalAmountPaise ?? 0);
+  const totalAmountPaise = Number(raw.totalAmountPaise ?? raw.totalPaise ?? totalPaise);
+  const quantity = Number(raw.quantity ?? raw.packetCount ?? 0);
+  const packetCount = Number(raw.packetCount ?? raw.quantity ?? quantity);
+  const unitPricePaise = Number(
+    raw.unitPricePaise ?? (quantity > 0 ? Math.round(totalPaise / quantity) : 0)
+  );
+  const lineItems = Array.isArray(raw.lineItems)
+    ? raw.lineItems
+    : Array.isArray(raw.items)
+    ? raw.items
+    : [];
+
+  const saleNumber =
+    raw.saleNumber ||
+    (raw.id && typeof raw.id === 'string'
+      ? `#${raw.id.slice(0, 8).toUpperCase()}`
+      : undefined);
+
+  const isResubmitted = isSaleResubmitted(raw);
+
+  return {
+    ...raw,
+    id: String(raw.id || ''),
+    saleNumber,
+    totalPaise,
+    totalAmountPaise,
+    quantity,
+    packetCount,
+    unitPricePaise,
+    lineItems,
+    items: lineItems,
+    requestedUnitPricePaise: raw.requestedUnitPricePaise ?? unitPricePaise,
+    minimumPricePaise: raw.minimumPricePaise ?? 2500,
+    isResubmitted,
+    resubmitForApproval: isResubmitted,
+  };
 }
 
 export const adminApi = {
+  // ----------------------------------------------------
+  // Profile & Settings
+  // ----------------------------------------------------
+  async updateProfile(payload: Partial<PublicUser>): Promise<{ user: PublicUser }> {
+    return apiRequest<{ user: PublicUser }>('admin/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
   // ----------------------------------------------------
   // Dashboard
   // ----------------------------------------------------
@@ -78,8 +158,6 @@ export const adminApi = {
     states: string[];
     districts: string[];
     villages: string[];
-    rawDistricts?: Array<{ state: string; district: string } | string>;
-    rawVillages?: Array<{ state: string; district: string; village: string } | string>;
   }> {
     try {
       const raw = await apiRequest<any>('admin/dashboard/filters', { method: 'GET' });
@@ -118,53 +196,16 @@ export const adminApi = {
         states: Array.from(new Set(states)),
         districts,
         villages,
-        rawDistricts: Array.isArray(raw.districts) ? raw.districts : [],
-        rawVillages: Array.isArray(raw.villages) ? raw.villages : [],
       };
     } catch {
       return {
-        categories: [
-          { id: 'cat_01', name: 'Sanitary Pads' },
-          { id: 'cat_02', name: 'Intimate Care' },
-          { id: 'cat_03', name: 'Wellness & Nutrition' },
-        ],
+        categories: [],
         customerLocations: [],
-        managers: [
-          { id: 'usr_manager_01', name: 'Rajesh Kumar', state: 'Madhya Pradesh', district: 'Indore' },
-          { id: 'usr_manager_02', name: 'Sunil Verma', state: 'Madhya Pradesh', district: 'Bhopal' },
-          { id: 'usr_manager_03', name: 'Meenakshi Iyer', state: 'Maharashtra', district: 'Nagpur' },
-        ],
-        sellers: [
-          { id: 'usr_seller_01', name: 'Pooja Sharma', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
-          { id: 'usr_seller_02', name: 'Kavita Patel', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
-          { id: 'usr_seller_03', name: 'Aakash Solanki', managerId: 'usr_manager_01', state: 'Madhya Pradesh', district: 'Indore' },
-          { id: 'usr_seller_04', name: 'Deepika Rathore', managerId: 'usr_manager_02', state: 'Madhya Pradesh', district: 'Bhopal' },
-        ],
-        states: ['Bihar', 'Madhya Pradesh', 'Maharashtra', 'Rajasthan', 'Uttar Pradesh'],
-        districts: ['Bhopal', 'Indore', 'Jaipur', 'Mumbai', 'Nagpur', 'Patna', 'Thane', 'Varanasi'],
-        villages: ['Andheri', 'Cantonment', 'Diva', 'Indore City', 'Kolar', 'Mhow', 'Rau', 'Sanwer', 'Sehore', 'Shivpur'],
-        rawDistricts: [
-          { state: 'Madhya Pradesh', district: 'Indore' },
-          { state: 'Madhya Pradesh', district: 'Bhopal' },
-          { state: 'Maharashtra', district: 'Thane' },
-          { state: 'Maharashtra', district: 'Mumbai' },
-          { state: 'Maharashtra', district: 'Nagpur' },
-          { state: 'Uttar Pradesh', district: 'Varanasi' },
-          { state: 'Bihar', district: 'Patna' },
-          { state: 'Rajasthan', district: 'Jaipur' },
-        ],
-        rawVillages: [
-          { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
-          { state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' },
-          { state: 'Madhya Pradesh', district: 'Indore', village: 'Mhow' },
-          { state: 'Madhya Pradesh', district: 'Indore', village: 'Sanwer' },
-          { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
-          { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Sehore' },
-          { state: 'Maharashtra', district: 'Thane', village: 'Diva' },
-          { state: 'Maharashtra', district: 'Mumbai', village: 'Andheri' },
-          { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
-          { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
-        ],
+        managers: [],
+        sellers: [],
+        states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan', 'Maharashtra'],
+        districts: ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
+        villages: ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
       };
     }
   },
@@ -173,14 +214,22 @@ export const adminApi = {
   // Price Approvals Queue
   // ----------------------------------------------------
   async listApprovals(params?: { page?: number; pageSize?: number }): Promise<{ items: PendingApprovalItem[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ items?: PendingApprovalItem[]; approvals?: PendingApprovalItem[]; pagination: PaginationMeta }>(
+    const raw = await apiRequest<{ items?: any[]; approvals?: any[]; pendingSales?: any[]; pagination: PaginationMeta }>(
       'admin/approvals',
       {
         method: 'GET',
         params,
       }
     );
-    const list = raw?.items ?? raw?.approvals ?? [];
+    const rawList = raw?.items ?? raw?.approvals ?? raw?.pendingSales ?? [];
+    const list = rawList.map(normalizeApprovalItem);
+    list.sort((a, b) => {
+      if (a.isResubmitted && !b.isResubmitted) return -1;
+      if (!a.isResubmitted && b.isResubmitted) return 1;
+      const timeA = new Date(a.resubmittedAt || a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.resubmittedAt || b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
     return {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
@@ -327,83 +376,71 @@ export const adminApi = {
     reference?: string;
     requestKey?: string;
   }): Promise<{ success: boolean; message?: string }> {
-    const sourceId = payload.sourceId || payload.sourceWarehouseId;
-    let destinationId = payload.destinationId || payload.targetLocationId;
+    const rawSourceId = payload.sourceId || payload.sourceWarehouseId;
+    let rawDestinationId = payload.destinationId || payload.targetLocationId;
 
-    if (!sourceId || !destinationId) {
+    if (!rawSourceId || !rawDestinationId) {
       throw new Error('Source and destination locations are required.');
     }
 
-    // If destinationId was passed as a seller's user ID, attempt resolution to their stockLocation ID
+    let sourceId = rawSourceId;
+    let destinationId = rawDestinationId;
+
+    // Resolve sourceId & destinationId to valid StockLocation UUIDs from inventory summary
     try {
-      const summary = await this.getInventorySummary();
-      const matchedSellerLocation = summary?.locations?.find(
-        (l) => l.sellerId === destinationId || l.id === destinationId
+      const summary = await adminApi.getInventorySummary();
+      const locations = summary?.locations || [];
+
+      // 1. Resolve source location:
+      // Match by exact id, or if id was default 'loc_hq_central', resolve to the HQ location UUID
+      const matchedSource =
+        locations.find((l) => l.id === sourceId) ||
+        (sourceId.startsWith('loc_hq') || sourceId.toLowerCase().includes('hq')
+          ? locations.find((l) => l.type === 'HQ')
+          : undefined) ||
+        locations.find((l) => l.type === 'HQ');
+
+      if (matchedSource?.id) {
+        sourceId = matchedSource.id;
+      }
+
+      // 2. Resolve destination location:
+      // Can be a seller's user ID, stockLocation ID, or warehouse ID
+      const matchedDest = locations.find(
+        (l) =>
+          l.id === destinationId ||
+          l.sellerId === destinationId ||
+          (l.seller && l.seller.id === destinationId)
       );
-      if (matchedSellerLocation) {
-        destinationId = matchedSellerLocation.id;
+      if (matchedDest?.id) {
+        destinationId = matchedDest.id;
       }
     } catch {
-      // Continue with destinationId as provided
+      // Continue with provided IDs if network lookup fails
     }
+
+    const items =
+      payload.items && payload.items.length > 0
+        ? payload.items.map((i) => ({ productId: i.productId, quantity: Number(i.quantity) }))
+        : payload.productId
+        ? [{ productId: payload.productId, quantity: Number(payload.quantity) }]
+        : [];
 
     const requestKey = payload.requestKey || payload.reference || undefined;
 
-    let body: any;
-    if (payload.items && payload.items.length > 0) {
-      body = {
-        sourceId,
-        destinationId,
-        items: payload.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-        requestKey,
-      };
-    } else if (payload.productId) {
-      body = {
-        sourceId,
-        destinationId,
-        items: [{ productId: payload.productId, quantity: payload.quantity }],
-        requestKey,
-      };
-    } else {
-      body = {
-        sourceId,
-        destinationId,
-        quantity: payload.quantity,
-        requestKey,
-      };
+    const body: Record<string, any> = {
+      sourceId,
+      destinationId,
+      items,
+    };
+    if (requestKey) {
+      body.requestKey = requestKey;
     }
 
     return apiRequest<{ success: boolean; message?: string }>('admin/inventory/transfers', {
       method: 'POST',
       body: JSON.stringify(body),
     });
-  },
-
-  async listTransactions(params?: {
-    page?: number;
-    pageSize?: number;
-    locationId?: string;
-    type?: string;
-  }): Promise<{ items: StockTransactionItem[]; pagination: PaginationMeta }> {
-    try {
-      const raw = await apiRequest<{ transactions?: StockTransactionItem[]; items?: StockTransactionItem[]; pagination: PaginationMeta }>(
-        'admin/inventory/transactions',
-        {
-          method: 'GET',
-          params,
-        }
-      );
-      const list = raw?.transactions ?? raw?.items ?? [];
-      return {
-        items: list,
-        pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-      };
-    } catch {
-      return {
-        items: [],
-        pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
-      };
-    }
   },
 
   // ----------------------------------------------------
@@ -447,20 +484,19 @@ export const adminApi = {
     const body: Record<string, any> = {
       name: payload.name.trim(),
       phone,
-      password: payload.password?.trim() || 'FemmeFlo@2026',
+      password: payload.password?.trim() || '',
     };
     if (payload.email?.trim()) body.email = payload.email.trim();
     if (payload.state?.trim()) body.state = payload.state.trim();
     if (payload.district?.trim()) body.district = payload.district.trim();
     if (payload.village?.trim()) body.village = payload.village.trim();
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
-    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
-    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
-    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
     if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
     if (payload.address?.trim()) body.address = payload.address.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
-    if (payload.permissions) body.permissions = payload.permissions;
+    if (payload.permissions && payload.permissions.length > 0) {
+      body.permissions = sanitizeBackendPermissions(payload.permissions);
+    }
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
 
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>('admin/managers', {
@@ -476,9 +512,12 @@ export const adminApi = {
       name?: string;
       email?: string;
       phone?: string;
+      alternatePhone?: string;
       state?: string;
       district?: string;
       village?: string;
+      address?: string;
+      pincode?: string;
       permissions?: string[];
       isSeller?: boolean;
       active?: boolean;
@@ -494,6 +533,9 @@ export const adminApi = {
     if (payload.state !== undefined) body.state = payload.state.trim();
     if (payload.district !== undefined) body.district = payload.district.trim();
     if (payload.village !== undefined) body.village = payload.village.trim();
+    if (payload.alternatePhone !== undefined) body.alternatePhone = payload.alternatePhone.trim();
+    if (payload.address !== undefined) body.address = payload.address.trim();
+    if (payload.pincode !== undefined) body.pincode = payload.pincode.trim();
     if (payload.permissions !== undefined) body.permissions = payload.permissions;
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
     if (payload.active !== undefined) body.active = payload.active;
@@ -501,13 +543,6 @@ export const adminApi = {
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(`admin/managers/${managerId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
-    });
-    return { manager: (res.manager ?? res.user)! };
-  },
-
-  async getManager(managerId: string): Promise<{ manager: PublicUser }> {
-    const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(`admin/managers/${managerId}`, {
-      method: 'GET',
     });
     return { manager: (res.manager ?? res.user)! };
   },
@@ -553,7 +588,7 @@ export const adminApi = {
     const body: Record<string, any> = {
       name: payload.name.trim(),
       phone,
-      password: payload.password?.trim() || 'FemmeFlo@2026',
+      password: payload.password?.trim() || '',
       managerId: payload.managerId,
     };
     if (payload.email?.trim()) body.email = payload.email.trim();
@@ -566,9 +601,6 @@ export const adminApi = {
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
     if (payload.active !== undefined) body.active = payload.active;
     if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
-    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
-    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
-    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
     if (payload.address?.trim()) body.address = payload.address.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
 
@@ -579,70 +611,15 @@ export const adminApi = {
     return { seller: (res.seller ?? res.user)! };
   },
 
-  async getSeller(sellerId: string): Promise<{ seller: PublicUser }> {
-    const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>(`admin/sellers/${sellerId}`, {
-      method: 'GET',
-    });
-    return { seller: (res.seller ?? res.user)! };
-  },
-
   async updateSeller(
     sellerId: string,
-    payload: {
-      name?: string;
-      email?: string;
-      phone?: string;
-      state?: string;
-      district?: string;
-      village?: string;
-      managerId?: string;
-      dailyTarget?: number;
-      shiftTiming?: string;
-      designation?: string;
-      active?: boolean;
-    }
+    payload: Partial<PublicUser> & { dailyTarget?: number }
   ): Promise<{ seller: PublicUser }> {
-    const body: Record<string, any> = {};
-    if (payload.name !== undefined) body.name = payload.name.trim();
-    if (payload.email !== undefined) body.email = payload.email.trim();
-    if (payload.phone !== undefined) {
-      const raw = payload.phone.trim();
-      body.phone = raw.startsWith('+') ? raw : `+91${raw.replace(/\D/g, '').slice(-10)}`;
-    }
-    if (payload.state !== undefined) body.state = payload.state.trim();
-    if (payload.district !== undefined) body.district = payload.district.trim();
-    if (payload.village !== undefined) body.village = payload.village.trim();
-    if (payload.managerId !== undefined) body.managerId = payload.managerId;
-    if (payload.dailyTarget !== undefined) body.dailyTarget = payload.dailyTarget;
-    if (payload.shiftTiming !== undefined) body.shiftTiming = payload.shiftTiming.trim();
-    if (payload.designation !== undefined) body.designation = payload.designation.trim();
-    if (payload.active !== undefined) body.active = payload.active;
-
     const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>(`admin/sellers/${sellerId}`, {
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
     return { seller: (res.seller ?? res.user)! };
-  },
-
-  async getUser(userId: string, preferredRole?: 'MANAGER' | 'SELLER'): Promise<{ user: PublicUser; role: 'MANAGER' | 'SELLER' }> {
-    if (preferredRole === 'MANAGER') {
-      try {
-        const res = await this.getManager(userId);
-        if (res.manager) return { user: res.manager, role: 'MANAGER' };
-      } catch {}
-    } else if (preferredRole === 'SELLER') {
-      try {
-        const res = await this.getSeller(userId);
-        if (res.seller) return { user: res.seller, role: 'SELLER' };
-      } catch {}
-    }
-    try {
-      const res = await this.getManager(userId);
-      if (res.manager) return { user: res.manager, role: 'MANAGER' };
-    } catch {}
-    const sellerRes = await this.getSeller(userId);
-    return { user: sellerRes.seller, role: 'SELLER' };
   },
 
   // ----------------------------------------------------
@@ -977,11 +954,12 @@ export const adminApi = {
     managerId: string,
     permissions: string[]
   ): Promise<{ manager: PublicUser }> {
+    const sanitized = sanitizeBackendPermissions(permissions);
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(
       `admin/permissions/managers/${managerId}/permissions`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions: sanitized }),
       }
     );
     return { manager: (res.manager ?? res.user)! };
@@ -990,11 +968,12 @@ export const adminApi = {
   async updateOverallPermissions(
     permissions: string[]
   ): Promise<{ count: number; message?: string }> {
+    const sanitized = sanitizeBackendPermissions(permissions);
     const res = await apiRequest<{ count?: number; message?: string; data?: { count: number } }>(
       'admin/permissions/overall',
       {
         method: 'PATCH',
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions: sanitized }),
       }
     );
     return {

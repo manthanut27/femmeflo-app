@@ -83,6 +83,8 @@ export function Button({
         <>
           {icon}
           <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
             style={[
               styles.text,
               styles[`${size}Text`],
@@ -159,6 +161,7 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: '600',
     textAlign: 'center',
+    flexShrink: 1,
   },
   smText: {
     ...Typography.bodySmall,
