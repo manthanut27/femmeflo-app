@@ -87,7 +87,7 @@ describe('Admin Stock Transfer Safety & Crash Prevention Suite', () => {
     assert.strictEqual(search('nonexistent').length, 0);
   });
 
-  it('constructs dual-compatible payload for backend stock transfers without undefined endpoints', () => {
+  it('constructs strict backend payload for stock transfers without unrecognized keys or root quantity', () => {
     const payload = {
       sourceId: 'wh_indore_01',
       destinationId: 'loc_van_seller_01',
@@ -98,30 +98,30 @@ describe('Admin Stock Transfer Safety & Crash Prevention Suite', () => {
     };
 
     const requestKey = payload.requestKey || payload.reference || undefined;
+    const items = payload.productId
+      ? [{ productId: payload.productId, quantity: Number(payload.quantity) }]
+      : [];
+
     const body: Record<string, any> = {
-      sourceWarehouseId: payload.sourceId,
       sourceId: payload.sourceId,
-      targetLocationId: payload.destinationId,
       destinationId: payload.destinationId,
-      productId: payload.productId,
-      quantity: payload.quantity,
-      reference: requestKey || payload.reference,
+      items,
     };
-    if (payload.productId) {
-      body.items = [{ productId: payload.productId, quantity: payload.quantity }];
-    }
     if (requestKey) {
       body.requestKey = requestKey;
     }
 
-    assert.strictEqual(body.sourceWarehouseId, 'wh_indore_01');
-    assert.strictEqual(body.targetLocationId, 'loc_van_seller_01');
     assert.strictEqual(body.sourceId, 'wh_indore_01');
     assert.strictEqual(body.destinationId, 'loc_van_seller_01');
-    assert.strictEqual(body.productId, 'prd_pad_xl');
-    assert.strictEqual(body.quantity, 50);
     assert.deepStrictEqual(body.items, [{ productId: 'prd_pad_xl', quantity: 50 }]);
     assert.strictEqual(body.requestKey, 'REQ-KEY-12345');
+
+    // Strict schema compliance: root quantity, productId, reference, sourceWarehouseId, targetLocationId must not exist
+    assert.strictEqual(body.sourceWarehouseId, undefined);
+    assert.strictEqual(body.targetLocationId, undefined);
+    assert.strictEqual(body.productId, undefined);
+    assert.strictEqual(body.quantity, undefined);
+    assert.strictEqual(body.reference, undefined);
   });
 
   it('guards safe back navigation without triggering multiple concurrent pops', () => {

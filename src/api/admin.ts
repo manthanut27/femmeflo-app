@@ -334,42 +334,63 @@ export const adminApi = {
     reference?: string;
     requestKey?: string;
   }): Promise<{ success: boolean; message?: string }> {
-    const sourceId = payload.sourceId || payload.sourceWarehouseId;
-    let destinationId = payload.destinationId || payload.targetLocationId;
+    const rawSourceId = payload.sourceId || payload.sourceWarehouseId;
+    let rawDestinationId = payload.destinationId || payload.targetLocationId;
 
-    if (!sourceId || !destinationId) {
+    if (!rawSourceId || !rawDestinationId) {
       throw new Error('Source and destination locations are required.');
     }
 
-    // If destinationId was passed as a seller's user ID, attempt resolution to their stockLocation ID
+    let sourceId = rawSourceId;
+    let destinationId = rawDestinationId;
+
+    // Resolve sourceId & destinationId to valid StockLocation UUIDs from inventory summary
     try {
       const summary = await adminApi.getInventorySummary();
-      const matchedSellerLocation = summary?.locations?.find(
-        (l) => l.sellerId === destinationId || l.id === destinationId
+      const locations = summary?.locations || [];
+
+      // 1. Resolve source location:
+      // Match by exact id, or if id was default 'loc_hq_central', resolve to the HQ location UUID
+      const matchedSource =
+        locations.find((l) => l.id === sourceId) ||
+        (sourceId.startsWith('loc_hq') || sourceId.toLowerCase().includes('hq')
+          ? locations.find((l) => l.type === 'HQ')
+          : undefined) ||
+        locations.find((l) => l.type === 'HQ');
+
+      if (matchedSource?.id) {
+        sourceId = matchedSource.id;
+      }
+
+      // 2. Resolve destination location:
+      // Can be a seller's user ID, stockLocation ID, or warehouse ID
+      const matchedDest = locations.find(
+        (l) =>
+          l.id === destinationId ||
+          l.sellerId === destinationId ||
+          (l.seller && l.seller.id === destinationId)
       );
-      if (matchedSellerLocation) {
-        destinationId = matchedSellerLocation.id;
+      if (matchedDest?.id) {
+        destinationId = matchedDest.id;
       }
     } catch {
-      // Continue with destinationId as provided
+      // Continue with provided IDs if network lookup fails
     }
+
+    const items =
+      payload.items && payload.items.length > 0
+        ? payload.items.map((i) => ({ productId: i.productId, quantity: Number(i.quantity) }))
+        : payload.productId
+        ? [{ productId: payload.productId, quantity: Number(payload.quantity) }]
+        : [];
 
     const requestKey = payload.requestKey || payload.reference || undefined;
 
     const body: Record<string, any> = {
-      sourceWarehouseId: sourceId,
       sourceId,
-      targetLocationId: destinationId,
       destinationId,
-      productId: payload.productId,
-      quantity: payload.quantity,
-      reference: requestKey || payload.reference,
+      items,
     };
-    if (payload.items && payload.items.length > 0) {
-      body.items = payload.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
-    } else if (payload.productId) {
-      body.items = [{ productId: payload.productId, quantity: payload.quantity }];
-    }
     if (requestKey) {
       body.requestKey = requestKey;
     }
