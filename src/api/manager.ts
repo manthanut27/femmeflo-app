@@ -119,9 +119,6 @@ export const managerApi = {
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
     if (payload.active !== undefined) body.active = payload.active;
     if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
-    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
-    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
-    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
     if (payload.address?.trim()) body.address = payload.address.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
 

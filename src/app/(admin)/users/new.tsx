@@ -16,7 +16,7 @@ import {
 import { adminApi } from '@/api/admin';
 import { sellerApi } from '@/api/seller';
 import type { PublicUser } from '@/api/types';
-import { syncPermissionAliases } from '@/utils/permissions';
+import { sanitizeBackendPermissions, syncPermissionAliases } from '@/utils/permissions';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -340,7 +340,7 @@ export default function AdminOnboardUserScreen() {
           address: address.trim() || undefined,
           pincode: pincode.trim() || undefined,
           isSeller,
-          permissions: syncPermissionAliases(managerPermissions),
+          permissions: sanitizeBackendPermissions(managerPermissions),
         });
 
         setFeedback({

@@ -1,4 +1,5 @@
 import { apiRequest, API_BASE_URL, uploadFileMultipart } from './client';
+import { sanitizeBackendPermissions } from '../utils/permissions';
 import type {
   AdminDashboardData,
   AdminIncentiveListResponse,
@@ -427,13 +428,12 @@ export const adminApi = {
     if (payload.district?.trim()) body.district = payload.district.trim();
     if (payload.village?.trim()) body.village = payload.village.trim();
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
-    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
-    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
-    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
     if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
     if (payload.address?.trim()) body.address = payload.address.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
-    if (payload.permissions) body.permissions = payload.permissions;
+    if (payload.permissions && payload.permissions.length > 0) {
+      body.permissions = sanitizeBackendPermissions(payload.permissions);
+    }
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
 
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>('admin/managers', {
@@ -538,9 +538,6 @@ export const adminApi = {
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
     if (payload.active !== undefined) body.active = payload.active;
     if (payload.alternatePhone?.trim()) body.alternatePhone = payload.alternatePhone.trim();
-    if (payload.aadhaarNumber?.trim()) body.aadhaarNumber = payload.aadhaarNumber.trim();
-    if (payload.drivingLicenseNumber?.trim()) body.drivingLicenseNumber = payload.drivingLicenseNumber.trim();
-    if (payload.qualification?.trim()) body.qualification = payload.qualification.trim();
     if (payload.address?.trim()) body.address = payload.address.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
 
@@ -894,11 +891,12 @@ export const adminApi = {
     managerId: string,
     permissions: string[]
   ): Promise<{ manager: PublicUser }> {
+    const sanitized = sanitizeBackendPermissions(permissions);
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(
       `admin/permissions/managers/${managerId}/permissions`,
       {
         method: 'PATCH',
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions: sanitized }),
       }
     );
     return { manager: (res.manager ?? res.user)! };
@@ -907,11 +905,12 @@ export const adminApi = {
   async updateOverallPermissions(
     permissions: string[]
   ): Promise<{ count: number; message?: string }> {
+    const sanitized = sanitizeBackendPermissions(permissions);
     const res = await apiRequest<{ count?: number; message?: string; data?: { count: number } }>(
       'admin/permissions/overall',
       {
         method: 'PATCH',
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions: sanitized }),
       }
     );
     return {

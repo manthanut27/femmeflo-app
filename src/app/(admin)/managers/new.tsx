@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
-import { syncPermissionAliases } from '@/utils/permissions';
+import { sanitizeBackendPermissions } from '@/utils/permissions';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -199,7 +199,7 @@ export default function AdminOnboardManagerScreen() {
         address: address.trim() || undefined,
         pincode: pincode.trim() || undefined,
         isSeller,
-        permissions: syncPermissionAliases(selectedPermissions),
+        permissions: sanitizeBackendPermissions(selectedPermissions),
       });
 
       setFeedback({

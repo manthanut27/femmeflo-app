@@ -180,6 +180,60 @@ export function syncPermissionAliases(permissions: string[]): string[] {
   return Array.from(set);
 }
 
+/**
+ * Sanitizes and maps permission keys into strictly valid backend canonical permissions.
+ * Filters out frontend-only UI shorthand keys (e.g. 'view_sellers', 'onboard_sellers', 'monitor_stock')
+ * and guarantees every returned item matches the backend's allowed enum:
+ * "manage_sellers"|"manage_managers"|"onboard_customers"|"view_customers"|"view_inventory"|
+ * "transfer_inventory"|"approve_sales"|"view_reports"|"manage_permissions"|"SELLER_READ"|
+ * "SELLER_CREATE"|"SELLER_UPDATE"|"CUSTOMER_READ"|"CUSTOMER_CREATE"|"SALES_READ"|"INVENTORY_READ"
+ */
+export function sanitizeBackendPermissions(permissions: string[]): string[] {
+  if (!Array.isArray(permissions)) return [];
+  const set = new Set<string>();
+
+  for (const perm of permissions) {
+    if (!perm || typeof perm !== 'string') continue;
+    const trimmed = perm.trim();
+
+    // Map UI shorthand keys to backend canonical permissions
+    if (trimmed === 'view_sellers') {
+      set.add('SELLER_READ');
+      set.add('manage_sellers');
+    } else if (trimmed === 'onboard_sellers') {
+      set.add('SELLER_CREATE');
+      set.add('manage_sellers');
+    } else if (trimmed === 'monitor_stock') {
+      set.add('view_inventory');
+      set.add('INVENTORY_READ');
+    } else if (trimmed === 'view_customers') {
+      set.add('view_customers');
+      set.add('CUSTOMER_READ');
+    } else if (trimmed === 'onboard_customers') {
+      set.add('onboard_customers');
+      set.add('CUSTOMER_CREATE');
+      set.add('view_customers');
+      set.add('CUSTOMER_READ');
+    } else if (trimmed === 'manage_sellers') {
+      set.add('manage_sellers');
+      set.add('SELLER_READ');
+      set.add('SELLER_CREATE');
+    } else if (trimmed === 'view_inventory') {
+      set.add('view_inventory');
+      set.add('INVENTORY_READ');
+    } else if (trimmed === 'approve_sales') {
+      set.add('approve_sales');
+      set.add('SALES_READ');
+    } else {
+      set.add(trimmed);
+    }
+  }
+
+  // Filter strictly against the backend's allowed enum
+  const backendSet = new Set<string>(ALL_BACKEND_PERMISSIONS);
+  return Array.from(set).filter((perm) => backendSet.has(perm));
+}
+
 // -----------------------------------------------------------------------
 // Operational Permission Helper Functions
 // -----------------------------------------------------------------------
