@@ -12,6 +12,7 @@ import type {
   PublicUser,
   SaleItem,
   Shift,
+  UpdateSalePayload,
 } from './types';
 
 export interface ManagerSellerItem extends PublicUser {
@@ -251,6 +252,20 @@ export const managerApi = {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
     };
+  },
+
+  async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
+    try {
+      return await apiRequest<{ sale: SaleItem }>(`manager/sales/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      return await apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+    }
   },
 
   // ----------------------------------------------------

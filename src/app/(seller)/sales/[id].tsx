@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   Modal,
   Platform,
   Pressable,
@@ -98,6 +99,12 @@ export default function SaleDetailScreen() {
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [editFeedbackText, setEditFeedbackText] = useState('');
   const [isUpdatingFeedback, setIsUpdatingFeedback] = useState(false);
+
+  // Price Reapproval Modal State
+  const [priceModalVisible, setPriceModalVisible] = useState(false);
+  const [editUnitPrice, setEditUnitPrice] = useState('');
+  const [editPriceNotes, setEditPriceNotes] = useState('');
+  const [isSubmittingReapproval, setIsSubmittingReapproval] = useState(false);
 
   const loadSale = useCallback(async () => {
     if (!id) return;
@@ -272,6 +279,70 @@ Generated in FemmeFlo Standalone Test Mode.`;
     }
   }
 
+  const handleOpenPriceModal = () => {
+    if (!sale) return;
+    const qty = sale.packetCount || sale.quantity || 1;
+    const currentPricePaise =
+      sale.unitPricePaise ||
+      (sale.items?.[0]?.unitPricePaise
+        ? sale.items[0].unitPricePaise
+        : qty > 0
+          ? Math.round(sale.totalAmountPaise / qty)
+          : 2500);
+    setEditUnitPrice(((currentPricePaise || 2500) / 100).toFixed(2));
+    setEditPriceNotes('');
+    setPriceModalVisible(true);
+  };
+
+  const handleResubmitPrice = async () => {
+    if (!sale || !id || isSubmittingReapproval) return;
+    const priceNum = parseFloat(editUnitPrice);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      Alert.alert('Invalid Price', 'Please enter a valid price greater than ₹0.00');
+      return;
+    }
+
+    const newUnitPricePaise = Math.round(priceNum * 100);
+    const qty = sale.packetCount || sale.quantity || 1;
+    const newTotalPaise = qty * newUnitPricePaise;
+
+    setIsSubmittingReapproval(true);
+    try {
+      const res = await sellerApi.updateSale(id, {
+        unitPricePaise: newUnitPricePaise,
+        totalAmountPaise: newTotalPaise,
+        totalPaise: newTotalPaise,
+        status: 'PENDING_APPROVAL',
+        resubmitForApproval: true,
+        notes: editPriceNotes.trim() || undefined,
+      });
+
+      const updatedSale = normalizeSale({
+        ...sale,
+        ...(res.sale || {}),
+        unitPricePaise: newUnitPricePaise,
+        totalAmountPaise: newTotalPaise,
+        totalPaise: newTotalPaise,
+        status: 'PENDING_APPROVAL',
+        rejectionReason: null,
+      });
+
+      setSale(updatedSale);
+      setPriceModalVisible(false);
+
+      DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { saleId: sale.id, action: 'RESUBMIT' });
+
+      Alert.alert(
+        'Price Updated & Resubmitted',
+        `Order #${sale.id.slice(0, 8)} unit price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Sent to Super Admin for authorization.`
+      );
+    } catch (err: any) {
+      Alert.alert('Update Failed', err.message || 'Unable to update price and resubmit for approval.');
+    } finally {
+      setIsSubmittingReapproval(false);
+    }
+  };
+
   const formatRupees = (paise?: number | null) => {
     return `₹${(((paise ?? 0)) / 100).toLocaleString('en-IN', {
       minimumFractionDigits: 2,
@@ -371,6 +442,31 @@ Generated in FemmeFlo Standalone Test Mode.`;
               </View>
             </View>
           </Card>
+
+          {/* Rejected Sale: Edit Price for Reapproval Action Card */}
+          {isRejected ? (
+            <Card variant="outlined" style={styles.reapprovalCard}>
+              <View style={styles.reapprovalHeader}>
+                <View style={styles.reapprovalIconBox}>
+                  <Ionicons name="pricetag" size={20} color={BrandColors.pink.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reapprovalTitle}>Revise Price for Reapproval</Text>
+                  <Text style={styles.reapprovalDesc}>
+                    Update unit price and send this order back to Super Admin for authorization.
+                  </Text>
+                </View>
+              </View>
+              <Button
+                title="Edit Price & Resubmit"
+                variant="primary"
+                size="md"
+                onPress={handleOpenPriceModal}
+                icon={<Ionicons name="create-outline" size={18} color="#FFFFFF" />}
+                style={{ marginTop: Spacing.sm }}
+              />
+            </Card>
+          ) : null}
 
           {/* Collect Outstanding Payment Action */}
           {isPendingPayment && !isRejected ? (
@@ -581,6 +677,113 @@ Generated in FemmeFlo Standalone Test Mode.`;
                   loading={isUpdatingFeedback}
                   disabled={isUpdatingFeedback}
                   style={{ flex: 1 }}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Price for Reapproval Modal */}
+      <Modal visible={priceModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>Edit Price for Reapproval</Text>
+                <Pressable
+                  onPress={() => setPriceModalVisible(false)}
+                  hitSlop={HitSlop.md}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={24} color="#64748B" />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Revise unit price and send order back to Super Admin for authorization
+              </Text>
+
+              {/* Previous Rejection Alert Box */}
+              {sale.rejectionReason ? (
+                <View style={styles.rejectionContextBox}>
+                  <Ionicons name="alert-circle" size={18} color="#B4234D" style={{ marginRight: 8, marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rejectionContextTitle}>Rejection Reason</Text>
+                    <Text style={styles.rejectionContextText}>{sale.rejectionReason}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Pricing Context Cards */}
+              <View style={styles.priceSummaryBox}>
+                <View style={styles.priceSummaryItem}>
+                  <Text style={styles.priceSummaryLabel}>Order Qty</Text>
+                  <Text style={styles.priceSummaryValue}>{sale.packetCount || sale.quantity || 1} pkts</Text>
+                </View>
+                <View style={styles.priceSummaryDivider} />
+                <View style={styles.priceSummaryItem}>
+                  <Text style={styles.priceSummaryLabel}>Previous Price</Text>
+                  <Text style={styles.priceSummaryValue}>
+                    ₹{(((sale.unitPricePaise || Math.round(sale.totalAmountPaise / (sale.packetCount || 1))) || 0) / 100).toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.priceSummaryDivider} />
+                <View style={styles.priceSummaryItem}>
+                  <Text style={styles.priceSummaryLabel}>Min Floor</Text>
+                  <Text style={[styles.priceSummaryValue, { color: BrandColors.pink.primary }]}>₹25.00</Text>
+                </View>
+              </View>
+
+              {/* Revised Unit Price Input */}
+              <Input
+                label="Revised Unit Price (₹ per packet)"
+                placeholder="e.g. 26.50"
+                value={editUnitPrice}
+                onChangeText={setEditUnitPrice}
+                keyboardType="decimal-pad"
+                leftIcon={<Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.pink.primary }}>₹</Text>}
+                containerStyle={{ marginTop: Spacing.sm }}
+              />
+
+              {/* Live Calculation Preview */}
+              {(() => {
+                const p = parseFloat(editUnitPrice);
+                const isValid = !isNaN(p) && p > 0;
+                const total = isValid ? p * (sale.packetCount || sale.quantity || 1) : 0;
+                return (
+                  <View style={styles.calculationPreview}>
+                    <Text style={styles.calcLabel}>Revised Total Order Value:</Text>
+                    <Text style={styles.calcValue}>₹{total.toFixed(2)}</Text>
+                  </View>
+                );
+              })()}
+
+              {/* Reapproval Notes / Justification */}
+              <Input
+                label="Reapproval Justification / Notes (Optional)"
+                placeholder="e.g. Customer agreed to ₹26.50 rate"
+                value={editPriceNotes}
+                onChangeText={setEditPriceNotes}
+                containerStyle={{ marginTop: Spacing.xs }}
+                leftIcon={<Ionicons name="document-text-outline" size={18} color="#94A3B8" />}
+              />
+
+              <View style={styles.modalButtonsRow}>
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => setPriceModalVisible(false)}
+                  disabled={isSubmittingReapproval}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={isSubmittingReapproval ? 'Resubmitting...' : 'Resubmit for Approval'}
+                  variant="primary"
+                  onPress={handleResubmitPrice}
+                  loading={isSubmittingReapproval}
+                  disabled={!editUnitPrice || isNaN(parseFloat(editUnitPrice)) || parseFloat(editUnitPrice) <= 0 || isSubmittingReapproval}
+                  style={{ flex: 1.6 }}
                 />
               </View>
             </ScrollView>
@@ -818,5 +1021,117 @@ const styles = StyleSheet.create({
     ...Typography.bodySmall,
     color: '#94A3B8',
     fontStyle: 'italic',
+  },
+  reapprovalCard: {
+    backgroundColor: '#FFF5F8',
+    borderColor: '#FECDD3',
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  reapprovalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reapprovalIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFE4E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  reapprovalTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  reapprovalDesc: {
+    ...Typography.bodySmall,
+    color: '#881337',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  reapprovalHintText: {
+    ...Typography.bodySmall,
+    color: '#9F1239',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  rejectionContextBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FDA4AF',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  rejectionContextTitle: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#9F1239',
+    textTransform: 'uppercase',
+  },
+  rejectionContextText: {
+    ...Typography.bodySmall,
+    color: '#BE123C',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  priceSummaryBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  priceSummaryItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  priceSummaryLabel: {
+    ...Typography.caption,
+    color: '#64748B',
+  },
+  priceSummaryValue: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  priceSummaryDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#CBD5E1',
+  },
+  calculationPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginVertical: Spacing.sm,
+  },
+  calcLabel: {
+    ...Typography.bodySmall,
+    color: '#166534',
+    fontWeight: '600',
+  },
+  calcValue: {
+    ...Typography.bodyMedium,
+    fontWeight: '800',
+    color: '#15803D',
   },
 });

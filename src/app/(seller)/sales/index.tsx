@@ -246,6 +246,11 @@ export default function SalesListScreen() {
                 <Text style={styles.uncollectedPillText}>Collect ›</Text>
               </View>
             )}
+            {item.status === 'REJECTED' && (
+              <View style={styles.revisePricePill}>
+                <Text style={styles.revisePricePillText}>Revise Price ›</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.amountText}>{formatCurrencyINR(totalAmount)}</Text>
         </View>
@@ -585,6 +590,11 @@ export default function SalesListScreen() {
                 <Text style={styles.uncollectedPillText}>Collect ›</Text>
               </View>
             )}
+            {item.status === 'REJECTED' && (
+              <View style={styles.revisePricePill}>
+                <Text style={styles.revisePricePillText}>Revise Price ›</Text>
+              </View>
+            )}
                                 </View>
                               </View>
 
@@ -868,6 +878,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#B45309',
+  },
+  revisePricePill: {
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+  },
+  revisePricePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9F1239',
   },
   paymentSummaryCard: {
     padding: Spacing.md,

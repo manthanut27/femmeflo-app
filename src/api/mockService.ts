@@ -519,6 +519,53 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { sale: mockDb.sales[0] } as unknown as T;
   }
 
+  // Seller / Manager: Update Sale Price & Resubmit for Reapproval
+  if (
+    (cleanEndpoint.startsWith('seller/sales/') || cleanEndpoint.startsWith('manager/sales/')) &&
+    !cleanEndpoint.endsWith('/payment') &&
+    method === 'PATCH'
+  ) {
+    const segments = cleanEndpoint.split('/');
+    const id = segments[2];
+    const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
+    if (sale) {
+      if (body.unitPricePaise) {
+        const unitPrice = Number(body.unitPricePaise);
+        sale.unitPricePaise = unitPrice;
+        const qty = sale.packetCount || sale.quantity || 1;
+        sale.totalAmountPaise = qty * unitPrice;
+        sale.totalPaise = sale.totalAmountPaise;
+        if (sale.items && sale.items.length > 0) {
+          sale.items.forEach((it: any) => {
+            it.unitPricePaise = unitPrice;
+            it.totalPricePaise = (it.quantity || 1) * unitPrice;
+          });
+        }
+        if (sale.lineItems && sale.lineItems.length > 0) {
+          sale.lineItems.forEach((it: any) => {
+            it.unitPricePaise = unitPrice;
+            it.totalPricePaise = (it.quantity || 1) * unitPrice;
+          });
+        }
+      }
+      if (body.status) {
+        sale.status = body.status;
+      } else if (body.resubmitForApproval) {
+        sale.status = 'PENDING_APPROVAL';
+      }
+      if (body.customerFeedback) {
+        sale.customerFeedback = body.customerFeedback;
+      }
+      if (sale.status === 'PENDING_APPROVAL' || sale.status === 'PENDING') {
+        sale.rejectionReason = undefined;
+        sale.approvalReason = body.notes || `Price revised to ₹${((sale.unitPricePaise || 2500) / 100).toFixed(2)} for reapproval.`;
+        sale.resubmittedAt = new Date().toISOString();
+      }
+      return { sale } as unknown as T;
+    }
+    return { sale: mockDb.sales[0] } as unknown as T;
+  }
+
   // ----------------------------------------------------
   // Seller: Incentives
   // ----------------------------------------------------

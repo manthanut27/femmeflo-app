@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   DeviceEventEmitter,
@@ -59,6 +59,15 @@ export default function AdminApprovalsScreen() {
       loadApprovals();
     }, [loadApprovals])
   );
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      loadApprovals();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [loadApprovals]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

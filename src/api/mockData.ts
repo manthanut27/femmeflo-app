@@ -535,6 +535,31 @@ export const MOCK_SALES: SaleItem[] = [
     createdAt: '2026-10-27T14:50:00Z',
     confirmedAt: '2026-10-27T14:55:00Z',
   },
+  {
+    id: 'sale_005',
+    saleNumber: 'FF-2026-00415',
+    customerId: 'cust_01',
+    customer: MOCK_CUSTOMERS[0],
+    sellerId: 'usr_seller_01',
+    seller: { id: 'usr_seller_01', name: 'Pooja Sharma' },
+    totalAmountPaise: 40000, // ₹400.00
+    packetCount: 20,
+    unitPricePaise: 2000, // ₹20.00 (below min floor ₹25.00)
+    status: 'REJECTED',
+    paymentMode: 'PENDING',
+    rejectionReason: 'Discounted selling price ₹20.00 is below the ₹25.00 minimum floor rate. Revise price for reapproval.',
+    items: [
+      {
+        id: 'sli_005',
+        productId: 'prod_01',
+        productName: 'FemmeFlo Ultra Comfort Regular (Pack of 10)',
+        quantity: 20,
+        unitPricePaise: 2000,
+        totalPricePaise: 40000,
+      },
+    ],
+    createdAt: '2026-10-28T16:00:00Z',
+  },
 ];
 
 // ==========================================
