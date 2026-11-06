@@ -2,7 +2,7 @@
   "expo": {
     "name": "FemmeFlo",
     "slug": "femmeflo-app",
-    "version": "1.0.15",
+    "version": "1.0.16",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "femmeflo",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.femmeflo.app",
-      "versionCode": 18,
+      "versionCode": 19,
       "adaptiveIcon": {
         "backgroundColor": "#FAF8F5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -69,10 +69,23 @@
           "android": {
             "usesCleartextTraffic": true,
             "targetSdkVersion": 35,
-            "enableProguardInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false,
-            "extraProguardRules": "-keep class expo.modules.** { *; }\n-dontwarn expo.modules.**\n-keep class com.facebook.react.** { *; }\n-dontwarn com.facebook.react.**\n-keep class com.facebook.jni.** { *; }\n-keepattributes *Annotation*,InnerClasses,Signature,EnclosingMethod",
-            "useLegacyPackaging": false,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "useLegacyPackaging": true,
+            "gifEnabled": false,
+            "packagingOptions": {
+              "exclude": [
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/*.kotlin_module"
+              ]
+            },
+            "extraProguardRules": "-keep class expo.modules.** { *; }\n-dontwarn expo.modules.**\n-keep interface expo.modules.** { *; }\n-keepclassmembers class * extends expo.modules.core.Module { *; }\n-keepclassmembers class * extends expo.modules.kotlin.modules.Module { *; }\n-keep class com.facebook.react.** { *; }\n-dontwarn com.facebook.react.**\n-keep class com.facebook.jni.** { *; }\n-dontwarn com.facebook.jni.**\n-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.soloader.** { *; }\n-keep class com.swmansion.reanimated.** { *; }\n-dontwarn com.swmansion.reanimated.**\n-keep class com.swmansion.rnscreens.** { *; }\n-dontwarn com.swmansion.rnscreens.**\n-keep class com.swmansion.gesturehandler.** { *; }\n-dontwarn com.swmansion.gesturehandler.**\n-keep class com.reactnativecommunity.asyncstorage.** { *; }\n-keep class expo.modules.securestore.** { *; }\n-keep class com.google.android.gms.location.** { *; }\n-dontwarn com.google.android.gms.location.**\n-keep class expo.modules.speechrecognition.** { *; }\n-keepattributes *Annotation*,InnerClasses,Signature,EnclosingMethod,SourceFile,LineNumberTable",
             "buildArchs": [
               "arm64-v8a",
               "armeabi-v7a"

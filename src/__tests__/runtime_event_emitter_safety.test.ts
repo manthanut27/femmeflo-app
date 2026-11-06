@@ -82,7 +82,7 @@ describe('Runtime EventEmitter & Native Module Initialization Safety Suite', () 
     assert.equal(callCount, 1);
   });
 
-  it('ensures app.json disables aggressive ProGuard class stripping for native reflection', () => {
+  it('ensures app.json enables optimized ProGuard / R8 and resource shrinking with reflection protection', () => {
     const appJsonPath = resolve(process.cwd(), 'app.json');
     const appConfig = JSON.parse(readFileSync(appJsonPath, 'utf8'));
     const buildPropsPlugin = appConfig.expo.plugins.find(
@@ -90,11 +90,16 @@ describe('Runtime EventEmitter & Native Module Initialization Safety Suite', () 
     );
     assert.ok(buildPropsPlugin, 'expo-build-properties plugin must be present');
     const androidConfig = buildPropsPlugin[1].android;
-    assert.equal(androidConfig.enableProguardInReleaseBuilds, false);
-    assert.equal(androidConfig.enableShrinkResourcesInReleaseBuilds, false);
+    assert.equal(androidConfig.enableProguardInReleaseBuilds, true);
+    assert.equal(androidConfig.enableShrinkResourcesInReleaseBuilds, true);
+    assert.equal(androidConfig.useLegacyPackaging, true);
     assert.ok(
       androidConfig.extraProguardRules.includes('expo.modules'),
       'extraProguardRules must protect expo.modules'
+    );
+    assert.ok(
+      androidConfig.extraProguardRules.includes('com.facebook.react'),
+      'extraProguardRules must protect com.facebook.react'
     );
   });
 });
