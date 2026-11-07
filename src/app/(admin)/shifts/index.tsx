@@ -30,6 +30,7 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 
 function formatMinutes(mins: number | null | undefined): string {
   if (mins === null || mins === undefined) return 'Active now';
@@ -156,12 +157,10 @@ export default function AdminShiftsScreen() {
     const sellerName = item.seller?.name || 'Field Officer';
     const visitsCount = item.visits?.length ?? 0;
     const duration = formatMinutes(item.durationMins);
-    const startKm = item.startOdometer;
-    const endKm = item.endOdometer;
-    const distanceKm =
-      startKm != null && endKm != null && endKm >= startKm
-        ? `${(endKm - startKm).toFixed(1)} km`
-        : null;
+    const startKm = item.startOdometer ?? item.startOdometerKm;
+    const endKm = item.endOdometer ?? item.endOdometerKm;
+    const distInfo = computeShiftTravelDistance(item);
+    const distanceKm = distInfo.distanceKm > 0 ? distInfo.formatted : (isOpen ? null : '0 km');
 
     return (
       <Card style={styles.shiftCard}>
@@ -352,20 +351,16 @@ export default function AdminShiftsScreen() {
                 <View style={styles.odometerGrid}>
                   <View style={styles.odometerCol}>
                     <Text style={styles.odometerLabel}>Start Reading</Text>
-                    <Text style={styles.odometerVal}>{selectedShift?.startOdometer ?? '—'} km</Text>
+                    <Text style={styles.odometerVal}>{selectedShift?.startOdometer ?? selectedShift?.startOdometerKm ?? '—'} km</Text>
                   </View>
                   <View style={styles.odometerCol}>
                     <Text style={styles.odometerLabel}>End Reading</Text>
-                    <Text style={styles.odometerVal}>{selectedShift?.endOdometer ?? '—'} km</Text>
+                    <Text style={styles.odometerVal}>{selectedShift?.endOdometer ?? selectedShift?.endOdometerKm ?? '—'} km</Text>
                   </View>
                   <View style={styles.odometerCol}>
                     <Text style={styles.odometerLabel}>Net Travel</Text>
                     <Text style={[styles.odometerVal, { color: BrandColors.pink.dark }]}>
-                      {selectedShift?.startOdometer != null &&
-                      selectedShift?.endOdometer != null &&
-                      selectedShift.endOdometer >= selectedShift.startOdometer
-                        ? `${(selectedShift.endOdometer - selectedShift.startOdometer).toFixed(1)} km`
-                        : '—'}
+                      {selectedShift ? computeShiftTravelDistance(selectedShift).formatted : '—'}
                     </Text>
                   </View>
                 </View>

@@ -31,6 +31,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 import {
   formatDateIST,
   formatDateTimeIST,
@@ -112,11 +113,7 @@ export default function ManagerShiftsScreen() {
 
     for (const s of shifts) {
       totalVisits += s.visits?.length || 0;
-      if (s.totalDistanceKm) {
-        totalDistance += s.totalDistanceKm;
-      } else if (s.startOdometer != null && s.endOdometer != null) {
-        totalDistance += Math.max(0, s.endOdometer - s.startOdometer);
-      }
+      totalDistance += computeShiftTravelDistance(s).distanceKm;
     }
 
     return {
@@ -374,12 +371,10 @@ export default function ManagerShiftsScreen() {
                 const isActive = shift.status === 'ACTIVE';
                 const visitsCount = shift.visits?.length || 0;
                 const isExpanded = Boolean(expandedShiftIds[shift.id]);
-
-                const distanceKm =
-                  shift.totalDistanceKm ??
-                  (shift.startOdometer != null && shift.endOdometer != null
-                    ? Math.max(0, shift.endOdometer - shift.startOdometer)
-                    : null);
+                const distInfo = computeShiftTravelDistance(shift);
+                const startKmVal = shift.startOdometer ?? shift.startOdometerKm;
+                const endKmVal = shift.endOdometer ?? shift.endOdometerKm;
+                const distanceKm = distInfo.distanceKm > 0 || !isActive ? distInfo.distanceKm : null;
 
                 return (
                   <Card key={shift.id} style={styles.shiftCard}>
@@ -430,9 +425,9 @@ export default function ManagerShiftsScreen() {
                         <Text style={styles.odometerText}>
                           Odometer:{' '}
                           <Text style={{ fontWeight: '700' }}>
-                            {shift.startOdometer ?? '—'} km
+                            {startKmVal ?? '—'} km
                           </Text>
-                          {shift.endOdometer != null ? ` → ${shift.endOdometer} km` : ''}
+                          {endKmVal != null ? ` → ${endKmVal} km` : ''}
                           {distanceKm != null ? ` (${distanceKm} km)` : ''}
                         </Text>
                       </View>

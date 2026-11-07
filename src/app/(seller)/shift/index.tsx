@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { draftStorage } from '@/utils/draftStorage';
+import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 
 const PREDEFINED_VISIT_REASONS = [
   'Stock already sufficient',
@@ -604,6 +605,7 @@ export default function ShiftScreen() {
     try {
       const coords = await acquireCoordinates();
       const shiftIdToEnd = currentShift?.id;
+      const startKmBeforeEnd = currentShift?.startOdometerKm ?? (currentShift as any)?.startOdometer ?? 0;
       const res = await sellerApi.endShift({
         shiftId: shiftIdToEnd,
         endOdometerKm: pendingOdometerKm,
@@ -624,15 +626,19 @@ export default function ShiftScreen() {
       setEndOdometer('');
       setEndNotes('');
 
-      const totalDist = (closedShift && closedShift.totalDistanceKm != null && !isNaN(Number(closedShift.totalDistanceKm)))
-        ? `${closedShift.totalDistanceKm} km`
-        : '0 km';
+      const distResult = computeShiftTravelDistance(closedShift, {
+        startKm: startKmBeforeEnd,
+        endKm: pendingOdometerKm,
+      });
+      const totalDist = distResult.formatted;
+      const measurementNote = distResult.source === 'odometer' ? ' (via meter fallback)' : '';
+
       setFeedback({
         type: 'success',
         title: 'Duty Shift Completed (Face ID Verified)',
-        message: `Closing odometer logged at ${pendingOdometerKm} km. Total beat route: ${totalDist}.`,
+        message: `Closing odometer logged at ${pendingOdometerKm} km. Total beat route: ${totalDist}${measurementNote}.`,
       });
-      Alert.alert('Shift Ended', `Shift ended with verified Face ID. Total route: ${totalDist}.`);
+      Alert.alert('Shift Ended', `Shift ended with verified Face ID. Total route: ${totalDist}${measurementNote}.`);
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -1425,6 +1431,22 @@ export default function ShiftScreen() {
                 autoFocus
               />
 
+              {(() => {
+                const enteredKm = parseFloat(endOdometer);
+                if (!isNaN(enteredKm) && enteredKm >= startKm) {
+                  const meterDist = Math.round((enteredKm - startKm) * 10) / 10;
+                  return (
+                    <View style={styles.meterPreviewCard}>
+                      <Ionicons name="speedometer" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
+                      <Text style={styles.meterPreviewText}>
+                        Calculated Travel: <Text style={{ fontWeight: '700' }}>{meterDist} km</Text> ({enteredKm} - {startKm} km)
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+
               <Input
                 label="Shift Summary / Remarks (Optional)"
                 value={endNotes}
@@ -1952,5 +1974,21 @@ const styles = StyleSheet.create({
   paymentModeTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  meterPreviewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  meterPreviewText: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '500',
   },
 });

@@ -20,6 +20,7 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { draftStorage } from '@/utils/draftStorage';
+import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -219,6 +220,7 @@ export default function SellerDashboardScreen() {
     setIsShiftSubmitting(true);
     try {
       const coords = await acquireCoordinates();
+      const startKmBeforeEnd = currentShift?.startOdometerKm ?? (currentShift as any)?.startOdometer ?? 0;
       const res = await sellerApi.endShift({
         shiftId: currentShift?.id,
         endOdometerKm: pendingOdometerKm,
@@ -240,13 +242,17 @@ export default function SellerDashboardScreen() {
       }
       setOdometerKm('');
       setShiftRemarks('');
-      const totalDist =
-        closedShift && closedShift.totalDistanceKm != null && !isNaN(Number(closedShift.totalDistanceKm))
-          ? `${closedShift.totalDistanceKm} km`
-          : 'recorded';
+
+      const distResult = computeShiftTravelDistance(closedShift, {
+        startKm: startKmBeforeEnd,
+        endKm: pendingOdometerKm,
+      });
+      const totalDist = distResult.formatted;
+      const viaNote = distResult.source === 'odometer' ? ' (via meter)' : '';
+
       Alert.alert(
         'Shift Completed',
-        `Duty shift ended with selfie attendance. Travel distance: ${totalDist}.`
+        `Duty shift ended with selfie attendance. Travel distance: ${totalDist}${viaNote}.`
       );
       loadDashboard();
     } catch (err: any) {
@@ -593,6 +599,23 @@ export default function SellerDashboardScreen() {
                 autoFocus
               />
 
+              {(() => {
+                const endKmNum = Number(odometerKm);
+                const startKmNum = currentShift?.startOdometerKm ?? (currentShift as any)?.startOdometer ?? 0;
+                if (odometerKm.trim() && !isNaN(endKmNum) && endKmNum >= startKmNum) {
+                  const deltaKm = Math.round((endKmNum - startKmNum) * 10) / 10;
+                  return (
+                    <View style={styles.meterPreviewCard}>
+                      <Ionicons name="speedometer" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
+                      <Text style={styles.meterPreviewText}>
+                        Calculated Travel: <Text style={{ fontWeight: '700' }}>{deltaKm} KM</Text> ({endKmNum} - {startKmNum} KM)
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+
               <Input
                 label="End of Day Remarks (Optional)"
                 value={shiftRemarks}
@@ -842,5 +865,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     marginTop: Spacing.md,
+  },
+  meterPreviewCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  meterPreviewText: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '500',
   },
 });

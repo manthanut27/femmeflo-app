@@ -28,6 +28,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 
 export default function SellerAllShiftsScreen() {
   const { user } = useAuth();
@@ -74,11 +75,7 @@ export default function SellerAllShiftsScreen() {
 
     for (const s of shifts) {
       totalVisits += s.visits?.length || 0;
-      if (s.totalDistanceKm) {
-        totalKm += s.totalDistanceKm;
-      } else if (s.endOdometerKm != null && s.startOdometerKm != null) {
-        totalKm += Math.max(0, s.endOdometerKm - s.startOdometerKm);
-      }
+      totalKm += computeShiftTravelDistance(s).distanceKm;
     }
 
     return {
@@ -93,7 +90,7 @@ export default function SellerAllShiftsScreen() {
     const isExpanded = Boolean(expandedShiftIds[item.id]);
     const startKm = item.startOdometerKm ?? (item as any).startOdometer ?? 0;
     const endKm = item.endOdometerKm ?? (item as any).endOdometer;
-    const distanceTraveled = endKm != null ? Math.max(0, endKm - startKm) : (item.totalDistanceKm || 0);
+    const distanceInfo = computeShiftTravelDistance(item);
     const visits = item.visits || [];
     const isActive = item.status === 'ACTIVE';
 
@@ -143,7 +140,7 @@ export default function SellerAllShiftsScreen() {
           <View style={styles.odometerBox}>
             <Text style={styles.odometerLabel}>DISTANCE</Text>
             <Text style={[styles.odometerValue, { color: BrandColors.green.primary }]}>
-              {distanceTraveled.toFixed(1)} KM
+              {distanceInfo.formatted.toUpperCase()}
             </Text>
           </View>
         </View>
