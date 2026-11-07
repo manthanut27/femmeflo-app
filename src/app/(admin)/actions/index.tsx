@@ -7,12 +7,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
 import type { AdminDashboardData } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import {
   BorderRadius,
@@ -316,46 +316,51 @@ export default function AdministrativeActionsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrapper}>
-          <View style={[styles.actionList, isTablet && styles.actionListTablet]}>
+          <View style={styles.headerInfoRow}>
+            <Text style={styles.sectionTitle}>Operational Modules</Text>
+            <Badge label="13 Modules" variant="neutral" size="sm" />
+          </View>
+
+          <View style={[styles.actionGrid, isTablet && styles.actionGridTablet]}>
             {actionItems.map((action) => (
-              <TouchableOpacity
+              <Card
                 key={action.id}
+                variant="elevated"
                 style={[
                   styles.actionCard,
                   isTablet && styles.actionCardTablet,
                   action.highlightAlert && styles.actionCardHighlight,
                 ]}
                 onPress={() => handleNavigateToAction(action.route)}
-                activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${action.title}`}
               >
-                <View style={[styles.iconBox, { backgroundColor: action.iconBg }]}>
-                  <Ionicons name={action.iconName} size={22} color={action.iconColor} />
+                <View style={styles.cardTopRow}>
+                  <View style={[styles.iconBox, { backgroundColor: action.iconBg }]}>
+                    <Ionicons name={action.iconName} size={22} color={action.iconColor} />
+                  </View>
+                  {action.highlightAlert ? (
+                    <Badge label={`${pendingCount} PENDING`} variant="danger" size="sm" />
+                  ) : (
+                    <View style={styles.arrowBox}>
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={Colors.light.textTertiary}
+                      />
+                    </View>
+                  )}
                 </View>
 
-                <View style={styles.actionInfo}>
-                  <View style={styles.titleRow}>
-                    <Text style={styles.actionTitle} numberOfLines={1}>
-                      {action.title}
-                    </Text>
-                    {action.highlightAlert ? (
-                      <Badge label={`${pendingCount} PENDING`} variant="danger" size="sm" />
-                    ) : null}
-                  </View>
-                  <Text style={styles.actionCategory}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.actionTitle} numberOfLines={2}>
+                    {action.buttonTitle || action.title}
+                  </Text>
+                  <Text style={styles.actionCategory} numberOfLines={1}>
                     #{action.index} • {action.categoryLabel}
                   </Text>
                 </View>
-
-                <View style={styles.arrowBox}>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={action.highlightAlert ? '#DC2626' : Colors.light.textTertiary}
-                  />
-                </View>
-              </TouchableOpacity>
+              </Card>
             ))}
           </View>
         </View>
@@ -378,67 +383,85 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
   },
-  actionList: {
-    gap: Spacing.sm,
+  headerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+    paddingHorizontal: 2,
   },
-  actionListTablet: {
+  sectionTitle: {
+    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    rowGap: Spacing.md,
+  },
+  actionGridTablet: {
+    justifyContent: 'flex-start',
+    gap: Spacing.md,
   },
   actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    width: '48.5%',
+    minHeight: 128,
+    justifyContent: 'space-between',
+    padding: Spacing.md,
     borderRadius: BorderRadius.lg,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: Spacing.md,
     ...Shadows.sm,
   },
   actionCardTablet: {
-    width: '49%',
+    width: '31.8%',
   },
   actionCardHighlight: {
     borderColor: '#FECDD3',
     backgroundColor: '#FFFDFD',
   },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  actionInfo: {
-    flex: 1,
-    marginRight: Spacing.xs,
-  },
-  titleRow: {
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  iconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardContent: {
+    justifyContent: 'flex-end',
   },
   actionTitle: {
     ...Typography.subtitle,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
-    flex: 1,
+    lineHeight: 19,
+    marginBottom: 4,
   },
   actionCategory: {
     ...Typography.caption,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 2,
-  },
-  arrowBox: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
