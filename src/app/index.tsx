@@ -1,7 +1,6 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import { BrandColors, Colors, Radius, Spacing, Typography } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
@@ -31,14 +30,13 @@ export default function StartupScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View
-          style={styles.logoBadge}
+        <Image
+          source={require('../../assets/images/femmeflo-logo.png')}
+          style={styles.brandLogo}
+          resizeMode="contain"
           accessibilityRole="image"
           accessibilityLabel="FemmeFlo logo"
-        >
-          <Ionicons name="flower-outline" size={42} color={BrandColors.pink.primary} />
-        </View>
-        <Text style={styles.brandTitle}>FemmeFlo</Text>
+        />
         <Text style={styles.brandSubtitle}>Operations & Field Distribution</Text>
         <ActivityIndicator
           size="large"
@@ -61,6 +59,11 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     paddingHorizontal: Spacing.xxl,
+  },
+  brandLogo: {
+    width: 240,
+    height: 92,
+    marginBottom: Spacing.sm,
   },
   logoBadge: {
     width: 80,
