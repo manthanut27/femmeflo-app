@@ -73,3 +73,4 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.match(code, /badge/, 'TabBarIcon must support optional badge indicator');
   });
 });
+
