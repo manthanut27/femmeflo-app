@@ -1,13 +1,24 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
-import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TabBarIcon } from '@/components/ui/TabBarIcon';
+import { BrandColors, Colors, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useResponsiveLayout } from '@/utils/responsive';
 
 export default function SellerTabsLayout() {
   const { user, state, isLoading } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width, isSmallMobile, isTablet } = useResponsiveLayout();
+
+  // Dynamic responsive tab bar dimensions
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 8);
+  const tabHeight = (isSmallMobile ? 54 : 60) + bottomInset;
+  const horizontalPadding = isTablet ? Math.max((width - 760) / 2, 24) : 4;
+  const iconSize = isSmallMobile ? 21 : isTablet ? 25 : 23;
+  const labelFontSize = isSmallMobile ? 10 : isTablet ? 12 : 11;
 
   const isAllowedSeller =
     user?.role === 'SELLER' ||
@@ -38,23 +49,42 @@ export default function SellerTabsLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: BrandColors.pink.primary,
         tabBarInactiveTintColor: Colors.light.textSecondary,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarStyle: {
+          backgroundColor: Colors.light.surface,
+          borderTopWidth: 1,
+          borderTopColor: Colors.light.border,
+          height: tabHeight,
+          paddingBottom: bottomInset,
+          paddingTop: 6,
+          paddingHorizontal: horizontalPadding,
+          ...Shadows.sm,
+        },
+        tabBarLabelStyle: {
+          fontSize: labelFontSize,
+          fontWeight: '700',
+          marginTop: 2,
+          letterSpacing: 0.1,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'home' : 'home-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="home-outline"
+              focusedName="home"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.primary}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -62,12 +92,16 @@ export default function SellerTabsLayout() {
       <Tabs.Screen
         name="shift/index"
         options={{
-          title: 'Duty Shift',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'time' : 'time-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          title: 'Shift',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="time-outline"
+              focusedName="time"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.primary}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -76,11 +110,15 @@ export default function SellerTabsLayout() {
         name="sales"
         options={{
           title: 'Sales',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'receipt' : 'receipt-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="receipt-outline"
+              focusedName="receipt"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.primary}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -89,11 +127,15 @@ export default function SellerTabsLayout() {
         name="customers"
         options={{
           title: 'Customers',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'people' : 'people-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="people-outline"
+              focusedName="people"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.primary}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -111,11 +153,15 @@ export default function SellerTabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'person' : 'person-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="person-outline"
+              focusedName="person"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.primary}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -139,19 +185,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tabBar: {
-    backgroundColor: Colors.light.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-    height: Platform.OS === 'ios' ? 88 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    paddingTop: 8,
-    ...Shadows.sm,
-  },
-  tabBarLabel: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: '700',
   },
 });

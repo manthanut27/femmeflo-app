@@ -1,13 +1,24 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
-import { BrandColors, Colors, Shadows, Typography } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TabBarIcon } from '@/components/ui/TabBarIcon';
+import { BrandColors, Colors, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useResponsiveLayout } from '@/utils/responsive';
 
 export default function AdminTabsLayout() {
   const { user, state, isLoading } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width, isSmallMobile, isTablet } = useResponsiveLayout();
+
+  // Dynamic responsive tab bar dimensions
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 8);
+  const tabHeight = (isSmallMobile ? 54 : 60) + bottomInset;
+  const horizontalPadding = isTablet ? Math.max((width - 760) / 2, 24) : 4;
+  const iconSize = isSmallMobile ? 20 : isTablet ? 24 : 22;
+  const labelFontSize = isSmallMobile ? 9.5 : isTablet ? 12 : 10.5;
 
   useEffect(() => {
     if (isLoading || state === 'INITIALIZING') return;
@@ -39,19 +50,37 @@ export default function AdminTabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: BrandColors.pink.dark,
         tabBarInactiveTintColor: Colors.light.textSecondary,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarStyle: {
+          backgroundColor: Colors.light.surface,
+          borderTopWidth: 1,
+          borderTopColor: Colors.light.border,
+          height: tabHeight,
+          paddingBottom: bottomInset,
+          paddingTop: 6,
+          paddingHorizontal: horizontalPadding,
+          ...Shadows.sm,
+        },
+        tabBarLabelStyle: {
+          fontSize: labelFontSize,
+          fontWeight: '700',
+          marginTop: 2,
+          letterSpacing: 0.1,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Executive',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'pie-chart' : 'pie-chart-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          title: 'Dashboard',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="pie-chart-outline"
+              focusedName="pie-chart"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -60,11 +89,15 @@ export default function AdminTabsLayout() {
         name="reports/index"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'bar-chart' : 'bar-chart-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="bar-chart-outline"
+              focusedName="bar-chart"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -73,11 +106,15 @@ export default function AdminTabsLayout() {
         name="approvals/index"
         options={{
           title: 'Approvals',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'checkmark-done-circle' : 'checkmark-done-circle-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="checkmark-done-circle-outline"
+              focusedName="checkmark-done-circle"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -85,12 +122,16 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'HQ Stock',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'cube' : 'cube-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          title: isSmallMobile ? 'Stock' : 'Inventory',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="cube-outline"
+              focusedName="cube"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -99,11 +140,15 @@ export default function AdminTabsLayout() {
         name="users/index"
         options={{
           title: 'Users',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'people-circle' : 'people-circle-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="people-circle-outline"
+              focusedName="people-circle"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -112,11 +157,15 @@ export default function AdminTabsLayout() {
         name="settings/index"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'settings' : 'settings-outline'}
-              size={size}
-              color={typeof color === 'string' ? color : undefined}
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="settings-outline"
+              focusedName="settings"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
             />
           ),
         }}
@@ -257,19 +306,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tabBar: {
-    backgroundColor: Colors.light.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-    height: Platform.OS === 'ios' ? 88 : 70,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    paddingTop: 8,
-    ...Shadows.sm,
-  },
-  tabBarLabel: {
-    ...Typography.caption,
-    fontSize: 10,
-    fontWeight: '700',
   },
 });
