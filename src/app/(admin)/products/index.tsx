@@ -75,7 +75,6 @@ export default function AdminProductsScreen() {
   const [formName, setFormName] = useState('');
   const [formSku, setFormSku] = useState('');
   const [formBasePrice, setFormBasePrice] = useState('');
-  const [formMinPrice, setFormMinPrice] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -127,20 +126,24 @@ export default function AdminProductsScreen() {
       .replace(/[^a-zA-Z0-9\s]/g, '')
       .split(/\s+/)
       .filter(Boolean);
-    const code = words
-      .map((w) => w.slice(0, 3).toUpperCase())
-      .slice(0, 3)
-      .join('-');
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    setFormSku(`FF-${code || 'PRD'}-${randomSuffix}`);
+    if (words.length > 0) {
+      const code = words
+        .map((w) => w.slice(0, 3).toUpperCase())
+        .slice(0, 3)
+        .join('-');
+      const randomSuffix = Math.floor(100 + Math.random() * 900);
+      setFormSku(`FF-${code}-${randomSuffix}`);
+    } else {
+      const randomSuffix = String(Math.floor(1 + Math.random() * 999)).padStart(3, '0');
+      setFormSku(`FF-SNP-${randomSuffix}`);
+    }
   };
 
   const openCreateModal = () => {
     setEditingProduct(null);
     setFormName('');
     setFormSku('');
-    setFormBasePrice('');
-    setFormMinPrice('');
+    setFormBasePrice('25');
     setFormError('');
     setModalVisible(true);
   };
@@ -150,7 +153,6 @@ export default function AdminProductsScreen() {
     setFormName(product.name);
     setFormSku(product.sku || '');
     setFormBasePrice(((product.basePricePaise || 0) / 100).toString());
-    setFormMinPrice(((product.minimumPricePaise || product.basePricePaise || 0) / 100).toString());
     setFormError('');
     setModalVisible(true);
   };
@@ -170,19 +172,8 @@ export default function AdminProductsScreen() {
       return;
     }
 
-    const minPriceNum = formMinPrice.trim() ? parseFloat(formMinPrice) : basePriceNum;
-    if (isNaN(minPriceNum) || minPriceNum <= 0) {
-      setFormError('Please enter a valid minimum floor price greater than 0.');
-      return;
-    }
-
-    if (minPriceNum > basePriceNum) {
-      setFormError('Minimum price cannot exceed base price.');
-      return;
-    }
-
     const basePricePaise = Math.round(basePriceNum * 100);
-    const minimumPricePaise = Math.round(minPriceNum * 100);
+    const minimumPricePaise = basePricePaise;
 
     setSubmitting(true);
     setFormError('');
@@ -421,9 +412,16 @@ export default function AdminProductsScreen() {
           <Pressable style={styles.backdropDismiss} onPress={() => setModalVisible(false)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingProduct ? 'Edit Product' : 'Add New Product'}
-              </Text>
+              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <Text style={styles.modalTitle}>
+                  {editingProduct ? 'Edit Product' : 'New Product'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {editingProduct
+                    ? 'Update product details in the catalog'
+                    : 'Add a new product to the catalog'}
+                </Text>
+              </View>
               <Pressable
                 onPress={() => setModalVisible(false)}
                 style={styles.modalCloseBtn}
@@ -434,7 +432,7 @@ export default function AdminProductsScreen() {
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalBody}>
+            <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
               {formError ? (
                 <View style={styles.errorBanner}>
                   <Ionicons name="alert-circle" size={16} color={Colors.light.error} />
@@ -447,51 +445,45 @@ export default function AdminProductsScreen() {
                 style={styles.modalInput}
                 value={formName}
                 onChangeText={setFormName}
+                placeholder="e.g. FemmeFlo Sanitary Napkins (Pack)"
+                placeholderTextColor={Colors.light.textMuted}
               />
 
+              <View style={styles.skuHeaderRow}>
+                <Text style={styles.inputLabel}>SKU (optional)</Text>
+                <Text style={styles.skuHintText}>Auto-generate</Text>
+              </View>
               <View style={styles.skuRow}>
-                <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                  <Text style={styles.inputLabel}>SKU Code</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={formSku}
-                    onChangeText={setFormSku}
-                    autoCapitalize="characters"
-                  />
-                </View>
+                <TextInput
+                  style={[styles.modalInput, styles.skuInput]}
+                  value={formSku}
+                  onChangeText={setFormSku}
+                  placeholder="e.g. FF-SNP-001"
+                  placeholderTextColor={Colors.light.textMuted}
+                  autoCapitalize="characters"
+                />
                 <TouchableOpacity
                   style={styles.skuGenBtn}
                   onPress={generateSkuFromName}
                   accessibilityRole="button"
                   accessibilityLabel="Auto-generate SKU"
                 >
-                  <Ionicons name="sparkles" size={16} color={BrandColors.pink.dark} />
-                  <Text style={styles.skuGenBtnText}>Auto SKU</Text>
+                  <Ionicons name="sparkles" size={15} color={BrandColors.pink.dark} />
+                  <Text style={styles.skuGenBtnText}>Generate</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>Base Selling Price (₹) *</Text>
+              <Text style={styles.inputLabel}>Base Price (₹) *</Text>
               <TextInput
                 style={styles.modalInput}
                 value={formBasePrice}
-                onChangeText={(val) => {
-                  setFormBasePrice(val);
-                  if (!editingProduct && !formMinPrice) {
-                    setFormMinPrice(val);
-                  }
-                }}
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.inputLabel}>Minimum Floor Price (₹) *</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={formMinPrice}
-                onChangeText={setFormMinPrice}
+                onChangeText={setFormBasePrice}
+                placeholder="25"
+                placeholderTextColor={Colors.light.textMuted}
                 keyboardType="numeric"
               />
               <Text style={styles.inputHelper}>
-                Sales entered below this threshold require Super Admin authorization in the Price Approvals Queue.
+                Sales recorded below this base price require Super Admin approval before stock is deducted.
               </Text>
 
               <View style={styles.modalBtnRow}>
@@ -708,6 +700,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
   },
+  modalSubtitle: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
   modalCloseBtn: {
     padding: Spacing.xs,
   },
@@ -737,12 +735,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginTop: Spacing.sm,
   },
+  skuHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+    marginBottom: 4,
+  },
+  skuHintText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    fontWeight: '500',
+  },
   inputHelper: {
     ...Typography.caption,
     fontSize: 11,
     color: Colors.light.textMuted,
-    marginTop: 2,
+    marginTop: 4,
     marginBottom: Spacing.sm,
+    lineHeight: 16,
   },
   modalInput: {
     borderWidth: 1,
@@ -755,24 +767,29 @@ const styles = StyleSheet.create({
   },
   skuRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  skuInput: {
+    flex: 1,
   },
   skuGenBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 5,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: BrandColors.pink.subtle,
     backgroundColor: '#FFF1F2',
-    marginBottom: 2,
   },
   skuGenBtnText: {
     ...Typography.caption,
     color: BrandColors.pink.dark,
     fontWeight: '700',
+    fontSize: 12,
   },
   modalBtnRow: {
     flexDirection: 'row',
