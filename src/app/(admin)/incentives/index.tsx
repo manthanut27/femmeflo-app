@@ -6,7 +6,9 @@ import {
   Alert,
   BackHandler,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -639,8 +641,18 @@ export default function AdminIncentivesScreen() {
       </ScrollView>
 
       {/* Global Rule Modal */}
-      <Modal visible={globalRuleModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={globalRuleModal}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setGlobalRuleModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setGlobalRuleModal(false)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Configure Default Incentive Rate</Text>
@@ -648,7 +660,7 @@ export default function AdminIncentivesScreen() {
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
               <Text style={styles.modalSub}>
                 This rule determines default commission calculated for every packet sold across the organization.
               </Text>
@@ -675,14 +687,24 @@ export default function AdminIncentivesScreen() {
                   style={{ flex: 1 }}
                 />
               </View>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Custom Rate Modal */}
-      <Modal visible={rateModalUser !== null} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={rateModalUser !== null}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setRateModalUser(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setRateModalUser(null)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Override Employee Rate</Text>
@@ -690,7 +712,7 @@ export default function AdminIncentivesScreen() {
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
               <Text style={styles.modalSub}>
                 Override incentive rate for{' '}
                 <Text style={{ fontWeight: '700' }}>
@@ -727,14 +749,24 @@ export default function AdminIncentivesScreen() {
                   style={{ flex: 1 }}
                 />
               </View>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Manual Adjustment Modal */}
-      <Modal visible={adjModalUser !== null} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={adjModalUser !== null}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setAdjModalUser(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setAdjModalUser(null)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Manual Incentive Adjustment</Text>
@@ -742,7 +774,7 @@ export default function AdminIncentivesScreen() {
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
               <Text style={styles.modalSub}>
                 Apply manual addition or deduction for{' '}
                 <Text style={{ fontWeight: '700' }}>
@@ -802,14 +834,24 @@ export default function AdminIncentivesScreen() {
                   style={{ flex: 1 }}
                 />
               </View>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Record Payout Modal */}
-      <Modal visible={payModalUser !== null} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={payModalUser !== null}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPayModalUser(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setPayModalUser(null)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Record Incentive Payout</Text>
@@ -817,7 +859,7 @@ export default function AdminIncentivesScreen() {
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
-            <View style={styles.modalBody}>
+            <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
               <Text style={styles.modalSub}>
                 Disburse commissions to{' '}
                 <Text style={{ fontWeight: '700' }}>
@@ -880,13 +922,19 @@ export default function AdminIncentivesScreen() {
                   style={{ flex: 1 }}
                 />
               </View>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Ledger Details Modal */}
-      <Modal visible={detailsModalUser !== null} transparent animationType="slide">
+      <Modal
+        visible={detailsModalUser !== null}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setDetailsModalUser(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContainer, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
@@ -1158,6 +1206,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContainer: {
     backgroundColor: Colors.light.surface,

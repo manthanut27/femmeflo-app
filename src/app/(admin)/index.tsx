@@ -3,7 +3,9 @@ import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DeviceEventEmitter,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -703,8 +705,18 @@ export default function AdminDashboardScreen() {
       </ScrollView>
 
       {/* Comprehensive Filter Modal */}
-      <Modal visible={filtersOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={filtersOpen}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setFiltersOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setFiltersOpen(false)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
@@ -920,7 +932,7 @@ export default function AdminDashboardScreen() {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1310,6 +1322,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContainer: {
     backgroundColor: '#FFFFFF',

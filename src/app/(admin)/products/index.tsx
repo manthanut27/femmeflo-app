@@ -6,7 +6,9 @@ import {
   Alert,
   BackHandler,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -409,9 +411,14 @@ export default function AdminProductsScreen() {
         visible={modalVisible}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setModalVisible(false)} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -504,7 +511,7 @@ export default function AdminProductsScreen() {
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -677,6 +684,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContainer: {
     backgroundColor: Colors.light.surface,

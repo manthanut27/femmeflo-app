@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   DeviceEventEmitter,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -572,8 +573,18 @@ Generated in FemmeFlo Standalone Test Mode.`;
       </ScrollView>
 
       {/* Payment Collection Modal */}
-      <Modal visible={paymentModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={paymentModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPaymentModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setPaymentModalVisible(false)} />
           <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>Collect Outstanding Payment</Text>
@@ -629,14 +640,24 @@ Generated in FemmeFlo Standalone Test Mode.`;
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Voice Feedback Edit Modal */}
-      <Modal visible={feedbackModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={feedbackModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setFeedbackModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setFeedbackModalVisible(false)} />
           <View style={[styles.modalContent, { maxHeight: '85%' }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.modalHeaderRow}>
                 <Text style={styles.modalTitle}>Retailer Voice Feedback</Text>
                 <Pressable
@@ -679,14 +700,24 @@ Generated in FemmeFlo Standalone Test Mode.`;
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Price for Reapproval Modal */}
-      <Modal visible={priceModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={priceModalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPriceModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setPriceModalVisible(false)} />
           <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.modalHeaderRow}>
                 <Text style={styles.modalTitle}>Edit Price for Reapproval</Text>
                 <Pressable
@@ -786,7 +817,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -956,6 +987,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     backgroundColor: Colors.light.surface,

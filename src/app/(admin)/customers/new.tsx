@@ -1292,10 +1292,15 @@ export default function AdminAddCustomerScreen() {
       <Modal
         visible={categoryModalVisible}
         transparent
+        statusBarTranslucent
         animationType="slide"
         onRequestClose={() => setCategoryModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setCategoryModalVisible(false)} />
           <View style={styles.selectionModalCard}>
             <View style={styles.selectionModalHeader}>
               <Text style={styles.selectionModalTitle}>Select Store Category</Text>
@@ -1331,17 +1336,22 @@ export default function AdminAddCustomerScreen() {
               })}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Field Officer Selection Modal */}
       <Modal
         visible={sellerModalVisible}
         transparent
+        statusBarTranslucent
         animationType="slide"
         onRequestClose={() => setSellerModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setSellerModalVisible(false)} />
           <View style={styles.selectionModalCard}>
             <View style={styles.selectionModalHeader}>
               <Text style={styles.selectionModalTitle}>Select Assigned Field Officer</Text>
@@ -1419,7 +1429,7 @@ export default function AdminAddCustomerScreen() {
                 })}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -2013,6 +2023,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.lg,
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   voiceModalCard: {
     width: '100%',

@@ -5,7 +5,9 @@ import {
   Alert,
   DeviceEventEmitter,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -633,8 +635,18 @@ export default function ManagerSalesScreen() {
 
       {/* Manager Price Edit & Reapproval Modal */}
       {selectedRejectedSale && (
-        <Modal visible={managerPriceModalVisible} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
+        <Modal
+          visible={managerPriceModalVisible}
+          transparent
+          statusBarTranslucent
+          animationType="slide"
+          onRequestClose={() => setManagerPriceModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
+            <Pressable style={styles.backdropDismiss} onPress={() => setManagerPriceModalVisible(false)} />
             <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalHeaderRow}>
@@ -738,7 +750,7 @@ export default function ManagerSalesScreen() {
                 </View>
               </ScrollView>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
     </View>
@@ -1104,6 +1116,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     backgroundColor: Colors.light.surface,

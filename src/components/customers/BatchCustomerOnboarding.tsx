@@ -964,9 +964,14 @@ export function BatchCustomerOnboarding({
         visible={importModalVisible}
         animationType="slide"
         transparent
+        statusBarTranslucent
         onRequestClose={() => setImportModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setImportModalVisible(false)} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View>
@@ -1034,7 +1039,7 @@ export function BatchCustomerOnboarding({
               </View>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -1237,6 +1242,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.md,
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     backgroundColor: '#FFFFFF',

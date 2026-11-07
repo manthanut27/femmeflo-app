@@ -367,7 +367,7 @@ export default function PendingSalesScreen() {
         onRequestClose={() => setPaymentModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdropDismiss} onPress={() => setPaymentModalVisible(false)} />

@@ -706,10 +706,11 @@ export default function AdminUsersScreen() {
         visible={modalVisible}
         animationType="slide"
         transparent
+        statusBarTranslucent
         onRequestClose={handleCloseModal}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
           <Pressable style={styles.backdropDismiss} onPress={handleCloseModal} />
@@ -1136,10 +1137,11 @@ export default function AdminUsersScreen() {
         visible={Boolean(editingManager)}
         animationType="slide"
         transparent
+        statusBarTranslucent
         onRequestClose={handleCloseEditModal}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
           <Pressable style={styles.backdropDismiss} onPress={handleCloseEditModal} />

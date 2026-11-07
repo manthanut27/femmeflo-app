@@ -356,13 +356,15 @@ export default function SellerProfileScreen() {
       <Modal
         visible={isEditModalVisible}
         transparent
+        statusBarTranslucent
         animationType="slide"
         onRequestClose={handleCloseEditModal}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
+          <Pressable style={styles.backdropDismiss} onPress={handleCloseEditModal} />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
@@ -743,6 +745,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'flex-end',
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     backgroundColor: Colors.light.surface,

@@ -314,7 +314,13 @@ export default function AdminSalesScreen() {
       )}
 
       {/* Sale Detail Modal */}
-      <Modal visible={selectedSale !== null} transparent animationType="slide">
+      <Modal
+        visible={selectedSale !== null}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setSelectedSale(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>

@@ -323,7 +323,13 @@ export default function AdminShiftsScreen() {
       )}
 
       {/* GPS Visits Audit Modal */}
-      <Modal visible={selectedShift !== null} transparent animationType="slide">
+      <Modal
+        visible={selectedShift !== null}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setSelectedShift(null)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>

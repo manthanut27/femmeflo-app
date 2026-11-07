@@ -5,9 +5,12 @@ import {
   Alert,
   BackHandler,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -181,58 +184,74 @@ export default function AdminCategoriesScreen() {
       </View>
 
       {/* Add Modal */}
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setModalVisible(false)} />
           <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>New Customer Category</Text>
-              <Pressable
-                onPress={() => setModalVisible(false)}
-                hitSlop={HitSlop.md}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
-                <Ionicons name="close" size={24} color={Colors.light.textTertiary} />
-              </Pressable>
-            </View>
-            <Text style={styles.modalSub}>
-              Categories appear in the Customer Onboarding form for field officers.
-            </Text>
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitle}>New Customer Category</Text>
+                <Pressable
+                  onPress={() => setModalVisible(false)}
+                  hitSlop={HitSlop.md}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={24} color={Colors.light.textTertiary} />
+                </Pressable>
+              </View>
+              <Text style={styles.modalSub}>
+                Categories appear in the Customer Onboarding form for field officers.
+              </Text>
 
-            <Input
-              label="Category Name *"
-              placeholder="e.g. Chemist / Pharmacy"
-              value={name}
-              onChangeText={setName}
-              leftIcon={<Ionicons name="pricetag-outline" size={18} color={Colors.light.textTertiary} />}
-            />
-
-            <Input
-              label="Description (Optional)"
-              placeholder="e.g. Retail medical and pharmaceutical shops"
-              value={description}
-              onChangeText={setDescription}
-              leftIcon={<Ionicons name="document-text-outline" size={18} color={Colors.light.textTertiary} />}
-            />
-
-            <View style={styles.modalBtnRow}>
-              <Button
-                title="Cancel"
-                variant="ghost"
-                onPress={() => setModalVisible(false)}
-                disabled={isSubmitting}
-                style={{ flex: 1, marginRight: Spacing.sm }}
+              <Input
+                label="Category Name *"
+                placeholder="e.g. Chemist / Pharmacy"
+                value={name}
+                onChangeText={setName}
+                leftIcon={<Ionicons name="pricetag-outline" size={18} color={Colors.light.textTertiary} />}
               />
-              <Button
-                title={isSubmitting ? 'Creating...' : 'Create Category'}
-                variant="admin"
-                onPress={handleCreateCategory}
-                loading={isSubmitting}
-                style={{ flex: 1.5 }}
+
+              <Input
+                label="Description (Optional)"
+                placeholder="e.g. Retail medical and pharmaceutical shops"
+                value={description}
+                onChangeText={setDescription}
+                leftIcon={<Ionicons name="document-text-outline" size={18} color={Colors.light.textTertiary} />}
               />
-            </View>
+
+              <View style={styles.modalBtnRow}>
+                <Button
+                  title="Cancel"
+                  variant="ghost"
+                  onPress={() => setModalVisible(false)}
+                  disabled={isSubmitting}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={isSubmitting ? 'Creating...' : 'Create Category'}
+                  variant="admin"
+                  onPress={handleCreateCategory}
+                  loading={isSubmitting}
+                  style={{ flex: 1.5 }}
+                />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -298,12 +317,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
+  },
   modalContent: {
     backgroundColor: Colors.light.card,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
     padding: Spacing.xxl,
     maxWidth: 600,
+    maxHeight: '90%',
     width: '100%',
     alignSelf: 'center',
     ...Elevation.high,

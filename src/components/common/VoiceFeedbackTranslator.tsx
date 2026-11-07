@@ -5,6 +5,7 @@ import {
   Alert,
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -440,10 +441,15 @@ export function VoiceFeedbackTranslator({
       <Modal
         visible={editModalVisible}
         transparent
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.backdropDismiss} onPress={() => setEditModalVisible(false)} />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit English Translation</Text>
             <Text style={styles.modalSubtitle}>Adjust wording before applying to your field visit note:</Text>
@@ -473,7 +479,7 @@ export function VoiceFeedbackTranslator({
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -754,6 +760,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.md,
+  },
+  backdropDismiss: {
+    ...StyleSheet.absoluteFill,
   },
   modalContent: {
     width: '100%',
