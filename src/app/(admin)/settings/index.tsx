@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -32,6 +33,39 @@ import { useAuth } from '@/context/AuthContext';
 export default function AdminSettingsScreen() {
   const { user, logout, updateProfile } = useAuth();
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    if (params?.from === 'actions') {
+      try {
+        (navigation as any).navigate('actions/index');
+        return;
+      } catch {
+        // fallback
+      }
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      try {
+        (navigation as any).navigate('actions/index');
+      } catch {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [params, navigation, router]);
+
+  useEffect(() => {
+    if (params?.from === 'actions') {
+      const onBackPress = () => {
+        handleBack();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }
+  }, [params?.from, handleBack]);
 
     // Executive Profile Editing
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -280,7 +314,12 @@ export default function AdminSettingsScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <Header title="Company & Legal Settings" subtitle="Global Governance & Invoice Configuration" />
+      <Header
+        title="Company & Legal Settings"
+        subtitle="Global Governance & Invoice Configuration"
+        showBack={Boolean(params?.from === 'actions')}
+        onBack={handleBack}
+      />
 
       {loading ? (
         <View style={styles.centerContainer}>

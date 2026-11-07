@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  BackHandler,
   FlatList,
   Pressable,
   RefreshControl,
@@ -45,6 +46,29 @@ function formatISTDate(dateStr?: string | null): string {
 
 export default function AdminCustomersScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    try {
+      (navigation as any).navigate('actions/index');
+    } catch {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [navigation, router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -167,8 +191,8 @@ export default function AdminCustomersScreen() {
         leftAction={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back to dashboard"
-            onPress={() => router.back()}
+            accessibilityLabel="Back to administrative actions"
+            onPress={handleBack}
             style={styles.headerBackBtn}
           >
             <Ionicons name="arrow-back" size={22} color={Colors.light.text} />

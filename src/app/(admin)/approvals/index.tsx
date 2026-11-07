@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   DeviceEventEmitter,
   FlatList,
   RefreshControl,
@@ -32,6 +33,40 @@ import { useAuth } from '@/context/AuthContext';
 
 export default function AdminApprovalsScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    if (params?.from === 'actions') {
+      try {
+        (navigation as any).navigate('actions/index');
+        return;
+      } catch {
+        // fallback
+      }
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      try {
+        (navigation as any).navigate('actions/index');
+      } catch {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [params, navigation, router]);
+
+  useEffect(() => {
+    if (params?.from === 'actions') {
+      const onBackPress = () => {
+        handleBack();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }
+  }, [params?.from, handleBack]);
+
   const { isOffline } = useAuth();
   const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -356,6 +391,7 @@ export default function AdminApprovalsScreen() {
         title="Price Approvals"
         subtitle={`${approvals.length} requests awaiting authorization`}
         showBack
+        onBack={handleBack}
       />
 
       <View style={styles.innerContainer}>

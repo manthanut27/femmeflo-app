@@ -1,7 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   FlatList,
   Modal,
   Pressable,
@@ -32,6 +34,30 @@ import {
 
 export default function AdminCategoriesScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    try {
+      (navigation as any).navigate('actions/index');
+    } catch {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [navigation, router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,6 +143,7 @@ export default function AdminCategoriesScreen() {
         title="Customer Categories"
         subtitle="Retail Store Classifications"
         showBack
+        onBack={handleBack}
         rightAction={
           <Pressable
             accessibilityRole="button"

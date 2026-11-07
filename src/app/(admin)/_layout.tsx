@@ -34,6 +34,7 @@ export default function AdminTabsLayout() {
 
   return (
     <Tabs
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: BrandColors.pink.dark,

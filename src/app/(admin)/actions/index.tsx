@@ -138,21 +138,26 @@ export default function AdministrativeActionsScreen() {
         '/(admin)/users': 'users/index',
         '/(admin)/categories': 'categories/index',
         '/(admin)/settings': 'settings/index',
+        '/(admin)/inventory': 'inventory',
       };
 
       const tabName = directTabs[route];
       if (tabName) {
         try {
-          (navigation as any).navigate(tabName);
+          (navigation as any).navigate(tabName, { from: 'actions' });
           return;
         } catch {
           // fallback to router
         }
       }
       try {
-        router.push(route as any);
+        router.push({ pathname: route as any, params: { from: 'actions' } });
       } catch {
-        router.navigate(route as any);
+        try {
+          router.navigate({ pathname: route as any, params: { from: 'actions' } });
+        } catch {
+          router.push(route as any);
+        }
       }
     },
     [navigation, router]

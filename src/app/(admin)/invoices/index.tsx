@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   FlatList,
   Linking,
   Platform,
@@ -36,6 +37,30 @@ type PaymentFilter = 'ALL' | 'PAID' | 'PENDING';
 
 export default function AdminInvoicesScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    try {
+      (navigation as any).navigate('actions/index');
+    } catch {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [navigation, router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
+
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -269,8 +294,8 @@ export default function AdminInvoicesScreen() {
         leftAction={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back to Settings"
-            onPress={() => router.back()}
+            accessibilityLabel="Back to administrative actions"
+            onPress={handleBack}
             style={styles.backBtn}
           >
             <Ionicons name="arrow-back" size={24} color={Colors.light.text} />

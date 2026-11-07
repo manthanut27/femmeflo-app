@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Platform,
   Pressable,
   RefreshControl,
@@ -77,6 +79,40 @@ function buildCsvString(headers: string[], rows: (string | number)[][]): string 
 
 export default function AdminReportsScreen() {
   const { user } = useAuth();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    if (params?.from === 'actions') {
+      try {
+        (navigation as any).navigate('actions/index');
+        return;
+      } catch {
+        // fallback
+      }
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      try {
+        (navigation as any).navigate('actions/index');
+      } catch {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [params, navigation, router]);
+
+  useEffect(() => {
+    if (params?.from === 'actions') {
+      const onBackPress = () => {
+        handleBack();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }
+  }, [params?.from, handleBack]);
 
   const [mode, setMode] = useState<MainReportMode>('SALES');
   const [groupBy, setGroupBy] = useState<GroupByOption>('district');
@@ -291,6 +327,8 @@ export default function AdminReportsScreen() {
       <Header
         title="Reports & Analytics"
         subtitle={`Super Admin • ${user?.name || 'HQ Operations'}`}
+        showBack={Boolean(params?.from === 'actions')}
+        onBack={handleBack}
         showNotificationBell
       />
 

@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  BackHandler,
   FlatList,
   Modal,
   KeyboardAvoidingView,
@@ -42,6 +43,39 @@ type UserTab = 'MANAGERS' | 'SELLERS';
 
 export default function AdminUsersScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    if (params?.from === 'actions') {
+      try {
+        (navigation as any).navigate('actions/index');
+        return;
+      } catch {
+        // fallback
+      }
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      try {
+        (navigation as any).navigate('actions/index');
+      } catch {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [params, navigation, router]);
+
+  useEffect(() => {
+    if (params?.from === 'actions') {
+      const onBackPress = () => {
+        handleBack();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }
+  }, [params?.from, handleBack]);
   const [tab, setTab] = useState<UserTab>('MANAGERS');
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [availableManagers, setAvailableManagers] = useState<PublicUser[]>([]);
@@ -536,6 +570,8 @@ export default function AdminUsersScreen() {
       <Header
         title="User Administration"
         subtitle="Managers & Field Officers Directory"
+        showBack={Boolean(params?.from === 'actions')}
+        onBack={handleBack}
         rightAction={
           <Pressable
             accessibilityRole="button"

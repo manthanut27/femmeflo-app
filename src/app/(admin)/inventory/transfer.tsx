@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
@@ -64,6 +65,29 @@ const DEFAULT_WAREHOUSES: WarehouseItem[] = [
 
 export default function StockTransferScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
+
+  const handleBack = useCallback(() => {
+    try {
+      (navigation as any).navigate('actions/index');
+    } catch {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(admin)/actions' as any);
+      }
+    }
+  }, [navigation, router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
 
   const [mode, setMode] = useState<TransferMode>('TRANSFER');
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>(DEFAULT_WAREHOUSES);
@@ -256,11 +280,7 @@ export default function StockTransferScreen() {
   }, [products]);
 
   const navigateBackSafely = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(admin)/inventory' as any);
-    }
+    handleBack();
   };
 
   async function handleSubmit() {
@@ -352,6 +372,7 @@ export default function StockTransferScreen() {
         title="Stock Movement Hub"
         subtitle={mode === 'RECEIPT' ? 'Factory Inward & Inventory Reception' : 'Van Stock & Field Seller Transfers'}
         showBack
+        onBack={handleBack}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
