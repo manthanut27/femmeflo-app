@@ -3,6 +3,7 @@ import { sanitizeBackendPermissions } from '../utils/permissions';
 import type {
   AdminDashboardData,
   AdminIncentiveListResponse,
+  AdminInventoryTransactionItem,
   BulkCustomerResponse,
   BusinessSettings,
   CreateAdjustmentPayload,
@@ -292,35 +293,10 @@ export const adminApi = {
         }
       }
 
-      // If still empty (e.g. backend initial state), provide default HQ Central Warehouse
-      if (warehouseList.length === 0) {
-        warehouseList.push({
-          id: 'loc_hq_central',
-          name: 'Headquarters (HQ) Central Warehouse',
-          code: 'HQ-MAIN',
-          state: 'Uttar Pradesh',
-          district: 'Varanasi',
-          active: true,
-          type: 'HQ',
-          balance: 15000,
-        } as WarehouseItem);
-      }
-
       return { items: warehouseList };
     } catch {
       return {
-        items: [
-          {
-            id: 'loc_hq_central',
-            name: 'Headquarters (HQ) Central Warehouse',
-            code: 'HQ-MAIN',
-            state: 'Uttar Pradesh',
-            district: 'Varanasi',
-            active: true,
-            type: 'HQ',
-            balance: 15000,
-          } as WarehouseItem,
-        ],
+        items: [],
       };
     }
   },
@@ -336,11 +312,12 @@ export const adminApi = {
     productId?: string;
     quantity: number;
     items?: Array<{ productId: string; quantity: number }>;
-    batchNumber?: string;
     requestKey?: string;
-    notes?: string;
   }): Promise<{ success: boolean; message?: string }> {
-    const requestKey = payload.requestKey || payload.batchNumber || undefined;
+    // Generate an independent unique idempotency request key if not explicitly supplied
+    const requestKey =
+      payload.requestKey ||
+      `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     let body: any;
     if (payload.items && payload.items.length > 0) {
       body = {
@@ -363,6 +340,32 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async listInventoryTransactions(params?: {
+    page?: number;
+    pageSize?: number;
+    type?: string;
+    locationId?: string;
+  }): Promise<{ items: AdminInventoryTransactionItem[]; pagination: PaginationMeta }> {
+    const raw = await apiRequest<{
+      items?: AdminInventoryTransactionItem[];
+      transactions?: AdminInventoryTransactionItem[];
+      pagination?: PaginationMeta;
+    }>('admin/inventory/transactions', {
+      method: 'GET',
+      params,
+    });
+    const list = raw?.transactions ?? raw?.items ?? [];
+    return {
+      items: list,
+      pagination: raw?.pagination ?? {
+        page: params?.page || 1,
+        pageSize: params?.pageSize || 20,
+        total: list.length,
+        totalPages: Math.ceil(list.length / (params?.pageSize || 20)) || 1,
+      },
+    };
   },
 
   async recordStockTransfer(payload: {

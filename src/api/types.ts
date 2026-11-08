@@ -213,6 +213,64 @@ export interface StockTransactionItem {
   createdAt: string;
 }
 
+export interface AdminInventoryTransactionItem {
+  id: string;
+  type: string;
+  quantity: number;
+  createdAt: string;
+  sourceLocation?: string | null;
+  destinationLocation?: string | null;
+  targetLocation?: string | null;
+  source?: {
+    id?: string;
+    name?: string;
+    type?: string;
+    code?: string;
+  } | null;
+  destination?: {
+    id?: string;
+    name?: string;
+    type?: string;
+    code?: string;
+  } | null;
+  product?: {
+    id?: string;
+    name?: string;
+    sku?: string | null;
+  } | null;
+  productId?: string;
+  productName?: string;
+  productSku?: string | null;
+  actor?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  } | null;
+  user?: {
+    id?: string;
+    name?: string;
+    role?: string;
+  } | null;
+  createdBy?: {
+    id?: string;
+    name?: string;
+    role?: string;
+  } | null;
+  sale?: {
+    id?: string;
+    saleNumber?: string;
+    customerName?: string;
+    customer?: {
+      id?: string;
+      shopName?: string;
+      ownerName?: string;
+    } | null;
+  } | null;
+  reference?: string | null;
+  notes?: string | null;
+}
+
 export interface WarehouseItem {
   id: string;
   name: string;

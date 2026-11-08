@@ -988,11 +988,112 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { items: mockDb.warehouses, warehouses: mockDb.warehouses } as unknown as T;
   }
 
+  if (cleanEndpoint === 'admin/inventory/transactions' && method === 'GET') {
+    let list = [...mockDb.transactions];
+    const filterType = options?.params?.type ? String(options.params.type).trim().toUpperCase() : '';
+    if (filterType && filterType !== 'ALL') {
+      if (filterType === 'INWARD' || filterType === 'RECEIPT') {
+        list = list.filter((t) => t.type === 'INWARD' || t.type === 'RECEIPT');
+      } else if (filterType === 'TRANSFER' || filterType === 'DISPATCH') {
+        list = list.filter((t) => t.type === 'TRANSFER' || t.type === 'DISPATCH');
+      } else if (filterType === 'SALE' || filterType === 'SALES') {
+        list = list.filter((t) => t.type === 'SALE' || t.type === 'SALES');
+      } else {
+        list = list.filter((t) => t.type === filterType);
+      }
+    }
+    const filterLoc = options?.params?.locationId;
+    if (filterLoc) {
+      list = list.filter(
+        (t: any) =>
+          t.sourceLocation === filterLoc ||
+          t.targetLocation === filterLoc ||
+          t.destinationLocation === filterLoc ||
+          t.source?.id === filterLoc ||
+          t.destination?.id === filterLoc
+      );
+    }
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const page = Number(options?.params?.page) || 1;
+    const pageSize = Number(options?.params?.pageSize) || 20;
+    const start = (page - 1) * pageSize;
+    const paginated = list.slice(start, start + pageSize);
+
+    return {
+      items: paginated,
+      transactions: paginated,
+      pagination: {
+        page,
+        pageSize,
+        total: list.length,
+        totalPages: Math.ceil(list.length / pageSize) || 1,
+      },
+    } as unknown as T;
+  }
+
   if (cleanEndpoint === 'admin/inventory/receipts' && method === 'POST') {
+    const items =
+      body?.items && body.items.length > 0
+        ? body.items
+        : [{ productId: body?.productId, quantity: body?.quantity || 0 }];
+    for (const item of items) {
+      const prod = mockDb.products.find((p) => p.id === item.productId);
+      const newTx: any = {
+        id: `tx_rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: 'INWARD',
+        quantity: Number(item.quantity) || 0,
+        productId: item.productId,
+        productName: prod?.name || 'Sanitary Napkins',
+        productSku: prod?.sku || 'SKU',
+        product: prod ? { id: prod.id, name: prod.name, sku: prod.sku } : undefined,
+        sourceLocation: 'Factory / Supplier',
+        destinationLocation: 'Headquarters (HQ)',
+        targetLocation: 'Headquarters (HQ)',
+        source: { name: 'Factory / Supplier', type: 'FACTORY' },
+        destination: { name: 'Headquarters (HQ)', type: 'HQ' },
+        actor: { name: mockDb.currentUser?.name || 'Super Admin', email: mockDb.currentUser?.email || 'admin@femmeflo.in' },
+        createdAt: new Date().toISOString(),
+      };
+      mockDb.transactions.unshift(newTx);
+    }
     return { success: true, message: 'Stock receipt recorded successfully in warehouse inventory.' } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/inventory/transfers' && method === 'POST') {
+    const items =
+      body?.items && body.items.length > 0
+        ? body.items
+        : [{ productId: body?.productId, quantity: body?.quantity || 0 }];
+    const sourceLoc =
+      (mockDb as any).locations?.find((l: any) => l.id === body?.sourceId) ||
+      mockDb.warehouses.find((w) => w.id === body?.sourceId);
+    const destLoc =
+      (mockDb as any).locations?.find((l: any) => l.id === body?.destinationId) ||
+      mockDb.sellers.find((s) => s.id === body?.destinationId) ||
+      mockDb.warehouses.find((w) => w.id === body?.destinationId);
+
+    for (const item of items) {
+      const prod = mockDb.products.find((p) => p.id === item.productId);
+      const newTx: any = {
+        id: `tx_trf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        type: 'TRANSFER',
+        quantity: Number(item.quantity) || 0,
+        productId: item.productId,
+        productName: prod?.name || 'Sanitary Napkins',
+        productSku: prod?.sku || 'SKU',
+        product: prod ? { id: prod.id, name: prod.name, sku: prod.sku } : undefined,
+        sourceLocation: sourceLoc?.name || 'Headquarters (HQ)',
+        destinationLocation: destLoc?.name || 'Regional Depot',
+        targetLocation: destLoc?.name || 'Regional Depot',
+        source: { name: sourceLoc?.name || 'Headquarters (HQ)', type: 'WAREHOUSE' },
+        destination: { name: destLoc?.name || 'Regional Depot', type: 'WAREHOUSE' },
+        actor: { name: mockDb.currentUser?.name || 'Super Admin', email: mockDb.currentUser?.email || 'admin@femmeflo.in' },
+        reference: body?.requestKey,
+        createdAt: new Date().toISOString(),
+      };
+      mockDb.transactions.unshift(newTx);
+    }
     return { success: true, message: 'Stock transfer recorded and dispatched.' } as unknown as T;
   }
 
