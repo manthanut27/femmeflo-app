@@ -127,6 +127,13 @@ export default function AdministrativeActionsScreen() {
       const tabName = directTabs[route];
       if (tabName) {
         try {
+          if (tabName === 'inventory') {
+            (navigation as any).navigate('inventory', {
+              screen: 'index',
+              params: { from: 'actions', ...extraParams },
+            });
+            return;
+          }
           if (extraParams && Object.keys(extraParams).length > 0) {
             (navigation as any).navigate(tabName, { from: 'actions', ...extraParams });
           } else {
@@ -280,8 +287,7 @@ export default function AdministrativeActionsScreen() {
         title: 'National Warehouses & Storage Facilities',
         buttonTitle: 'Add Warehouse',
         categoryLabel: 'Catalog & Stock',
-        route: '/(admin)/inventory',
-        params: { openAddModal: 'true' },
+        route: '/(admin)/inventory/new',
         iconName: 'business-outline',
         iconBg: '#F0FDF4',
         iconColor: '#16A34A',

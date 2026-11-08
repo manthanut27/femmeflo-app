@@ -71,6 +71,7 @@ describe('Admin Actions Navigation & History Retention Suite', () => {
       { name: 'Permissions', path: 'src/app/(admin)/permissions/index.tsx' },
       { name: 'Customers', path: 'src/app/(admin)/customers/index.tsx' },
       { name: 'Stock Movement', path: 'src/app/(admin)/inventory/transfer.tsx' },
+      { name: 'Add Warehouse', path: 'src/app/(admin)/inventory/new.tsx' },
     ];
 
     for (const screen of dedicatedScreens) {

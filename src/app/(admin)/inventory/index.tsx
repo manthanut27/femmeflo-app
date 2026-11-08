@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -81,12 +81,12 @@ export default function AdminInventoryScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Automatically open modal if requested from Quick Actions
+  // Automatically open Add Warehouse screen if requested from Quick Actions
   useEffect(() => {
     if (params?.openAddModal === 'true') {
-      setModalVisible(true);
+      router.push('/(admin)/inventory/new' as any);
     }
-  }, [params?.openAddModal]);
+  }, [params?.openAddModal, router]);
 
   const loadWarehouses = useCallback(async () => {
     try {
@@ -104,15 +104,19 @@ export default function AdminInventoryScreen() {
     loadWarehouses();
   }, [loadWarehouses]);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadWarehouses();
+    }, [loadWarehouses])
+  );
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadWarehouses();
   }, [loadWarehouses]);
 
   const handleOpenAddModal = () => {
-    setFormName('');
-    setFormError(null);
-    setModalVisible(true);
+    router.push('/(admin)/inventory/new' as any);
   };
 
   const handleCreateWarehouse = async () => {
