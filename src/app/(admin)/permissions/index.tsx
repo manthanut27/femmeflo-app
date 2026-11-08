@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,11 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import {
+  DropdownTrigger,
+  SearchableDropdownModal,
+  type DropdownOption,
+} from '@/components/ui/SearchableDropdownModal';
 import {
   BorderRadius,
   BrandColors,
@@ -69,12 +74,28 @@ export default function AdminPermissionsScreen() {
   const [scopeMode, setScopeMode] = useState<'specific' | 'overall'>('specific');
   const [activePermissions, setActivePermissions] = useState<string[]>([]);
   const [overallPermissions, setOverallPermissions] = useState<string[]>([]);
+  const [managerPickerVisible, setManagerPickerVisible] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const selectedManager = managers.find((m) => m.id === selectedManagerId);
+
+  const managerOptions: DropdownOption[] = useMemo(() => {
+    return managers.map((m) => {
+      const territory = [m.district, m.state].filter(Boolean).join(', ') || m.address || 'Territory';
+      const contact = m.phone ? ` • +91 ${m.phone}` : '';
+      return {
+        id: m.id,
+        title: m.name || 'Unnamed Manager',
+        subtitle: `${territory}${contact}`,
+        badge: m.active ? 'ACTIVE' : 'INACTIVE',
+        badgeVariant: (m.active ? 'ACTIVE' : 'INACTIVE') as any,
+        icon: 'person-circle-outline',
+      };
+    });
+  }, [managers]);
 
   const loadData = useCallback(async () => {
     try {
@@ -108,6 +129,12 @@ export default function AdminPermissionsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -259,27 +286,20 @@ export default function AdminPermissionsScreen() {
               ) : managers.length === 0 ? (
                 <Text style={styles.emptyText}>No Territory Managers registered yet.</Text>
               ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.managerListRow}>
-                  {managers.map((m) => {
-                    const isSelected = m.id === selectedManagerId;
-                    return (
-                      <TouchableOpacity
-                        key={m.id}
-                        style={[styles.managerChip, isSelected && styles.managerChipActive]}
-                        onPress={() => handleSelectManager(m)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Select ${m.name}`}
-                      >
-                        <Text style={[styles.managerChipName, isSelected && styles.managerChipNameActive]}>
-                          {m.name}
-                        </Text>
-                        <Text style={[styles.managerChipTerritory, isSelected && styles.managerChipTerritoryActive]}>
-                          {[m.district, m.state].filter(Boolean).join(', ') || 'Territory'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <DropdownTrigger
+                  label="Territory Manager"
+                  required
+                  value={selectedManager?.name}
+                  subtitle={
+                    selectedManager
+                      ? `${[selectedManager.district, selectedManager.state].filter(Boolean).join(', ') || 'Territory'}${selectedManager.phone ? ` • +91 ${selectedManager.phone}` : ''}`
+                      : 'Search and select manager...'
+                  }
+                  badge={selectedManager ? (selectedManager.active ? 'ACTIVE' : 'INACTIVE') : undefined}
+                  icon="person"
+                  placeholder="Search and select territory manager..."
+                  onPress={() => setManagerPickerVisible(true)}
+                />
               )}
             </View>
           ) : (
@@ -341,6 +361,24 @@ export default function AdminPermissionsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Searchable Manager Dropdown Modal */}
+      <SearchableDropdownModal
+        visible={managerPickerVisible}
+        title="Select Territory Manager"
+        searchPlaceholder="Search manager by name, phone, district..."
+        options={managerOptions}
+        selectedId={selectedManagerId}
+        onSelect={(opt) => {
+          const mgr = managers.find((m) => m.id === opt.id);
+          if (mgr) {
+            handleSelectManager(mgr);
+          }
+          setManagerPickerVisible(false);
+        }}
+        onClose={() => setManagerPickerVisible(false)}
+        emptyMessage="No territory managers found"
+      />
     </View>
   );
 }
@@ -405,46 +443,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   managerSection: {
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   sectionHeading: {
     ...Typography.subtitle,
     fontWeight: '700',
     color: Colors.light.text,
-  },
-  managerListRow: {
-    flexDirection: 'row',
-    marginVertical: Spacing.xs,
-  },
-  managerChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.light.surface,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginRight: Spacing.sm,
-  },
-  managerChipActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  managerChipName: {
-    ...Typography.body,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  managerChipNameActive: {
-    color: '#FFFFFF',
-  },
-  managerChipTerritory: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
-  },
-  managerChipTerritoryActive: {
-    color: '#94A3B8',
   },
   overallNoticeCard: {
     flexDirection: 'row',

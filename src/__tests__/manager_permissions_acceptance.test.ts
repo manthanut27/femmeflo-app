@@ -236,4 +236,97 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
       }
     });
   });
+
+  describe('4. Searchable Manager Dropdown Selection in Permissions', () => {
+    test('formats manager dropdown options with territory, contact and active badge', () => {
+      const managers: PublicUser[] = [
+        {
+          id: 'usr_mgr_01',
+          name: 'Priya Sharma',
+          phone: '9876543210',
+          role: 'MANAGER',
+          active: true,
+          district: 'Varanasi',
+          state: 'Uttar Pradesh',
+        },
+        {
+          id: 'usr_mgr_02',
+          name: 'Rajesh Verma',
+          phone: '9812345678',
+          role: 'MANAGER',
+          active: false,
+          district: 'Thane',
+          state: 'Maharashtra',
+        },
+      ];
+
+      const options = managers.map((m) => {
+        const territory = [m.district, m.state].filter(Boolean).join(', ') || m.address || 'Territory';
+        const contact = m.phone ? ` • +91 ${m.phone}` : '';
+        return {
+          id: m.id,
+          title: m.name || 'Unnamed Manager',
+          subtitle: `${territory}${contact}`,
+          badge: m.active ? 'ACTIVE' : 'INACTIVE',
+          badgeVariant: m.active ? 'ACTIVE' : 'INACTIVE',
+          icon: 'person-circle-outline',
+        };
+      });
+
+      assert.equal(options.length, 2);
+      assert.equal(options[0].title, 'Priya Sharma');
+      assert.equal(options[0].subtitle, 'Varanasi, Uttar Pradesh • +91 9876543210');
+      assert.equal(options[0].badge, 'ACTIVE');
+
+      assert.equal(options[1].title, 'Rajesh Verma');
+      assert.equal(options[1].subtitle, 'Thane, Maharashtra • +91 9812345678');
+      assert.equal(options[1].badge, 'INACTIVE');
+    });
+
+    test('search query matches managers across name, district, or phone', () => {
+      const managers: PublicUser[] = [
+        {
+          id: 'usr_mgr_01',
+          name: 'Vikram Malhotra',
+          phone: '9876543210',
+          role: 'MANAGER',
+          active: true,
+          district: 'Varanasi',
+          state: 'Uttar Pradesh',
+        },
+        {
+          id: 'usr_mgr_02',
+          name: 'Anjali Deshmukh',
+          phone: '9123456789',
+          role: 'MANAGER',
+          active: true,
+          district: 'Thane',
+          state: 'Maharashtra',
+        },
+      ];
+
+      const searchManagers = (query: string) => {
+        const q = query.trim().toLowerCase();
+        if (!q) return managers;
+        return managers.filter((m) => {
+          const matchName = m.name?.toLowerCase().includes(q);
+          const matchDist = m.district?.toLowerCase().includes(q);
+          const matchPhone = m.phone?.includes(q);
+          return matchName || matchDist || matchPhone;
+        });
+      };
+
+      // Search by name
+      assert.equal(searchManagers('vikram').length, 1);
+      assert.equal(searchManagers('vikram')[0].name, 'Vikram Malhotra');
+
+      // Search by district
+      assert.equal(searchManagers('thane').length, 1);
+      assert.equal(searchManagers('thane')[0].name, 'Anjali Deshmukh');
+
+      // Search by phone
+      assert.equal(searchManagers('98765').length, 1);
+      assert.equal(searchManagers('98765')[0].id, 'usr_mgr_01');
+    });
+  });
 });
