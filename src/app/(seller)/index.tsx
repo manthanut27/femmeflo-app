@@ -1,6 +1,7 @@
 import { sellerApi } from '@/api/seller';
 import type { SellerDashboardData, Shift } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -56,6 +57,7 @@ export default function SellerDashboardScreen() {
   const [odometerKm, setOdometerKm] = useState('');
   const [shiftRemarks, setShiftRemarks] = useState('');
   const [isShiftSubmitting, setIsShiftSubmitting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -296,6 +298,8 @@ export default function SellerDashboardScreen() {
         title={`Hello, ${user?.name?.split(' ')[0] || 'Seller'}`}
         subtitle="Field Operations • Active Session"
         showNotificationBell
+        showMenu={true}
+        onMenuPress={() => setMenuOpen(true)}
       />
 
       <ScrollView
@@ -670,6 +674,12 @@ export default function SellerDashboardScreen() {
           </Text>
         </View>
       )}
+
+      {/* Slide-out Mobile Navigation Drawer */}
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }

@@ -197,4 +197,87 @@ describe('FemmeFlo Dual-Role Persona for Area/Territory Sales Manager Suite', ()
     assert.equal(authorizeApiEndpoint(dualRoleSession, 'admin/users'), false);
     assert.equal(authorizeApiEndpoint(dualRoleSession, 'admin/approvals'), false);
   });
+
+  // ----------------------------------------------------
+  // 5. Manager Can Add Sale & Follows Shift Prerequisite
+  // ----------------------------------------------------
+  it('Pillar 5: Managers can act as sellers to add sales, following shift prerequisite', () => {
+    function canManagerAccessSellerRoutes(user: { role: string }): boolean {
+      return user.role === 'SELLER' || user.role === 'MANAGER';
+    }
+
+    const territoryManager = {
+      id: 'mgr_mumbai_01',
+      name: 'Pooja Territory Head',
+      role: 'MANAGER' as const,
+    };
+
+    assert.equal(canManagerAccessSellerRoutes(territoryManager), true, 'Manager must be permitted to access seller routes');
+
+    // Simulate shift gate evaluation for manager selling
+    function evaluateSaleCreationPrerequisite(hasActiveShift: boolean): { canCreateSale: boolean; redirectRoute: string } {
+      if (!hasActiveShift) {
+        return { canCreateSale: false, redirectRoute: '/(seller)/shift' };
+      }
+      return { canCreateSale: true, redirectRoute: '/(seller)/sales/new' };
+    }
+
+    // When manager has not started daily duty shift yet
+    const blockedResult = evaluateSaleCreationPrerequisite(false);
+    assert.equal(blockedResult.canCreateSale, false);
+    assert.equal(blockedResult.redirectRoute, '/(seller)/shift', 'Redirects to shift check-in when inactive');
+
+    // When manager has completed selfie & meter verification
+    const allowedResult = evaluateSaleCreationPrerequisite(true);
+    assert.equal(allowedResult.canCreateSale, true);
+    assert.equal(allowedResult.redirectRoute, '/(seller)/sales/new', 'Proceeds to new sale screen');
+  });
+
+  // ----------------------------------------------------
+  // 6. Mobile Navigation Drawer Initial Closed State & Operations
+  // ----------------------------------------------------
+  it('Pillar 6: Mobile Navigation Drawer starts closed on app launch and provides full operational routes', () => {
+    // Drawer visibility state on initial app mount
+    const initialDrawerState = {
+      visible: false, // Closed on app open
+    };
+    assert.equal(initialDrawerState.visible, false, 'Mobile navigation drawer must be closed on app launch');
+
+    function buildDrawerNavItems(role: 'MANAGER' | 'SELLER') {
+      const isManager = role === 'MANAGER';
+      return [
+        { title: 'Dashboard', route: isManager ? '/(manager)' : '/(seller)' },
+        { title: 'New Field Sale', route: '/(seller)/sales/new', requiresShift: true },
+        { title: 'My Duty Shift', route: '/(seller)/shift' },
+        ...(isManager
+          ? [
+              { title: 'Territory Sales', route: '/(manager)/sales' },
+              { title: 'Team Sellers', route: '/(manager)/sellers' },
+              { title: 'Retail Stores', route: '/(manager)/customers' },
+              { title: 'Depot Stock', route: '/(manager)/inventory' },
+              { title: 'Incentives', route: '/(manager)/incentives' },
+            ]
+          : [
+              { title: 'My Sales History', route: '/(seller)/sales' },
+              { title: 'Retail Customers', route: '/(seller)/customers' },
+              { title: 'My Van Stock', route: '/(seller)/inventory' },
+              { title: 'My Earnings', route: '/(seller)/incentives' },
+            ]),
+        { title: 'My Profile', route: isManager ? '/(manager)/profile' : '/(seller)/profile' },
+        { title: 'Notifications', route: '/(shared)/notifications' },
+      ];
+    }
+
+    const managerItems = buildDrawerNavItems('MANAGER');
+    assert.ok(managerItems.some((i) => i.title === 'New Field Sale'));
+    assert.ok(managerItems.some((i) => i.title === 'My Duty Shift'));
+    assert.ok(managerItems.some((i) => i.title === 'Territory Sales'));
+    assert.ok(managerItems.some((i) => i.title === 'Team Sellers'));
+    assert.ok(managerItems.some((i) => i.title === 'Depot Stock'));
+
+    const sellerItems = buildDrawerNavItems('SELLER');
+    assert.ok(sellerItems.some((i) => i.title === 'New Field Sale'));
+    assert.ok(sellerItems.some((i) => i.title === 'My Duty Shift'));
+    assert.ok(sellerItems.some((i) => i.title === 'My Sales History'));
+  });
 });

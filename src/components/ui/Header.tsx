@@ -11,6 +11,8 @@ export interface HeaderProps {
   subtitle?: string;
   showBack?: boolean;
   onBack?: () => void;
+  showMenu?: boolean;
+  onMenuPress?: () => void;
   leftAction?: React.ReactNode;
   rightAction?: React.ReactNode;
   showNotificationBell?: boolean;
@@ -23,6 +25,8 @@ export function Header({
   subtitle,
   showBack = false,
   onBack,
+  showMenu = false,
+  onMenuPress,
   leftAction,
   rightAction,
   showNotificationBell = false,
@@ -67,6 +71,16 @@ export function Header({
               style={({ pressed }) => [styles.backButton, pressed && styles.iconPressed]}
             >
               <Ionicons name="arrow-back" size={24} color="#0F172A" />
+            </Pressable>
+          ) : showMenu ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open mobile navigation menu"
+              onPress={onMenuPress}
+              hitSlop={HitSlop.md}
+              style={({ pressed }) => [styles.backButton, pressed && styles.iconPressed]}
+            >
+              <Ionicons name="menu-outline" size={26} color="#0F172A" />
             </Pressable>
           ) : null}
           <View style={styles.titleWrapper}>

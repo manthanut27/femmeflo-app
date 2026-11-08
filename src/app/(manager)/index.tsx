@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { managerApi } from '@/api/manager';
 import type { ManagerDashboardData } from '@/api/types';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -19,6 +20,7 @@ import { CardSkeleton, StatCardSkeleton } from '@/components/ui/LoadingSkeleton'
 import { StatCard } from '@/components/ui/StatCard';
 import { BorderRadius, BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { requireActiveShift } from '@/utils/shiftGuard';
 import {
   canMonitorStock,
   canOnboardCustomers,
@@ -38,6 +40,16 @@ export default function ManagerDashboardScreen() {
   const [dashboard, setDashboard] = useState<ManagerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleNewSale = async () => {
+    const hasActive = await requireActiveShift(user?.id, 'record field sales', () => {
+      router.push('/(seller)/shift' as any);
+    });
+    if (hasActive) {
+      router.push('/(seller)/sales/new' as any);
+    }
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -79,6 +91,8 @@ export default function ManagerDashboardScreen() {
         title={`Territory: ${user?.district || 'Regional'}`}
         subtitle={`Manager: ${user?.name}`}
         showNotificationBell
+        showMenu={true}
+        onMenuPress={() => setMenuOpen(true)}
       />
 
       <ScrollView
@@ -92,33 +106,41 @@ export default function ManagerDashboardScreen() {
         }
       >
         <View style={styles.contentWrapper}>
-          {/* Dual-Role Persona Quick Switch Banner */}
-          {user?.isSeller ? (
-            <Card style={styles.dualRoleCard}>
-              <View style={styles.dualRoleHeader}>
-                <View style={styles.dualRoleIconBox}>
-                  <Ionicons name="swap-horizontal" size={20} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.dualRoleTitleRow}>
-                    <Text style={styles.dualRoleTitle}>Dual-Role Persona Active</Text>
-                    <Badge label="FIELD READY" variant="ACTIVE" size="sm" pulse={true} />
-                  </View>
-                  <Text style={styles.dualRoleDesc}>
-                    Frontline sales authority enabled: personal van stock, mobile POS orders, shift punch-in, and store KYC onboarding.
-                  </Text>
-                </View>
+          {/* Dual-Role Persona: Field Sales & Duty Shift */}
+          <Card style={styles.dualRoleCard}>
+            <View style={styles.dualRoleHeader}>
+              <View style={styles.dualRoleIconBox}>
+                <Ionicons name="bag-check" size={20} color="#FFFFFF" />
               </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.dualRoleTitleRow}>
+                  <Text style={styles.dualRoleTitle}>Dual-Role Field Sales</Text>
+                  <Badge label="SELLER ACTIVE" variant="ACTIVE" size="sm" pulse={true} />
+                </View>
+                <Text style={styles.dualRoleDesc}>
+                  Frontline sales authority enabled: issue store invoices, punch in your daily shift with odometer & selfie verification, and manage deliveries.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.dualRoleActionsRow}>
               <Button
-                title="Switch to Field Sales Mode"
+                title="New Field Sale"
                 variant="primary"
                 size="md"
-                icon={<Ionicons name="bag-handle-outline" size={18} color="#FFFFFF" />}
-                onPress={() => router.replace('/(seller)' as any)}
-                style={styles.dualRoleBtn}
+                icon={<Ionicons name="cart-outline" size={18} color="#FFFFFF" />}
+                onPress={handleNewSale}
+                style={{ flex: 1 }}
               />
-            </Card>
-          ) : null}
+              <Button
+                title="My Duty Shift"
+                variant="outline"
+                size="md"
+                icon={<Ionicons name="speedometer-outline" size={18} color={BrandColors.pink.primary} />}
+                onPress={() => router.push('/(seller)/shift' as any)}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Card>
 
           <Card variant="outlined" style={styles.territoryCard}>
             <View style={styles.territoryHeader}>
@@ -196,6 +218,20 @@ export default function ManagerDashboardScreen() {
           {/* Quick Links */}
           <Text style={styles.sectionHeading}>Territory Operations & Supervision</Text>
           <View style={styles.actionsCol}>
+            <Button
+              title="Record Field Sale (POS)"
+              variant="primary"
+              size="md"
+              icon={<Ionicons name="cart" size={18} color="#FFFFFF" />}
+              onPress={handleNewSale}
+            />
+            <Button
+              title="My Personal Duty Shift (Attendance & Route)"
+              variant="outline-secondary"
+              size="md"
+              icon={<Ionicons name="speedometer-outline" size={18} color={BrandColors.green.primary} />}
+              onPress={() => router.push('/(seller)/shift' as any)}
+            />
             {allowStock ? (
               <Button
                 title="Van Stock Supervision"
@@ -248,6 +284,12 @@ export default function ManagerDashboardScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Slide-out Mobile Navigation Drawer */}
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }
@@ -355,5 +397,10 @@ const styles = StyleSheet.create({
   },
   dualRoleBtn: {
     marginTop: Spacing.sm,
+  },
+  dualRoleActionsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
 });

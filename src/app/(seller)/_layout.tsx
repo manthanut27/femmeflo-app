@@ -22,7 +22,7 @@ export default function SellerTabsLayout() {
 
   const isAllowedSeller =
     user?.role === 'SELLER' ||
-    (user?.role === 'MANAGER' && Boolean((user as any).isSeller));
+    user?.role === 'MANAGER';
 
   useEffect(() => {
     if (isLoading || state === 'INITIALIZING') return;

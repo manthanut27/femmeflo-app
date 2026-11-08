@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
 import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -37,6 +39,8 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { requireActiveShift } from '@/utils/shiftGuard';
 import {
   formatCurrencyINR,
   formatDateIST,
@@ -54,6 +58,10 @@ const PERIOD_FILTERS = [
 ];
 
 export default function ManagerSalesScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const [viewMode, setViewMode] = useState<'DAILY_REPORT' | 'TRANSACTIONS'>('DAILY_REPORT');
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [sellers, setSellers] = useState<SellerItem[]>([]);
@@ -336,11 +344,31 @@ export default function ManagerSalesScreen() {
     );
   };
 
+  const handleNewSale = async () => {
+    const hasActive = await requireActiveShift(user?.id, 'record field sales', () => {
+      router.push('/(seller)/shift' as any);
+    });
+    if (hasActive) {
+      router.push('/(seller)/sales/new' as any);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Header
         title="Territory Sales & Reports"
         subtitle={`Territory Beat Analytics • ${territoryMetrics.activeOfficersCount} field officers`}
+        showMenu={true}
+        onMenuPress={() => setMenuOpen(true)}
+        rightAction={
+          <Button
+            title="New Sale"
+            size="sm"
+            variant="primary"
+            icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
+            onPress={handleNewSale}
+          />
+        }
       />
 
       {/* Mode Switcher: Daily Report vs Order Transactions */}
@@ -753,6 +781,12 @@ export default function ManagerSalesScreen() {
           </KeyboardAvoidingView>
         </Modal>
       )}
+
+      {/* Mobile Navigation Drawer */}
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }
