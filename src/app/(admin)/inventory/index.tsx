@@ -2,7 +2,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   BackHandler,
   FlatList,
@@ -15,7 +14,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
@@ -80,11 +78,6 @@ export default function AdminInventoryScreen() {
   // Add Warehouse Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [formName, setFormName] = useState('');
-  const [formCode, setFormCode] = useState('');
-  const [formState, setFormState] = useState('Uttar Pradesh');
-  const [formDistrict, setFormDistrict] = useState('Varanasi');
-  const [formAddress, setFormAddress] = useState('');
-  const [formType, setFormType] = useState<'WAREHOUSE' | 'HQ'>('WAREHOUSE');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -116,35 +109,15 @@ export default function AdminInventoryScreen() {
     loadWarehouses();
   }, [loadWarehouses]);
 
-  const generateFacilityCode = () => {
-    const raw = formDistrict.trim() || formName.trim() || 'FAC';
-    const clean = raw.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-    const rand = Math.floor(10 + Math.random() * 90);
-    setFormCode(`WH-${clean}-${rand}`);
-  };
-
   const handleOpenAddModal = () => {
     setFormName('');
-    setFormCode(`WH-DEPOT-${Math.floor(100 + Math.random() * 900)}`);
-    setFormState('Uttar Pradesh');
-    setFormDistrict('Varanasi');
-    setFormAddress('');
-    setFormType('WAREHOUSE');
     setFormError(null);
     setModalVisible(true);
   };
 
   const handleCreateWarehouse = async () => {
     if (!formName.trim()) {
-      setFormError('Please enter warehouse facility name.');
-      return;
-    }
-    if (!formDistrict.trim()) {
-      setFormError('District is required.');
-      return;
-    }
-    if (!formState.trim()) {
-      setFormError('State is required.');
+      setFormError('Please enter warehouse / depot name.');
       return;
     }
 
@@ -153,22 +126,17 @@ export default function AdminInventoryScreen() {
     try {
       const res = await adminApi.createWarehouse({
         name: formName.trim(),
-        code: formCode.trim() || undefined,
-        state: formState.trim(),
-        district: formDistrict.trim(),
-        address: formAddress.trim() || undefined,
-        type: formType,
       });
 
       setModalVisible(false);
       Alert.alert(
-        'Warehouse Registered',
-        `${res.warehouse?.name || formName} has been successfully added to the logistics network.`,
+        'Warehouse Created',
+        `${res.warehouse?.name || formName.trim()} has been added to the regional depot network.`,
         [{ text: 'OK' }]
       );
       loadWarehouses();
     } catch (err: any) {
-      setFormError(err?.message || 'Failed to create warehouse facility.');
+      setFormError(err?.message || 'Failed to create warehouse.');
     } finally {
       setIsSubmitting(false);
     }
@@ -315,9 +283,9 @@ export default function AdminInventoryScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                <Text style={styles.modalTitle}>New Warehouse Facility</Text>
+                <Text style={styles.modalTitle}>Add Regional Warehouse</Text>
                 <Text style={styles.modalSubtitle}>
-                  Register a regional depot or central facility in the logistics network
+                  Create a regional depot for buffer storage
                 </Text>
               </View>
               <Pressable
@@ -338,124 +306,16 @@ export default function AdminInventoryScreen() {
                 </View>
               )}
 
-              {/* Warehouse Facility Name */}
-              <Text style={styles.inputLabel}>Facility / Warehouse Name *</Text>
+              {/* Warehouse / Depot Name */}
+              <Text style={styles.inputLabel}>Warehouse / Depot Name *</Text>
               <TextInput
                 style={styles.modalInput}
                 value={formName}
                 onChangeText={setFormName}
-                placeholder="e.g. Varanasi Regional Distribution Hub"
+                placeholder="e.g. Thane Regional Depot"
                 placeholderTextColor={Colors.light.textMuted}
+                autoFocus
               />
-
-              {/* Facility Code with Auto-Generator */}
-              <View style={styles.codeHeaderRow}>
-                <Text style={styles.inputLabel}>Facility Code (optional)</Text>
-                <Text style={styles.codeHintText}>Auto-generate</Text>
-              </View>
-              <View style={styles.codeRowInputWrap}>
-                <TextInput
-                  style={[styles.modalInput, styles.codeInputFlex]}
-                  value={formCode}
-                  onChangeText={setFormCode}
-                  placeholder="e.g. WH-VNS-01"
-                  placeholderTextColor={Colors.light.textMuted}
-                  autoCapitalize="characters"
-                />
-                <TouchableOpacity
-                  style={styles.codeGenBtn}
-                  onPress={generateFacilityCode}
-                  accessibilityRole="button"
-                  accessibilityLabel="Auto-generate facility code"
-                >
-                  <Ionicons name="sparkles" size={15} color={BrandColors.green.dark} />
-                  <Text style={styles.codeGenBtnText}>Generate</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* State & District Row */}
-              <View style={styles.twoColumnRow}>
-                <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                  <Text style={styles.inputLabel}>State *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={formState}
-                    onChangeText={setFormState}
-                    placeholder="e.g. Uttar Pradesh"
-                    placeholderTextColor={Colors.light.textMuted}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>District *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={formDistrict}
-                    onChangeText={setFormDistrict}
-                    placeholder="e.g. Varanasi"
-                    placeholderTextColor={Colors.light.textMuted}
-                  />
-                </View>
-              </View>
-
-              {/* Address */}
-              <Text style={styles.inputLabel}>Physical Address / Industrial Area (optional)</Text>
-              <TextInput
-                style={[styles.modalInput, { minHeight: 64, textAlignVertical: 'top' }]}
-                value={formAddress}
-                onChangeText={setFormAddress}
-                placeholder="e.g. Plot 42, Transport Nagar Phase 2"
-                placeholderTextColor={Colors.light.textMuted}
-                multiline
-                numberOfLines={2}
-              />
-
-              {/* Facility Type Selector */}
-              <Text style={styles.inputLabel}>Facility Type</Text>
-              <View style={styles.typeSelectorRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.typeSelectorPill,
-                    formType === 'WAREHOUSE' && styles.typeSelectorPillActive,
-                  ]}
-                  onPress={() => setFormType('WAREHOUSE')}
-                >
-                  <Ionicons
-                    name="business-outline"
-                    size={16}
-                    color={formType === 'WAREHOUSE' ? '#FFFFFF' : Colors.light.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.typeSelectorText,
-                      formType === 'WAREHOUSE' && styles.typeSelectorTextActive,
-                    ]}
-                  >
-                    Regional Depot
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.typeSelectorPill,
-                    formType === 'HQ' && styles.typeSelectorPillActive,
-                  ]}
-                  onPress={() => setFormType('HQ')}
-                >
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={16}
-                    color={formType === 'HQ' ? '#FFFFFF' : Colors.light.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.typeSelectorText,
-                      formType === 'HQ' && styles.typeSelectorTextActive,
-                    ]}
-                  >
-                    Central Reserve HQ
-                  </Text>
-                </TouchableOpacity>
-              </View>
 
               {/* Buttons */}
               <View style={styles.modalBtnRow}>
@@ -466,10 +326,11 @@ export default function AdminInventoryScreen() {
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title={isSubmitting ? 'Registering...' : 'Register Warehouse'}
+                  title={isSubmitting ? 'Creating...' : 'Create Warehouse'}
                   variant="primary"
                   onPress={handleCreateWarehouse}
                   loading={isSubmitting}
+                  disabled={!formName.trim() || isSubmitting}
                   style={{ flex: 1, backgroundColor: BrandColors.green.primary }}
                 />
               </View>
@@ -705,81 +566,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: Colors.light.textPrimary,
-  },
-  codeHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  codeHintText: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: BrandColors.green.dark,
-    fontWeight: '600',
-  },
-  codeRowInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  codeInputFlex: {
-    flex: 1,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  codeGenBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: BrandColors.green.surface,
-    borderWidth: 1,
-    borderColor: BrandColors.green.border,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 4,
-  },
-  codeGenBtnText: {
-    ...Typography.caption,
-    color: BrandColors.green.dark,
-    fontWeight: '700',
-  },
-  twoColumnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  typeSelectorRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 2,
-    marginBottom: Spacing.md,
-  },
-  typeSelectorPill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.light.surfaceMuted,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    gap: 6,
-  },
-  typeSelectorPillActive: {
-    backgroundColor: BrandColors.green.dark,
-    borderColor: BrandColors.green.dark,
-  },
-  typeSelectorText: {
-    ...Typography.caption,
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  typeSelectorTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   modalBtnRow: {
     flexDirection: 'row',

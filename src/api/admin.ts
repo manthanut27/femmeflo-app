@@ -305,15 +305,21 @@ export const adminApi = {
   async createWarehouse(
     payload: CreateWarehousePayload
   ): Promise<{ success: boolean; warehouse: WarehouseItem; message?: string }> {
+    const cleanName = payload.name.trim();
+    const cleanPrefix = cleanName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'DEP';
+    const code = payload.code ? payload.code.trim().toUpperCase() : `WH-${cleanPrefix}-${Math.floor(100 + Math.random() * 900)}`;
+    const district = payload.district?.trim() || cleanName.split(' ')[0] || 'Regional';
+    const state = payload.state?.trim() || 'Maharashtra';
+
     return apiRequest<{ success: boolean; warehouse: WarehouseItem; message?: string }>(
       'admin/warehouses',
       {
         method: 'POST',
         body: JSON.stringify({
-          name: payload.name.trim(),
-          code: payload.code ? payload.code.trim().toUpperCase() : `WH-${Date.now().toString().slice(-4)}`,
-          state: payload.state.trim(),
-          district: payload.district.trim(),
+          name: cleanName,
+          code,
+          state,
+          district,
           address: payload.address ? payload.address.trim() : undefined,
           type: payload.type || 'WAREHOUSE',
         }),

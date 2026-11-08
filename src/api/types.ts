@@ -777,8 +777,8 @@ export interface CreatePayoutPayload {
 export interface CreateWarehousePayload {
   name: string;
   code?: string;
-  state: string;
-  district: string;
+  state?: string;
+  district?: string;
   address?: string;
   type?: 'HQ' | 'WAREHOUSE';
 }

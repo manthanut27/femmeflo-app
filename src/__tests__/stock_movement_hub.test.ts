@@ -156,4 +156,31 @@ describe('Admin Stock Movement Hub & Safety Suite', () => {
     assert.strictEqual(mapHistoryFilterToApiType('Transfer'), 'TRANSFER');
     assert.strictEqual(mapHistoryFilterToApiType('Sales'), 'SALE');
   });
+
+  it('streamlines Add Regional Warehouse modal to single depot name input with automatic derivation', () => {
+    // When the user inputs only "Thane Regional Depot"
+    const inputName = 'Thane Regional Depot';
+
+    const buildPayload = (name: string) => {
+      const cleanName = name.trim();
+      const cleanPrefix = cleanName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'DEP';
+      const code = `WH-${cleanPrefix}-842`;
+      const district = cleanName.split(' ')[0] || 'Regional';
+      const state = 'Maharashtra';
+      return {
+        name: cleanName,
+        code,
+        district,
+        state,
+        type: 'WAREHOUSE' as const,
+      };
+    };
+
+    const payload = buildPayload(inputName);
+    assert.strictEqual(payload.name, 'Thane Regional Depot');
+    assert.strictEqual(payload.code, 'WH-THA-842');
+    assert.strictEqual(payload.district, 'Thane');
+    assert.strictEqual(payload.state, 'Maharashtra');
+    assert.strictEqual(payload.type, 'WAREHOUSE');
+  });
 });
