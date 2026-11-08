@@ -11,6 +11,7 @@ import type {
   CreateCustomerPayload,
   CreatePayoutPayload,
   CreateProductPayload,
+  CreateWarehousePayload,
   CustomerItem,
   InventorySummaryData,
   InvoiceItem,
@@ -299,6 +300,25 @@ export const adminApi = {
         items: [],
       };
     }
+  },
+
+  async createWarehouse(
+    payload: CreateWarehousePayload
+  ): Promise<{ success: boolean; warehouse: WarehouseItem; message?: string }> {
+    return apiRequest<{ success: boolean; warehouse: WarehouseItem; message?: string }>(
+      'admin/warehouses',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: payload.name.trim(),
+          code: payload.code ? payload.code.trim().toUpperCase() : `WH-${Date.now().toString().slice(-4)}`,
+          state: payload.state.trim(),
+          district: payload.district.trim(),
+          address: payload.address ? payload.address.trim() : undefined,
+          type: payload.type || 'WAREHOUSE',
+        }),
+      }
+    );
   },
 
   async getInventorySummary(): Promise<InventorySummaryData> {

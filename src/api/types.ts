@@ -774,6 +774,15 @@ export interface CreatePayoutPayload {
   periodMonth?: number;
 }
 
+export interface CreateWarehousePayload {
+  name: string;
+  code?: string;
+  state: string;
+  district: string;
+  address?: string;
+  type?: 'HQ' | 'WAREHOUSE';
+}
+
 export interface CreateProductPayload {
   name: string;
   sku?: string;

@@ -985,6 +985,26 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'admin/warehouses' || cleanEndpoint === 'admin/inventory/warehouses') {
+    if (method === 'POST') {
+      const newWh: WarehouseItem = {
+        id: `wh_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: body.name || 'New Regional Warehouse',
+        code: body.code ? body.code.toUpperCase() : `WH-${Math.floor(100 + Math.random() * 900)}`,
+        state: body.state || 'Uttar Pradesh',
+        district: body.district || 'Varanasi',
+        address: body.address || '',
+        active: true,
+        type: body.type || 'WAREHOUSE',
+        balance: 0,
+      };
+      mockDb.warehouses.unshift(newWh);
+      return {
+        success: true,
+        warehouse: newWh,
+        item: newWh,
+        message: 'Warehouse facility registered successfully.',
+      } as unknown as T;
+    }
     return { items: mockDb.warehouses, warehouses: mockDb.warehouses } as unknown as T;
   }
 

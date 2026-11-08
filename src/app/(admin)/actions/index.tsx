@@ -32,6 +32,7 @@ interface AdminActionItem {
   buttonTitle: string;
   categoryLabel: string;
   route: string;
+  params?: Record<string, string>;
   iconName: keyof typeof Ionicons.glyphMap;
   iconBg: string;
   iconColor: string;
@@ -106,7 +107,7 @@ export default function AdministrativeActionsScreen() {
   }, [navigation, router]);
 
   const handleNavigateToAction = useCallback(
-    (route: string) => {
+    (route: string, extraParams?: Record<string, string>) => {
       const directTabs: Record<string, string> = {
         '/(admin)/reports': 'reports/index',
         '/(admin)/approvals': 'approvals/index',
@@ -126,17 +127,29 @@ export default function AdministrativeActionsScreen() {
       const tabName = directTabs[route];
       if (tabName) {
         try {
-          (navigation as any).navigate(tabName, { from: 'actions' });
+          if (extraParams && Object.keys(extraParams).length > 0) {
+            (navigation as any).navigate(tabName, { from: 'actions', ...extraParams });
+          } else {
+            (navigation as any).navigate(tabName, { from: 'actions' });
+          }
           return;
         } catch {
           // fallback to router
         }
       }
       try {
-        router.push({ pathname: route as any, params: { from: 'actions' } });
+        if (extraParams && Object.keys(extraParams).length > 0) {
+          router.push({ pathname: route as any, params: { from: 'actions', ...extraParams } });
+        } else {
+          router.push({ pathname: route as any, params: { from: 'actions' } });
+        }
       } catch {
         try {
-          router.navigate({ pathname: route as any, params: { from: 'actions' } });
+          if (extraParams && Object.keys(extraParams).length > 0) {
+            router.navigate({ pathname: route as any, params: { from: 'actions', ...extraParams } });
+          } else {
+            router.navigate({ pathname: route as any, params: { from: 'actions' } });
+          }
         } catch {
           router.push(route as any);
         }
@@ -262,8 +275,20 @@ export default function AdministrativeActionsScreen() {
         iconColor: '#059669',
       },
       {
-        id: 'users',
+        id: 'warehouse',
         index: 11,
+        title: 'National Warehouses & Storage Facilities',
+        buttonTitle: 'Add Warehouse',
+        categoryLabel: 'Catalog & Stock',
+        route: '/(admin)/inventory',
+        params: { openAddModal: 'true' },
+        iconName: 'business-outline',
+        iconBg: '#F0FDF4',
+        iconColor: '#16A34A',
+      },
+      {
+        id: 'users',
+        index: 12,
         title: 'Manage Managers & Sellers Directory',
         buttonTitle: 'Managers & Field Reps',
         categoryLabel: 'Field Operations',
@@ -274,7 +299,7 @@ export default function AdministrativeActionsScreen() {
       },
       {
         id: 'categories',
-        index: 12,
+        index: 13,
         title: 'Customer Categories Configuration',
         buttonTitle: 'Customer Categories',
         categoryLabel: 'System & Config',
@@ -285,7 +310,7 @@ export default function AdministrativeActionsScreen() {
       },
       {
         id: 'settings',
-        index: 13,
+        index: 14,
         title: 'Company Legal & Tax Invoice Settings',
         buttonTitle: 'Legal & Company Settings',
         categoryLabel: 'System & Config',
@@ -302,7 +327,7 @@ export default function AdministrativeActionsScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Header
         title="Quick Actions"
-        subtitle="13 Operational Modules"
+        subtitle="14 Operational Modules"
         showBack
         onBack={handleBack}
         showNotificationBell
@@ -318,7 +343,7 @@ export default function AdministrativeActionsScreen() {
         <View style={styles.contentWrapper}>
           <View style={styles.headerInfoRow}>
             <Text style={styles.sectionTitle}>Operational Modules</Text>
-            <Badge label="13 Modules" variant="neutral" size="sm" />
+            <Badge label="14 Modules" variant="neutral" size="sm" />
           </View>
 
           <View style={[styles.actionGrid, isTablet && styles.actionGridTablet]}>
@@ -331,7 +356,7 @@ export default function AdministrativeActionsScreen() {
                   isTablet && styles.actionCardTablet,
                   action.highlightAlert && styles.actionCardHighlight,
                 ]}
-                onPress={() => handleNavigateToAction(action.route)}
+                onPress={() => handleNavigateToAction(action.route, action.params)}
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${action.title}`}
               >
