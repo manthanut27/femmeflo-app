@@ -243,6 +243,7 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
         {
           id: 'usr_mgr_01',
           name: 'Priya Sharma',
+          email: 'priya@femmeflo.in',
           phone: '9876543210',
           role: 'MANAGER',
           active: true,
@@ -252,6 +253,7 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
         {
           id: 'usr_mgr_02',
           name: 'Rajesh Verma',
+          email: 'rajesh@femmeflo.in',
           phone: '9812345678',
           role: 'MANAGER',
           active: false,
@@ -288,6 +290,7 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
         {
           id: 'usr_mgr_01',
           name: 'Vikram Malhotra',
+          email: 'vikram@femmeflo.in',
           phone: '9876543210',
           role: 'MANAGER',
           active: true,
@@ -297,6 +300,7 @@ describe('Manager Initial Operational Permissions Acceptance Suite', () => {
         {
           id: 'usr_mgr_02',
           name: 'Anjali Deshmukh',
+          email: 'anjali@femmeflo.in',
           phone: '9123456789',
           role: 'MANAGER',
           active: true,
