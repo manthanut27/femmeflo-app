@@ -6,6 +6,7 @@ import {
   validateStockTransfer,
   calculateQuickAdd,
   generateReceiptRequestKey,
+  mapHistoryFilterToApiType,
 } from '../utils/inventoryMovement.ts';
 import type { AdminInventoryTransactionItem } from '../api/types.ts';
 
@@ -146,20 +147,13 @@ describe('Admin Stock Movement Hub & Safety Suite', () => {
     assert.strictEqual(applyQuickAdd('1000', 2500), '1200');
   });
 
-  it('supports the 4 required transaction history filters without fake fields', () => {
+  it('maps the 4 UI history filter options to backend enum RECEIPT, TRANSFER, SALE', () => {
     const FILTERS = ['All', 'Inward', 'Transfer', 'Sales'];
     assert.strictEqual(FILTERS.length, 4);
 
-    const mapApiFilter = (f: string) => {
-      if (f === 'Inward') return 'INWARD';
-      if (f === 'Transfer') return 'TRANSFER';
-      if (f === 'Sales') return 'SALE';
-      return undefined;
-    };
-
-    assert.strictEqual(mapApiFilter('All'), undefined);
-    assert.strictEqual(mapApiFilter('Inward'), 'INWARD');
-    assert.strictEqual(mapApiFilter('Transfer'), 'TRANSFER');
-    assert.strictEqual(mapApiFilter('Sales'), 'SALE');
+    assert.strictEqual(mapHistoryFilterToApiType('All'), undefined);
+    assert.strictEqual(mapHistoryFilterToApiType('Inward'), 'RECEIPT');
+    assert.strictEqual(mapHistoryFilterToApiType('Transfer'), 'TRANSFER');
+    assert.strictEqual(mapHistoryFilterToApiType('Sales'), 'SALE');
   });
 });

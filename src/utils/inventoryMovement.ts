@@ -121,3 +121,17 @@ export function calculateQuickAdd(
 export function generateReceiptRequestKey(): string {
   return `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
+
+/**
+ * Maps the 4 UI history filter options to the exact backend enum:
+ * Backend expects: "RECEIPT" | "TRANSFER" | "SALE"
+ */
+export function mapHistoryFilterToApiType(
+  filter: 'All' | 'Inward' | 'Transfer' | 'Sales' | string
+): 'RECEIPT' | 'TRANSFER' | 'SALE' | undefined {
+  if (filter === 'Inward') return 'RECEIPT';
+  if (filter === 'Transfer') return 'TRANSFER';
+  if (filter === 'Sales') return 'SALE';
+  return undefined;
+}
+

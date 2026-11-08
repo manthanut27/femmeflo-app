@@ -44,8 +44,7 @@ import {
 import {
   formatTransactionIST,
   getTransactionRoute,
-  validateStockTransfer,
-  calculateQuickAdd,
+  mapHistoryFilterToApiType,
 } from '@/utils/inventoryMovement';
 
 export type MainSectionTab = 'TRANSFER' | 'INWARD' | 'HISTORY';
@@ -187,10 +186,7 @@ export default function StockMovementHubScreen() {
 
       setHistoryError(null);
       try {
-        let apiType: string | undefined = undefined;
-        if (filter === 'Inward') apiType = 'INWARD';
-        else if (filter === 'Transfer') apiType = 'TRANSFER';
-        else if (filter === 'Sales') apiType = 'SALE';
+        const apiType = mapHistoryFilterToApiType(filter);
 
         const res = await adminApi.listInventoryTransactions({
           page,
@@ -955,7 +951,7 @@ export default function StockMovementHubScreen() {
                       <View style={styles.txTopRow}>
                         <View style={[styles.txTypeBadge, { backgroundColor: typeBg }]}>
                           <Text style={[styles.txTypeBadgeText, { color: typeColor }]}>
-                            {upperType}
+                            {isTxInward ? 'INWARD' : upperType}
                           </Text>
                         </View>
                         <View style={styles.txDateWrap}>
