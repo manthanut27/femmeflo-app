@@ -100,7 +100,6 @@ export default function StockMovementHubScreen() {
   const [targetLocationId, setTargetLocationId] = useState('');
   const [transferProductId, setTransferProductId] = useState('');
   const [transferQtyStr, setTransferQtyStr] = useState('100');
-  const [transferReference, setTransferReference] = useState('');
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
 
   // Section 2: Stock Inward Form State
@@ -394,17 +393,6 @@ export default function StockMovementHubScreen() {
   const isInwardQtyValid = !isNaN(parsedInwardQty) && parsedInwardQty > 0;
   const isInwardFormValid = Boolean(inwardProductId) && isInwardQtyValid;
 
-  // Quick-Add Handlers
-  const handleTransferQuickAdd = (amount: number) => {
-    const current = parseInt(transferQtyStr, 10);
-    const next = isNaN(current) || current <= 0 ? amount : current + amount;
-    if (sourceAvailableStock > 0 && next > sourceAvailableStock) {
-      setTransferQtyStr(String(sourceAvailableStock));
-    } else {
-      setTransferQtyStr(String(next));
-    }
-  };
-
   const handleInwardQuickAdd = (amount: number) => {
     const current = parseInt(inwardQtyStr, 10);
     const next = isNaN(current) || current <= 0 ? amount : current + amount;
@@ -423,7 +411,6 @@ export default function StockMovementHubScreen() {
         targetLocationId,
         productId: transferProductId,
         quantity: parsedTransferQty,
-        reference: transferReference.trim() || undefined,
       });
 
       DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { action: 'TRANSFER' });
@@ -698,7 +685,7 @@ export default function StockMovementHubScreen() {
                   onPress={() => setTransferProdPickerOpen(true)}
                 />
 
-                {/* 4. Numeric Quantity Input & Quick-Add Controls */}
+                {/* 4. Numeric Quantity Input */}
                 <View style={styles.quantitySection}>
                   <Input
                     label="Packet Quantity *"
@@ -718,40 +705,7 @@ export default function StockMovementHubScreen() {
                       </Text>
                     </View>
                   )}
-
-                  <View style={styles.quickChipsRow}>
-                    <Text style={styles.quickChipsLabel}>Quick Add:</Text>
-                    {QUICK_ADD_PILLS.map((qty) => (
-                      <TouchableOpacity
-                        key={qty}
-                        style={[
-                          styles.quickQtyChip,
-                          transferQtyStr === String(qty) && styles.quickQtyChipActive,
-                        ]}
-                        onPress={() => handleTransferQuickAdd(qty)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.quickQtyText,
-                            transferQtyStr === String(qty) && styles.quickQtyTextActive,
-                          ]}
-                        >
-                          +{qty >= 1000 ? `${qty / 1000}k` : qty}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
                 </View>
-
-                {/* 5. Transfer Reference (Optional) */}
-                <Input
-                  label="Waybill / Dispatch Reference (Optional)"
-                  value={transferReference}
-                  onChangeText={setTransferReference}
-                  placeholder="e.g. TRF-2026-1102"
-                  leftIcon={<Ionicons name="document-text-outline" size={18} color={Colors.light.textTertiary} />}
-                />
               </Card>
 
               {/* Action Button: Execute Stock Transfer */}
