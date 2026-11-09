@@ -1,6 +1,6 @@
 # FEMMEFLO MOBILE APPLICATION — COMPREHENSIVE TECHNICAL MANUAL & PROJECT DETAILS
 
-**Target Version:** 1.0.17  
+**Target Version:** 1.0.18  
 **Framework:** React Native 0.88.1 / Expo SDK 58 (~58.0.23) / React 19.3.0 / TypeScript 6.0.3  
 **Architecture:** Expo Router v58 (File-based navigation with route guards)  
 **Document Classification:** Engineering Blueprint & Technical System Manual  

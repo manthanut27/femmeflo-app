@@ -364,7 +364,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
               <Ionicons name="log-out-outline" size={18} color={Colors.light.error} />
               <Text style={styles.logoutBtnText}>Sign Out</Text>
             </Pressable>
-            <Text style={styles.appVersion}>FemmeFlo v1.0.17</Text>
+            <Text style={styles.appVersion}>FemmeFlo v1.0.18</Text>
           </View>
         </View>
       </View>
