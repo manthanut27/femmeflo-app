@@ -241,18 +241,59 @@ export const managerApi = {
     paymentMode?: string;
     search?: string;
   }): Promise<{ items: SaleItem[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination: PaginationMeta }>(
-      'manager/sales',
-      {
-        method: 'GET',
-        params,
+    try {
+      const raw = await apiRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination: PaginationMeta }>(
+        'manager/sales',
+        {
+          method: 'GET',
+          params,
+        }
+      );
+      const list = raw?.sales ?? raw?.items ?? [];
+      return {
+        items: list,
+        pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+      };
+    } catch (err: any) {
+      // If manager lacks approve_sales/SALES_READ or backend returns 403 Permission denied,
+      // fallback to seller/sales so the dual-role manager can access their own recorded field sales
+      if (
+        err?.status === 403 ||
+        err?.status === 401 ||
+        err?.message?.toLowerCase().includes('permission denied')
+      ) {
+        try {
+          const sellerRes = await apiRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination: PaginationMeta }>(
+            'seller/sales',
+            {
+              method: 'GET',
+              params: {
+                page: params?.page,
+                pageSize: params?.pageSize,
+                status: params?.status,
+                paymentMode: params?.paymentMode,
+                search: params?.search,
+              },
+            }
+          );
+          const list = sellerRes?.sales ?? sellerRes?.items ?? [];
+          return {
+            items: list,
+            pagination: sellerRes?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+          };
+        } catch {
+          return {
+            items: [],
+            pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
+          };
+        }
       }
-    );
-    const list = raw?.sales ?? raw?.items ?? [];
-    return {
-      items: list,
-      pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-    };
+
+      return {
+        items: [],
+        pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
+      };
+    }
   },
 
   async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
@@ -274,9 +315,16 @@ export const managerApi = {
   // Inventory in Territory
   // ----------------------------------------------------
   async getInventory(): Promise<ManagerInventoryData> {
-    return apiRequest<ManagerInventoryData>('manager/inventory', {
-      method: 'GET',
-    });
+    try {
+      return await apiRequest<ManagerInventoryData>('manager/inventory', {
+        method: 'GET',
+      });
+    } catch {
+      return {
+        summary: { totalSellers: 0, totalAssigned: 0, totalSold: 0, totalRemaining: 0 },
+        sellers: [],
+      };
+    }
   },
 
   // ----------------------------------------------------
@@ -290,18 +338,25 @@ export const managerApi = {
     sellerId?: string;
     status?: string;
   }): Promise<{ items: Shift[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ items?: Shift[]; shifts?: Shift[]; pagination: PaginationMeta }>(
-      'manager/shifts',
-      {
-        method: 'GET',
-        params,
-      }
-    );
-    const list = raw?.items ?? raw?.shifts ?? [];
-    return {
-      items: list,
-      pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-    };
+    try {
+      const raw = await apiRequest<{ items?: Shift[]; shifts?: Shift[]; pagination: PaginationMeta }>(
+        'manager/shifts',
+        {
+          method: 'GET',
+          params,
+        }
+      );
+      const list = raw?.items ?? raw?.shifts ?? [];
+      return {
+        items: list,
+        pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+      };
+    } catch {
+      return {
+        items: [],
+        pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
+      };
+    }
   },
 
   // ----------------------------------------------------

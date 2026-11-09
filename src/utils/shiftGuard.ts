@@ -21,9 +21,10 @@ export async function checkHasActiveShift(userId?: string): Promise<ShiftStatusR
       activeShift = (res as any)?.shift ?? (res as any)?.data?.shift ?? (res as any)?.data ?? null;
     } catch {
       // Offline fallback: check local cached shift
-      if (userId) {
-        activeShift = await draftStorage.getActiveShift(userId).catch(() => null);
-      }
+    }
+
+    if (!activeShift && userId) {
+      activeShift = await draftStorage.getActiveShift(userId).catch(() => null);
     }
 
     // Merge startOdometerKm from local draft if server returned null

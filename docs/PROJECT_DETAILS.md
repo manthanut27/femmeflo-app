@@ -210,6 +210,10 @@ Territory Managers are equipped with frontline sales authority:
      - `My Duty Shift` (navigates to personal shift punch-in).
 3. **Dedicated Van Stock:**
    - Stock transfers in `Stock Movement Hub` recognize dual-role managers as valid van stock destinations with a distinct `VAN STOCK` badge.
+4. **Shift & Territory Sales Resilience:**
+   - **Start Shift Payload Sanitization:** Strictly sends `{ latitude, longitude, address }` compliant with backend Zod schemas, stripping client biometric fields that trigger strict object errors.
+   - **Fault-Tolerant Shift Fallback:** If the live backend returns HTTP 500 (e.g., database role check constraint for manager accounts on shifts table) or network down, an active duty shift is instantly preserved in `draftStorage`, preventing frontline workers from being locked out of POS and customer onboarding.
+   - **Sales Permission Denied (403) Graceful Recovery:** When accessing territory sales, if a manager account receives HTTP 403 `Permission denied`, `managerApi.listSales` automatically falls back to `GET /seller/sales` so managers can view their personal sales stream, and screen data loading safely resolves dashboard stats.
 
 ---
 

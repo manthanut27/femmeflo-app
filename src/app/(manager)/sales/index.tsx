@@ -94,15 +94,18 @@ export default function ManagerSalesScreen() {
   const loadData = useCallback(async () => {
     try {
       const [salesRes, dashRes, sellersRes] = await Promise.all([
-        managerApi.listSales({ page: 1, pageSize: 100 }),
+        managerApi.listSales({ page: 1, pageSize: 100 }).catch(() => ({
+          items: [],
+          pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 },
+        })),
         managerApi.getDashboard().catch(() => null),
         managerApi.listSellers({ pageSize: 50 }).catch(() => ({ items: [] })),
       ]);
 
-      setSales(salesRes.items || []);
-      setPagination(salesRes.pagination);
+      setSales(salesRes?.items || []);
+      setPagination(salesRes?.pagination || { page: 1, pageSize: 50, total: 0, totalPages: 1 });
       if (dashRes) setDashboardData(dashRes);
-      setSellers(sellersRes.items || []);
+      setSellers(sellersRes?.items || []);
     } catch (err) {
       console.warn('Failed to load manager sales and dashboard', err);
     } finally {
