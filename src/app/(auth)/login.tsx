@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Keyboard,
@@ -19,6 +19,7 @@ import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { loginAttemptLimiter, type LoginAttemptStatus } from '@/utils/loginLimiter';
 
 export type LoginRole = 'seller' | 'manager' | 'admin';
 
@@ -76,6 +77,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [attemptStatus, setAttemptStatus] = useState<LoginAttemptStatus | null>(null);
 
   const passwordInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const { login } = useAuth();
@@ -89,11 +92,58 @@ export default function LoginScreen() {
     setError(null);
   }
 
+  // Check attempt status when identifier changes
+  useEffect(() => {
+    if (identifier.trim()) {
+      loginAttemptLimiter.getStatus(identifier.trim()).then((status) => {
+        setAttemptStatus(status);
+        if (status.isLocked) {
+          setLockoutSeconds(status.lockoutRemainingSeconds);
+          setError(status.warningMessage);
+        } else if (status.warningMessage) {
+          setError(status.warningMessage);
+        }
+      });
+    } else {
+      setAttemptStatus(null);
+      setLockoutSeconds(0);
+    }
+  }, [identifier]);
+
+  // Active countdown ticker during temporary lockout
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          if (identifier.trim()) {
+            loginAttemptLimiter.getStatus(identifier.trim()).then((status) => {
+              setAttemptStatus(status);
+              setError(null);
+            });
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSeconds, identifier]);
+
   async function handleLogin() {
-    if (isSubmitting) return;
+    if (isSubmitting || lockoutSeconds > 0) return;
     const trimmedId = identifier.trim();
     if (!trimmedId || !password) {
       setError('Please enter your email/phone and password.');
+      return;
+    }
+
+    // Check if account is currently locked out
+    const currentStatus = await loginAttemptLimiter.getStatus(trimmedId);
+    if (currentStatus.isLocked) {
+      setLockoutSeconds(currentStatus.lockoutRemainingSeconds);
+      setError(currentStatus.warningMessage);
       return;
     }
 
@@ -103,6 +153,8 @@ export default function LoginScreen() {
 
     try {
       const { user } = await login(trimmedId, password, selectedRole);
+      // Reset failed attempts on successful authentication
+      await loginAttemptLimiter.recordSuccessfulLogin(trimmedId);
       const role = user.role;
 
       // Role-based routing based on verified backend user object
@@ -117,10 +169,22 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.includes('network') || msg.includes('fetch') || msg.includes('unreachable') || msg.includes('timeout')) {
+      const isNetwork = msg.includes('network') || msg.includes('fetch') || msg.includes('unreachable') || msg.includes('timeout');
+
+      if (isNetwork) {
         setError('Unable to reach authentication server. Please check your internet connection.');
       } else {
-        setError(msg || 'Invalid login credentials. Please verify your email/phone and password.');
+        // Record failed attempt for invalid credentials
+        const updatedStatus = await loginAttemptLimiter.recordFailedAttempt(trimmedId);
+        setAttemptStatus(updatedStatus);
+        if (updatedStatus.isLocked) {
+          setLockoutSeconds(updatedStatus.lockoutRemainingSeconds);
+          setError(updatedStatus.warningMessage);
+        } else if (updatedStatus.warningMessage) {
+          setError(updatedStatus.warningMessage);
+        } else {
+          setError(msg || 'Invalid login credentials. Please verify your email/phone and password.');
+        }
       }
     } finally {
       setIsSubmitting(false);
@@ -306,12 +370,31 @@ export default function LoginScreen() {
 
             {/* Submit Button */}
             <Button
-              title={isSubmitting ? 'Authenticating...' : `Sign In as ${activeRole.label}`}
+              title={
+                lockoutSeconds > 0
+                  ? `Locked (${lockoutSeconds}s)`
+                  : isSubmitting
+                  ? 'Authenticating...'
+                  : `Sign In as ${activeRole.label}`
+              }
               onPress={handleLogin}
               loading={isSubmitting}
-              disabled={!isFormValid || isSubmitting}
+              disabled={!isFormValid || isSubmitting || lockoutSeconds > 0}
               size="lg"
-              variant={selectedRole === 'manager' ? 'secondary' : selectedRole === 'admin' ? 'admin' : 'primary'}
+              variant={
+                lockoutSeconds > 0
+                  ? 'outline'
+                  : selectedRole === 'manager'
+                  ? 'secondary'
+                  : selectedRole === 'admin'
+                  ? 'admin'
+                  : 'primary'
+              }
+              icon={
+                lockoutSeconds > 0 ? (
+                  <Ionicons name="time-outline" size={18} color={Colors.light.error} />
+                ) : undefined
+              }
               style={styles.submitButton}
             />
           </View>

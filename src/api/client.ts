@@ -1,5 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { cacheManager, type CachePolicy } from '../utils/cacheManager.ts';
+import { requestRateLimiter } from '../utils/rateLimiter.ts';
 import { handleMockRequest } from './mockService';
 import { ApiError, type PublicUser } from './types';
 
@@ -9,9 +11,15 @@ export interface RequestOptions extends RequestInit {
   timeoutMs?: number;
   responseType?: 'json' | 'blob' | 'text' | 'arrayBuffer';
   retries?: number;
+  // Rate limiting & Caching controls
+  skipRateLimit?: boolean;
+  cachePolicy?: CachePolicy;
+  cacheTtlMs?: number;
+  cacheTags?: string[];
+  skipCache?: boolean;
 }
 
-export { ApiError };
+export { ApiError, cacheManager, requestRateLimiter };
 
 // Primary Render Production Backend URL
 export const RENDER_BACKEND_API_URL = 'https://femmeflo-inventory.onrender.com/api/v1';
@@ -172,6 +180,7 @@ export const tokenStorage = {
         await SecureStore.deleteItemAsync(USER_KEY);
       }
       await userProfileStorage.clearCachedUser();
+      await cacheManager.clearAll();
     } catch (err) {
       console.warn('Failed to clear auth token', err);
     }
@@ -245,10 +254,17 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     headers: customHeaders,
     responseType,
     retries = 0,
+    skipRateLimit = false,
+    cachePolicy = 'network-first',
+    cacheTtlMs,
+    cacheTags,
+    skipCache = false,
     ...rest
   } = options;
 
-  let url = `${getApiBaseUrl()}/${endpoint.replace(/^\/+/, '')}`;
+  const cleanEndpoint = endpoint.replace(/^\/+/, '');
+  let url = `${getApiBaseUrl()}/${cleanEndpoint}`;
+  let qStr = '';
 
   if (params) {
     const query = new URLSearchParams();
@@ -257,9 +273,58 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
         query.append(key, String(value));
       }
     }
-    const qStr = query.toString();
+    qStr = query.toString();
     if (qStr) {
       url += (url.includes('?') ? '&' : '?') + qStr;
+    }
+  }
+
+  const method = (rest.method || 'GET').toUpperCase();
+  const cacheKey = `${cleanEndpoint}${qStr ? '?' + qStr : ''}`;
+
+  // 1. Rate Limiting Evaluation
+  if (!skipRateLimit) {
+    const rateCategory = requestRateLimiter.getCategory(cleanEndpoint, method);
+    const limitCheck = requestRateLimiter.checkLimit(cleanEndpoint, rateCategory);
+    if (!limitCheck.allowed) {
+      // For GET requests, gracefully serve from cache if available
+      if (method === 'GET' && !skipCache) {
+        const cached = await cacheManager.get<T>(cacheKey, { allowStale: true });
+        if (cached) {
+          console.warn(`[Client] Rate limit active. Serving cached fallback for '${cacheKey}'`);
+          return cached.data;
+        }
+      }
+
+      throw new ApiError(
+        `Too many requests. Please wait ${limitCheck.retryAfterSeconds} seconds before trying again.`,
+        429,
+        { retryAfterSeconds: limitCheck.retryAfterSeconds }
+      );
+    }
+    requestRateLimiter.recordRequest(cleanEndpoint);
+  }
+
+  // 2. Cache-First or Stale-While-Revalidate Evaluation (GET only)
+  if (method === 'GET' && !skipCache && cachePolicy !== 'no-cache') {
+    if (cachePolicy === 'cache-first') {
+      const cached = await cacheManager.get<T>(cacheKey);
+      if (cached) {
+        return cached.data;
+      }
+    } else if (cachePolicy === 'stale-while-revalidate') {
+      const cached = await cacheManager.get<T>(cacheKey, { allowStale: true });
+      if (cached) {
+        // Trigger background revalidation without blocking caller
+        setTimeout(() => {
+          apiRequest<T>(endpoint, {
+            ...options,
+            cachePolicy: 'network-first',
+            skipRateLimit: true,
+          }).catch(() => {});
+        }, 0);
+        return cached.data;
+      }
     }
   }
 
@@ -282,7 +347,6 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     headers.set('Content-Type', 'application/json');
   }
 
-  const method = (rest.method || 'GET').toUpperCase();
   const isIdempotent = method === 'GET' || method === 'HEAD';
   let attempts = 0;
   const maxAttempts = isIdempotent ? Math.max(1, 1 + retries) : 1;
@@ -307,6 +371,17 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
           onSessionExpiredCallback();
         }
         throw new ApiError('Your session has expired. Please sign in again.', 401);
+      }
+
+      if (response.status === 429) {
+        const retryHeader = response.headers.get('Retry-After');
+        const retrySeconds = retryHeader ? parseInt(retryHeader, 10) || 10 : 10;
+        requestRateLimiter.setLockout(cleanEndpoint, retrySeconds);
+        throw new ApiError(
+          `Server is currently busy. Please wait ${retrySeconds} seconds before trying again.`,
+          429,
+          { retryAfterSeconds: retrySeconds }
+        );
       }
 
       const contentType = response.headers.get('content-type') || '';
@@ -360,11 +435,24 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       }
 
       // Support responses structured as { success: true, data: T } or directly T
-      if (responseData && typeof responseData === 'object' && 'data' in responseData) {
-        return responseData.data as T;
+      const finalResult = (responseData && typeof responseData === 'object' && 'data' in responseData)
+        ? (responseData.data as T)
+        : (responseData as T);
+
+      // Cache successful GET responses
+      if (method === 'GET' && !skipCache && cachePolicy !== 'no-cache') {
+        cacheManager.set(cacheKey, finalResult, { ttlMs: cacheTtlMs, tags: cacheTags }).catch(() => {});
       }
 
-      return responseData as T;
+      // Automatically invalidate related cache tags on mutations
+      if (method !== 'GET' && method !== 'HEAD') {
+        const tagsToInvalidate = cacheManager.resolveMutationInvalidationTags(cleanEndpoint, method);
+        if (tagsToInvalidate.length > 0) {
+          cacheManager.invalidateByTags(tagsToInvalidate).catch(() => {});
+        }
+      }
+
+      return finalResult;
     } catch (error: any) {
       clearTimeout(timer);
 
@@ -395,6 +483,15 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
       }
 
       if (isNetworkOrAbort) {
+        // Transparent fallback to offline cache for GET requests
+        if (method === 'GET' && !skipCache) {
+          const cachedOffline = await cacheManager.get<T>(cacheKey, { allowStale: true });
+          if (cachedOffline) {
+            console.info(`[Client] Offline mode active. Serving cached data for '${cacheKey}'`);
+            return cachedOffline.data;
+          }
+        }
+
         // Critical: Auth endpoints MUST NEVER silently fall back to mock data!
         const cleanEndpoint = endpoint.replace(/^\/+/, '').toLowerCase();
         const isAuthEndpoint =

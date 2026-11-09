@@ -255,6 +255,26 @@ Implemented in `src/components/common/MobileNavigationDrawer.tsx`:
 
 ---
 
+### 4.8 Login Attempt Limiting & Account Lockout
+Implemented in `src/utils/loginLimiter.ts` and integrated in `src/app/(auth)/login.tsx`:
+1. **Brute-Force Attack Prevention:** Tracks consecutive failed authentication attempts per user identifier.
+2. **5-Attempt Lockout Threshold:** After 5 failed password attempts, the account is temporarily locked for 60 seconds (escalating to 300 seconds on repeat offenses).
+3. **Storage Persistence Across App Restarts:** Lockout timestamps are persisted in storage; force-closing the application does not bypass the active lockout window.
+4. **Live Countdown Ticker & Remaining Attempt Alerts:** UI provides real-time countdown timer (`Locked (48s)`), disabling the submit button until the lockout period naturally expires, with plain English warnings when remaining attempts are low.
+5. **Auto-Reset on Success:** Successful authentication immediately wipes failed attempt history and resets counters.
+
+---
+
+### 4.9 Multi-Tier Caching & Client-Side Request Rate Limiter
+Implemented in `src/utils/cacheManager.ts` and `src/utils/rateLimiter.ts`:
+1. **Multi-Tier Caching (L1 Memory + L2 Disk):** Dual-layer caching serving Master Data (Products/Categories: 15m), Retail Customers (5m), and Inventory/Dashboard (2m) instantly without network round-trips.
+2. **Mutation Cache Invalidation:** Mutation operations (`POST /seller/sales`, `POST /admin/inventory/transfers`, `POST /seller/customers`) automatically purge matching tagged cache entries to prevent stale data display.
+3. **Offline Stale-While-Revalidate Fallback:** When rural field networks drop offline, `apiRequest()` seamlessly serves cached entries with transparent data availability.
+4. **Sliding-Window Rate Limiter:** Protects against request bursts, repetitive pull-to-refresh flooding, and server 429 penalties by throttling client-side requests according to operation category (auth: 10/min, mutation: 30/min, read: 90/min, global: 120/min).
+5. **Automatic 429 Lockout:** Automatically parses server `Retry-After` HTTP headers to back off dynamically.
+
+---
+
 ## 5. Design System & Tokens (`src/constants/theme.ts`)
 
 The visual design language is tailored for readability in bright sunlight and on budget Android screens:
@@ -278,7 +298,7 @@ Colors.light.border       = '#E2E8F0' // Clean divider lines
 The codebase features an exhaustive automated test suite running on Node.js's native test runner (`node --test`), completing in **~8 seconds** without third-party test framework overhead:
 
 ```bash
-# Run all 37 test suites (302 tests)
+# Run all 38 test suites (312 tests)
 npm test
 
 # Run TypeScript strict typecheck
@@ -297,6 +317,7 @@ npx expo lint
 6. **Voice Translation:** `voice_translation_acceptance.test.ts` (11 scenarios)
 7. **Village Toast Naming:** `toast_naming.test.ts` (Plain English without confusing jargon)
 8. **Permissions & Security:** `manager_permissions_acceptance.test.ts`, `offline_auth_resilience.test.ts`
+9. **Rate Limiting & Caching:** `rate_limit_and_cache.test.ts` (10 scenarios: sliding window, lockout, L1/L2 cache, mutation invalidation)
 
 ---
 
@@ -322,3 +343,4 @@ npx eas-cli login
 # Build internal standalone Android APK
 npx eas-cli build --platform android --profile preview
 ```
+

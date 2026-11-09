@@ -261,7 +261,7 @@ export function createDraftStorage(backend: StorageBackend) {
   };
 }
 
-function resolveDefaultStorage(): StorageBackend {
+export function resolveDefaultStorage(): StorageBackend {
   // 1. Browser Web LocalStorage
   if (typeof localStorage !== 'undefined') {
     return {

@@ -89,6 +89,16 @@ flowchart TD
 - **FR-AUTH-003 (Automatic Session Restoration):** On app boot, validates token via `GET /auth/me`. If backend returns HTTP 401/403, immediately wipes tokens and redirects to login.
 - **FR-AUTH-004 (Offline Graceful Degradation):** On genuine network failure or timeout, restores cached user profile in `OFFLINE_AUTHENTICATED` state without corrupting permissions.
 - **FR-AUTH-005 (Safe Logout):** Clears secure tokens, profile cache, active shift cache, and in-memory states.
+- **FR-AUTH-006 (Brute-Force Protection & Lockout):** Tracks failed login attempts per user identifier; after 5 consecutive failures, activates a persistent 60-second lockout with live countdown timer and village-friendly remaining attempt alerts.
+
+### Module 1.1: Request Rate Limiting & Throttling (FR-RATE)
+- **FR-RATE-001 (Sliding-Window Client Rate Limiter):** Enforces request limits across categories (auth: 10/min, mutations: 30/min, reads: 90/min, global: 120/min) to prevent network flooding.
+- **FR-RATE-002 (HTTP 429 Lockout & Retry-After):** Automatically parses server `Retry-After` header and enforces temporary client lockout.
+
+### Module 1.2: Multi-Tier Caching System (FR-CACHE)
+- **FR-CACHE-001 (Dual L1/L2 Caching Architecture):** High-speed In-Memory (L1) and AsyncStorage Persistent Disk (L2) caching with entity-based TTL (master data 15 min, customers 5 min, inventory/dashboard 2 min).
+- **FR-CACHE-002 (Smart Mutation Invalidation):** Automatically invalidates related cache tags upon successful data mutations (`POST`, `PUT`, `DELETE`).
+- **FR-CACHE-003 (Stale-While-Revalidate & Offline Fallback):** Transparently serves cached data when device is offline or network is degraded.
 
 ### Module 2: Duty Shift & Attendance Engine (FR-SHIFT)
 - **FR-SHIFT-001 (Shift Start Prerequisite):** Sellers and dual-role Managers cannot record field sales or onboard stores without an active duty shift.
@@ -182,9 +192,10 @@ flowchart TD
 | **Stock Movement Hub** | `stock_movement_hub.test.ts`, `stock_transfer_safety.test.ts` | **PASS (100%)** |
 | **Voice Translation** | `voice_translation_acceptance.test.ts` | **PASS (100%)** |
 | **Village Toasts Naming** | `toast_naming.test.ts` | **PASS (100%)** |
+| **Rate Limiting & Caching** | `rate_limit_and_cache.test.ts` | **PASS (100%)** |
 | **TypeScript 6 Compilation** | `npx tsc --noEmit` | **0 Errors** |
 | **ESLint Quality Gate** | `npx expo lint` | **0 Errors** |
-| **Total Automated Tests** | `npm test` (Node.js test runner) | **302/302 Passed** |
+| **Total Automated Tests** | `npm test` (Node.js test runner) | **312/312 Passed** |
 
 ---
 
@@ -194,3 +205,4 @@ flowchart TD
 - Unregulated partial cash installments / debt credit ledgers.
 - Background persistent GPS tracking when the app is completely killed.
 - WhatsApp automation bot (direct sharing via Android OS native share sheet is used instead).
+
