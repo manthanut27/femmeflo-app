@@ -287,7 +287,7 @@ export default function AdminUsersScreen() {
 
       setScreenFeedback({
         type: 'success',
-        message: `Details updated for Manager ${editMgrName.trim()}.`,
+        message: `Manager ${editMgrName.trim()} saved.`,
       });
       setEditingManager(null);
       loadUsers(false);
@@ -353,7 +353,7 @@ export default function AdminUsersScreen() {
 
       setScreenFeedback({
         type: 'success',
-        message: `Details updated for Field Officer ${editSellerName.trim()}.`,
+        message: `Seller ${editSellerName.trim()} saved.`,
       });
       setEditingSeller(null);
       loadUsers(false);
@@ -412,7 +412,7 @@ export default function AdminUsersScreen() {
         setModalVisible(false);
         setScreenFeedback({
           type: 'success',
-          message: `Manager ${res.manager.name} (${res.manager.phone || res.manager.email}) onboarded successfully!`,
+          message: `Manager ${res.manager.name} added!`,
         });
         setTab('MANAGERS');
         loadUsers(true);
@@ -430,7 +430,7 @@ export default function AdminUsersScreen() {
         setModalVisible(false);
         setScreenFeedback({
           type: 'success',
-          message: `Field Seller ${res.seller.name} (${res.seller.phone || res.seller.email}) onboarded successfully!`,
+          message: `Seller ${res.seller.name} added!`,
         });
         setTab('SELLERS');
         loadUsers(true);
@@ -453,7 +453,7 @@ export default function AdminUsersScreen() {
       <Card
         style={styles.card}
         accessibilityRole="summary"
-        accessibilityLabel={`User ${item.name}, ${item.email || item.phone}, role ${tab === 'MANAGERS' ? 'Manager' : 'Seller'}, status ${item.active ? 'Active' : 'Inactive'}${isDualRole ? ', Dual Role' : ''}`}
+        accessibilityLabel={`User ${item.name}, ${item.email || item.phone}, role ${tab === 'MANAGERS' ? 'Manager' : 'Seller'}, status ${item.active ? 'Active' : 'Inactive'}${isDualRole ? ', Can Also Sell' : ''}`}
       >
         <View style={styles.header}>
           <View style={styles.avatarRow}>
@@ -493,7 +493,7 @@ export default function AdminUsersScreen() {
             />
             {isDualRole && (
               <Badge
-                label="DUAL ROLE"
+                label="CAN ALSO SELL"
                 variant="ACTIVE"
                 size="sm"
                 pulse={true}
@@ -505,7 +505,7 @@ export default function AdminUsersScreen() {
         {isDualRole && (
           <View style={styles.dualRoleBadgeRow}>
             <Ionicons name="bus-outline" size={13} color={BrandColors.pink.dark} />
-            <Text style={styles.dualRoleBadgeText}>Dedicated Van Stock & Field Sales POS Active</Text>
+            <Text style={styles.dualRoleBadgeText}>Can take orders & hold van stock</Text>
           </View>
         )}
 
@@ -1068,7 +1068,7 @@ export default function AdminUsersScreen() {
                       onPress={() => setFormIsSeller(!formIsSeller)}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: formIsSeller }}
-                      accessibilityLabel="Enable Dual-Role Persona for field sales and dedicated van stock"
+                      accessibilityLabel="Manager can also sell in field and hold van stock"
                     >
                       <View style={styles.dualRoleToggleLeft}>
                         <View style={[styles.dualRoleToggleIconCircle, formIsSeller && styles.dualRoleToggleIconCircleActive]}>
@@ -1080,15 +1080,15 @@ export default function AdminUsersScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.dualRoleToggleTitle}>Dual-Role Persona</Text>
+                            <Text style={styles.dualRoleToggleTitle}>Manager Can Also Sell</Text>
                             <Badge
-                              label={formIsSeller ? 'FIELD SALES & VAN STOCK' : 'OFF'}
+                              label={formIsSeller ? 'CAN SELL & STOCK' : 'OFF'}
                               variant={formIsSeller ? 'ACTIVE' : 'neutral'}
                               size="sm"
                             />
                           </View>
                           <Text style={styles.dualRoleToggleDesc}>
-                            Provisions dedicated vehicle/van inventory, allows frontline mobile POS sales, duty shifts, and store onboarding.
+                            Manager can take customer orders, do shop visits, and hold van stock.
                           </Text>
                         </View>
                       </View>
@@ -1286,7 +1286,7 @@ export default function AdminUsersScreen() {
                 onPress={() => setEditIsSeller(!editIsSeller)}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: editIsSeller }}
-                accessibilityLabel="Enable Dual-Role Persona for field sales and dedicated van stock"
+                accessibilityLabel="Manager can also sell in field and hold van stock"
               >
                 <View style={styles.dualRoleToggleLeft}>
                   <View style={[styles.dualRoleToggleIconCircle, editIsSeller && styles.dualRoleToggleIconCircleActive]}>
@@ -1298,17 +1298,17 @@ export default function AdminUsersScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.dualRoleToggleTitle}>Dual-Role Persona</Text>
+                      <Text style={styles.dualRoleToggleTitle}>Manager Can Also Sell</Text>
                       <Badge
-                        label={editIsSeller ? 'FIELD SALES READY' : 'SUPERVISORY ONLY'}
+                        label={editIsSeller ? 'CAN SELL & STOCK' : 'OFF'}
                         variant={editIsSeller ? 'ACTIVE' : 'neutral'}
                         size="sm"
                       />
                     </View>
                     <Text style={styles.dualRoleToggleDesc}>
                       {editIsSeller
-                        ? 'Manager has supervisory privileges AND frontline field capabilities with dedicated van inventory.'
-                        : 'Manager operates strictly in supervisory governance without individual field stock balance.'}
+                        ? 'Manager can take customer orders, do shop visits, and hold van stock.'
+                        : 'Manager can only manage the team and cannot take shop orders.'}
                     </Text>
                   </View>
                 </View>
@@ -1321,15 +1321,15 @@ export default function AdminUsersScreen() {
               <View style={styles.architectureBox}>
                 <View style={styles.archTitleRow}>
                   <Ionicons name="information-circle-outline" size={18} color={BrandColors.pink.primary} />
-                  <Text style={styles.archTitle}>What Enabling This Feature Does</Text>
+                  <Text style={styles.archTitle}>What This Means</Text>
                 </View>
 
                 <View style={styles.archItem}>
                   <Ionicons name="swap-horizontal-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Dual Portal & Screen Navigation</Text>
+                    <Text style={styles.archItemHeading}>Can Use Manager & Seller Screens</Text>
                     <Text style={styles.archItemDesc}>
-                      Manager Portal: supervisory team reports, audits, price breaches. Seller Portal: frontline mobile POS, store visits, and duty punch-in.
+                      Can manage the team and also take orders, start daily duty, and visit shops.
                     </Text>
                   </View>
                 </View>
@@ -1337,9 +1337,9 @@ export default function AdminUsersScreen() {
                 <View style={styles.archItem}>
                   <Ionicons name="car-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Dedicated Field Inventory (Van Stock)</Text>
+                    <Text style={styles.archItemHeading}>Can Hold Van Stock</Text>
                     <Text style={styles.archItemDesc}>
-                      Provisions an individual field stock balance under this manager. Central HQ or depot inventory can be transferred directly to their vehicle for retail fulfillment.
+                      Stock can be transferred directly to this manager's van to sell to shops.
                     </Text>
                   </View>
                 </View>
@@ -1347,9 +1347,9 @@ export default function AdminUsersScreen() {
                 <View style={styles.archItem}>
                   <Ionicons name="storefront-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Frontline Customer Onboarding</Text>
+                    <Text style={styles.archItemHeading}>Can Add Shops</Text>
                     <Text style={styles.archItemDesc}>
-                      Directly onboards and KYC-verifies new retail outlets on the road, with those customers automatically mapped under their supervisory territory.
+                      Can register and visit new shops in their area directly on the phone.
                     </Text>
                   </View>
                 </View>
@@ -1357,9 +1357,9 @@ export default function AdminUsersScreen() {
                 <View style={styles.archItem}>
                   <Ionicons name="key-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Single Identity & Credentials</Text>
+                    <Text style={styles.archItemHeading}>One Login For Everything</Text>
                     <Text style={styles.archItemDesc}>
-                      Unified login credentials grant access across both seller-level transaction APIs and manager-level governance endpoints.
+                      One phone number and password works for both managing the team and selling.
                     </Text>
                   </View>
                 </View>

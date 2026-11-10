@@ -114,17 +114,17 @@ export default function ManagerDashboardScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.dualRoleTitleRow}>
-                  <Text style={styles.dualRoleTitle}>Dual-Role Field Sales</Text>
-                  <Badge label="SELLER ACTIVE" variant="ACTIVE" size="sm" pulse={true} />
+                  <Text style={styles.dualRoleTitle}>My Field Sales</Text>
+                  <Badge label="CAN ALSO SELL" variant="ACTIVE" size="sm" pulse={true} />
                 </View>
                 <Text style={styles.dualRoleDesc}>
-                  Frontline sales authority enabled: issue store invoices, punch in your daily shift with odometer & selfie verification, and manage deliveries.
+                  You can take customer orders, start your daily shift, and deliver stock to shops.
                 </Text>
               </View>
             </View>
             <View style={styles.dualRoleActionsRow}>
               <Button
-                title="New Field Sale"
+                title="New Sale"
                 variant="primary"
                 size="md"
                 icon={<Ionicons name="cart-outline" size={18} color="#FFFFFF" />}
@@ -132,7 +132,7 @@ export default function ManagerDashboardScreen() {
                 style={{ flex: 1 }}
               />
               <Button
-                title="My Duty Shift"
+                title="Daily Shift"
                 variant="outline"
                 size="md"
                 icon={<Ionicons name="speedometer-outline" size={18} color={BrandColors.pink.primary} />}
@@ -147,17 +147,17 @@ export default function ManagerDashboardScreen() {
               <View style={styles.territoryInfo}>
                 <View style={styles.territoryTitleRow}>
                   <Ionicons name="map-outline" size={18} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.territoryTitle}>Territory Command</Text>
+                  <Text style={styles.territoryTitle}>My Area</Text>
                 </View>
                 <Text style={styles.territorySub}>
-                  Authorized scope: {[user?.district, user?.state].filter(Boolean).join(', ') || 'All Assigned Regional Territories'}
+                  Area: {[user?.district, user?.state].filter(Boolean).join(', ') || 'All Assigned Areas'}
                 </Text>
               </View>
-              <Badge label="TERRITORY MANAGER" variant="ACTIVE" />
+              <Badge label="MANAGER" variant="ACTIVE" />
             </View>
           </Card>
 
-          <Text style={styles.sectionHeading}>Territory Performance</Text>
+          <Text style={styles.sectionHeading}>Team Performance</Text>
           {loading ? (
             <View style={styles.metricsContainer}>
               <View style={styles.metricRow}>
@@ -175,7 +175,7 @@ export default function ManagerDashboardScreen() {
                 <StatCard
                   title="Monthly Revenue"
                   value={formatRupees(dashboard?.monthlyRevenuePaise || 0)}
-                  subtitle="Confirmed sales volume"
+                  subtitle="Total sales"
                   icon="cash-outline"
                   iconColor={BrandColors.green.primary}
                   iconBgColor={BrandColors.green.surface}
@@ -183,9 +183,9 @@ export default function ManagerDashboardScreen() {
                   onPress={() => router.push('/(manager)/sales' as any)}
                 />
                 <StatCard
-                  title="Packets Distributed"
+                  title="Packets Sold"
                   value={allowStock ? (dashboard?.monthlyPacketsSold || 0).toLocaleString() : '—'}
-                  subtitle={allowStock ? 'Total units sold' : 'Permission restricted'}
+                  subtitle={allowStock ? 'Total packets sold' : 'Not permitted'}
                   icon="cube-outline"
                   iconColor={Colors.light.info}
                   iconBgColor={Colors.light.infoBg}
@@ -194,18 +194,18 @@ export default function ManagerDashboardScreen() {
               </View>
               <View style={styles.metricRow}>
                 <StatCard
-                  title="Active Field Force"
+                  title="Active Sellers"
                   value={allowSellers ? `${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}` : '—'}
-                  subtitle={allowSellers ? 'Sellers on active duty' : 'Permission restricted'}
+                  subtitle={allowSellers ? 'Sellers working today' : 'Not permitted'}
                   icon="people-outline"
                   iconColor={BrandColors.green.primary}
                   iconBgColor={BrandColors.green.surface}
                   onPress={allowSellers ? () => router.push('/(manager)/sellers' as any) : undefined}
                 />
                 <StatCard
-                  title="Retail Stores"
+                  title="Shops"
                   value={allowCustomers ? (dashboard?.totalCustomers || 0).toLocaleString() : '—'}
-                  subtitle={allowCustomers ? 'Active customer network' : 'Permission restricted'}
+                  subtitle={allowCustomers ? 'Total shops' : 'Not permitted'}
                   icon="storefront-outline"
                   iconColor={BrandColors.pink.primary}
                   iconBgColor={BrandColors.pink.subtle}
@@ -216,17 +216,17 @@ export default function ManagerDashboardScreen() {
           )}
 
           {/* Quick Links */}
-          <Text style={styles.sectionHeading}>Territory Operations & Supervision</Text>
+          <Text style={styles.sectionHeading}>Quick Actions</Text>
           <View style={styles.actionsCol}>
             <Button
-              title="Record Field Sale (POS)"
+              title="New Sale"
               variant="primary"
               size="md"
               icon={<Ionicons name="cart" size={18} color="#FFFFFF" />}
               onPress={handleNewSale}
             />
             <Button
-              title="My Personal Duty Shift (Attendance & Route)"
+              title="Daily Shift (Punch-In / Route)"
               variant="outline-secondary"
               size="md"
               icon={<Ionicons name="speedometer-outline" size={18} color={BrandColors.green.primary} />}
@@ -234,7 +234,7 @@ export default function ManagerDashboardScreen() {
             />
             {allowStock ? (
               <Button
-                title="Van Stock Supervision"
+                title="Check Van Stock"
                 variant="secondary"
                 size="lg"
                 icon={<Ionicons name="cube-outline" size={20} color="#FFFFFF" />}
@@ -242,14 +242,14 @@ export default function ManagerDashboardScreen() {
               />
             ) : null}
             <Button
-              title="Field Shift Attendance & Route Tracking"
+              title="Seller Shifts & Routes"
               variant="outline-secondary"
               size="md"
               icon={<Ionicons name="time-outline" size={18} color={BrandColors.green.primary} />}
               onPress={() => router.push('/(manager)/shifts' as any)}
             />
             <Button
-              title="Team Performance & Incentives Audit"
+              title="Team Performance & Incentives"
               variant="outline-secondary"
               size="md"
               icon={<Ionicons name="gift-outline" size={18} color={BrandColors.green.primary} />}
@@ -257,7 +257,7 @@ export default function ManagerDashboardScreen() {
             />
             {allowOnboardCust ? (
               <Button
-                title="Onboard Customer Store (Single / Batch)"
+                title="Add New Shop"
                 variant="outline-secondary"
                 size="md"
                 icon={<Ionicons name="storefront-outline" size={18} color={BrandColors.green.primary} />}
@@ -266,7 +266,7 @@ export default function ManagerDashboardScreen() {
             ) : null}
             {allowSellers ? (
               <Button
-                title="Manage Field Officers (Sellers)"
+                title="Manage Sellers"
                 variant="outline-secondary"
                 size="md"
                 icon={<Ionicons name="people-outline" size={18} color={BrandColors.green.primary} />}
@@ -274,7 +274,7 @@ export default function ManagerDashboardScreen() {
               />
             ) : null}
             <Button
-              title="Territory Sales Stream"
+              title="All Sales"
               variant="ghost"
               size="md"
               textStyle={{ color: BrandColors.green.primary }}

@@ -315,10 +315,10 @@ export default function ShiftScreen() {
 
       setFeedback({
         type: 'success',
-        title: 'Duty Shift Started (Face ID Verified)',
-        message: `Duty shift active at ${pendingOdometerKm} km. Location locked and selfie attendance recorded.`,
+        title: 'Shift Started',
+        message: `Shift started at ${pendingOdometerKm} km.`,
       });
-      Alert.alert('Shift Started', `Field beat shift initialized at ${pendingOdometerKm} km.`);
+      Alert.alert('Shift Started', `Shift started at ${pendingOdometerKm} km.`);
     } catch (err: any) {
       console.warn('Shift start API error, falling back to local active shift:', err);
       const fallbackShift: Shift = {
@@ -336,10 +336,10 @@ export default function ShiftScreen() {
       setStartNotes('');
       setFeedback({
         type: 'success',
-        title: 'Duty Shift Started',
-        message: `Duty shift active at ${pendingOdometerKm} km. Ready to record sales and visits.`,
+        title: 'Shift Started',
+        message: `Shift started at ${pendingOdometerKm} km.`,
       });
-      Alert.alert('Shift Started', `Daily duty shift recorded at ${pendingOdometerKm} km.`);
+      Alert.alert('Shift Started', `Shift started at ${pendingOdometerKm} km.`);
     } finally {
       setIsStartingShift(false);
     }
@@ -351,7 +351,7 @@ export default function ShiftScreen() {
   async function handleCheckInVisit() {
     if (isCheckingIn) return;
     if (!selectedCustomerId) {
-      Alert.alert('Select Customer', 'Please select a retail outlet for this visit.');
+      Alert.alert('Select Shop', 'Please select a shop for this visit.');
       return;
     }
 
@@ -393,18 +393,18 @@ export default function ShiftScreen() {
       setVisitNotes('');
       setFeedback({
         type: 'success',
-        title: 'Visit Checked In',
-        message: `GPS location captured at ${customer?.shopName || 'retail outlet'}. Store timer running.`,
+        title: 'Visit Started',
+        message: `Visit started at ${customer?.shopName || 'shop'}.`,
       });
-      Alert.alert('Visit Checked In', 'GPS location captured and store visit recorded.');
+      Alert.alert('Visit Started', `Visit started at ${customer?.shopName || 'shop'}.`);
       await loadShiftData().catch(() => {});
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        title: 'Check-in Failed',
-        message: err.message || 'Unable to record store visit.',
+        title: 'Error',
+        message: err.message || 'Unable to start shop visit.',
       });
-      Alert.alert('Check-in Failed', err.message || 'Unable to record store visit.');
+      Alert.alert('Error', err.message || 'Unable to start shop visit.');
     } finally {
       setIsCheckingIn(false);
     }
@@ -415,7 +415,7 @@ export default function ShiftScreen() {
   // ----------------------------------------------------
   async function handleOpenCheckout(visit: ShiftVisit) {
     if (visit.checkOutTime) {
-      Alert.alert('Already Completed', 'This store visit has already been checked out.');
+      Alert.alert('Already Done', 'This visit is already finished.');
       return;
     }
 
@@ -498,7 +498,7 @@ export default function ShiftScreen() {
     if (isCheckingOut || !activeCheckoutVisit) return;
 
     if (activeCheckoutVisit.checkOutTime) {
-      Alert.alert('Visit Completed', 'This visit is already checked out.');
+      Alert.alert('Already Done', 'This visit is already finished.');
       setCheckOutModalVisible(false);
       return;
     }
@@ -514,13 +514,13 @@ export default function ShiftScreen() {
       if (checkoutSaleDone) {
         const targetCustomerId = checkoutCustomerId || activeCheckoutVisit.customerId;
         if (!targetCustomerId) {
-          Alert.alert('Select Customer', 'Please choose a retail customer account to associate with this sale.');
+          Alert.alert('Select Shop', 'Please select a shop for this sale.');
           setIsCheckingOut(false);
           return;
         }
 
         if (!saleQuantity || saleQuantity <= 0) {
-          Alert.alert('Invalid Quantity', 'Please enter a valid packet quantity of at least 1.');
+          Alert.alert('Enter Quantity', 'Please enter at least 1 packet.');
           setIsCheckingOut(false);
           return;
         }
@@ -569,10 +569,10 @@ export default function ShiftScreen() {
       setCheckoutReason('');
       setCheckoutSaleDone(false);
 
-      const successTitle = checkoutSaleDone ? 'Sale & Visit Completed' : 'Visit Completed (No Sale)';
+      const successTitle = checkoutSaleDone ? 'Visit & Sale Done' : 'Visit Completed';
       const successMessage = checkoutSaleDone
-        ? `Sale recorded for ₹${(saleQuantity * saleUnitPrice).toLocaleString('en-IN')} with customer feedback.`
-        : `Outcome logged (${checkoutReason || 'Inquiry'}) and departure coordinates locked.`;
+        ? `Sale saved: ₹${(saleQuantity * saleUnitPrice).toLocaleString('en-IN')}.`
+        : `Visit saved (${checkoutReason || 'Shop Visit'}).`;
 
       setFeedback({
         type: 'success',
@@ -584,10 +584,10 @@ export default function ShiftScreen() {
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        title: 'Checkout Failed',
-        message: err.message || 'Unable to check out of visit. Your feedback draft has been preserved.',
+        title: 'Error',
+        message: err.message || 'Unable to save visit.',
       });
-      Alert.alert('Checkout Failed', err.message || 'Unable to complete checkout. Draft notes preserved.');
+      Alert.alert('Error', err.message || 'Unable to save visit.');
     } finally {
       setIsCheckingOut(false);
     }
@@ -648,21 +648,20 @@ export default function ShiftScreen() {
         endKm: pendingOdometerKm,
       });
       const totalDist = distResult.formatted;
-      const measurementNote = distResult.source === 'odometer' ? ' (via meter fallback)' : '';
 
       setFeedback({
         type: 'success',
-        title: 'Duty Shift Completed (Face ID Verified)',
-        message: `Closing odometer logged at ${pendingOdometerKm} km. Total beat route: ${totalDist}${measurementNote}.`,
+        title: 'Shift Ended',
+        message: `Duty shift ended at ${pendingOdometerKm} km. Total travel: ${totalDist}.`,
       });
-      Alert.alert('Shift Ended', `Shift ended with verified Face ID. Total route: ${totalDist}${measurementNote}.`);
+      Alert.alert('Shift Ended', `Duty shift ended at ${pendingOdometerKm} km. Total travel: ${totalDist}.`);
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        title: 'End Shift Failed',
-        message: err.message || 'Unable to close duty shift. Never closed locally until confirmed by server.',
+        title: 'Error',
+        message: err.message || 'Unable to end shift.',
       });
-      Alert.alert('End Shift Failed', err.message || 'Unable to close duty shift.');
+      Alert.alert('Error', err.message || 'Unable to end shift.');
     } finally {
       setIsEndingShift(false);
     }

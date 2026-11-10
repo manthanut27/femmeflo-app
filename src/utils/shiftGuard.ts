@@ -73,7 +73,7 @@ export async function requireActiveShift(
 
   Alert.alert(
     'Duty Shift Required',
-    `You must start your daily duty shift with selfie verification before you can ${actionName}.`,
+    `Please start your daily shift before you ${actionName}.`,
     [
       {
         text: 'Start Shift Now',

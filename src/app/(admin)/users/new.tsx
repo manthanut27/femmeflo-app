@@ -345,17 +345,17 @@ export default function AdminOnboardUserScreen() {
 
         setFeedback({
           type: 'success',
-          message: `Territory Manager ${res.manager.name} (${formattedPhone}) onboarded successfully!`,
+          message: `Manager ${res.manager.name} added!`,
         });
 
         Alert.alert(
-          'Manager Provisioned Successfully',
-          `${res.manager.name} has been enrolled as Territory Manager for ${district.trim()}, ${state.trim()}.${
-            isSeller ? ' Dual-Role Persona is enabled (can also book direct sales).' : ''
+          'Manager Added',
+          `Manager ${res.manager.name} has been added for ${district.trim()}, ${state.trim()}.${
+            isSeller ? ' Can also take orders.' : ''
           }`,
           [
             {
-              text: 'View Users Directory',
+              text: 'View Users',
               onPress: () => router.replace('/(admin)/users' as any),
             },
           ]
@@ -383,24 +383,24 @@ export default function AdminOnboardUserScreen() {
 
         setFeedback({
           type: 'success',
-          message: `Field Sales Officer ${res.seller.name} (${formattedPhone}) onboarded successfully!`,
+          message: `Seller ${res.seller.name} added!`,
         });
 
         Alert.alert(
-          'Officer Onboarded Successfully',
-          `${res.seller.name} has been enrolled as ${designation.trim()} assigned to ${village.trim()}, ${district.trim()} reporting to ${selectedManager?.name || 'Territory Manager'}.`,
+          'Seller Added',
+          `Seller ${res.seller.name} has been added for ${village.trim()}, ${district.trim()} under ${selectedManager?.name || 'Manager'}.`,
           [
             {
-              text: 'View Users & Roster',
+              text: 'View Users',
               onPress: () => router.replace('/(admin)/users' as any),
             },
           ]
         );
       }
     } catch (err: any) {
-      const msg = err.message || 'Failed to onboard user.';
+      const msg = err.message || 'Failed to add user.';
       setFeedback({ type: 'error', message: msg });
-      Alert.alert('Onboarding Failed', msg);
+      Alert.alert('Save Failed', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -419,8 +419,8 @@ export default function AdminOnboardUserScreen() {
         title={isMgr ? 'Onboard Territory Manager' : 'Officer information'}
         subtitle={
           isMgr
-            ? 'Add and provision regional depot manager accounts'
-            : 'Complete the required fields to save this record to the database'
+            ? 'Create a new manager account'
+            : 'Create a new seller account'
         }
         showBack
       />
@@ -812,10 +812,10 @@ export default function AdminOnboardUserScreen() {
                     </View>
                     <View style={{ flex: 1, marginRight: Spacing.sm }}>
                       <Text style={styles.capabilityTitle}>
-                        Same as Seller (Manager also acts as Field Seller)
+                        Manager Can Also Sell (Field Orders)
                       </Text>
                       {isSeller && (
-                        <Badge label="DUAL ROLE ACTIVE" variant="ACTIVE" size="sm" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+                        <Badge label="CAN ALSO SELL" variant="ACTIVE" size="sm" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
                       )}
                     </View>
                     <Switch
@@ -826,16 +826,16 @@ export default function AdminOnboardUserScreen() {
                     />
                   </View>
                   <Text style={styles.capabilityDescription}>
-                    Enable this if this manager will also directly perform field sales and customer onboarding. They can log in to both the Manager Portal and Seller Portal with the same ID &amp; password and will receive their own field stock balance.
+                    Enable this if this manager will also take customer orders and visit shops. They can use both Manager and Seller screens with the same login, and have their own stock in their van.
                   </Text>
                 </View>
               </Card>
 
-              {/* SECTION 4: Initial operational permissions */}
+              {/* SECTION 4: Manager Permissions */}
               <View style={styles.sectionHeaderBox}>
-                <Text style={styles.sectionTitle}>Initial operational permissions</Text>
+                <Text style={styles.sectionTitle}>Manager Permissions</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Configure supervisory access rights for regional territory management
+                  Choose what this manager can see and approve
                 </Text>
               </View>
 

@@ -272,8 +272,8 @@ export default function SellerDashboardScreen() {
       const viaNote = distResult.source === 'odometer' ? ' (via meter)' : '';
 
       Alert.alert(
-        'Shift Completed',
-        `Duty shift ended with selfie attendance. Travel distance: ${totalDist}${viaNote}.`
+        'Shift Ended',
+        `Duty shift ended. Total distance: ${totalDist}${viaNote}.`
       );
       loadDashboard();
     } catch (err: any) {
@@ -287,7 +287,7 @@ export default function SellerDashboardScreen() {
     if (!currentShift) {
       Alert.alert(
         'Duty Shift Required',
-        `You must start your daily duty shift with selfie attendance verification before you can ${actionName}.`,
+        `Please start your daily shift before you ${actionName}.`,
         [
           {
             text: 'Start Shift Now',
@@ -315,7 +315,7 @@ export default function SellerDashboardScreen() {
     <View style={styles.container}>
       <Header
         title={`Hello, ${user?.name?.split(' ')[0] || 'Seller'}`}
-        subtitle="Field Operations • Active Session"
+        subtitle="Field Sales"
         showNotificationBell
         showMenu={true}
         onMenuPress={() => setMenuOpen(true)}
@@ -336,18 +336,18 @@ export default function SellerDashboardScreen() {
                 <View style={{ flex: 1 }}>
                   <View style={styles.managerModeTitleRow}>
                     <Text style={styles.managerModeTitle}>Field Sales Mode</Text>
-                    <Badge label="TERRITORY MANAGER" variant="ACTIVE" size="sm" pulse={true} />
+                    <Badge label="MANAGER" variant="ACTIVE" size="sm" pulse={true} />
                   </View>
                   <Text style={styles.managerModeDesc}>
-                    Operating field POS sales & duty visits with your dedicated van stock.
+                    Taking shop orders with your van stock.
                   </Text>
                 </View>
               </View>
               <Button
-                title="Return to Territory Manager Hub"
+                title="Back to Manager Screen"
                 variant="outline-secondary"
                 size="sm"
-                icon={<Ionicons name="swap-horizontal" size={16} color={BrandColors.green.primary} />}
+                icon={<Ionicons name="arrow-back" size={16} color={BrandColors.green.primary} />}
                 onPress={() => router.replace('/(manager)' as any)}
                 style={styles.managerModeBtn}
               />
@@ -368,14 +368,14 @@ export default function SellerDashboardScreen() {
                     color={currentShift ? BrandColors.green.primary : Colors.light.textSecondary}
                     style={{ marginRight: 6 }}
                   />
-                  <Text style={styles.shiftTitle}>Daily Duty Attendance</Text>
+                  <Text style={styles.shiftTitle}>Daily Shift</Text>
                 </View>
                 <Text style={styles.shiftSubtitle}>
                   {currentShift
                     ? (currentShift.startOdometerKm != null
                       ? `Shift Active • Started at ${currentShift.startOdometerKm} KM`
-                      : 'Shift Active • Field Beat Running')
-                    : 'No active shift. Record daily travel & store visits.'}
+                      : 'Shift Active • Working today')
+                    : 'No active shift. Start shift to take orders.'}
                 </Text>
               </View>
               <Badge
@@ -387,7 +387,7 @@ export default function SellerDashboardScreen() {
             {currentShift ? (
               <View style={styles.shiftActionsRow}>
                 <Button
-                  title="Shift & Visits Tracker"
+                  title="Shift & Shop Visits"
                   variant="secondary"
                   size="sm"
                   onPress={() => router.push('/(seller)/shift' as any)}
@@ -408,7 +408,7 @@ export default function SellerDashboardScreen() {
               </View>
             ) : (
               <Button
-                title="Start Shift with KM"
+                title="Start Daily Shift"
                 variant="secondary"
                 size="md"
                 onPress={() => {
@@ -477,7 +477,7 @@ export default function SellerDashboardScreen() {
                 value={data?.lowStockCount ? `${data.lowStockCount} Low` : (data?.stockBalance ? `${data.stockBalance} Pkts` : 'Healthy')}
                 icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
                 variant={data?.lowStockCount ? 'pink' : 'default'}
-                changeLabel="Warehouse inventory"
+                changeLabel="Van stock"
                 onPress={() => router.push('/(seller)/inventory' as any)}
                 animate={false}
               />
@@ -486,28 +486,28 @@ export default function SellerDashboardScreen() {
 
           {/* Field Quick Actions */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeading}>Field Work Actions</Text>
+            <Text style={styles.sectionHeading}>Quick Actions</Text>
           </View>
 
           <View style={styles.actionButtonsCol}>
             <Button
-              title="New Store Sale (POS)"
-              onPress={() => handleProtectedFieldAction('/(seller)/sales/new', 'record new store sales')}
+              title="New Sale"
+              onPress={() => handleProtectedFieldAction('/(seller)/sales/new', 'record new sales')}
               variant="primary"
               size="lg"
               icon={<Ionicons name="cart" size={20} color="#FFFFFF" />}
               style={styles.actionBtn}
             />
             <Button
-              title="Onboard New Retailer"
-              onPress={() => handleProtectedFieldAction('/(seller)/customers/new', 'onboard new retailers')}
+              title="Add New Shop"
+              onPress={() => handleProtectedFieldAction('/(seller)/customers/new', 'add new shops')}
               variant="outline"
               size="lg"
               icon={<Ionicons name="person-add-outline" size={20} color={BrandColors.pink.primary} />}
               style={styles.actionBtn}
             />
             <Button
-              title="Check Inventory Balance"
+              title="Check Van Stock"
               onPress={() => router.push('/(seller)/inventory')}
               variant="outline"
               size="lg"

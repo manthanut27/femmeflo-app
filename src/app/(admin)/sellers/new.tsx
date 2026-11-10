@@ -269,15 +269,15 @@ export default function AdminOnboardSellerScreen() {
 
       setFeedback({
         type: 'success',
-        message: `Field Sales Officer ${res.seller.name} (${formattedPhone}) onboarded successfully!`,
+        message: `Seller ${res.seller.name} added!`,
       });
 
       Alert.alert(
-        'Officer Onboarded Successfully',
-        `${res.seller.name} has been enrolled as ${designation.trim()} assigned to ${village.trim()}, ${district.trim()} reporting to ${selectedManager?.name || 'Territory Manager'}.`,
+        'Seller Added',
+        `Seller ${res.seller.name} has been added for ${village.trim()}, ${district.trim()} under ${selectedManager?.name || 'Manager'}.`,
         [
           {
-            text: 'Onboard Another',
+            text: 'Add Another',
             onPress: () => {
               setName('');
               setEmployeeCode('');
@@ -295,15 +295,15 @@ export default function AdminOnboardSellerScreen() {
             },
           },
           {
-            text: 'View Users & Roster',
+            text: 'View Sellers',
             onPress: () => router.replace('/(admin)/users' as any),
           },
         ]
       );
     } catch (err: any) {
-      const msg = err.message || 'Failed to onboard field seller.';
+      const msg = err.message || 'Failed to add seller.';
       setFeedback({ type: 'error', message: msg });
-      Alert.alert('Onboarding Failed', msg);
+      Alert.alert('Save Failed', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -315,8 +315,8 @@ export default function AdminOnboardSellerScreen() {
       style={styles.container}
     >
       <Header
-        title="Officer information"
-        subtitle="Complete the required fields to save this record to the database"
+        title="Add Seller"
+        subtitle="Create Seller Account"
         showBack
       />
 
@@ -338,7 +338,7 @@ export default function AdminOnboardSellerScreen() {
                 <Text style={styles.breadcrumbLinkText}>Back to users</Text>
               </Pressable>
               <Text style={styles.breadcrumbDivider}>•</Text>
-              <Text style={styles.breadcrumbCurrent}>Seller onboarding</Text>
+              <Text style={styles.breadcrumbCurrent}>Add seller</Text>
             </View>
           </View>
 

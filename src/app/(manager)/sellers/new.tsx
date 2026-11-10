@@ -219,15 +219,15 @@ export default function ManagerOnboardSellerScreen() {
 
       setFeedback({
         type: 'success',
-        message: `Field Sales Officer ${res.seller.name} (${formattedPhone}) onboarded successfully!`,
+        message: `Seller ${res.seller.name} added!`,
       });
 
       Alert.alert(
-        'Officer Onboarded Successfully',
-        `${res.seller.name} has been enrolled as ${designation.trim()} assigned to ${village.trim()}, ${district.trim()} reporting to your team.`,
+        'Seller Added',
+        `Seller ${res.seller.name} has been added to your team in ${village.trim()}, ${district.trim()}.`,
         [
           {
-            text: 'Onboard Another',
+            text: 'Add Another',
             onPress: () => {
               setName('');
               setEmployeeCode('');
@@ -245,15 +245,15 @@ export default function ManagerOnboardSellerScreen() {
             },
           },
           {
-            text: 'View Field Force',
+            text: 'View Sellers',
             onPress: () => router.replace('/(manager)/sellers' as any),
           },
         ]
       );
     } catch (err: any) {
-      const msg = err.message || 'Failed to onboard field officer.';
+      const msg = err.message || 'Failed to add seller.';
       setFeedback({ type: 'error', message: msg });
-      Alert.alert('Onboarding Failed', msg);
+      Alert.alert('Save Failed', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -262,15 +262,15 @@ export default function ManagerOnboardSellerScreen() {
   if (!canOnboardSellers(user)) {
     return (
       <View style={styles.container}>
-        <Header title="Officer information" subtitle="Onboard field officer" showBack />
+        <Header title="Add Seller" subtitle="Create Seller Account" showBack />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
             title="Access Restricted"
-            description="You do not have permission to onboard new field officers. Please contact your administrator to request 'Onboard new field officers' permission."
+            description="You do not have permission to add new sellers. Please ask your admin to give you permission."
             iconColor={Colors.light.danger}
             iconBgColor={Colors.light.dangerBg}
-            actionTitle="Back to Field Force"
+            actionTitle="Back to Sellers"
             buttonVariant="secondary"
             onAction={() => router.replace('/(manager)/sellers' as any)}
           />
@@ -285,8 +285,8 @@ export default function ManagerOnboardSellerScreen() {
       style={styles.container}
     >
       <Header
-        title="Officer information"
-        subtitle="Complete the required fields to save this record to the database"
+        title="Add Seller"
+        subtitle="Create Seller Account"
         showBack
       />
 

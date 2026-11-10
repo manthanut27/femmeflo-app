@@ -134,8 +134,8 @@ export default function AdminInventoryScreen() {
 
       setModalVisible(false);
       Alert.alert(
-        'Warehouse Created',
-        `${res.warehouse?.name || formName.trim()} has been added to the regional depot network.`,
+        'Warehouse Added',
+        `${res.warehouse?.name || formName.trim()} has been added.`,
         [{ text: 'OK' }]
       );
       loadWarehouses();

@@ -411,24 +411,24 @@ export default function NewSaleScreen() {
       setFeedback({
         type: 'error',
         title: 'Duty Shift Required',
-        message: 'You must start your daily duty shift with selfie attendance before recording sales.',
+        message: 'Please start your daily shift before recording sales.',
       });
       Alert.alert(
         'Duty Shift Required',
-        'You must start your daily duty shift with selfie attendance before recording sales.'
+        'Please start your daily shift before recording sales.'
       );
       return;
     }
 
     if (!validate()) {
-      Alert.alert('Incomplete Sale', 'Please review highlighted fields in your cart.');
+      Alert.alert('Please Check', 'Please check the items in your cart.');
       return;
     }
 
     if (hasStockError) {
       Alert.alert(
-        'Insufficient Van Stock',
-        'One or more products in your cart exceed available van inventory. Please adjust quantities before submitting.'
+        'Not Enough Stock',
+        'You do not have enough stock in your van for this order.'
       );
       return;
     }
@@ -459,13 +459,13 @@ export default function NewSaleScreen() {
       const isPendingApproval = res.sale.status === 'PENDING_APPROVAL';
 
       Alert.alert(
-        isPendingApproval ? 'Sale Submitted for Approval' : 'Sale Confirmed!',
+        isPendingApproval ? 'Sent for Office Approval' : 'Sale Done!',
         isPendingApproval
-          ? `Order #${res.sale.saleNumber || ''} created with below-minimum price. It has been routed to the Super Admin queue for authorization.`
-          : `Order #${res.sale.saleNumber || ''} recorded successfully. Total: ₹${grandTotalRupees.toFixed(2)} (${totalPackets} pkts).`,
+          ? `Bill #${res.sale.saleNumber || ''} has special price. Sent to office for approval.`
+          : `Bill #${res.sale.saleNumber || ''} saved. Total: ₹${grandTotalRupees.toFixed(2)} (${totalPackets} packets).`,
         [
           {
-            text: 'View Sales Stream',
+            text: 'View Sales',
             onPress: () => router.replace('/(seller)/sales' as any),
           },
         ]
@@ -474,10 +474,10 @@ export default function NewSaleScreen() {
       const msg = err.message || 'Failed to submit sale. Please retry.';
       setFeedback({
         type: 'error',
-        title: 'Submission Error',
+        title: 'Error',
         message: msg,
       });
-      Alert.alert('Submission Error', msg);
+      Alert.alert('Error', msg);
     } finally {
       setIsSubmitting(false);
     }

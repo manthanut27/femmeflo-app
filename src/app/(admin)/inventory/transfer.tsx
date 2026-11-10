@@ -413,12 +413,12 @@ export default function StockMovementHubScreen() {
 
       setFeedback({
         type: 'success',
-        message: `Successfully transferred ${parsedTransferQty.toLocaleString('en-IN')} packets to ${selectedDestination?.title || 'destination'}.`,
+        message: `Transferred ${parsedTransferQty.toLocaleString('en-IN')} packets to ${selectedDestination?.title || 'destination'}.`,
       });
 
       Alert.alert(
-        'Stock Transfer Dispatched',
-        `Transferred ${parsedTransferQty.toLocaleString('en-IN')} packets successfully.`,
+        'Stock Transferred',
+        `Sent ${parsedTransferQty.toLocaleString('en-IN')} packets to ${selectedDestination?.title || 'destination'}.`,
         [{ text: 'OK' }]
       );
 
@@ -452,12 +452,12 @@ export default function StockMovementHubScreen() {
 
       setFeedback({
         type: 'success',
-        message: `Stock Inward Recorded: Received ${parsedInwardQty.toLocaleString('en-IN')} verified packets into Central HQ Reserve.`,
+        message: `Added ${parsedInwardQty.toLocaleString('en-IN')} packets to HQ stock.`,
       });
 
       Alert.alert(
-        'Stock Inward Confirmed',
-        `Received ${parsedInwardQty.toLocaleString('en-IN')} verified factory packets into Central HQ Reserve.`,
+        'Stock Received',
+        `Added ${parsedInwardQty.toLocaleString('en-IN')} packets to HQ stock.`,
         [{ text: 'OK' }]
       );
 

@@ -204,17 +204,17 @@ export default function AdminOnboardManagerScreen() {
 
       setFeedback({
         type: 'success',
-        message: `Manager ${res.manager.name} (${formattedPhone}) onboarded and provisioned successfully!`,
+        message: `Manager ${res.manager.name} added!`,
       });
 
       Alert.alert(
-        'Manager Provisioned Successfully',
-        `Territory Manager account for ${res.manager.name} has been enrolled for ${district.trim()}, ${state.trim()}.${
-          isSeller ? ' Dual-Role Persona is enabled (can also directly sell & book retail orders).' : ''
+        'Manager Added',
+        `Manager ${res.manager.name} has been added for ${district.trim()}, ${state.trim()}.${
+          isSeller ? ' Can also take orders.' : ''
         }`,
         [
           {
-            text: 'Onboard Another',
+            text: 'Add Another',
             onPress: () => {
               setName('');
               setEmployeeCode('');
@@ -233,15 +233,15 @@ export default function AdminOnboardManagerScreen() {
             },
           },
           {
-            text: 'View Users Directory',
+            text: 'View Managers',
             onPress: () => router.replace('/(admin)/users' as any),
           },
         ]
       );
     } catch (err: any) {
-      const msg = err.message || 'Failed to onboard manager.';
+      const msg = err.message || 'Failed to add manager.';
       setFeedback({ type: 'error', message: msg });
-      Alert.alert('Onboarding Failed', msg);
+      Alert.alert('Save Failed', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -253,8 +253,8 @@ export default function AdminOnboardManagerScreen() {
       style={styles.container}
     >
       <Header
-        title="Onboard Territory Manager"
-        subtitle="Regional Depot Manager Provisioning"
+        title="Add Territory Manager"
+        subtitle="Create Manager Account"
         showBack
       />
 
@@ -276,7 +276,7 @@ export default function AdminOnboardManagerScreen() {
                 <Text style={styles.breadcrumbLinkText}>Back to users</Text>
               </Pressable>
               <Text style={styles.breadcrumbDivider}>•</Text>
-              <Text style={styles.breadcrumbCurrent}>Manager onboarding</Text>
+              <Text style={styles.breadcrumbCurrent}>Add manager</Text>
             </View>
           </View>
 
@@ -604,10 +604,10 @@ export default function AdminOnboardManagerScreen() {
                 </View>
                 <View style={{ flex: 1, marginRight: Spacing.sm }}>
                   <Text style={styles.capabilityTitle}>
-                    Same as Seller (Manager also acts as Field Seller)
+                    Manager Can Also Sell (Field Orders)
                   </Text>
                   {isSeller && (
-                    <Badge label="DUAL ROLE ACTIVE" variant="ACTIVE" size="sm" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+                    <Badge label="CAN ALSO SELL" variant="ACTIVE" size="sm" style={{ alignSelf: 'flex-start', marginTop: 4 }} />
                   )}
                 </View>
                 <Switch
@@ -618,16 +618,16 @@ export default function AdminOnboardManagerScreen() {
                 />
               </View>
               <Text style={styles.capabilityDescription}>
-                Enable this if this manager will also directly perform field sales and customer onboarding. They can log in to both the Manager Portal and Seller Portal with the same ID &amp; password and will receive their own field stock balance.
+                Enable this if this manager will also take customer orders and visit shops. They can use both Manager and Seller screens with the same login, and have their own stock in their van.
               </Text>
             </View>
           </Card>
 
-          {/* SECTION 4: Initial operational permissions */}
+          {/* SECTION 4: Manager Permissions */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>Initial operational permissions</Text>
+            <Text style={styles.sectionTitle}>Manager Permissions</Text>
             <Text style={styles.sectionSubtitle}>
-              Configure supervisory access rights for regional territory management
+              Choose what this manager can see and approve
             </Text>
           </View>
 

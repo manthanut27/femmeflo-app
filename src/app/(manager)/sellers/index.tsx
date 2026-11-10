@@ -177,9 +177,9 @@ export default function ManagerSellersScreen() {
       );
 
       setEditingSeller(null);
-      Alert.alert('Field Officer Updated', `${trimmedName}'s details have been saved successfully.`);
+      Alert.alert('Seller Saved', `${trimmedName}'s details have been saved.`);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to update field officer details.');
+      Alert.alert('Save Failed', err?.message || 'Could not save seller details.');
     } finally {
       setIsUpdatingSeller(false);
     }

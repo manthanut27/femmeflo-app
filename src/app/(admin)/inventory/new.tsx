@@ -81,8 +81,8 @@ export default function AdminNewWarehouseScreen() {
       });
 
       Alert.alert(
-        'Warehouse Created',
-        `${res.warehouse?.name || trimmed} has been added to the regional depot network.`,
+        'Warehouse Added',
+        `${res.warehouse?.name || trimmed} has been added.`,
         [
           {
             text: 'OK',

@@ -173,11 +173,11 @@ export default function AdminPermissionsScreen() {
       : `Manager "${selectedManager?.name || 'Selected'}"`;
 
     Alert.alert(
-      'Confirm Security Permission Changes',
-      `Apply updated operational permissions to ${targetTitle}?\n\nGranted privileges:\n${
+      'Save Permissions?',
+      `Save these permissions for ${targetTitle}?\n\nPermissions:\n${
         rawList.length > 0
           ? rawList.map((p) => `• ${PERMISSION_METADATA[p]?.label || p}`).join('\n')
-          : '• None (All restricted)'
+          : '• None (All turned off)'
       }`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -189,19 +189,19 @@ export default function AdminPermissionsScreen() {
               if (isOverall) {
                 const res = await adminApi.updateOverallPermissions(finalPermissions);
                 Alert.alert(
-                  'Success',
-                  `Security privileges broadcast across all ${res.count || managers.length} managers successfully.`
+                  'Permissions Saved',
+                  `Permissions saved for all ${res.count || managers.length} managers.`
                 );
               } else {
                 await adminApi.updateManagerPermissions(selectedManagerId, finalPermissions);
                 Alert.alert(
-                  'Success',
-                  `Security privileges updated for ${selectedManager?.name || 'Manager'}.`
+                  'Permissions Saved',
+                  `Permissions saved for ${selectedManager?.name || 'Manager'}.`
                 );
               }
               await loadData();
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to update manager permissions.');
+              Alert.alert('Error', err?.message || 'Failed to save manager permissions.');
             } finally {
               setSaving(false);
             }

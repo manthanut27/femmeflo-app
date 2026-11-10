@@ -1,11 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { CustomerItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatDateIST, formatTimeIST } from '@/utils/dateUtils';
-import { BorderRadius, BrandColors, Colors, Elevation, Spacing, Typography } from '@/constants/theme';
+import { BorderRadius, BrandColors, Elevation, Spacing, Typography } from '@/constants/theme';
 
 export interface SaveConfirmationProps {
   count: number;
@@ -32,7 +32,7 @@ export function SaveConfirmationCard({
   longitude,
   onReset,
   onDone,
-  title = 'Customer Registration Successful',
+  title = 'Customer Added',
 }: SaveConfirmationProps) {
   const timestamp = serverCreatedAt ? new Date(serverCreatedAt) : new Date();
   const dateStr = formatDateIST(timestamp, 'medium');
@@ -47,7 +47,7 @@ export function SaveConfirmationCard({
         </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.countSubtitle}>
-          {count === 1 ? '1 Retail Customer Registered' : `${count} Customers Registered in Batch`}
+          {count === 1 ? '1 Shop Added' : `${count} Shops Added`}
         </Text>
       </View>
 
@@ -55,11 +55,11 @@ export function SaveConfirmationCard({
       <View style={styles.auditSection}>
         <View style={styles.auditRow}>
           <View style={styles.auditCol}>
-            <Text style={styles.auditLabel}>SAVED DATE (IST)</Text>
+            <Text style={styles.auditLabel}>DATE</Text>
             <Text style={styles.auditValue}>{dateStr}</Text>
           </View>
           <View style={styles.auditCol}>
-            <Text style={styles.auditLabel}>AUTHORITATIVE TIME (IST)</Text>
+            <Text style={styles.auditLabel}>TIME</Text>
             <Text style={styles.auditValue}>{timeStr}</Text>
           </View>
         </View>
@@ -74,8 +74,8 @@ export function SaveConfirmationCard({
           />
           <Text style={styles.verificationText}>
             {hasPhoto
-              ? 'Storefront Photo Captured & Uploaded (Verified)'
-              : `Photo Exempted: ${photoReason || 'Bulk Field Onboarding'}`}
+              ? 'Shop Photo Saved'
+              : `Photo Skipped: ${photoReason || 'Field Entry'}`}
           </Text>
         </View>
 
@@ -88,14 +88,14 @@ export function SaveConfirmationCard({
           />
           <Text style={styles.verificationText}>
             {hasGps && latitude && longitude
-              ? `GPS Coordinates Verified: ${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E`
-              : 'Location Recorded via Postal / Beat Territory'}
+              ? `GPS Location Saved: ${latitude.toFixed(4)}°N, ${longitude.toFixed(4)}°E`
+              : 'Location Saved'}
           </Text>
         </View>
       </View>
 
       {/* Registered Outlets List */}
-      <Text style={styles.listHeading}>Registered Outlets ({customers.length})</Text>
+      <Text style={styles.listHeading}>Shops Added ({customers.length})</Text>
       <View style={styles.customersList}>
         {customers.slice(0, 5).map((cust, idx) => {
           const contactPerson = 'contactName' in cust ? cust.contactName : ('ownerName' in cust ? (cust as any).ownerName : '');
@@ -120,7 +120,7 @@ export function SaveConfirmationCard({
 
         {customers.length > 5 && (
           <Text style={styles.moreText}>
-            + {customers.length - 5} more customers registered in this batch
+            + {customers.length - 5} more shops added
           </Text>
         )}
       </View>
@@ -128,13 +128,13 @@ export function SaveConfirmationCard({
       {/* Action Buttons */}
       <View style={styles.buttonContainer}>
         <Button
-          title="Onboard Another Customer"
+          title="Add Another Shop"
           variant="secondary"
           onPress={onReset}
           style={styles.actionBtn}
         />
         <Button
-          title="Done & View Directory"
+          title="Done"
           variant="primary"
           onPress={onDone}
           style={styles.actionBtn}

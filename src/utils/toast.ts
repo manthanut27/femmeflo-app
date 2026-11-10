@@ -70,6 +70,13 @@ export const VillageToasts = {
   permissionsSaved: () => 'Permissions saved successfully.',
   passwordChanged: () => 'Password changed! Please remember it.',
 
+  // Users & Team
+  managerAdded: (name?: string) => (name ? `Manager ${name} added!` : 'Manager Added!'),
+  managerSaved: (name?: string) => (name ? `Manager ${name} saved!` : 'Manager Saved!'),
+  sellerAdded: (name?: string) => (name ? `Seller ${name} added!` : 'Seller Added!'),
+  sellerSaved: (name?: string) => (name ? `Seller ${name} saved!` : 'Seller Saved!'),
+  userRemoved: (name?: string) => (name ? `${name} removed.` : 'Removed.'),
+
   // Internet & Offline Mode
   noInternet: () => 'No Internet! Working in Offline Mode.',
   savedToPhone: () => 'Saved to phone! Will upload when network comes.',
