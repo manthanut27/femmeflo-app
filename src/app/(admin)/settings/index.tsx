@@ -140,11 +140,6 @@ export default function AdminSettingsScreen() {
     }
   }
 
-  // Price Invariants
-  const [minPriceRupees, setMinPriceRupees] = useState('25');
-  const [lowStockThreshold, setLowStockThreshold] = useState('50');
-  const [savingPricing, setSavingPricing] = useState(false);
-
   // Company Legal Settings
   const [companyName, setCompanyName] = useState('');
   const [companyGst, setCompanyGst] = useState('');
@@ -177,14 +172,6 @@ export default function AdminSettingsScreen() {
     setLoading(true);
     try {
       const res = await adminApi.getBusinessSettings();
-      if (res.minimumSalePricePaise) {
-        setMinPriceRupees(String(res.minimumSalePricePaise / 100));
-      } else if (res.minimumPricePaise) {
-        setMinPriceRupees(String(res.minimumPricePaise / 100));
-      }
-      if (res.lowStockThreshold !== undefined) {
-        setLowStockThreshold(String(res.lowStockThreshold));
-      }
 
       // Filter out any default dummy placeholder text to ensure fields are clean
       const rawName = res.companyName && res.companyName !== 'MASAKO ENTERPRISES PRIVATE LIMITED' ? res.companyName : '';
@@ -263,35 +250,6 @@ export default function AdminSettingsScreen() {
       Alert.alert('Error', err.message || 'Failed to update legal details.');
     } finally {
       setSavingLegal(false);
-    }
-  }
-
-  async function handleSavePricing() {
-    if (savingPricing) return;
-
-    const priceNum = parseFloat(minPriceRupees);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert('Invalid Price', 'Authoritative minimum sale price must be a positive number.');
-      return;
-    }
-
-    const thresholdNum = parseInt(lowStockThreshold, 10);
-
-    setSavingPricing(true);
-    try {
-      await adminApi.updateBusinessSettings({
-        minimumSalePricePaise: Math.round(priceNum * 100),
-        lowStockThreshold: isNaN(thresholdNum) ? undefined : thresholdNum,
-      });
-
-      Alert.alert(
-        'Pricing Rules Saved',
-        'Minimum price threshold and inventory alert level updated successfully.'
-      );
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update pricing rules.');
-    } finally {
-      setSavingPricing(false);
     }
   }
 
@@ -610,45 +568,6 @@ export default function AdminSettingsScreen() {
               )}
             </Card>
 
-            {/* Pricing Rules & System Invariants */}
-            <Text style={styles.sectionHeading}>Pricing Rules & System Invariants</Text>
-            <Card style={styles.card}>
-              <View style={styles.ruleNotice}>
-                <Ionicons name="information-circle-outline" size={18} color={BrandColors.pink.dark} />
-                <Text style={styles.ruleNoticeText}>
-                  Sales recorded by field sellers below this unit price require mandatory Super Admin approval before order confirmation.
-                </Text>
-              </View>
-
-              <Input
-                label="Authoritative Minimum Sale Price (₹) *"
-                value={minPriceRupees}
-                onChangeText={setMinPriceRupees}
-                keyboardType="decimal-pad"
-                helperText="Field sellers pricing below this value trigger mandatory Super Admin approval"
-                leftIcon={<Text style={styles.rupeeSymbol}>₹</Text>}
-              />
-
-              <Input
-                label="Low Stock Warehouse Warning (Packets)"
-                value={lowStockThreshold}
-                onChangeText={setLowStockThreshold}
-                keyboardType="number-pad"
-                helperText="Threshold for alerting re-order triggers"
-                leftIcon={<Ionicons name="cube-outline" size={18} color={Colors.light.textTertiary} />}
-              />
-
-              <Button
-                title={savingPricing ? 'Saving Rules...' : 'Save Pricing Rules'}
-                onPress={handleSavePricing}
-                loading={savingPricing}
-                variant="admin"
-                size="lg"
-                icon={<Ionicons name="save-outline" size={18} color="#FFFFFF" />}
-                style={{ marginTop: Spacing.sm }}
-              />
-            </Card>
-
             {/* Navigation to Invoices, Categories & Shared Features */}
             <Text style={styles.sectionHeading}>Catalog & Administration</Text>
             <Card style={styles.menuCard}>
@@ -872,12 +791,6 @@ const styles = StyleSheet.create({
     ...Typography.bodySmall,
     fontWeight: '600',
     color: Colors.light.textPrimary,
-  },
-  rupeeSymbol: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: BrandColors.pink.dark,
-    marginRight: 4,
   },
   menuCard: {
     marginBottom: Spacing.lg,

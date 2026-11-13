@@ -648,13 +648,14 @@ export default function ShiftScreen() {
         endKm: pendingOdometerKm,
       });
       const totalDist = distResult.formatted;
+      const measurementNote = distResult.source === 'odometer' ? ' (via meter fallback)' : '';
 
       setFeedback({
         type: 'success',
         title: 'Shift Ended',
-        message: `Duty shift ended at ${pendingOdometerKm} km. Total travel: ${totalDist}.`,
+        message: `Duty shift ended at ${pendingOdometerKm} km. Total travel: ${totalDist}${measurementNote}.`,
       });
-      Alert.alert('Shift Ended', `Duty shift ended at ${pendingOdometerKm} km. Total travel: ${totalDist}.`);
+      Alert.alert('Shift Ended', `Duty shift ended at ${pendingOdometerKm} km. Total travel: ${totalDist}${measurementNote}.`);
     } catch (err: any) {
       setFeedback({
         type: 'error',
