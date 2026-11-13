@@ -86,7 +86,7 @@ export default function SellerInventoryScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Personal Stock" subtitle="Van Inventory & Movements" />
+      <Header title="My Stock" subtitle="Van Stock & History" />
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -107,7 +107,7 @@ export default function SellerInventoryScreen() {
               {/* Summary Balance Card */}
               <Card style={styles.balanceCard}>
                 <View style={styles.balanceHeaderRow}>
-                  <Text style={styles.balanceLabel}>Current Available Balance</Text>
+                  <Text style={styles.balanceLabel}>Available Stock</Text>
                   <View style={styles.balanceIconWrap}>
                     <Ionicons name="cube-outline" size={18} color={BrandColors.green.primary} />
                   </View>
@@ -118,14 +118,14 @@ export default function SellerInventoryScreen() {
 
                 <View style={styles.balanceRow}>
                   <View style={styles.balanceStat}>
-                    <Text style={styles.statLabel}>Assigned Stock</Text>
+                    <Text style={styles.statLabel}>Stock Received</Text>
                     <Text style={styles.statVal}>
                       {(inventory?.assignedPackets ?? 0).toLocaleString()}
                     </Text>
                   </View>
 
                   <View style={styles.balanceStat}>
-                    <Text style={styles.statLabel}>Confirmed Sold</Text>
+                    <Text style={styles.statLabel}>Sold</Text>
                     <Text style={[styles.statVal, { color: BrandColors.pink.primary }]}>
                       {(inventory?.soldPackets ?? 0).toLocaleString()}
                     </Text>
@@ -134,7 +134,7 @@ export default function SellerInventoryScreen() {
               </Card>
 
               {/* SKU Level Breakdown */}
-              <Text style={styles.sectionHeading}>Product SKU Stock</Text>
+              <Text style={styles.sectionHeading}>Products in Stock</Text>
               {inventory?.products && inventory.products.length > 0 ? (
                 inventory.products.map((p) => (
                   <Card key={p.productId} style={styles.skuCard}>
@@ -145,7 +145,7 @@ export default function SellerInventoryScreen() {
                     <View style={styles.skuFooter}>
                       <Text style={styles.skuMeta}>SKU: {p.productSku || 'STD'}</Text>
                       <Text style={styles.skuMeta}>
-                        Assigned: {p.assigned} • Sold: {p.sold}
+                        Received: {p.assigned} • Sold: {p.sold}
                       </Text>
                     </View>
                   </Card>
@@ -158,14 +158,14 @@ export default function SellerInventoryScreen() {
                 </Card>
               )}
 
-              <Text style={styles.sectionHeading}>Recent Stock Ledger</Text>
+              <Text style={styles.sectionHeading}>Recent Stock History</Text>
             </>
           }
           ListEmptyComponent={
             <EmptyState
               icon="cube-outline"
-              title="No Stock Movements"
-              description="No recent stock receipts or transfers recorded."
+              title="No Stock History"
+              description="No stock transfers or receipts yet."
             />
           }
         />

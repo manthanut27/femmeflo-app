@@ -333,7 +333,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
 
       Alert.alert(
         'Price Updated & Resubmitted',
-        `Order #${sale.id.slice(0, 8)} unit price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Sent to Super Admin for authorization.`
+        `Order #${sale.id.slice(0, 8)} unit price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Sent to office for approval.`
       );
     } catch (err: any) {
       Alert.alert('Update Failed', err.message || 'Unable to update price and resubmit for approval.');
@@ -452,7 +452,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 <View style={{ flex: 1 }}>
                   <Text style={styles.reapprovalTitle}>Revise Price for Reapproval</Text>
                   <Text style={styles.reapprovalDesc}>
-                    Update unit price and send this order back to Super Admin for authorization.
+                    Update price and send this order back to office for approval.
                   </Text>
                 </View>
               </View>
@@ -475,7 +475,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
                   <Text style={styles.paymentActionTitle}>Payment Outstanding</Text>
                   <Text style={styles.paymentActionDesc}>
                     {isPendingApproval
-                      ? 'Order is awaiting Super Admin authorization. Payment can be collected once approved.'
+                      ? 'Order is waiting for office approval. Payment can be collected once approved.'
                       : 'Customer has not paid for this order yet. Collect cash or verify UPI payment.'}
                   </Text>
                 </View>
@@ -730,7 +730,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 </Pressable>
               </View>
               <Text style={styles.modalSubtitle}>
-                Revise unit price and send order back to Super Admin for authorization
+                Change price and send back to office for approval
               </Text>
 
               {/* Previous Rejection Alert Box */}
@@ -790,7 +790,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
 
               {/* Reapproval Notes / Justification */}
               <Input
-                label="Reapproval Justification / Notes (Optional)"
+                label="Note for Office (Optional)"
                 placeholder="e.g. Customer agreed to ₹26.50 rate"
                 value={editPriceNotes}
                 onChangeText={setEditPriceNotes}
@@ -807,7 +807,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title={isSubmittingReapproval ? 'Resubmitting...' : 'Resubmit for Approval'}
+                  title={isSubmittingReapproval ? 'Sending...' : 'Send for Approval'}
                   variant="primary"
                   onPress={handleResubmitPrice}
                   loading={isSubmittingReapproval}

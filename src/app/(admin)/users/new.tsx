@@ -444,7 +444,7 @@ export default function AdminOnboardUserScreen() {
               </Pressable>
               <Text style={styles.breadcrumbDivider}>•</Text>
               <Text style={styles.breadcrumbCurrent}>
-                {isMgr ? 'Manager credentials & territory' : 'Officer onboarding'}
+                {isMgr ? 'Add Manager' : 'Add Seller'}
               </Text>
             </View>
           </View>
@@ -511,9 +511,9 @@ export default function AdminOnboardUserScreen() {
             <>
               {/* SECTION 1: Manager credentials & territory */}
               <View style={styles.sectionHeaderBox}>
-                <Text style={styles.sectionTitle}>Manager credentials & territory</Text>
+                <Text style={styles.sectionTitle}>Manager Details &amp; Area</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Add and provision regional depot manager accounts
+                  Add a new territory manager
                 </Text>
               </View>
 
@@ -658,7 +658,7 @@ export default function AdminOnboardUserScreen() {
                   </View>
                 </View>
                 <Text style={styles.sectionSubtitle}>
-                  Government identification required for manager supervisory credentials.
+                  Government ID needed for manager account.
                 </Text>
               </View>
 
@@ -1048,11 +1048,11 @@ export default function AdminOnboardUserScreen() {
                 </View>
               </Card>
 
-              {/* 2. Contact Numbers & Login Credentials */}
+              {/* 2. Phone & Login Details */}
               <View style={styles.sectionHeaderBox}>
-                <Text style={styles.sectionTitle}>2. Contact Numbers &amp; Login Credentials</Text>
+                <Text style={styles.sectionTitle}>2. Phone &amp; Login Details</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Primary mobile number, distinct alternate phone, optional email, and login credentials
+                  Phone numbers, optional email, and password
                 </Text>
               </View>
 
@@ -1073,7 +1073,7 @@ export default function AdminOnboardUserScreen() {
                     maxLength={10}
                     error={errors.phone}
                     leftIcon={<Text style={styles.phonePrefix}>+91</Text>}
-                    helperText="Primary number used for authentication and SMS notifications"
+                    helperText="Used for login and SMS"
                   />
                 </View>
 
@@ -1142,11 +1142,11 @@ export default function AdminOnboardUserScreen() {
                 </View>
               </Card>
 
-              {/* 3. Identification Documents & Qualification */}
+              {/* 3. ID Documents & Education */}
               <View style={styles.sectionHeaderBox}>
-                <Text style={styles.sectionTitle}>3. Identification Documents &amp; Qualification</Text>
+                <Text style={styles.sectionTitle}>3. ID Documents &amp; Education</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Government identification documents and educational background
+                  Government ID and education details
                 </Text>
               </View>
 

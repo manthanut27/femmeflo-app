@@ -30,8 +30,8 @@ import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTod
 const STATUS_FILTERS: Array<{ label: string; value: string | null }> = [
   { label: 'All Orders', value: null },
   { label: 'Confirmed', value: 'CONFIRMED' },
-  { label: 'Uncollected Payments', value: 'PAYMENT_PENDING' },
-  { label: 'Pending Approval', value: 'PENDING_APPROVAL' },
+  { label: 'Unpaid Bills', value: 'PAYMENT_PENDING' },
+  { label: 'Waiting for Approval', value: 'PENDING_APPROVAL' },
   { label: 'Rejected', value: 'REJECTED' },
 ];
 
@@ -265,7 +265,7 @@ export default function SalesListScreen() {
         subtitle={
           selectedCustomer
             ? `${sales.length} orders for ${selectedCustomer.shopName}`
-            : `${sales.length} orders loaded • IST Analytics`
+            : `${sales.length} orders recorded`
         }
         rightAction={
           <Pressable
@@ -298,7 +298,7 @@ export default function SalesListScreen() {
             style={{ marginRight: 6 }}
           />
           <Text style={[styles.modeTabText, viewMode === 'DAILY_REPORT' && styles.modeTabTextActive]}>
-            Daily Sales Report
+            Daily Report
           </Text>
         </Pressable>
 
@@ -313,7 +313,7 @@ export default function SalesListScreen() {
             style={{ marginRight: 6 }}
           />
           <Text style={[styles.modeTabText, viewMode === 'TRANSACTIONS' && styles.modeTabTextActive]}>
-            Order Ledger
+            All Orders
           </Text>
         </Pressable>
       </View>

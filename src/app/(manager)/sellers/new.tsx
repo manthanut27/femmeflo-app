@@ -308,7 +308,7 @@ export default function ManagerOnboardSellerScreen() {
                 <Text style={styles.breadcrumbLinkText}>Back to field force</Text>
               </Pressable>
               <Text style={styles.breadcrumbDivider}>•</Text>
-              <Text style={styles.breadcrumbCurrent}>Officer onboarding</Text>
+              <Text style={styles.breadcrumbCurrent}>Add seller</Text>
             </View>
           </View>
 
@@ -322,11 +322,11 @@ export default function ManagerOnboardSellerScreen() {
             </View>
           )}
 
-          {/* 1. Employee Identity & Role Assignment */}
+          {/* 1. Seller Details */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>1. Employee Identity &amp; Role Assignment</Text>
+            <Text style={styles.sectionTitle}>1. Seller Details</Text>
             <Text style={styles.sectionSubtitle}>
-              Official officer identification, designation, status, and reporting manager
+              Name and employee code
             </Text>
           </View>
 
@@ -415,7 +415,7 @@ export default function ManagerOnboardSellerScreen() {
             {/* Assigned Reporting Manager */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>
-                Assigned Reporting Manager <Text style={styles.requiredStar}>*</Text>
+                Assigned Manager <Text style={styles.requiredStar}>*</Text>
               </Text>
               <View style={styles.reportingManagerCard}>
                 <View style={styles.managerIconBadge}>
@@ -432,11 +432,11 @@ export default function ManagerOnboardSellerScreen() {
             </View>
           </Card>
 
-          {/* 2. Contact Numbers & Login Credentials */}
+          {/* 2. Phone & Login Details */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>2. Contact Numbers &amp; Login Credentials</Text>
+            <Text style={styles.sectionTitle}>2. Phone &amp; Login Details</Text>
             <Text style={styles.sectionSubtitle}>
-              Primary mobile number, distinct alternate phone, optional email, and login credentials
+              Phone numbers, optional email, and password
             </Text>
           </View>
 
@@ -457,7 +457,7 @@ export default function ManagerOnboardSellerScreen() {
                 maxLength={10}
                 error={errors.phone}
                 leftIcon={<Text style={styles.phonePrefix}>+91</Text>}
-                helperText="Primary number used for authentication and SMS notifications"
+                helperText="Used for login and SMS"
               />
             </View>
 
@@ -526,11 +526,11 @@ export default function ManagerOnboardSellerScreen() {
             </View>
           </Card>
 
-          {/* 3. Identification Documents & Qualification */}
+          {/* 3. ID Documents & Education */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>3. Identification Documents &amp; Qualification</Text>
+            <Text style={styles.sectionTitle}>3. ID Documents &amp; Education</Text>
             <Text style={styles.sectionSubtitle}>
-              Government identification documents and educational background
+              Government ID and education details
             </Text>
           </View>
 

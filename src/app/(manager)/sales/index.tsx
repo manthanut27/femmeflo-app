@@ -700,7 +700,7 @@ export default function ManagerSalesScreen() {
                   <View style={styles.rejectionContextBox}>
                     <Ionicons name="alert-circle" size={18} color="#B4234D" style={{ marginRight: 8, marginTop: 1 }} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.rejectionContextTitle}>Admin Rejection Reason</Text>
+                      <Text style={styles.rejectionContextTitle}>Rejection Reason</Text>
                       <Text style={styles.rejectionContextText}>{selectedRejectedSale.rejectionReason}</Text>
                     </View>
                   </View>
@@ -730,7 +730,7 @@ export default function ManagerSalesScreen() {
 
                 {/* Revised Unit Price Input */}
                 <Input
-                  label="Manager Revised Unit Price (₹ per packet)"
+                  label="Revised Price (₹ per packet)"
                   placeholder="e.g. 26.50"
                   value={managerEditPriceStr}
                   onChangeText={setManagerEditPriceStr}
@@ -754,8 +754,8 @@ export default function ManagerSalesScreen() {
 
                 {/* Reapproval Notes / Justification */}
                 <Input
-                  label="Manager Justification / Authorization Notes"
-                  placeholder="e.g. Approved price revision for territory beat"
+                  label="Manager Notes / Reason"
+                  placeholder="e.g. Revised price for store"
                   value={managerEditNotes}
                   onChangeText={setManagerEditNotes}
                   containerStyle={{ marginTop: Spacing.xs }}
@@ -771,7 +771,7 @@ export default function ManagerSalesScreen() {
                     style={{ flex: 1, marginRight: Spacing.sm }}
                   />
                   <Button
-                    title={isManagerSubmitting ? 'Resubmitting...' : 'Resubmit for Approval'}
+                    title={isManagerSubmitting ? 'Sending...' : 'Send for Approval'}
                     variant="primary"
                     onPress={handleManagerResubmitPrice}
                     loading={isManagerSubmitting}

@@ -234,13 +234,13 @@ export default function AdminApprovalsScreen() {
             ) : null}
             <View style={styles.officerRow}>
               <Ionicons name="person-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
-              <Text style={styles.sellerName}>Field Officer: {item.seller?.name || 'Seller'}</Text>
+              <Text style={styles.sellerName}>Seller: {item.seller?.name || 'Seller'}</Text>
             </View>
           </View>
           {item.isResubmitted ? (
-            <Badge label="RESUBMITTED FOR APPROVAL" variant="purple" />
+            <Badge label="WAITING FOR RE-APPROVAL" variant="purple" />
           ) : (
-            <Badge label="APPROVAL REQUIRED" variant="warning" />
+            <Badge label="WAITING FOR APPROVAL" variant="warning" />
           )}
         </View>
 
@@ -249,7 +249,7 @@ export default function AdminApprovalsScreen() {
           <View style={styles.resubmittedNotice}>
             <Ionicons name="refresh-circle" size={16} color="#7C3AED" />
             <Text style={styles.resubmittedNoticeText}>
-              Price revised after rejection • Resubmitted for Super Admin re-approval
+              Price changed • Sent again for office approval
             </Text>
           </View>
         ) : null}
@@ -258,7 +258,7 @@ export default function AdminApprovalsScreen() {
         <View style={styles.thresholdNotice}>
           <Ionicons name="alert-circle-outline" size={16} color={Colors.light.warning} />
           <Text style={styles.thresholdText}>
-            Priced at {formatRupees(unitPricePaise)}/pkt (Below {formatRupees(minThresholdPaise)} min threshold)
+            Price: {formatRupees(unitPricePaise)}/pkt (Below min {formatRupees(minThresholdPaise)})
           </Text>
         </View>
 
@@ -389,7 +389,7 @@ export default function AdminApprovalsScreen() {
     <View style={styles.container}>
       <Header
         title="Price Approvals"
-        subtitle={`${approvals.length} requests awaiting authorization`}
+        subtitle={`${approvals.length} orders waiting for approval`}
         showBack
         onBack={handleBack}
       />

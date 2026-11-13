@@ -354,9 +354,9 @@ export default function AdminOnboardSellerScreen() {
 
           {/* 1. Employee Identity & Role Assignment */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>1. Employee Identity &amp; Role Assignment</Text>
+            <Text style={styles.sectionTitle}>1. Seller Details &amp; Manager</Text>
             <Text style={styles.sectionSubtitle}>
-              Official officer identification, designation, status, and reporting manager
+              Name, employee code, and assigned manager
             </Text>
           </View>
 
@@ -421,7 +421,7 @@ export default function AdminOnboardSellerScreen() {
                     style={{ marginRight: 6 }}
                   />
                   <Text style={[styles.statusOptionText, isActive && styles.statusOptionTextActive]}>
-                    Active (Authorized)
+                    Active
                   </Text>
                 </Pressable>
 
@@ -436,7 +436,7 @@ export default function AdminOnboardSellerScreen() {
                     style={{ marginRight: 6 }}
                   />
                   <Text style={[styles.statusOptionText, !isActive && styles.statusOptionTextInactive]}>
-                    Inactive (Suspended)
+                    Inactive
                   </Text>
                 </Pressable>
               </View>
@@ -446,7 +446,7 @@ export default function AdminOnboardSellerScreen() {
             <View style={styles.fieldGroup}>
               <View style={styles.labelWithSubRow}>
                 <Text style={styles.fieldLabel}>
-                  Assigned Reporting Manager <Text style={styles.requiredStar}>*</Text>
+                  Select Manager <Text style={styles.requiredStar}>*</Text>
                 </Text>
                 <Text style={styles.managerCountText}>{managers.length} available managers</Text>
               </View>
@@ -527,11 +527,11 @@ export default function AdminOnboardSellerScreen() {
             </View>
           </Card>
 
-          {/* 2. Contact Numbers & Login Credentials */}
+          {/* 2. Phone & Login Details */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>2. Contact Numbers &amp; Login Credentials</Text>
+            <Text style={styles.sectionTitle}>2. Phone &amp; Login Details</Text>
             <Text style={styles.sectionSubtitle}>
-              Primary mobile number, distinct alternate phone, optional email, and login credentials
+              Phone numbers, optional email, and password
             </Text>
           </View>
 
@@ -552,7 +552,7 @@ export default function AdminOnboardSellerScreen() {
                 maxLength={10}
                 error={errors.phone}
                 leftIcon={<Text style={styles.phonePrefix}>+91</Text>}
-                helperText="Primary number used for authentication and SMS notifications"
+                helperText="Used for login and SMS"
               />
             </View>
 
@@ -621,11 +621,11 @@ export default function AdminOnboardSellerScreen() {
             </View>
           </Card>
 
-          {/* 3. Identification Documents & Qualification */}
+          {/* 3. ID Documents & Education */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>3. Identification Documents &amp; Qualification</Text>
+            <Text style={styles.sectionTitle}>3. ID Documents &amp; Education</Text>
             <Text style={styles.sectionSubtitle}>
-              Government identification documents and educational background
+              Government ID and education details
             </Text>
           </View>
 

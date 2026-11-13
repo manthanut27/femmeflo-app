@@ -82,7 +82,7 @@ export default function ManagerCustomersScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1, marginRight: Spacing.sm }}>
           <Text style={styles.shopName}>{item.shopName}</Text>
-          <Text style={styles.owner}>Proprietor: {item.ownerName}</Text>
+          <Text style={styles.owner}>Owner: {item.ownerName}</Text>
         </View>
         <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
       </View>
@@ -94,7 +94,7 @@ export default function ManagerCustomersScreen() {
         <View style={styles.sellerRow}>
           <Ionicons name="person-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
           <Text style={styles.sellerTag}>
-            Officer: {item.seller?.name || 'Assigned'}
+            Seller: {item.seller?.name || 'Assigned'}
           </Text>
         </View>
       </View>
@@ -104,12 +104,12 @@ export default function ManagerCustomersScreen() {
   if (!allowView) {
     return (
       <View style={styles.container}>
-        <Header title="Territory Customers" subtitle="Store Directory" showBack />
+        <Header title="Shops" subtitle="Directory" showBack />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
-            title="Access Restricted"
-            description="You do not have permission to view the customer directory. Please contact your administrator to request 'View customer directory' permission."
+            title="No Permission"
+            description="You do not have permission to view shops. Please ask your administrator to turn on this permission."
             iconColor={Colors.light.danger}
             iconBgColor={Colors.light.dangerBg}
             actionTitle="Back to Dashboard"
@@ -124,8 +124,8 @@ export default function ManagerCustomersScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Territory Customers"
-        subtitle={`${pagination.total} registered stores across sellers`}
+        title="Shops"
+        subtitle={`${pagination.total} registered shops`}
         rightAction={
           allowOnboard ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -170,8 +170,8 @@ export default function ManagerCustomersScreen() {
       ) : customers.length === 0 ? (
         <EmptyState
           icon="storefront-outline"
-          title="No Customers Found"
-          description="No retail stores onboarded in this territory yet."
+          title="No Shops Found"
+          description="No shops added in your territory yet."
           iconColor={BrandColors.green.primary}
           iconBgColor={BrandColors.green.surface}
           iconBorderColor={BrandColors.green.light}

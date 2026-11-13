@@ -268,8 +268,8 @@ export default function AdminDashboardScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Executive Overview"
-        subtitle={`Super Admin • ${user?.name || 'Administrator'}`}
+        title="Admin Dashboard"
+        subtitle={`Hello, ${user?.name || 'Admin'}`}
         showNotificationBell
       />
 
@@ -293,11 +293,11 @@ export default function AdminDashboardScreen() {
                   <View style={styles.bannerIconBadge}>
                     <Ionicons name="shield-checkmark" size={18} color={BrandColors.pink.dark} />
                   </View>
-                  <Text style={styles.bannerTitle}>National Distribution Control</Text>
+                  <Text style={styles.bannerTitle}>Admin Center</Text>
                 </View>
-                <Text style={styles.bannerSub}>HQ Operations, Warehouses & Role Hierarchy</Text>
+                <Text style={styles.bannerSub}>Manage Warehouses, Team & Stock</Text>
               </View>
-              <Badge label="SUPER ADMIN" variant="ACTIVE" />
+              <Badge label="ADMIN" variant="ACTIVE" />
             </View>
           </Card>
 
@@ -396,7 +396,7 @@ export default function AdminDashboardScreen() {
                 {selectedSellerId ? (
                   <View style={styles.activeChip}>
                     <Text style={styles.activeChipText}>
-                      Officer: {filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || 'Selected'}
+                      Seller: {filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || 'Selected'}
                     </Text>
                     <Pressable onPress={() => setSelectedSellerId('')}>
                       <Ionicons name="close-circle" size={14} color="#64748B" />
@@ -433,15 +433,15 @@ export default function AdminDashboardScreen() {
                   <View style={styles.alertHeaderRow}>
                     <Ionicons name="alert-circle" size={20} color={Colors.light.warning} style={{ marginRight: 6 }} />
                     <Text style={styles.approvalAlertTitle}>
-                      {pendingCount} Below-Minimum Price {pendingCount === 1 ? 'Sale' : 'Sales'} Pending
+                      {pendingCount} Special Price {pendingCount === 1 ? 'Order' : 'Orders'} Waiting for Approval
                     </Text>
                   </View>
                   <Text style={styles.approvalAlertDesc}>
-                    Orders below the ₹25.00/pkt floor are blocked from stock deduction and invoicing until authorized.
+                    Special price orders need approval before they can be completed.
                   </Text>
                 </View>
                 <Button
-                  title="Review Queue"
+                  title="View Orders"
                   size="sm"
                   variant="admin"
                   onPress={() => router.push('/(admin)/approvals' as any)}
@@ -452,7 +452,7 @@ export default function AdminDashboardScreen() {
 
           {/* Metrics Grid */}
           <Text style={styles.sectionHeading}>
-            National Operations Metrics {activeFiltersCount > 0 ? `(Filtered: ${activeFiltersCount})` : ''}
+            Key Numbers {activeFiltersCount > 0 ? `(Filtered: ${activeFiltersCount})` : ''}
           </Text>
 
           {loading && !dashboard ? (
@@ -477,7 +477,7 @@ export default function AdminDashboardScreen() {
                 <StatCard
                   title="Total Revenue"
                   value={formatRupees(dashboard?.totalRevenuePaise ?? dashboard?.metrics?.totalEarningsPaise ?? 0)}
-                  subtitle="Confirmed gross receipts"
+                  subtitle="Total sales money"
                   icon="wallet-outline"
                   iconColor={BrandColors.pink.primary}
                   iconBg={BrandColors.pink.subtle}
@@ -486,7 +486,7 @@ export default function AdminDashboardScreen() {
                 <StatCard
                   title="Packets Sold"
                   value={formatCount(dashboard?.totalPacketsSold ?? dashboard?.metrics?.totalPacketsSold ?? 0)}
-                  subtitle="Sanitary napkins sold"
+                  subtitle="Total packets sold"
                   icon="cube-outline"
                   iconColor="#0284C7"
                   iconBg="#F0F9FF"
@@ -497,9 +497,9 @@ export default function AdminDashboardScreen() {
               {/* Row 2: Warehouse Stock & Store Network */}
               <View style={styles.metricRow}>
                 <StatCard
-                  title="HQ Warehouse Stock"
+                  title="HQ Stock"
                   value={`${formatCount(dashboard?.warehouseStockBalance ?? dashboard?.metrics?.warehouseStock ?? dashboard?.metrics?.totalInventory ?? 0)} pkts`}
-                  subtitle="Central inventory pool"
+                  subtitle="Packets in main warehouse"
                   icon="business-outline"
                   iconColor={BrandColors.green.primary}
                   iconBg={BrandColors.green.subtle}
@@ -507,9 +507,9 @@ export default function AdminDashboardScreen() {
                   onPress={() => router.push('/(admin)/inventory' as any)}
                 />
                 <StatCard
-                  title="Customer Network"
+                  title="Total Shops"
                   value={formatCount(dashboard?.totalCustomers ?? dashboard?.metrics?.totalShops ?? 0)}
-                  subtitle="Active retail stores"
+                  subtitle="Registered shops"
                   icon="storefront-outline"
                   iconColor={BrandColors.pink.primary}
                   iconBg={BrandColors.pink.subtle}
@@ -520,18 +520,18 @@ export default function AdminDashboardScreen() {
               {/* Row 3: Active Field Force & Approvals */}
               <View style={styles.metricRow}>
                 <StatCard
-                  title="Active Field Force"
+                  title="Active Sellers"
                   value={formatCount(dashboard?.activeSellers ?? dashboard?.metrics?.totalSellers ?? 0)}
-                  subtitle="Officers on duty"
+                  subtitle="Sellers working today"
                   icon="people-outline"
                   iconColor={BrandColors.green.primary}
                   iconBg={BrandColors.green.subtle}
                   onPress={() => router.push('/(admin)/shifts' as any)}
                 />
                 <StatCard
-                  title="Price Approvals"
+                  title="Waiting Approvals"
                   value={String(pendingCount)}
-                  subtitle={pendingCount > 0 ? 'Action required' : 'Queue cleared'}
+                  subtitle={pendingCount > 0 ? 'Need approval' : 'All clear'}
                   icon="hourglass-outline"
                   iconColor={pendingCount > 0 ? Colors.light.warning : Colors.light.textTertiary}
                   iconBg={pendingCount > 0 ? Colors.light.warningBg : '#F1F5F9'}
@@ -545,8 +545,8 @@ export default function AdminDashboardScreen() {
           {/* Administration Actions Section Header */}
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={styles.sectionHeading}>Administrative Actions</Text>
-              <Text style={styles.sectionSubheading}>Operations Command & System Governance</Text>
+              <Text style={styles.sectionHeading}>Quick Actions</Text>
+              <Text style={styles.sectionSubheading}>Manage All Operations</Text>
             </View>
             <TouchableOpacity
               style={styles.viewAllActionsBtn}
@@ -568,11 +568,11 @@ export default function AdminDashboardScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.actionsHubTitleRow}>
-                  <Text style={styles.actionsHubTitle}>Operations Command Center</Text>
-                  <Badge label="13 MODULES READY" variant="ACTIVE" size="sm" />
+                  <Text style={styles.actionsHubTitle}>All Admin Features</Text>
+                  <Badge label="13 SECTIONS" variant="ACTIVE" size="sm" />
                 </View>
                 <Text style={styles.actionsHubDesc}>
-                  Access financial ledgers, price approvals, central inventory transfers, field shifts, and customer directories with live data telemetry.
+                  Manage stock transfers, price approvals, seller shifts, shops, and reports.
                 </Text>
               </View>
             </View>
@@ -586,21 +586,21 @@ export default function AdminDashboardScreen() {
                   color={pendingCount > 0 ? '#DC2626' : '#059669'}
                 />
                 <Text style={[styles.hubMetricText, pendingCount > 0 && { color: '#DC2626' }]}>
-                  {pendingCount > 0 ? `${pendingCount} Approvals Due` : 'Approvals Clear'}
+                  {pendingCount > 0 ? `${pendingCount} Waiting Approvals` : 'All Approved'}
                 </Text>
               </View>
 
               <View style={styles.hubMetricChip}>
                 <Ionicons name="cube-outline" size={14} color={BrandColors.green.primary} />
                 <Text style={styles.hubMetricText}>
-                  {formatCount(dashboard?.warehouseStockBalance ?? 0)} Central Pkts
+                  {formatCount(dashboard?.warehouseStockBalance ?? 0)} HQ Packets
                 </Text>
               </View>
 
               <View style={styles.hubMetricChip}>
                 <Ionicons name="people-outline" size={14} color="#0284C7" />
                 <Text style={styles.hubMetricText}>
-                  {formatCount(dashboard?.activeSellers ?? 0)} Reps Active
+                  {formatCount(dashboard?.activeSellers ?? 0)} Sellers Active
                 </Text>
               </View>
             </View>
@@ -611,10 +611,10 @@ export default function AdminDashboardScreen() {
               onPress={handleOpenActionsHub}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Open Administrative Actions Hub"
+              accessibilityLabel="View All Features & Settings"
             >
               <Ionicons name="apps" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.openCommandCenterBtnText}>Open Administrative Actions Hub</Text>
+              <Text style={styles.openCommandCenterBtnText}>View All Features &amp; Settings</Text>
               <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </Card>

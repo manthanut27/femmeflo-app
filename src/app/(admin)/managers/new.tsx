@@ -292,9 +292,9 @@ export default function AdminOnboardManagerScreen() {
 
           {/* SECTION 1: Manager credentials & territory */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>Manager credentials & territory</Text>
+            <Text style={styles.sectionTitle}>Manager Details & Area</Text>
             <Text style={styles.sectionSubtitle}>
-              Add and provision regional depot manager accounts
+              Add a new territory manager
             </Text>
           </View>
 
@@ -440,13 +440,13 @@ export default function AdminOnboardManagerScreen() {
           {/* SECTION 2: Official Verification & Documents */}
           <View style={styles.sectionHeaderBox}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.sectionTitle}>Official Verification & Documents</Text>
+              <Text style={styles.sectionTitle}>ID Documents</Text>
               <View style={styles.mandatoryBadge}>
                 <Text style={styles.mandatoryBadgeText}>(Mandatory)</Text>
               </View>
             </View>
             <Text style={styles.sectionSubtitle}>
-              Government identification required for manager supervisory credentials.
+              Government ID needed for manager account.
             </Text>
           </View>
 

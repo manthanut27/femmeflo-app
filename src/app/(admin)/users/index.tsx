@@ -444,7 +444,7 @@ export default function AdminUsersScreen() {
 
   const tabs = [
     { key: 'MANAGERS', label: 'Managers', badge: tab === 'MANAGERS' ? users.length : undefined },
-    { key: 'SELLERS', label: 'Sellers (Field Force)', badge: tab === 'SELLERS' ? users.length : undefined },
+    { key: 'SELLERS', label: 'Sellers', badge: tab === 'SELLERS' ? users.length : undefined },
   ];
 
   const renderItem = ({ item }: { item: PublicUser }) => {
@@ -1266,7 +1266,7 @@ export default function AdminUsersScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F8FAFC', borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.light.border, marginBottom: Spacing.md }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={{ ...Typography.bodyMedium, fontWeight: '700', color: Colors.light.heading }}>Account Status</Text>
-                  <Text style={{ ...Typography.caption, color: Colors.light.textSecondary }}>{editMgrActive ? 'Manager is Active with full territory access' : 'Manager is Deactivated'}</Text>
+                  <Text style={{ ...Typography.caption, color: Colors.light.textSecondary }}>{editMgrActive ? 'Manager is Active' : 'Manager is Disabled'}</Text>
                 </View>
                 <Pressable
                   style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full, backgroundColor: editMgrActive ? '#DCFCE7' : '#FEE2E2', borderWidth: 1, borderColor: editMgrActive ? '#86EFAC' : '#FCA5A5' }}

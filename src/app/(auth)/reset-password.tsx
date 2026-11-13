@@ -101,10 +101,10 @@ export default function ResetPasswordScreen() {
                 </View>
                 <Text style={styles.successTitle}>Password Updated!</Text>
                 <Text style={styles.successDesc}>
-                  Your password has been successfully reset. You can now sign in with your new credentials.
+                  Your password has been reset. You can now login with your new password.
                 </Text>
                 <Button
-                  title="Go to Sign In"
+                  title="Go to Login"
                   onPress={() => router.replace('/(auth)/login' as any)}
                   variant="primary"
                   size="lg"

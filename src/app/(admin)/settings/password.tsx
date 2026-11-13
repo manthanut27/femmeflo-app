@@ -79,11 +79,11 @@ export default function AdminChangePasswordScreen() {
       setConfirmPassword('');
 
       Alert.alert(
-        'Password Changed Successfully',
-        'Your Super Admin master credentials have been updated.',
+        'Password Changed',
+        'Your password has been saved.',
         [
           {
-            text: 'Return to Settings',
+            text: 'Back to Settings',
             onPress: () => router.back(),
           },
         ]
@@ -103,7 +103,7 @@ export default function AdminChangePasswordScreen() {
     >
       <Header
         title="Change Password"
-        subtitle="Super Admin Master Security"
+        subtitle="Update Admin Password"
         rightAction={
           <Pressable
             accessibilityRole="button"
@@ -140,9 +140,9 @@ export default function AdminChangePasswordScreen() {
                 <Ionicons name="shield-checkmark" size={22} color={BrandColors.pink.dark} />
               </View>
               <View style={{ flex: 1, marginLeft: Spacing.md }}>
-                <Text style={styles.securityCardTitle}>Super Admin Master Credentials</Text>
+                <Text style={styles.securityCardTitle}>Admin Password Security</Text>
                 <Text style={styles.securityCardSubtitle}>
-                  This credential secures full executive administrative access over FemmeFlo inventory, approvals, and payroll.
+                  This password protects your administrative access for approvals, stock, and team management.
                 </Text>
               </View>
             </View>
@@ -169,7 +169,7 @@ export default function AdminChangePasswordScreen() {
             />
 
             <Input
-              label="New Master Password *"
+              label="New Password *"
               value={newPassword}
               onChangeText={setNewPassword}
               secureTextEntry={!showNewPassword}

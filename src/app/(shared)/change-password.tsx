@@ -71,7 +71,7 @@ export default function ChangePasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <Header title="Change Password" subtitle="Security & Credentials" showBack />
+      <Header title="Change Password" subtitle="Update Your Password" showBack />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.containerBox}>
@@ -79,7 +79,7 @@ export default function ChangePasswordScreen() {
           <View style={styles.noticeBox}>
             <Ionicons name="shield-checkmark-outline" size={18} color={Colors.light.info} />
             <Text style={styles.noticeText}>
-              Choose a strong password containing at least 6 characters. Do not share your login credentials with others.
+              Choose a password with at least 6 characters. Do not share your password with anyone.
             </Text>
           </View>
 

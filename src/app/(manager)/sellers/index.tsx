@@ -242,12 +242,12 @@ export default function ManagerSellersScreen() {
   if (!allowView) {
     return (
       <View style={styles.container}>
-        <Header title="Field Force" subtitle="Territory Officers" showBack />
+        <Header title="Sellers" subtitle="Team" showBack />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
-            title="Access Restricted"
-            description="You do not have permission to view field officers in your territory. Please contact your administrator to request 'View assigned field officers' permission."
+            title="No Permission"
+            description="You do not have permission to view sellers in your territory. Please ask your administrator to enable this permission."
             iconColor={Colors.light.danger}
             iconBgColor={Colors.light.dangerBg}
             actionTitle="Back to Dashboard"
@@ -262,8 +262,8 @@ export default function ManagerSellersScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Field Force"
-        subtitle={`${pagination.total} assigned sellers`}
+        title="Sellers"
+        subtitle={`${pagination.total} Sellers in Team`}
         rightAction={
           allowOnboard ? (
             <Pressable
@@ -313,13 +313,13 @@ export default function ManagerSellersScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
-              title="No Field Officers Found"
+              title="No Sellers Found"
               description={
                 debouncedSearch
-                  ? 'No officers matched your search criteria.'
-                  : 'No field officers currently assigned to this territory.'
+                  ? 'No sellers matched your search.'
+                  : 'No sellers in your team yet.'
               }
-              actionTitle={allowOnboard ? 'Onboard Field Officer' : undefined}
+              actionTitle={allowOnboard ? 'Add Seller' : undefined}
               onAction={allowOnboard ? () => router.push('/(manager)/sellers/new' as any) : undefined}
             />
           }
@@ -344,7 +344,7 @@ export default function ManagerSellersScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Edit Field Officer</Text>
                 <Text style={styles.modalSubtitle}>
-                  Update officer details, beat assignment, and status
+                  Update seller details and status
                 </Text>
               </View>
               <Pressable
@@ -366,7 +366,7 @@ export default function ManagerSellersScreen() {
               {editingSeller && (
                 <View style={styles.metaRow}>
                   <View style={styles.metaChip}>
-                    <Text style={styles.metaChipLabel}>OFFICER EMAIL</Text>
+                    <Text style={styles.metaChipLabel}>SELLER EMAIL</Text>
                     <Text style={styles.metaChipVal}>{editingSeller.email || 'N/A'}</Text>
                   </View>
                   <View style={styles.metaChip}>
@@ -383,7 +383,7 @@ export default function ManagerSellersScreen() {
                   setEditName(val);
                   if (sellerFormErrors.name) setSellerFormErrors((p) => ({ ...p, name: '' }));
                 }}
-                placeholder="Officer full legal name"
+                placeholder="Seller name"
                 autoCapitalize="words"
                 error={sellerFormErrors.name}
                 leftIcon={<Ionicons name="person-outline" size={18} color={Colors.light.textTertiary} />}
@@ -400,7 +400,7 @@ export default function ManagerSellersScreen() {
                 keyboardType="phone-pad"
                 maxLength={10}
                 error={sellerFormErrors.phone}
-                helperText="Officer direct field contact line"
+                helperText="Used for login and SMS"
                 leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
               />
 

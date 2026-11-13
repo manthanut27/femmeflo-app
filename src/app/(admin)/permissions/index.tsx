@@ -241,7 +241,7 @@ export default function AdminPermissionsScreen() {
         <View style={styles.contentWrapper}>
           {/* Scope Mode Selector */}
           <Card style={styles.scopeCard}>
-            <Text style={styles.scopeCardTitle}>Authorization Scope</Text>
+            <Text style={styles.scopeCardTitle}>Select Who Gets Permissions</Text>
             <View style={styles.scopeToggleRow}>
               <TouchableOpacity
                 style={[styles.scopeBtn, scopeMode === 'specific' && styles.scopeBtnActive]}
@@ -255,7 +255,7 @@ export default function AdminPermissionsScreen() {
                   color={scopeMode === 'specific' ? '#FFFFFF' : Colors.light.textSecondary}
                 />
                 <Text style={[styles.scopeBtnText, scopeMode === 'specific' && styles.scopeBtnTextActive]}>
-                  Individual Manager
+                  One Manager
                 </Text>
               </TouchableOpacity>
 
@@ -271,7 +271,7 @@ export default function AdminPermissionsScreen() {
                   color={scopeMode === 'overall' ? '#FFFFFF' : Colors.light.textSecondary}
                 />
                 <Text style={[styles.scopeBtnText, scopeMode === 'overall' && styles.scopeBtnTextActive]}>
-                  Global (All Managers)
+                  All Managers
                 </Text>
               </TouchableOpacity>
             </View>

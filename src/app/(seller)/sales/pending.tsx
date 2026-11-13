@@ -244,7 +244,7 @@ export default function PendingSalesScreen() {
           <View style={styles.approvalNotice}>
             <Ionicons name="alert-circle" size={14} color="#B45309" style={{ marginRight: 6 }} />
             <Text style={styles.approvalNoticeText}>
-              Special price order pending Super Admin authorization. You can collect payment once authorized.
+              Special price order waiting for office approval. You can collect payment once approved.
             </Text>
           </View>
         ) : null}

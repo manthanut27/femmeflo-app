@@ -206,13 +206,13 @@ export default function AdminProductsScreen() {
   };
 
   const handleToggleActive = (product: ProductItem) => {
-    const action = product.active ? 'deactivate' : 'activate';
+    const action = product.active ? 'disable' : 'enable';
     Alert.alert(
-      `Confirm ${product.active ? 'Deactivation' : 'Activation'}`,
+      `Confirm ${product.active ? 'Disable' : 'Enable'}`,
       `Are you sure you want to ${action} "${product.name}"? ${
         product.active
-          ? 'Field officers will no longer be able to select this SKU in POS carts.'
-          : 'Field officers will be able to select and sell this SKU.'
+          ? 'Sellers will no longer be able to select this product in orders.'
+          : 'Sellers will be able to select and sell this product.'
       }`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -225,7 +225,7 @@ export default function AdminProductsScreen() {
               await adminApi.toggleProductActive(product.id);
               await fetchProducts();
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to toggle product status.');
+              Alert.alert('Error', err?.message || 'Failed to update product status.');
             } finally {
               setTogglingId(null);
             }
@@ -298,7 +298,7 @@ export default function AdminProductsScreen() {
                     { color: item.active ? Colors.light.error : BrandColors.green.primary },
                   ]}
                 >
-                  {item.active ? 'Deactivate' : 'Activate'}
+                  {item.active ? 'Disable' : 'Enable'}
                 </Text>
               </>
             )}

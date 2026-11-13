@@ -482,7 +482,7 @@ export default function StockMovementHubScreen() {
     >
       <Header
         title="Stock Movement Hub"
-        subtitle="Manage stock transfers, factory inward and inventory movements."
+        subtitle="Transfer stock, add factory inward, and view history"
         showBack
         onBack={handleBack}
       />

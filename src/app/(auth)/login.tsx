@@ -165,14 +165,14 @@ export default function LoginScreen() {
       } else if (role === 'SELLER') {
         router.replace('/(seller)' as any);
       } else {
-        setError('Account role is not recognized. Please contact system support.');
+        setError('Account role is not recognized. Please contact support.');
       }
     } catch (err: any) {
       const msg = err.message || '';
       const isNetwork = msg.includes('network') || msg.includes('fetch') || msg.includes('unreachable') || msg.includes('timeout');
 
       if (isNetwork) {
-        setError('Unable to reach authentication server. Please check your internet connection.');
+        setError('Cannot connect to server. Please check your internet connection.');
       } else {
         // Record failed attempt for invalid credentials
         const updatedStatus = await loginAttemptLimiter.recordFailedAttempt(trimmedId);
@@ -183,7 +183,7 @@ export default function LoginScreen() {
         } else if (updatedStatus.warningMessage) {
           setError(updatedStatus.warningMessage);
         } else {
-          setError(msg || 'Invalid login credentials. Please verify your email/phone and password.');
+          setError(msg || 'Wrong email/phone or password. Please try again.');
         }
       }
     } finally {
@@ -220,12 +220,12 @@ export default function LoginScreen() {
               accessibilityRole="image"
               accessibilityLabel="FemmeFlo logo"
             />
-            <Text style={styles.subtitle}>Enterprise Field Operations & Sales</Text>
+            <Text style={styles.subtitle}>Field Sales & Stock</Text>
           </View>
 
           {/* Three Role Tabs Selector */}
           <View style={styles.roleSelectorCard}>
-            <Text style={styles.roleSelectorHeading}>SELECT LOGIN PORTAL</Text>
+            <Text style={styles.roleSelectorHeading}>CHOOSE YOUR ROLE</Text>
             <View style={styles.roleTabsRow}>
               {(['seller', 'manager', 'admin'] as LoginRole[]).map((roleKey) => {
                 const conf = ROLES[roleKey];
