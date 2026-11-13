@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -22,11 +22,13 @@ import type {
   PublicUser,
   WarehouseItem,
 } from '@/api/types';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
+import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
   DropdownOption,
   DropdownTrigger,
@@ -37,6 +39,7 @@ import {
   BrandColors,
   Colors,
   MaxContentWidth,
+  Radius,
   Shadows,
   Spacing,
   Typography,
@@ -55,35 +58,48 @@ const QUICK_ADD_PILLS = [100, 500, 1000, 2500, 5000];
 export default function StockMovementHubScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{ from?: string; section?: string; tab?: string }>();
 
   const handleBack = useCallback(() => {
-    try {
-      if (params?.from === 'actions') {
+    if (params?.from === 'actions') {
+      try {
         (navigation as any).navigate('actions/index');
         return;
+      } catch {
+        // fallback
       }
-      if (router.canGoBack()) {
-        router.back();
-      } else {
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      try {
+        (navigation as any).navigate('actions/index');
+      } catch {
         router.replace('/(admin)/actions' as any);
       }
-    } catch {
-      router.replace('/(admin)/actions' as any);
     }
-  }, [navigation, router, params]);
+  }, [params?.from, navigation, router]);
 
   useEffect(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [handleBack]);
+    if (params?.from === 'actions') {
+      const onBackPress = () => {
+        handleBack();
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }
+  }, [params?.from, handleBack]);
 
-  // Primary 3-Section Navigation
-  const [activeSection, setActiveSection] = useState<MainSectionTab>('TRANSFER');
+  // Primary 3-Section Navigation: Stock Transfer, Stock Inward, History
+  const initialSection: MainSectionTab = useMemo(() => {
+    const raw = (params?.section || params?.tab || '').toUpperCase();
+    if (raw === 'INWARD') return 'INWARD';
+    if (raw === 'HISTORY') return 'HISTORY';
+    return 'TRANSFER';
+  }, [params?.section, params?.tab]);
+
+  const [activeSection, setActiveSection] = useState<MainSectionTab>(initialSection);
 
   // Master Data State
   const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
@@ -213,18 +229,24 @@ export default function StockMovementHubScreen() {
     []
   );
 
+  // Always fetch transactions on mount and filter changes so recent history is immediately ready
   useEffect(() => {
-    if (activeSection === 'HISTORY') {
+    fetchTransactions(historyFilter, 1);
+  }, [historyFilter, fetchTransactions]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMasterData();
       fetchTransactions(historyFilter, 1);
-    }
-  }, [activeSection, historyFilter, fetchTransactions]);
+    }, [fetchMasterData, fetchTransactions, historyFilter])
+  );
 
   const handleRefreshAll = useCallback(async () => {
-    await fetchMasterData();
-    if (activeSection === 'HISTORY') {
-      await fetchTransactions(historyFilter, 1, true);
-    }
-  }, [fetchMasterData, activeSection, historyFilter, fetchTransactions]);
+    await Promise.all([
+      fetchMasterData(),
+      fetchTransactions(historyFilter, 1, true),
+    ]);
+  }, [fetchMasterData, historyFilter, fetchTransactions]);
 
   // Selected Lookups
   const selectedSourceWarehouse = useMemo(() => {
@@ -270,7 +292,7 @@ export default function StockMovementHubScreen() {
       list.push({
         id,
         title: wh.name || 'Warehouse',
-        subtitle: `Code: ${wh.code || 'WH'} • Available Balance: ${bal.toLocaleString('en-IN')} pkts`,
+        subtitle: `Code: ${wh.code || 'WH'} • Available: ${bal.toLocaleString('en-IN')} pkts`,
         badge: isHq ? 'CENTRAL HQ' : 'REGIONAL DEPOT',
         badgeVariant: isHq ? 'ACTIVE' : 'neutral',
         metadata: `${wh.state || ''} ${wh.district || ''} ${wh.code || ''}`,
@@ -296,7 +318,7 @@ export default function StockMovementHubScreen() {
       list.push({
         id,
         title: `${m.name || 'Manager'} (Dual-Role Manager - Van Stock)`,
-        subtitle: `Manager Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
+        subtitle: `Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
         badge: 'VAN STOCK',
         badgeVariant: 'ACTIVE',
         metadata: `${m.phone || ''} ${m.email || ''} ${m.district || ''} dual role van stock manager`,
@@ -389,6 +411,16 @@ export default function StockMovementHubScreen() {
   const isInwardQtyValid = !isNaN(parsedInwardQty) && parsedInwardQty > 0;
   const isInwardFormValid = Boolean(inwardProductId) && isInwardQtyValid;
 
+  const handleTransferQuickAdd = (amount: number) => {
+    const current = parseInt(transferQtyStr, 10);
+    const next = isNaN(current) || current <= 0 ? amount : current + amount;
+    if (sourceAvailableStock > 0 && next > sourceAvailableStock) {
+      setTransferQtyStr(String(sourceAvailableStock));
+    } else {
+      setTransferQtyStr(String(next));
+    }
+  };
+
   const handleInwardQuickAdd = (amount: number) => {
     const current = parseInt(inwardQtyStr, 10);
     const next = isNaN(current) || current <= 0 ? amount : current + amount;
@@ -422,11 +454,9 @@ export default function StockMovementHubScreen() {
         [{ text: 'OK' }]
       );
 
-      // Refresh master inventory data
+      // Refresh master inventory data and recent transactions
       fetchMasterData();
-      if (activeSection === 'HISTORY') {
-        fetchTransactions(historyFilter, 1);
-      }
+      fetchTransactions(historyFilter, 1);
     } catch (err: any) {
       const msg = err.message || 'Failed to dispatch stock transfer.';
       setFeedback({ type: 'error', message: msg });
@@ -461,11 +491,9 @@ export default function StockMovementHubScreen() {
         [{ text: 'OK' }]
       );
 
-      // Refresh master inventory data
+      // Refresh master inventory data and recent transactions
       fetchMasterData();
-      if (activeSection === 'HISTORY') {
-        fetchTransactions(historyFilter, 1);
-      }
+      fetchTransactions(historyFilter, 1);
     } catch (err: any) {
       const msg = err.message || 'Failed to record stock inward.';
       setFeedback({ type: 'error', message: msg });
@@ -475,6 +503,98 @@ export default function StockMovementHubScreen() {
     }
   }
 
+  // Helper to render transaction item card
+  const renderTransactionCard = (tx: AdminInventoryTransactionItem) => {
+    const { dateStr, timeStr } = formatTransactionIST(tx.createdAt);
+    const route = getTransactionRoute(tx);
+    const upperType = String(tx.type || '').toUpperCase();
+    const isTxInward = upperType === 'INWARD' || upperType === 'RECEIPT';
+    const isTxTransfer = upperType === 'TRANSFER' || upperType === 'DISPATCH';
+
+    const typeColor = isTxInward
+      ? BrandColors.green.dark
+      : isTxTransfer
+      ? '#0369A1'
+      : '#7C3AED';
+
+    const typeBg = isTxInward
+      ? BrandColors.green.surface
+      : isTxTransfer
+      ? '#F0F9FF'
+      : '#F5F3FF';
+
+    const prodName = tx.product?.name || tx.productName || 'Sanitary Napkins Pack';
+    const prodSku = tx.product?.sku || tx.productSku || 'SKU';
+    const actorName = tx.actor?.name || tx.user?.name || tx.createdBy?.name || 'Super Admin';
+
+    return (
+      <Card key={tx.id} style={styles.txCard}>
+        {/* Top Row: Type Badge + IST Timestamp */}
+        <View style={styles.txTopRow}>
+          <View style={[styles.txTypeBadge, { backgroundColor: typeBg }]}>
+            <Text style={[styles.txTypeBadgeText, { color: typeColor }]}>
+              {isTxInward ? 'INWARD' : upperType}
+            </Text>
+          </View>
+          <View style={styles.txDateWrap}>
+            <Ionicons name="calendar-outline" size={13} color={Colors.light.textTertiary} />
+            <Text style={styles.txDateText}>
+              {dateStr} • {timeStr}
+            </Text>
+          </View>
+        </View>
+
+        {/* Route: From -> To */}
+        <View style={styles.txRouteBox}>
+          <View style={styles.txRouteNode}>
+            <Text style={styles.txRouteLabel}>FROM</Text>
+            <Text style={styles.txRouteText} numberOfLines={1}>
+              {route.from}
+            </Text>
+          </View>
+          <View style={styles.txRouteArrowWrap}>
+            <Ionicons name="arrow-forward" size={16} color={BrandColors.green.primary} />
+          </View>
+          <View style={styles.txRouteNode}>
+            <Text style={styles.txRouteLabel}>TO</Text>
+            <Text style={styles.txRouteText} numberOfLines={1}>
+              {route.to}
+            </Text>
+          </View>
+        </View>
+
+        {/* Product & Quantity */}
+        <View style={styles.txProductRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.txProductName} numberOfLines={1}>
+              {prodName}
+            </Text>
+            <Text style={styles.txProductSku}>SKU: {prodSku}</Text>
+          </View>
+          <View style={[styles.txQuantityPill, isTxInward && styles.txQuantityPillInward]}>
+            <Text style={[styles.txQuantityText, isTxInward && styles.txQuantityTextInward]}>
+              {isTxInward ? '+' : ''}{Number(tx.quantity).toLocaleString('en-IN')} pkts
+            </Text>
+          </View>
+        </View>
+
+        {/* Footer */}
+        <View style={styles.txFooterRow}>
+          <View style={styles.txActorWrap}>
+            <Ionicons name="person-circle-outline" size={14} color={Colors.light.textTertiary} />
+            <Text style={styles.txActorText} numberOfLines={1}>
+              By: {actorName}
+            </Text>
+          </View>
+          <View style={styles.txStatusPill}>
+            <Ionicons name="checkmark-circle" size={12} color={BrandColors.green.primary} />
+            <Text style={styles.txStatusText}>Recorded</Text>
+          </View>
+        </View>
+      </Card>
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -483,104 +603,20 @@ export default function StockMovementHubScreen() {
       <Header
         title="Stock Movement Hub"
         subtitle="Transfer stock, add factory inward, and view history"
-        showBack
+        showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
+        rightAction={
+          <TouchableOpacity
+            style={styles.addWarehouseHeaderBtn}
+            onPress={() => router.push('/(admin)/inventory/new' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Add Warehouse Depot"
+          >
+            <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.addWarehouseHeaderBtnText}>Depot</Text>
+          </TouchableOpacity>
+        }
       />
-
-      {/* Primary 3-Section Segmented Navigation Buttons */}
-      <View style={styles.segmentedNavWrapper}>
-        <View style={styles.segmentedNavContainer}>
-          <TouchableOpacity
-            style={[
-              styles.segmentedButton,
-              activeSection === 'TRANSFER' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => {
-              setActiveSection('TRANSFER');
-              setFeedback(null);
-            }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeSection === 'TRANSFER' }}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="swap-horizontal-outline"
-              size={16}
-              color={activeSection === 'TRANSFER' ? BrandColors.green.dark : Colors.light.textSecondary}
-              style={styles.segmentedButtonIcon}
-            />
-            <Text
-              style={[
-                styles.segmentedButtonText,
-                activeSection === 'TRANSFER' && styles.segmentedButtonTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              Stock Transfer
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.segmentedButton,
-              activeSection === 'INWARD' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => {
-              setActiveSection('INWARD');
-              setFeedback(null);
-            }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeSection === 'INWARD' }}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="download-outline"
-              size={16}
-              color={activeSection === 'INWARD' ? BrandColors.green.dark : Colors.light.textSecondary}
-              style={styles.segmentedButtonIcon}
-            />
-            <Text
-              style={[
-                styles.segmentedButtonText,
-                activeSection === 'INWARD' && styles.segmentedButtonTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              Stock Inward
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.segmentedButton,
-              activeSection === 'HISTORY' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => {
-              setActiveSection('HISTORY');
-              setFeedback(null);
-            }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeSection === 'HISTORY' }}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name="time-outline"
-              size={16}
-              color={activeSection === 'HISTORY' ? BrandColors.green.dark : Colors.light.textSecondary}
-              style={styles.segmentedButtonIcon}
-            />
-            <Text
-              style={[
-                styles.segmentedButtonText,
-                activeSection === 'HISTORY' && styles.segmentedButtonTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              History
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -599,435 +635,578 @@ export default function StockMovementHubScreen() {
               type={feedback.type}
               message={feedback.message}
               onDismiss={() => setFeedback(null)}
-              style={{ marginBottom: Spacing.md }}
             />
           )}
 
           {dataError && (
             <Card style={styles.errorCard}>
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle-outline" size={24} color={Colors.light.error} />
-                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                <Ionicons name="alert-circle" size={20} color={Colors.light.danger} style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
                   <Text style={styles.errorTitle}>Inventory Lookup Issue</Text>
                   <Text style={styles.errorText}>{dataError}</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={fetchMasterData}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.retryButtonText}>Retry</Text>
-                </TouchableOpacity>
               </View>
+              <Button
+                title="Retry Fetch"
+                variant="outline"
+                size="sm"
+                onPress={fetchMasterData}
+                style={{ marginTop: Spacing.sm }}
+              />
             </Card>
           )}
 
-          {/* ======================================================== */}
-          {/* SECTION 1: STOCK TRANSFER */}
-          {/* ======================================================== */}
-          {activeSection === 'TRANSFER' && (
-            <View>
-              <Card style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={[styles.cardIconBox, { backgroundColor: BrandColors.green.surface }]}>
-                    <Ionicons name="swap-horizontal" size={20} color={BrandColors.green.dark} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardHeaderTitle}>Inter-Location Stock Transfer</Text>
-                    <Text style={styles.cardHeaderSub}>
-                      Dispatch inventory from central or regional depot to field seller vans or regional hubs.
-                    </Text>
+          {/* ==================================================== */}
+          {/* STAT CARDS SECTION (HQ, Depots, Vans, Total)          */}
+          {/* ==================================================== */}
+          <View style={styles.statsSection}>
+            <View style={styles.statCardsRow}>
+              {/* Card 1: Central HQ Stock */}
+              <Card style={[styles.statCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
+                <View style={styles.statCardHeader}>
+                  <Text style={styles.statCardLabel}>CENTRAL HQ</Text>
+                  <View style={[styles.statIconBadge, { backgroundColor: BrandColors.green.surface }]}>
+                    <Ionicons name="cube" size={14} color={BrandColors.green.primary} />
                   </View>
                 </View>
-
-                {/* 1. Source Location (From) */}
-                <DropdownTrigger
-                  label="Source Location (From)"
-                  required
-                  value={selectedSourceWarehouse?.name}
-                  subtitle={
-                    selectedSourceWarehouse
-                      ? `Code: ${selectedSourceWarehouse.code || 'HQ'} • Available Balance: ${sourceAvailableStock.toLocaleString('en-IN')} pkts`
-                      : 'Select source warehouse...'
-                  }
-                  badge={selectedSourceWarehouse?.type === 'HQ' ? 'CENTRAL HQ' : 'REGIONAL DEPOT'}
-                  icon="cube"
-                  onPress={() => setSourcePickerOpen(true)}
-                />
-
-                {/* 2. Destination Location (To) */}
-                <DropdownTrigger
-                  label="Destination Location (To)"
-                  required
-                  value={selectedDestination?.title}
-                  subtitle={selectedDestination?.subtitle || 'Select destination seller or depot...'}
-                  badge={selectedDestination?.badge}
-                  icon={selectedDestination?.badge === 'FIELD SELLER' ? 'person' : 'business'}
-                  onPress={() => setDestPickerOpen(true)}
-                />
-
-                {/* 3. Product / SKU Picker */}
-                <DropdownTrigger
-                  label="Product / SKU"
-                  required
-                  value={selectedTransferProduct?.name}
-                  subtitle={
-                    selectedTransferProduct
-                      ? `SKU: ${selectedTransferProduct.sku || selectedTransferProduct.id.slice(0, 8)} • Source Stock: ${sourceAvailableStock.toLocaleString('en-IN')} pkts`
-                      : 'Select product SKU...'
-                  }
-                  badge={selectedTransferProduct?.sku || undefined}
-                  icon="pricetag"
-                  onPress={() => setTransferProdPickerOpen(true)}
-                />
-
-                {/* 4. Numeric Quantity Input */}
-                <View style={styles.quantitySection}>
-                  <Input
-                    label="Packet Quantity *"
-                    value={transferQtyStr}
-                    onChangeText={setTransferQtyStr}
-                    keyboardType="number-pad"
-                    placeholder="Enter packet quantity..."
-                    leftIcon={<Ionicons name="cube-outline" size={18} color={Colors.light.textTertiary} />}
-                  />
-
-                  {/* Stock Validation Feedback */}
-                  {isTransferStockExceeded && (
-                    <View style={styles.stockWarningBox}>
-                      <Ionicons name="warning-outline" size={16} color={BrandColors.pink.primary} />
-                      <Text style={styles.stockWarningText}>
-                        Entered quantity ({parsedTransferQty.toLocaleString('en-IN')}) exceeds available stock ({sourceAvailableStock.toLocaleString('en-IN')} pkts) at source location.
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                <Text style={[styles.statCardValue, { color: BrandColors.green.primary }]}>
+                  {(inventorySummary?.hqStock ?? 0).toLocaleString('en-IN')}
+                  <Text style={styles.statCardUnit}> pkts</Text>
+                </Text>
+                <Text style={styles.statCardSub}>HQ Reserve</Text>
               </Card>
 
-              {/* Action Button: Execute Stock Transfer */}
+              {/* Card 2: Regional Depots */}
+              <Card style={[styles.statCard, { borderLeftColor: '#0284C7', borderLeftWidth: 4 }]}>
+                <View style={styles.statCardHeader}>
+                  <Text style={styles.statCardLabel}>DEPOTS</Text>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#F0F9FF' }]}>
+                    <Ionicons name="business" size={14} color="#0284C7" />
+                  </View>
+                </View>
+                <Text style={[styles.statCardValue, { color: '#0284C7' }]}>
+                  {(inventorySummary?.warehouseStock ?? 0).toLocaleString('en-IN')}
+                  <Text style={styles.statCardUnit}> pkts</Text>
+                </Text>
+                <Text style={styles.statCardSub}>{warehouses.length} active facilities</Text>
+              </Card>
+            </View>
+
+            <View style={styles.statCardsRow}>
+              {/* Card 3: Field Van Stock */}
+              <Card style={[styles.statCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>
+                <View style={styles.statCardHeader}>
+                  <Text style={styles.statCardLabel}>VAN STOCK</Text>
+                  <View style={[styles.statIconBadge, { backgroundColor: BrandColors.pink.surface }]}>
+                    <Ionicons name="car-sport" size={14} color={BrandColors.pink.primary} />
+                  </View>
+                </View>
+                <Text style={[styles.statCardValue, { color: BrandColors.pink.primary }]}>
+                  {(inventorySummary?.sellerStock ?? 0).toLocaleString('en-IN')}
+                  <Text style={styles.statCardUnit}> pkts</Text>
+                </Text>
+                <Text style={styles.statCardSub}>{sellers.length} field sellers</Text>
+              </Card>
+
+              {/* Card 4: Total System Stock */}
+              <Card style={[styles.statCard, { borderLeftColor: '#7C3AED', borderLeftWidth: 4 }]}>
+                <View style={styles.statCardHeader}>
+                  <Text style={styles.statCardLabel}>TOTAL STOCK</Text>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#F5F3FF' }]}>
+                    <Ionicons name="layers" size={14} color="#7C3AED" />
+                  </View>
+                </View>
+                <Text style={[styles.statCardValue, { color: '#7C3AED' }]}>
+                  {(inventorySummary?.totalStock ?? 0).toLocaleString('en-IN')}
+                  <Text style={styles.statCardUnit}> pkts</Text>
+                </Text>
+                <Text style={styles.statCardSub}>Entire network</Text>
+              </Card>
+            </View>
+          </View>
+
+          {/* ==================================================== */}
+          {/* THREE PROPER BUTTONS AT TOP                          */}
+          {/* (Stock Transfer, Stock Inward, History)              */}
+          {/* ==================================================== */}
+          <View style={styles.actionButtonsContainer}>
+            <Text style={styles.sectionHeaderTitle}>Stock Actions</Text>
+            <View style={styles.actionButtonsRow}>
+              {/* Button 1: Stock Transfer */}
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  activeSection === 'TRANSFER' && styles.actionButtonActiveTransfer,
+                ]}
+                onPress={() => {
+                  setActiveSection('TRANSFER');
+                  setFeedback(null);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeSection === 'TRANSFER' }}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.actionIconBox,
+                    { backgroundColor: '#E0F2FE' },
+                    activeSection === 'TRANSFER' && styles.actionIconBoxActiveTransfer,
+                  ]}
+                >
+                  <Ionicons
+                    name="swap-horizontal"
+                    size={20}
+                    color={activeSection === 'TRANSFER' ? '#FFFFFF' : '#0369A1'}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.actionButtonTitle,
+                    activeSection === 'TRANSFER' && styles.actionButtonTitleActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  Stock Transfer
+                </Text>
+                <Text style={styles.actionButtonSub} numberOfLines={1}>
+                  Depot to Van
+                </Text>
+              </TouchableOpacity>
+
+              {/* Button 2: Stock Inward */}
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  activeSection === 'INWARD' && styles.actionButtonActiveInward,
+                ]}
+                onPress={() => {
+                  setActiveSection('INWARD');
+                  setFeedback(null);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeSection === 'INWARD' }}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.actionIconBox,
+                    { backgroundColor: BrandColors.green.surface },
+                    activeSection === 'INWARD' && styles.actionIconBoxActiveInward,
+                  ]}
+                >
+                  <Ionicons
+                    name="download"
+                    size={20}
+                    color={activeSection === 'INWARD' ? '#FFFFFF' : BrandColors.green.primary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.actionButtonTitle,
+                    activeSection === 'INWARD' && styles.actionButtonTitleActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  Stock Inward
+                </Text>
+                <Text style={styles.actionButtonSub} numberOfLines={1}>
+                  Factory to HQ
+                </Text>
+              </TouchableOpacity>
+
+              {/* Button 3: History */}
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  activeSection === 'HISTORY' && styles.actionButtonActiveHistory,
+                ]}
+                onPress={() => {
+                  setActiveSection('HISTORY');
+                  setFeedback(null);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeSection === 'HISTORY' }}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.actionIconBox,
+                    { backgroundColor: '#F1F5F9' },
+                    activeSection === 'HISTORY' && styles.actionIconBoxActiveHistory,
+                  ]}
+                >
+                  <Ionicons
+                    name="time"
+                    size={20}
+                    color={activeSection === 'HISTORY' ? '#FFFFFF' : '#475569'}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.actionButtonTitle,
+                    activeSection === 'HISTORY' && styles.actionButtonTitleActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  History
+                </Text>
+                <Text style={styles.actionButtonSub} numberOfLines={1}>
+                  Ledger Audit
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ==================================================== */}
+          {/* SECTION 1: STOCK TRANSFER FORM (When active)          */}
+          {/* ==================================================== */}
+          {activeSection === 'TRANSFER' && (
+            <Card style={styles.formCard}>
+              <View style={styles.formHeaderRow}>
+                <View style={[styles.formHeaderIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons name="swap-horizontal" size={18} color="#0369A1" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formHeaderTitle}>Transfer Stock</Text>
+                  <Text style={styles.formHeaderSubtitle}>
+                    Dispatch packets from central/regional depot to seller vans or hubs.
+                  </Text>
+                </View>
+              </View>
+
+              {/* 1. Source Warehouse Trigger */}
+              <View style={styles.fieldWrap}>
+                <DropdownTrigger
+                  label="SOURCE WAREHOUSE (FROM)"
+                  required
+                  value={selectedSourceWarehouse?.name || 'Select Source Depot'}
+                  subtitle={`Code: ${selectedSourceWarehouse?.code || 'WH'} • Balance: ${sourceAvailableStock.toLocaleString('en-IN')} pkts`}
+                  badge={selectedSourceWarehouse?.type === 'HQ' ? 'CENTRAL HQ' : 'DEPOT'}
+                  icon="cube-outline"
+                  onPress={() => setSourcePickerOpen(true)}
+                />
+              </View>
+
+              {/* 2. Destination Location Trigger */}
+              <View style={styles.fieldWrap}>
+                <DropdownTrigger
+                  label="DESTINATION (TO)"
+                  required
+                  value={selectedDestination?.title || 'Select Target Location'}
+                  subtitle={selectedDestination?.subtitle || 'Tap to choose destination'}
+                  badge={selectedDestination?.badge || 'DESTINATION'}
+                  icon="car-sport-outline"
+                  onPress={() => setDestPickerOpen(true)}
+                />
+              </View>
+
+              {/* 3. Product Selection Trigger */}
+              <View style={styles.fieldWrap}>
+                <DropdownTrigger
+                  label="PRODUCT SKU"
+                  required
+                  value={selectedTransferProduct?.name || 'Select Product SKU'}
+                  subtitle={`SKU: ${selectedTransferProduct?.sku || 'SKU'} • Available: ${sourceAvailableStock.toLocaleString('en-IN')} pkts`}
+                  badge={selectedTransferProduct?.sku || 'SKU'}
+                  icon="pricetag-outline"
+                  onPress={() => setTransferProdPickerOpen(true)}
+                />
+              </View>
+
+              {/* Live Available Stock Badge */}
+              <View style={styles.balanceInfoBox}>
+                <Ionicons name="information-circle" size={16} color="#0369A1" style={{ marginRight: 6 }} />
+                <Text style={styles.balanceInfoText}>
+                  Source Stock Available: <Text style={{ fontWeight: '800' }}>{sourceAvailableStock.toLocaleString('en-IN')}</Text> packets
+                </Text>
+              </View>
+
+              {/* 4. Quantity Input */}
+              <View style={styles.fieldWrap}>
+                <Input
+                  label="TRANSFER QUANTITY (PACKETS) *"
+                  value={transferQtyStr}
+                  onChangeText={setTransferQtyStr}
+                  placeholder="e.g. 200"
+                  keyboardType="number-pad"
+                  leftIcon={<Ionicons name="cube-outline" size={18} color="#64748B" />}
+                  error={
+                    isTransferStockExceeded
+                      ? `Cannot transfer more than available balance (${sourceAvailableStock.toLocaleString('en-IN')} pkts).`
+                      : !isTransferQtyValid && transferQtyStr.length > 0
+                      ? 'Please enter a valid packet quantity.'
+                      : undefined
+                  }
+                />
+              </View>
+
+              {/* Quick Add Pills */}
+              <View style={styles.quickAddWrap}>
+                <Text style={styles.quickAddLabel}>Quick Add:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickAddScroll}>
+                  {QUICK_ADD_PILLS.map((amount) => (
+                    <TouchableOpacity
+                      key={amount}
+                      style={styles.quickPill}
+                      onPress={() => handleTransferQuickAdd(amount)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickPillText}>+{amount.toLocaleString('en-IN')}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {sourceAvailableStock > 0 && (
+                    <TouchableOpacity
+                      style={[styles.quickPill, styles.quickPillMax]}
+                      onPress={() => setTransferQtyStr(String(sourceAvailableStock))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickPillMaxText}>Max ({sourceAvailableStock.toLocaleString('en-IN')})</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              </View>
+
+              {/* Submit Transfer Button */}
               <Button
-                title={isSubmittingTransfer ? 'Processing Transfer...' : 'Execute Stock Transfer'}
+                title={isSubmittingTransfer ? 'Dispatching Transfer...' : 'Confirm & Dispatch Transfer'}
                 variant="primary"
                 size="lg"
                 onPress={handleExecuteTransfer}
-                disabled={!isTransferFormValid || isSubmittingTransfer}
                 loading={isSubmittingTransfer}
-                icon={<Ionicons name="swap-horizontal" size={20} color="#FFFFFF" />}
-                style={styles.actionButton}
+                disabled={!isTransferFormValid || isSubmittingTransfer}
+                icon={<Ionicons name="send" size={18} color="#FFFFFF" />}
+                style={{ marginTop: Spacing.md }}
               />
-            </View>
+            </Card>
           )}
 
-          {/* ======================================================== */}
-          {/* SECTION 2: STOCK INWARD */}
-          {/* ======================================================== */}
+          {/* ==================================================== */}
+          {/* SECTION 2: STOCK INWARD FORM (When active)            */}
+          {/* ==================================================== */}
           {activeSection === 'INWARD' && (
-            <View>
-              <Card style={styles.sectionCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={[styles.cardIconBox, { backgroundColor: BrandColors.pink.surface }]}>
-                    <Ionicons name="download" size={20} color={BrandColors.pink.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardHeaderTitle}>Inward Stock to HQ</Text>
-                    <Text style={styles.cardHeaderSub}>
-                      Receive verified factory packets into Central Reserve.
-                    </Text>
-                  </View>
+            <Card style={styles.formCard}>
+              <View style={styles.formHeaderRow}>
+                <View style={[styles.formHeaderIconCircle, { backgroundColor: BrandColors.green.surface }]}>
+                  <Ionicons name="download" size={18} color={BrandColors.green.primary} />
                 </View>
-
-                {/* Fixed Destination Card: Automatic Central HQ Routing (No Dropdown) */}
-                <View style={styles.inwardHqContainer}>
-                  <View style={styles.inwardHqHeader}>
-                    <View style={styles.inwardHqBadge}>
-                      <Ionicons name="shield-checkmark" size={14} color={BrandColors.green.dark} />
-                      <Text style={styles.inwardHqBadgeText}>AUTOMATIC RESERVE ROUTING</Text>
-                    </View>
-                    <Text style={styles.inwardHqTitle}>Central Reserve (HQ Warehouse)</Text>
-                  </View>
-                  <Text style={styles.inwardHqDescription}>
-                    Verified factory inward packets are automatically added into the Central HQ inventory reserve.
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formHeaderTitle}>Factory Stock Inward</Text>
+                  <Text style={styles.formHeaderSubtitle}>
+                    Record incoming factory shipment packets into Central HQ inventory.
                   </Text>
                 </View>
+              </View>
 
-                {/* Product / SKU Dropdown */}
+              {/* 1. Target Inward Depot */}
+              <View style={styles.fieldWrap}>
+                <Text style={styles.fieldLabel}>DESTINATION WAREHOUSE (HQ) *</Text>
+                <Card variant="flat" style={styles.inwardHqBox}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="business" size={20} color={BrandColors.green.primary} style={{ marginRight: 10 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inwardHqTitle}>Central HQ Master Depot</Text>
+                      <Text style={styles.inwardHqSubtitle}>
+                        Direct Factory Consignment Inward Reserve
+                      </Text>
+                    </View>
+                    <Badge label="CENTRAL HQ" variant="ACTIVE" size="sm" />
+                  </View>
+                </Card>
+              </View>
+
+              {/* 2. Product Selection Trigger */}
+              <View style={styles.fieldWrap}>
                 <DropdownTrigger
-                  label="Product / SKU *"
+                  label="PRODUCT SKU TO RECEIVE"
                   required
-                  value={selectedInwardProduct?.name}
-                  subtitle={
-                    selectedInwardProduct
-                      ? `SKU: ${selectedInwardProduct.sku || selectedInwardProduct.id.slice(0, 8)} • Base Price: ₹${((selectedInwardProduct.basePricePaise ?? 2500) / 100).toFixed(2)}`
-                      : 'Select product SKU to inward...'
-                  }
-                  badge={selectedInwardProduct?.sku || undefined}
-                  icon="pricetag"
+                  value={selectedInwardProduct?.name || 'Select Product SKU to Receive'}
+                  subtitle={`SKU: ${selectedInwardProduct?.sku || 'SKU'} • Tap to choose`}
+                  badge={selectedInwardProduct?.sku || 'SKU'}
+                  icon="pricetag-outline"
                   onPress={() => setInwardProdPickerOpen(true)}
                 />
+              </View>
 
-                {/* Numeric Packet Quantity Input & Quick Chips */}
-                <View style={styles.quantitySection}>
-                  <Input
-                    label="Packet Quantity *"
-                    value={inwardQtyStr}
-                    onChangeText={setInwardQtyStr}
-                    keyboardType="number-pad"
-                    placeholder="Enter received packet count..."
-                    leftIcon={<Ionicons name="cube-outline" size={18} color={Colors.light.textTertiary} />}
-                  />
+              {/* 3. Inward Quantity Input */}
+              <View style={styles.fieldWrap}>
+                <Input
+                  label="RECEIVED QUANTITY (PACKETS) *"
+                  value={inwardQtyStr}
+                  onChangeText={setInwardQtyStr}
+                  placeholder="e.g. 5000"
+                  keyboardType="number-pad"
+                  leftIcon={<Ionicons name="cube-outline" size={18} color="#64748B" />}
+                  error={!isInwardQtyValid && inwardQtyStr.length > 0 ? 'Please enter a valid packet quantity.' : undefined}
+                />
+              </View>
 
-                  <View style={styles.quickChipsRow}>
-                    <Text style={styles.quickChipsLabel}>Quick Add:</Text>
-                    {QUICK_ADD_PILLS.map((qty) => (
-                      <TouchableOpacity
-                        key={qty}
-                        style={[
-                          styles.quickQtyChip,
-                          inwardQtyStr === String(qty) && styles.quickQtyChipActive,
-                        ]}
-                        onPress={() => handleInwardQuickAdd(qty)}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={[
-                            styles.quickQtyText,
-                            inwardQtyStr === String(qty) && styles.quickQtyTextActive,
-                          ]}
-                        >
-                          +{qty >= 1000 ? `${qty / 1000}k` : qty}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
+              {/* Quick Add Pills */}
+              <View style={styles.quickAddWrap}>
+                <Text style={styles.quickAddLabel}>Quick Add:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickAddScroll}>
+                  {QUICK_ADD_PILLS.map((amount) => (
+                    <TouchableOpacity
+                      key={amount}
+                      style={styles.quickPill}
+                      onPress={() => handleInwardQuickAdd(amount)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickPillText}>+{amount.toLocaleString('en-IN')}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
-                {/* Total Packet Quantity Summary */}
-                <View style={styles.totalPacketBanner}>
-                  <View style={styles.totalPacketIconWrap}>
-                    <Ionicons name="layers-outline" size={20} color={BrandColors.green.dark} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.totalPacketLabel}>Total Factory Inward</Text>
-                    <Text style={styles.totalPacketValue}>
-                      {isInwardQtyValid ? `${parsedInwardQty.toLocaleString('en-IN')} Packets` : '—'}
-                    </Text>
-                  </View>
-                  <View style={styles.totalPacketHqPill}>
-                    <Text style={styles.totalPacketHqPillText}>HQ Reserve</Text>
-                  </View>
-                </View>
-              </Card>
-
-              {/* Action Button: Inward Stock to HQ */}
+              {/* Submit Inward Button */}
               <Button
-                title={isSubmittingInward ? 'Logging Factory Inward...' : 'Inward Stock to HQ'}
+                title={isSubmittingInward ? 'Recording Factory Inward...' : 'Add Stock to HQ'}
                 variant="primary"
                 size="lg"
                 onPress={handleExecuteInward}
-                disabled={!isInwardFormValid || isSubmittingInward}
                 loading={isSubmittingInward}
-                icon={<Ionicons name="download" size={20} color="#FFFFFF" />}
-                style={styles.actionButton}
+                disabled={!isInwardFormValid || isSubmittingInward}
+                icon={<Ionicons name="checkmark-done-circle" size={18} color="#FFFFFF" />}
+                style={{ marginTop: Spacing.md }}
               />
-            </View>
+            </Card>
           )}
 
-          {/* ======================================================== */}
-          {/* SECTION 3: TRANSACTION HISTORY */}
-          {/* ======================================================== */}
-          {activeSection === 'HISTORY' && (
-            <View>
-              {/* Filter Buttons */}
-              <View style={styles.historyFilterRow}>
-                {(['All', 'Inward', 'Transfer', 'Sales'] as HistoryFilterType[]).map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[
-                      styles.historyFilterPill,
-                      historyFilter === f && styles.historyFilterPillActive,
-                    ]}
-                    onPress={() => setHistoryFilter(f)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.historyFilterText,
-                        historyFilter === f && styles.historyFilterTextActive,
-                      ]}
-                    >
-                      {f}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+          {/* ==================================================== */}
+          {/* BELOW SHOWN RECENT HISTORY                           */}
+          {/* (Shown in all modes, fully filtered when in History) */}
+          {/* ==================================================== */}
+          <View style={styles.historySection}>
+            <View style={styles.historySectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionHeaderTitle}>
+                  {activeSection === 'HISTORY'
+                    ? 'Recent History & Audit Ledger'
+                    : activeSection === 'TRANSFER'
+                    ? 'Recent Stock Transfers'
+                    : 'Recent Inward Receipts'}
+                </Text>
+                <Text style={styles.historySectionSubtitle}>
+                  {activeSection === 'HISTORY'
+                    ? 'All transfers, factory receipts, and retail deliveries'
+                    : 'Latest recorded stock movements in the ledger'}
+                </Text>
               </View>
 
-              {/* Error State with Retry */}
-              {historyError && (
-                <Card style={styles.errorCard}>
-                  <View style={styles.errorRow}>
-                    <Ionicons name="alert-circle-outline" size={24} color={Colors.light.error} />
-                    <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                      <Text style={styles.errorTitle}>Ledger Retrieval Error</Text>
-                      <Text style={styles.errorText}>{historyError}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.retryButton}
-                      onPress={() => fetchTransactions(historyFilter, 1)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.retryButtonText}>Retry</Text>
-                    </TouchableOpacity>
-                  </View>
-                </Card>
-              )}
-
-              {/* Loading Skeleton */}
-              {historyLoading && (
-                <View style={styles.skeletonContainer}>
-                  {[1, 2, 3].map((i) => (
-                    <View key={i} style={styles.skeletonCard}>
-                      <View style={styles.skeletonHeaderRow}>
-                        <View style={styles.skeletonPill} />
-                        <View style={styles.skeletonDate} />
-                      </View>
-                      <View style={styles.skeletonLineLg} />
-                      <View style={styles.skeletonLineSm} />
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Empty History State */}
-              {!historyLoading && !historyError && transactions.length === 0 && (
-                <Card style={styles.emptyStateCard}>
-                  <View style={styles.emptyIconCircle}>
-                    <Ionicons name="file-tray-outline" size={32} color={Colors.light.textMuted} />
-                  </View>
-                  <Text style={styles.emptyStateTitle}>No Movements Recorded</Text>
-                  <Text style={styles.emptyStateText}>
-                    {historyFilter === 'All'
-                      ? 'No stock movements or transactions found in the nationwide ledger.'
-                      : `No ${historyFilter.toLowerCase()} transactions found for this filter.`}
-                  </Text>
-                  <Button
-                    title="Refresh Ledger"
-                    variant="outline"
-                    size="sm"
-                    onPress={() => fetchTransactions(historyFilter, 1, true)}
-                    style={{ marginTop: Spacing.md }}
-                  />
-                </Card>
-              )}
-
-              {/* Transaction Cards List */}
-              {!historyLoading &&
-                transactions.map((tx) => {
-                  const { dateStr, timeStr } = formatTransactionIST(tx.createdAt);
-                  const route = getTransactionRoute(tx);
-                  const upperType = String(tx.type || '').toUpperCase();
-                  const isTxInward = upperType === 'INWARD' || upperType === 'RECEIPT';
-                  const isTxTransfer = upperType === 'TRANSFER' || upperType === 'DISPATCH';
-                  const isTxSale = upperType === 'SALE' || upperType === 'SALES';
-
-                  const typeColor = isTxInward
-                    ? BrandColors.green.dark
-                    : isTxTransfer
-                    ? '#0369A1'
-                    : '#7C3AED';
-
-                  const typeBg = isTxInward
-                    ? BrandColors.green.surface
-                    : isTxTransfer
-                    ? '#F0F9FF'
-                    : '#F5F3FF';
-
-                  const prodName = tx.product?.name || tx.productName || 'Sanitary Napkins Pack';
-                  const prodSku = tx.product?.sku || tx.productSku || 'SKU';
-                  const actorName = tx.actor?.name || tx.user?.name || tx.createdBy?.name || 'Super Admin';
-
-                  return (
-                    <Card key={tx.id} style={styles.txCard}>
-                      {/* Top Row: Type Badge + IST Timestamp */}
-                      <View style={styles.txTopRow}>
-                        <View style={[styles.txTypeBadge, { backgroundColor: typeBg }]}>
-                          <Text style={[styles.txTypeBadgeText, { color: typeColor }]}>
-                            {isTxInward ? 'INWARD' : upperType}
-                          </Text>
-                        </View>
-                        <View style={styles.txDateWrap}>
-                          <Ionicons name="calendar-outline" size={13} color={Colors.light.textTertiary} />
-                          <Text style={styles.txDateText}>
-                            {dateStr} • {timeStr}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Middle: Route & Flow */}
-                      <View style={styles.txRouteBox}>
-                        <View style={styles.txRouteNode}>
-                          <Text style={styles.txRouteLabel}>FROM</Text>
-                          <Text style={styles.txRouteText} numberOfLines={1}>
-                            {route.from}
-                          </Text>
-                        </View>
-                        <View style={styles.txRouteArrowWrap}>
-                          <Ionicons name="arrow-forward" size={16} color={BrandColors.green.primary} />
-                        </View>
-                        <View style={styles.txRouteNode}>
-                          <Text style={styles.txRouteLabel}>TO</Text>
-                          <Text style={styles.txRouteText} numberOfLines={1}>
-                            {route.to}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Product & Quantity Row */}
-                      <View style={styles.txProductRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.txProductName} numberOfLines={1}>
-                            {prodName}
-                          </Text>
-                          <Text style={styles.txProductSku}>SKU: {prodSku}</Text>
-                        </View>
-                        <View style={styles.txQuantityPill}>
-                          <Text style={styles.txQuantityText}>
-                            {Number(tx.quantity).toLocaleString('en-IN')} pkts
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Footer Row: Responsible User & Status */}
-                      <View style={styles.txFooterRow}>
-                        <View style={styles.txActorWrap}>
-                          <Ionicons name="person-circle-outline" size={14} color={Colors.light.textTertiary} />
-                          <Text style={styles.txActorText} numberOfLines={1}>
-                            By: {actorName}
-                          </Text>
-                        </View>
-                        <View style={styles.txStatusPill}>
-                          <Ionicons name="checkmark-circle" size={12} color={BrandColors.green.primary} />
-                          <Text style={styles.txStatusText}>Recorded</Text>
-                        </View>
-                      </View>
-                    </Card>
-                  );
-                })}
-
-              {/* Load More Pagination */}
-              {!historyLoading && historyPage < historyTotalPages && (
-                <View style={styles.paginationWrap}>
-                  <Button
-                    title={isLoadingMoreHistory ? 'Loading More Movements...' : 'Load More History'}
-                    variant="outline"
-                    size="md"
-                    onPress={() => fetchTransactions(historyFilter, historyPage + 1)}
-                    loading={isLoadingMoreHistory}
-                    disabled={isLoadingMoreHistory}
-                  />
-                </View>
+              {activeSection !== 'HISTORY' && (
+                <TouchableOpacity
+                  onPress={() => setActiveSection('HISTORY')}
+                  style={styles.viewAllHistoryLink}
+                  accessibilityRole="button"
+                  accessibilityLabel="View all history"
+                >
+                  <Text style={styles.viewAllHistoryLinkText}>View All ›</Text>
+                </TouchableOpacity>
               )}
             </View>
-          )}
+
+            {/* History Filter Pills (When History tab is active) */}
+            {activeSection === 'HISTORY' && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.historyFilterScroll}
+              >
+                {(['All', 'Inward', 'Transfer', 'Sales'] as HistoryFilterType[]).map((tab) => {
+                  const isActive = historyFilter === tab;
+                  return (
+                    <TouchableOpacity
+                      key={tab}
+                      style={[styles.historyFilterPill, isActive && styles.historyFilterPillActive]}
+                      onPress={() => setHistoryFilter(tab)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.historyFilterText, isActive && styles.historyFilterTextActive]}>
+                        {tab === 'All' ? 'All Movements' : tab}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            {/* Loading Skeleton */}
+            {historyLoading && (
+              <View style={{ gap: Spacing.sm }}>
+                <CardSkeleton />
+                <CardSkeleton />
+                <CardSkeleton />
+              </View>
+            )}
+
+            {/* Error State */}
+            {historyError && !historyLoading && (
+              <Card style={styles.errorCard}>
+                <View style={styles.errorRow}>
+                  <Ionicons name="alert-circle" size={18} color={Colors.light.danger} style={{ marginRight: 8 }} />
+                  <Text style={styles.errorText}>{historyError}</Text>
+                </View>
+                <Button
+                  title="Retry"
+                  variant="outline"
+                  size="sm"
+                  onPress={() => fetchTransactions(historyFilter, 1, true)}
+                  style={{ marginTop: Spacing.sm, alignSelf: 'flex-start' }}
+                />
+              </Card>
+            )}
+
+            {/* Empty History State */}
+            {!historyLoading && !historyError && transactions.length === 0 && (
+              <Card style={styles.emptyStateCard}>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons name="file-tray-outline" size={32} color={Colors.light.textMuted} />
+                </View>
+                <Text style={styles.emptyStateTitle}>No Movements Recorded</Text>
+                <Text style={styles.emptyStateText}>
+                  {historyFilter === 'All'
+                    ? 'No stock movements or transactions found in the ledger.'
+                    : `No ${historyFilter.toLowerCase()} transactions found for this filter.`}
+                </Text>
+                <Button
+                  title="Refresh Ledger"
+                  variant="outline"
+                  size="sm"
+                  onPress={() => fetchTransactions(historyFilter, 1, true)}
+                  style={{ marginTop: Spacing.md }}
+                />
+              </Card>
+            )}
+
+            {/* Transactions List */}
+            {!historyLoading && (
+              <View style={styles.transactionsList}>
+                {(activeSection === 'HISTORY'
+                  ? transactions
+                  : activeSection === 'TRANSFER'
+                  ? transactions.filter((t) => String(t.type || '').toUpperCase().includes('TRANSFER'))
+                  : transactions.filter((t) => {
+                      const ut = String(t.type || '').toUpperCase();
+                      return ut.includes('INWARD') || ut.includes('RECEIPT');
+                    })
+                ).slice(0, activeSection === 'HISTORY' ? undefined : 6).map((tx) => renderTransactionCard(tx))}
+              </View>
+            )}
+
+            {/* Load More Pagination (Only in Full History tab) */}
+            {activeSection === 'HISTORY' && !historyLoading && historyPage < historyTotalPages && (
+              <View style={styles.paginationWrap}>
+                <Button
+                  title={isLoadingMoreHistory ? 'Loading More Movements...' : 'Load More History'}
+                  variant="outline"
+                  size="md"
+                  onPress={() => fetchTransactions(historyFilter, historyPage + 1)}
+                  loading={isLoadingMoreHistory}
+                  disabled={isLoadingMoreHistory}
+                />
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
 
@@ -1099,396 +1278,339 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  segmentedNavWrapper: {
-    backgroundColor: Colors.light.surface,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  segmentedNavContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    borderRadius: BorderRadius.lg,
-    padding: 3,
-    maxWidth: MaxContentWidth,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  segmentedButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderRadius: BorderRadius.md,
-  },
-  segmentedButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    ...Shadows.sm,
-  },
-  segmentedButtonIcon: {
-    marginRight: 4,
-  },
-  segmentedButtonText: {
-    ...Typography.caption,
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  segmentedButtonTextActive: {
-    color: BrandColors.green.dark,
-    fontWeight: '700',
-  },
   scrollContent: {
     padding: Spacing.md,
     paddingBottom: Spacing.huge,
   },
   contentWrapper: {
-    width: '100%',
     maxWidth: MaxContentWidth,
+    width: '100%',
     alignSelf: 'center',
+    gap: Spacing.md,
   },
-  sectionCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginBottom: Spacing.md,
-    ...Shadows.sm,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.lg,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  cardIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  cardHeaderTitle: {
-    ...Typography.title,
-    fontSize: 17,
-    fontWeight: '700',
-    color: BrandColors.green.dark,
-  },
-  cardHeaderSub: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  quantitySection: {
-    marginBottom: Spacing.xs,
-  },
-  stockWarningBox: {
+  addWarehouseHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: BrandColors.pink.subtle,
-    borderWidth: 1,
-    borderColor: BrandColors.pink.border,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    marginTop: -8,
-    marginBottom: Spacing.sm,
-    gap: 6,
-  },
-  stockWarningText: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: BrandColors.pink.dark,
-    fontWeight: '600',
-    flex: 1,
-  },
-  quickChipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: -4,
-    marginBottom: Spacing.md,
-  },
-  quickChipsLabel: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textTertiary,
-    marginRight: 4,
-  },
-  quickQtyChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.light.surfaceMuted,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  quickQtyChipActive: {
-    backgroundColor: BrandColors.green.surface,
-    borderColor: BrandColors.green.border,
-  },
-  quickQtyText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-    fontSize: 12,
-  },
-  quickQtyTextActive: {
-    color: BrandColors.green.dark,
-    fontWeight: '700',
-  },
-  actionButton: {
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xl,
     backgroundColor: BrandColors.green.primary,
-  },
-  inwardHqContainer: {
-    backgroundColor: BrandColors.green.surface,
-    borderWidth: 1,
-    borderColor: BrandColors.green.border,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  inwardHqHeader: {
-    marginBottom: Spacing.xs,
-  },
-  inwardHqBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
-  },
-  inwardHqBadgeText: {
-    ...Typography.caption,
-    fontSize: 10,
-    fontWeight: '700',
-    color: BrandColors.green.dark,
-    letterSpacing: 0.5,
-  },
-  inwardHqTitle: {
-    ...Typography.subtitle,
-    fontSize: 15,
-    fontWeight: '700',
-    color: BrandColors.green.dark,
-  },
-  inwardHqDescription: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    lineHeight: 16,
-  },
-  totalPacketBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-  },
-  totalPacketIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: BorderRadius.md,
-    backgroundColor: BrandColors.green.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
-  },
-  totalPacketLabel: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.light.textTertiary,
-    fontWeight: '600',
-  },
-  totalPacketValue: {
-    ...Typography.title,
-    fontSize: 18,
-    fontWeight: '700',
-    color: BrandColors.green.dark,
-  },
-  totalPacketHqPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    backgroundColor: BrandColors.green.subtle,
-    borderWidth: 1,
-    borderColor: BrandColors.green.border,
-  },
-  totalPacketHqPillText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: '700',
-    color: BrandColors.green.dark,
-  },
-  historyFilterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.md,
-  },
-  historyFilterPill: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyFilterPillActive: {
-    backgroundColor: BrandColors.green.dark,
-    borderColor: BrandColors.green.dark,
-  },
-  historyFilterText: {
-    ...Typography.caption,
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  historyFilterTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  errorCard: {
-    backgroundColor: '#FFF1F2',
-    borderColor: '#FECDD3',
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  errorTitle: {
-    ...Typography.subtitle,
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.error,
-  },
-  errorText: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
-  },
-  retryButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.light.error,
+    borderRadius: Radius.full,
   },
-  retryButtonText: {
-    ...Typography.caption,
-    fontSize: 12,
-    fontWeight: '700',
+  addWarehouseHeaderBtnText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
   },
-  skeletonContainer: {
+
+  // Stat Cards
+  statsSection: {
     gap: Spacing.sm,
   },
-  skeletonCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+  statCardsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  skeletonHeaderRow: {
+  statCard: {
+    flex: 1,
+    padding: Spacing.md,
+    backgroundColor: '#FFFFFF',
+  },
+  statCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
-  },
-  skeletonPill: {
-    width: 70,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  skeletonDate: {
-    width: 110,
-    height: 16,
-    borderRadius: 4,
-    backgroundColor: '#F1F5F9',
-  },
-  skeletonLineLg: {
-    width: '85%',
-    height: 16,
-    borderRadius: 4,
-    backgroundColor: '#E2E8F0',
-    marginBottom: 8,
-  },
-  skeletonLineSm: {
-    width: '50%',
-    height: 14,
-    borderRadius: 4,
-    backgroundColor: '#F1F5F9',
-  },
-  emptyStateCard: {
     alignItems: 'center',
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    backgroundColor: Colors.light.card,
+    marginBottom: 4,
   },
-  emptyIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F1F5F9',
+  statCardLabel: {
+    ...Typography.overline,
+    color: Colors.light.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  statIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.md,
   },
-  emptyStateTitle: {
-    ...Typography.title,
+  statCardValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  statCardUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  statCardSub: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textTertiary,
+    marginTop: 2,
+  },
+
+  // Action Buttons
+  actionButtonsContainer: {
+    gap: Spacing.xs,
+  },
+  sectionHeaderTitle: {
+    ...Typography.h3,
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.light.heading,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: 4,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    ...Shadows.sm,
+  },
+  actionButtonActiveTransfer: {
+    borderColor: '#0284C7',
+    backgroundColor: '#F0F9FF',
+  },
+  actionButtonActiveInward: {
+    borderColor: BrandColors.green.primary,
+    backgroundColor: '#F0FDF4',
+  },
+  actionButtonActiveHistory: {
+    borderColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  actionIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  actionIconBoxActiveTransfer: {
+    backgroundColor: '#0284C7',
+  },
+  actionIconBoxActiveInward: {
+    backgroundColor: BrandColors.green.primary,
+  },
+  actionIconBoxActiveHistory: {
+    backgroundColor: '#0F172A',
+  },
+  actionButtonTitle: {
+    ...Typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.heading,
+    textAlign: 'center',
+  },
+  actionButtonTitleActive: {
+    color: '#0F172A',
+    fontWeight: '800',
+  },
+  actionButtonSub: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.light.textTertiary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+
+  // Forms
+  formCard: {
+    padding: Spacing.lg,
+    backgroundColor: '#FFFFFF',
+  },
+  formHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  formHeaderIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formHeaderTitle: {
+    ...Typography.h3,
     fontSize: 16,
     fontWeight: '700',
     color: Colors.light.heading,
   },
-  emptyStateText: {
-    ...Typography.body,
-    fontSize: 13,
+  formHeaderSubtitle: {
+    ...Typography.caption,
+    fontSize: 12,
     color: Colors.light.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 280,
+    marginTop: 2,
   },
-  txCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+  fieldWrap: {
     marginBottom: Spacing.sm,
-    ...Shadows.sm,
+  },
+  fieldLabel: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  balanceInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+    marginBottom: Spacing.sm,
+  },
+  balanceInfoText: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: '#0369A1',
+  },
+  inwardHqBox: {
+    padding: Spacing.md,
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+  },
+  inwardHqTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.heading,
+  },
+  inwardHqSubtitle: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  quickAddWrap: {
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  quickAddLabel: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  quickAddScroll: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  quickPill: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+  },
+  quickPillText: {
+    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  quickPillMax: {
+    backgroundColor: BrandColors.green.surface,
+    borderColor: BrandColors.green.border,
+  },
+  quickPillMaxText: {
+    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.green.dark,
+  },
+
+  // History Section
+  historySection: {
+    gap: Spacing.sm,
+  },
+  historySectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historySectionSubtitle: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 1,
+  },
+  viewAllHistoryLink: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  viewAllHistoryLinkText: {
+    ...Typography.caption,
+    fontSize: 13,
+    fontWeight: '700',
+    color: BrandColors.green.primary,
+  },
+  historyFilterScroll: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  historyFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+  },
+  historyFilterPillActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  historyFilterText: {
+    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  historyFilterTextActive: {
+    color: '#FFFFFF',
+  },
+  transactionsList: {
+    gap: Spacing.sm,
+  },
+
+  // Transaction Cards
+  txCard: {
+    padding: Spacing.md,
+    backgroundColor: '#FFFFFF',
   },
   txTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
   },
   txTypeBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: BorderRadius.xs,
+    borderRadius: BorderRadius.sm,
   },
   txTypeBadgeText: {
     ...Typography.caption,
@@ -1555,17 +1677,24 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   txQuantityPill: {
-    backgroundColor: BrandColors.green.surface,
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  txQuantityPillInward: {
+    backgroundColor: BrandColors.green.surface,
     borderColor: BrandColors.green.border,
   },
   txQuantityText: {
     ...Typography.caption,
     fontSize: 12,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  txQuantityTextInward: {
     color: BrandColors.green.dark,
   },
   txFooterRow: {
@@ -1602,5 +1731,56 @@ const styles = StyleSheet.create({
   paginationWrap: {
     marginVertical: Spacing.md,
     alignItems: 'center',
+  },
+
+  // Error & Empty States
+  errorCard: {
+    padding: Spacing.md,
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  errorTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.danger,
+  },
+  errorText: {
+    ...Typography.caption,
+    color: Colors.light.danger,
+    marginTop: 2,
+  },
+  emptyStateCard: {
+    padding: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.sm,
+  },
+  emptyStateTitle: {
+    ...Typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.heading,
+  },
+  emptyStateText: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    maxWidth: 280,
   },
 });
