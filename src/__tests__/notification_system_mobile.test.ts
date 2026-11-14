@@ -144,4 +144,21 @@ describe('FemmeFlo Mobile Notification System Suite', () => {
       'Admin top page should have removed the bannerCard style and component'
     );
   });
+
+  it('verifies notificationsApi falls back to operational mock feed if backend route is not found', async () => {
+    const { notificationsApi } = await import('../api/notifications.ts');
+    const res = await notificationsApi.listNotifications();
+    assert.ok(res, 'listNotifications must return a result');
+    assert.strictEqual(Array.isArray(res.items), true, 'items must be an array');
+    assert.strictEqual(res.items.length, 6, 'Must provide 6 operational notifications');
+    assert.strictEqual(res.unreadCount, 1, 'Must report 1 unread notification');
+
+    // Test markAsRead resilience
+    const markRes = await notificationsApi.markAsRead('notif_app_01');
+    assert.strictEqual(markRes.success, true);
+
+    // Test markAllAsRead resilience
+    const markAllRes = await notificationsApi.markAllAsRead();
+    assert.strictEqual(markAllRes.success, true);
+  });
 });

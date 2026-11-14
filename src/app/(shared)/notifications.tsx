@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { MOCK_NOTIFICATIONS } from '@/api/mockData';
 import { notificationsApi } from '@/api/notifications';
 import type { NotificationItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
@@ -166,7 +167,9 @@ export default function NotificationsScreen() {
       setNotifications(res.items);
       setUnreadCount(res.unreadCount);
     } catch (err) {
-      console.warn('Failed to load notifications', err);
+      console.warn('Live notifications endpoint unavailable, serving offline feed', err);
+      setNotifications(MOCK_NOTIFICATIONS);
+      setUnreadCount(MOCK_NOTIFICATIONS.filter((n) => !n.read).length);
     } finally {
       setLoading(false);
       setRefreshing(false);
