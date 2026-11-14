@@ -487,30 +487,6 @@ export const MOCK_SALES: SaleItem[] = [
     confirmedAt: '2026-10-28T12:28:00Z',
   },
   {
-    id: 'sale_003',
-    saleNumber: 'FF-2026-00414',
-    customerId: 'cust_03',
-    customer: MOCK_CUSTOMERS[2],
-    sellerId: 'usr_seller_01',
-    seller: { id: 'usr_seller_01', name: 'Pooja Sharma' },
-    totalAmountPaise: 44000, // ₹440.00
-    packetCount: 20,
-    status: 'PENDING', // Below minimum price (₹22 vs min ₹25)
-    paymentMode: 'PENDING',
-    approvalReason: 'Wholesale introductory discount requested by chemist association.',
-    items: [
-      {
-        id: 'sli_003',
-        productId: 'prod_01',
-        productName: 'FemmeFlo Ultra Comfort Regular (Pack of 10)',
-        quantity: 20,
-        unitPricePaise: 2200, // Below min ₹25
-        totalPricePaise: 44000,
-      },
-    ],
-    createdAt: '2026-10-28T13:45:00Z',
-  },
-  {
     id: 'sale_004',
     saleNumber: 'FF-2026-00398',
     customerId: 'cust_04',
@@ -1067,7 +1043,7 @@ export const MOCK_SELLER_DASHBOARD: SellerDashboardData = {
   todaySalesAmountPaise: 147500, // ₹1,475.00
   todayPacketsSold: 45,
   stockBalance: 305,
-  pendingApprovalsCount: 1,
+  pendingApprovalsCount: 0,
   activeShift: MOCK_CURRENT_SHIFT,
 };
 
@@ -1084,7 +1060,7 @@ export const MOCK_ADMIN_DASHBOARD: AdminDashboardData = {
   totalPacketsSold: 36200,
   totalCustomers: 590,
   activeSellers: 48,
-  pendingApprovalsCount: 1,
+  pendingApprovalsCount: 0,
   warehouseStockBalance: 42500,
 };
 
