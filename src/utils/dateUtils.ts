@@ -236,3 +236,29 @@ export function getISTDateRangeFilter(period: 'all' | 'today' | 'week' | 'month'
   return {};
 }
 
+export function parseDateInputToISO(dateStr: string): string | undefined {
+  const trimmed = dateStr.trim();
+  if (!trimmed) return undefined;
+  // Support dd-mm-yyyy or dd/mm/yyyy
+  const ddmmyyyy = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyy) {
+    const day = parseInt(ddmmyyyy[1], 10);
+    const month = parseInt(ddmmyyyy[2], 10) - 1;
+    const year = parseInt(ddmmyyyy[3], 10);
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  // Support yyyy-mm-dd
+  const yyyymmdd = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (yyyymmdd) {
+    const year = parseInt(yyyymmdd[1], 10);
+    const month = parseInt(yyyymmdd[2], 10) - 1;
+    const day = parseInt(yyyymmdd[3], 10);
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  const d = new Date(trimmed);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+

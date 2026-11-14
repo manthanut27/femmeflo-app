@@ -29,12 +29,14 @@ import {
   BrandColors,
   Colors,
   Elevation,
+  HitSlop,
   MaxContentWidth,
   Shadows,
   Spacing,
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { parseDateInputToISO } from '@/utils/dateUtils';
 
 export default function AdminDashboardScreen() {
   const { user } = useAuth();
@@ -54,7 +56,7 @@ export default function AdminDashboardScreen() {
   const [selectedManagerId, setSelectedManagerId] = useState('');
   const [selectedSellerId, setSelectedSellerId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | '30days' | 'custom'>('all');
+  const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | '30days' | 'this_month' | 'custom'>('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
@@ -101,6 +103,12 @@ export default function AdminDashboardScreen() {
   // Compute active date boundaries
   const dateRange = useMemo(() => {
     const now = new Date();
+    if (customFrom || customTo) {
+      return {
+        from: customFrom ? parseDateInputToISO(customFrom) : undefined,
+        to: customTo ? parseDateInputToISO(customTo) : undefined,
+      };
+    }
     if (datePreset === 'today') {
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       return { from: start.toISOString(), to: now.toISOString() };
@@ -115,11 +123,9 @@ export default function AdminDashboardScreen() {
       start.setDate(start.getDate() - 30);
       return { from: start.toISOString(), to: now.toISOString() };
     }
-    if (datePreset === 'custom') {
-      return {
-        from: customFrom ? new Date(customFrom).toISOString() : undefined,
-        to: customTo ? new Date(customTo).toISOString() : undefined,
-      };
+    if (datePreset === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: start.toISOString(), to: now.toISOString() };
     }
     return { from: undefined, to: undefined };
   }, [datePreset, customFrom, customTo]);
@@ -330,35 +336,56 @@ export default function AdminDashboardScreen() {
             </Card>
           ) : null}
 
-          {/* Filter Bar Trigger & Active Filters Strip */}
+          {/* Territory & Scope Filters */}
           <Card style={styles.filterTriggerCard}>
             <View style={styles.filterTriggerHeader}>
-              <TouchableOpacity
-                style={styles.filterToggleBtn}
-                onPress={() => setFiltersOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Open Operations Filters"
-              >
-                <Ionicons name="options-outline" size={18} color="#0F172A" />
-                <Text style={styles.filterToggleText}>Filter Operations</Text>
-                {activeFiltersCount > 0 ? (
-                  <View style={styles.filterCountBadge}>
-                    <Text style={styles.filterCountText}>{activeFiltersCount}</Text>
-                  </View>
-                ) : null}
-              </TouchableOpacity>
+              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="filter" size={18} color={BrandColors.pink.primary} />
+                  <Text style={styles.filterMainTitle}>Territory & Scope Filters</Text>
+                  {activeFiltersCount > 0 ? (
+                    <View style={styles.filterCountBadge}>
+                      <Text style={styles.filterCountText}>{activeFiltersCount}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.filterMainSub}>
+                  Filter live operational metrics by geographic hierarchy and category
+                </Text>
+              </View>
 
-              {activeFiltersCount > 0 ? (
-                <TouchableOpacity onPress={resetFilters} style={styles.clearAllBtn}>
-                  <Ionicons name="refresh-outline" size={14} color={BrandColors.pink.dark} />
-                  <Text style={styles.clearAllText}>Reset Filters</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {activeFiltersCount > 0 ? (
+                  <TouchableOpacity onPress={resetFilters} style={styles.clearAllBtn} hitSlop={HitSlop.sm}>
+                    <Ionicons name="refresh-outline" size={14} color={BrandColors.pink.dark} />
+                    <Text style={styles.clearAllText}>Reset</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.filterToggleBtn}
+                  onPress={() => setFiltersOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open Territory & Scope Filters"
+                >
+                  <Ionicons name="options-outline" size={16} color="#0F172A" />
+                  <Text style={styles.filterToggleText}>Filters</Text>
                 </TouchableOpacity>
-              ) : null}
+              </View>
             </View>
 
             {/* Active Filter Chips Strip */}
             {activeFiltersCount > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.activeChipsRow}>
+                {datePreset !== 'all' || customFrom || customTo ? (
+                  <View style={styles.activeChip}>
+                    <Text style={styles.activeChipText}>
+                      Date: {datePreset === 'today' ? 'Today' : datePreset === '7days' ? 'Last 7 Days' : datePreset === '30days' ? 'Last 30 Days' : datePreset === 'this_month' ? 'This Month' : `${customFrom || 'Start'} to ${customTo || 'Now'}`}
+                    </Text>
+                    <Pressable onPress={() => { setDatePreset('all'); setCustomFrom(''); setCustomTo(''); }}>
+                      <Ionicons name="close-circle" size={14} color="#64748B" />
+                    </Pressable>
+                  </View>
+                ) : null}
                 {selectedState ? (
                   <View style={styles.activeChip}>
                     <Text style={styles.activeChipText}>State: {selectedState}</Text>
@@ -377,7 +404,7 @@ export default function AdminDashboardScreen() {
                 ) : null}
                 {selectedVillage ? (
                   <View style={styles.activeChip}>
-                    <Text style={styles.activeChipText}>Village: {selectedVillage}</Text>
+                    <Text style={styles.activeChipText}>Village / Area: {selectedVillage}</Text>
                     <Pressable onPress={() => setSelectedVillage('')}>
                       <Ionicons name="close-circle" size={14} color="#64748B" />
                     </Pressable>
@@ -396,7 +423,7 @@ export default function AdminDashboardScreen() {
                 {selectedSellerId ? (
                   <View style={styles.activeChip}>
                     <Text style={styles.activeChipText}>
-                      Seller: {filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || 'Selected'}
+                      Field Officer: {filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || 'Selected'}
                     </Text>
                     <Pressable onPress={() => setSelectedSellerId('')}>
                       <Ionicons name="close-circle" size={14} color="#64748B" />
@@ -409,14 +436,6 @@ export default function AdminDashboardScreen() {
                       Category: {filterOptions.categories.find((c) => c.id === selectedCategoryId)?.name || 'Selected'}
                     </Text>
                     <Pressable onPress={() => setSelectedCategoryId('')}>
-                      <Ionicons name="close-circle" size={14} color="#64748B" />
-                    </Pressable>
-                  </View>
-                ) : null}
-                {datePreset !== 'all' ? (
-                  <View style={styles.activeChip}>
-                    <Text style={styles.activeChipText}>Period: {datePreset.toUpperCase()}</Text>
-                    <Pressable onPress={() => setDatePreset('all')}>
                       <Ionicons name="close-circle" size={14} color="#64748B" />
                     </Pressable>
                   </View>
@@ -720,8 +739,8 @@ export default function AdminDashboardScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Filter Dashboard Operations</Text>
-                <Text style={styles.modalSub}>Target specific territories, field officers and dates</Text>
+                <Text style={styles.modalTitle}>Territory & Scope Filters</Text>
+                <Text style={styles.modalSub}>Filter live operational metrics by geographic hierarchy and category</Text>
               </View>
               <Pressable onPress={() => setFiltersOpen(false)} style={styles.modalCloseBtn}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />
@@ -729,50 +748,64 @@ export default function AdminDashboardScreen() {
             </View>
 
             <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Date Presets */}
-              <Text style={styles.filterSectionTitle}>Period</Text>
+              {/* Date Range */}
+              <Text style={styles.filterSectionTitle}>Date Range:</Text>
               <View style={styles.chipGrid}>
                 {(
                   [
-                    { id: 'all', label: 'All Time' },
                     { id: 'today', label: 'Today' },
                     { id: '7days', label: 'Last 7 Days' },
                     { id: '30days', label: 'Last 30 Days' },
-                    { id: 'custom', label: 'Custom' },
+                    { id: 'this_month', label: 'This Month' },
                   ] as const
-                ).map((d) => (
-                  <TouchableOpacity
-                    key={d.id}
-                    style={[styles.filterChip, datePreset === d.id && styles.filterChipActive]}
-                    onPress={() => setDatePreset(d.id)}
-                  >
-                    <Text style={[styles.filterChipText, datePreset === d.id && styles.filterChipTextActive]}>
-                      {d.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                ).map((d) => {
+                  const isSelected = datePreset === d.id && !customFrom && !customTo;
+                  return (
+                    <TouchableOpacity
+                      key={d.id}
+                      style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                      onPress={() => {
+                        setDatePreset(isSelected ? 'all' : d.id);
+                        setCustomFrom('');
+                        setCustomTo('');
+                      }}
+                    >
+                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                        {d.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              {datePreset === 'custom' ? (
-                <View style={styles.customDateRow}>
-                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                    <Text style={styles.inputLabel}>From Date (YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={styles.dateInput}
-                      value={customFrom}
-                      onChangeText={setCustomFrom}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>To Date (YYYY-MM-DD)</Text>
-                    <TextInput
-                      style={styles.dateInput}
-                      value={customTo}
-                      onChangeText={setCustomTo}
-                    />
-                  </View>
+              <View style={styles.customDateRow}>
+                <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                  <Text style={styles.inputLabel}>From:</Text>
+                  <TextInput
+                    style={styles.dateInput}
+                    value={customFrom}
+                    onChangeText={(val) => {
+                      setCustomFrom(val);
+                      if (val) setDatePreset('custom');
+                    }}
+                    placeholder="dd-mm-yyyy"
+                    placeholderTextColor="#94A3B8"
+                  />
                 </View>
-              ) : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>To:</Text>
+                  <TextInput
+                    style={styles.dateInput}
+                    value={customTo}
+                    onChangeText={(val) => {
+                      setCustomTo(val);
+                      if (val) setDatePreset('custom');
+                    }}
+                    placeholder="dd-mm-yyyy"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
 
               {/* State */}
               <Text style={styles.filterSectionTitle}>State</Text>
@@ -782,7 +815,7 @@ export default function AdminDashboardScreen() {
                   onPress={() => setSelectedState('')}
                 >
                   <Text style={[styles.filterChipText, !selectedState && styles.filterChipTextActive]}>
-                    All States
+                    All states
                   </Text>
                 </TouchableOpacity>
                 {filterOptions.states.map((st, idx) => {
@@ -811,7 +844,7 @@ export default function AdminDashboardScreen() {
                   onPress={() => setSelectedDistrict('')}
                 >
                   <Text style={[styles.filterChipText, !selectedDistrict && styles.filterChipTextActive]}>
-                    All Districts
+                    All districts
                   </Text>
                 </TouchableOpacity>
                 {filterOptions.districts.map((dst, idx) => {
@@ -832,24 +865,51 @@ export default function AdminDashboardScreen() {
                 })}
               </ScrollView>
 
-              {/* Village */}
-              <Text style={styles.filterSectionTitle}>Village / Cluster</Text>
+              {/* Village / Area */}
+              <Text style={styles.filterSectionTitle}>Village / Area</Text>
               <TextInput
                 style={styles.dateInput}
-                placeholder="Filter by village name (e.g. Diva, Shivpur)..."
+                placeholder="All villages"
+                placeholderTextColor="#94A3B8"
                 value={selectedVillage}
                 onChangeText={setSelectedVillage}
               />
+              {filterOptions.villages.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.horizontalChips, { marginTop: 6 }]}>
+                  <TouchableOpacity
+                    style={[styles.filterChip, !selectedVillage && styles.filterChipActive]}
+                    onPress={() => setSelectedVillage('')}
+                  >
+                    <Text style={[styles.filterChipText, !selectedVillage && styles.filterChipTextActive]}>
+                      All villages
+                    </Text>
+                  </TouchableOpacity>
+                  {filterOptions.villages.map((v, idx) => {
+                    const isSelected = selectedVillage.toLowerCase() === v.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={`v-${v}-${idx}`}
+                        style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                        onPress={() => setSelectedVillage(isSelected ? '' : v)}
+                      >
+                        <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                          {v}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
 
-              {/* Territory Manager */}
-              <Text style={styles.filterSectionTitle}>Territory Manager</Text>
+              {/* Manager */}
+              <Text style={styles.filterSectionTitle}>Manager</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
                 <TouchableOpacity
                   style={[styles.filterChip, !selectedManagerId && styles.filterChipActive]}
                   onPress={() => setSelectedManagerId('')}
                 >
                   <Text style={[styles.filterChipText, !selectedManagerId && styles.filterChipTextActive]}>
-                    All Managers
+                    All managers
                   </Text>
                 </TouchableOpacity>
                 {filterOptions.managers.map((m) => (
@@ -865,7 +925,7 @@ export default function AdminDashboardScreen() {
                 ))}
               </ScrollView>
 
-              {/* Field Officer / Seller */}
+              {/* Field Officer */}
               <Text style={styles.filterSectionTitle}>Field Officer</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
                 <TouchableOpacity
@@ -873,7 +933,7 @@ export default function AdminDashboardScreen() {
                   onPress={() => setSelectedSellerId('')}
                 >
                   <Text style={[styles.filterChipText, !selectedSellerId && styles.filterChipTextActive]}>
-                    All Officers
+                    All field officers
                   </Text>
                 </TouchableOpacity>
                 {filterOptions.sellers.map((s) => (
@@ -890,14 +950,14 @@ export default function AdminDashboardScreen() {
               </ScrollView>
 
               {/* Category */}
-              <Text style={styles.filterSectionTitle}>Retail Category</Text>
+              <Text style={styles.filterSectionTitle}>Category</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
                 <TouchableOpacity
                   style={[styles.filterChip, !selectedCategoryId && styles.filterChipActive]}
                   onPress={() => setSelectedCategoryId('')}
                 >
                   <Text style={[styles.filterChipText, !selectedCategoryId && styles.filterChipTextActive]}>
-                    All Categories
+                    All categories
                   </Text>
                 </TouchableOpacity>
                 {filterOptions.categories.map((c) => (
@@ -1046,6 +1106,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  filterMainTitle: {
+    ...Typography.body,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  filterMainSub: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
   filterToggleBtn: {
     flexDirection: 'row',
