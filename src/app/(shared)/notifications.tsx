@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Linking,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -12,6 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { notificationsApi } from '@/api/notifications';
@@ -34,7 +36,7 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
-type NotificationFilter =
+export type NotificationFilter =
   | 'ALL'
   | 'UNREAD'
   | 'SALE'
@@ -44,21 +46,83 @@ type NotificationFilter =
   | 'CUSTOMER'
   | 'OFFICER';
 
-interface FilterTabOption {
+export interface FilterOption {
   key: NotificationFilter;
   label: string;
+  description: string;
+  iconName: keyof typeof Ionicons.glyphMap;
+  color: string;
+  bgColor: string;
 }
 
-const FILTER_TABS: FilterTabOption[] = [
-  { key: 'ALL', label: 'All updates' },
-  { key: 'UNREAD', label: 'Unread' },
-  { key: 'SALE', label: 'Sales' },
-  { key: 'APPROVAL', label: 'Approvals' },
-  { key: 'INVENTORY', label: 'Inventory' },
-  { key: 'SHIFT', label: 'Duty Shifts' },
-  { key: 'CUSTOMER', label: 'Customers' },
-  { key: 'OFFICER', label: 'Officers' },
+export const FILTER_OPTIONS: FilterOption[] = [
+  {
+    key: 'ALL',
+    label: 'All updates',
+    description: 'All system alerts and notifications',
+    iconName: 'layers-outline',
+    color: '#0F172A',
+    bgColor: '#F1F5F9',
+  },
+  {
+    key: 'UNREAD',
+    label: 'Unread',
+    description: 'Notifications requiring your attention',
+    iconName: 'mail-unread-outline',
+    color: BrandColors.pink.dark,
+    bgColor: '#FFF1F2',
+  },
+  {
+    key: 'SALE',
+    label: 'Sales',
+    description: 'New orders and retail bookings',
+    iconName: 'receipt-outline',
+    color: '#1D4ED8',
+    bgColor: '#EFF6FF',
+  },
+  {
+    key: 'APPROVAL',
+    label: 'Approvals',
+    description: 'Price approvals and discounts',
+    iconName: 'shield-checkmark-outline',
+    color: BrandColors.pink.dark,
+    bgColor: '#FFF1F2',
+  },
+  {
+    key: 'INVENTORY',
+    label: 'Inventory',
+    description: 'Stock inward and dispatches',
+    iconName: 'cube-outline',
+    color: BrandColors.green.primary,
+    bgColor: '#ECFDF5',
+  },
+  {
+    key: 'SHIFT',
+    label: 'Duty Shifts',
+    description: 'Beat check-ins and field shifts',
+    iconName: 'time-outline',
+    color: '#7C3AED',
+    bgColor: '#F5F3FF',
+  },
+  {
+    key: 'CUSTOMER',
+    label: 'Customers',
+    description: 'New shops and customer records',
+    iconName: 'storefront-outline',
+    color: '#C026D3',
+    bgColor: '#FDF4FF',
+  },
+  {
+    key: 'OFFICER',
+    label: 'Officers',
+    description: 'Manager and seller activity',
+    iconName: 'person-outline',
+    color: '#0D9488',
+    bgColor: '#F0FDFA',
+  },
 ];
+
+export const FILTER_TABS = FILTER_OPTIONS.map((o) => ({ key: o.key, label: o.label }));
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -69,6 +133,7 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<NotificationFilter>('ALL');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMarkingAll, setIsMarkingAll] = useState(false);
 
@@ -164,6 +229,10 @@ export default function NotificationsScreen() {
       if (target.startsWith('/(admin)')) {
         target = target.replace('/(admin)', '/(manager)');
       }
+    } else if (user?.role === 'SELLER') {
+      if (target.startsWith('/(admin)')) {
+        target = target.replace('/(admin)', '/(seller)');
+      }
     }
     try {
       router.push(target as any);
@@ -201,13 +270,19 @@ export default function NotificationsScreen() {
       UNREAD: notifications.filter((n) => !n.read).length,
       SALE: notifications.filter((n) => (n.type || '').toUpperCase() === 'SALE').length,
       APPROVAL: notifications.filter((n) => (n.type || '').toUpperCase() === 'APPROVAL').length,
-      INVENTORY: notifications.filter((n) => (n.type || '').toUpperCase() === 'INVENTORY' || (n.type || '').toUpperCase() === 'STOCK').length,
+      INVENTORY: notifications.filter(
+        (n) => (n.type || '').toUpperCase() === 'INVENTORY' || (n.type || '').toUpperCase() === 'STOCK'
+      ).length,
       SHIFT: notifications.filter((n) => (n.type || '').toUpperCase() === 'SHIFT').length,
       CUSTOMER: notifications.filter((n) => (n.type || '').toUpperCase() === 'CUSTOMER').length,
       OFFICER: notifications.filter((n) => (n.type || '').toUpperCase() === 'OFFICER').length,
     };
     return counts;
   }, [notifications]);
+
+  const activeOption = useMemo(() => {
+    return FILTER_OPTIONS.find((opt) => opt.key === activeFilter) || FILTER_OPTIONS[0];
+  }, [activeFilter]);
 
   // Filtered list with tab filter and real-time search
   const filteredNotifications = useMemo(() => {
@@ -239,7 +314,10 @@ export default function NotificationsScreen() {
       const d = new Date(isoString);
       if (isNaN(d.getTime())) return isoString;
       const day = d.getDate();
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthNames = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
       const month = monthNames[d.getMonth()];
       let hours = d.getHours();
       const mins = d.getMinutes().toString().padStart(2, '0');
@@ -335,12 +413,29 @@ export default function NotificationsScreen() {
       >
         {/* Top Tag & Time Row */}
         <View style={styles.cardTopRow}>
-          <View style={[styles.categoryPill, { backgroundColor: visuals.badgeBg, borderColor: visuals.borderColor }]}>
-            <Ionicons name={visuals.iconName} size={12} color={visuals.badgeColor} style={{ marginRight: 4 }} />
-            <Text style={[styles.categoryPillText, { color: visuals.badgeColor }]}>{visuals.label}</Text>
+          <View
+            style={[
+              styles.categoryPill,
+              { backgroundColor: visuals.badgeBg, borderColor: visuals.borderColor },
+            ]}
+          >
+            <Ionicons
+              name={visuals.iconName}
+              size={12}
+              color={visuals.badgeColor}
+              style={{ marginRight: 4 }}
+            />
+            <Text style={[styles.categoryPillText, { color: visuals.badgeColor }]}>
+              {visuals.label}
+            </Text>
           </View>
           <View style={styles.topRightRow}>
-            {!item.read && <View style={styles.unreadPulseDot} />}
+            {!item.read && (
+              <View style={styles.unreadStatusPill}>
+                <View style={styles.unreadPulseDot} />
+                <Text style={styles.unreadStatusText}>NEW</Text>
+              </View>
+            )}
             <Text style={styles.timestampText}>{formatTimestamp(item.createdAt)}</Text>
           </View>
         </View>
@@ -362,7 +457,12 @@ export default function NotificationsScreen() {
               accessibilityLabel={`${item.actionLabel || 'Open details'} for ${item.title}`}
             >
               <Text style={styles.actionLinkText}>{item.actionLabel || 'Open details'}</Text>
-              <Ionicons name="arrow-forward" size={13} color={BrandColors.pink.primary} style={{ marginLeft: 3 }} />
+              <Ionicons
+                name="arrow-forward"
+                size={13}
+                color={BrandColors.pink.primary}
+                style={{ marginLeft: 4 }}
+              />
             </Pressable>
           </View>
         )}
@@ -406,7 +506,12 @@ export default function NotificationsScreen() {
         {/* Workspace Breadcrumb & Summary Header */}
         <View style={styles.breadcrumbBanner}>
           <View style={styles.breadcrumbRow}>
-            <Ionicons name="radio-outline" size={14} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
+            <Ionicons
+              name="radio-outline"
+              size={14}
+              color={BrandColors.pink.primary}
+              style={{ marginRight: 6 }}
+            />
             <Text style={styles.breadcrumbText}>{workspaceBreadcrumb}</Text>
           </View>
           <Text style={styles.workspaceLeadDescription}>
@@ -449,57 +554,176 @@ export default function NotificationsScreen() {
           />
         </Card>
 
-        {/* Filter Category Scrollable Tabs */}
-        <View style={styles.tabsWrapper}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabsContent}
-          >
-            {FILTER_TABS.map((tab) => {
-              const isSelected = activeFilter === tab.key;
-              const count = tabCounts[tab.key];
-              return (
-                <Pressable
-                  key={tab.key}
-                  onPress={() => setActiveFilter(tab.key)}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: isSelected }}
-                  style={[styles.filterTabPill, isSelected && styles.filterTabPillActive]}
-                >
-                  <Text style={[styles.filterTabText, isSelected && styles.filterTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                  {count > 0 || tab.key === 'ALL' || tab.key === 'UNREAD' ? (
-                    <View style={[styles.countBadge, isSelected && styles.countBadgeActive]}>
-                      <Text style={[styles.countBadgeText, isSelected && styles.countBadgeTextActive]}>
-                        {count}
-                      </Text>
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        {/* Search & Filter Controls Section */}
+        <View style={styles.controlsSection}>
+          {/* Search Input Bar */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search notifications..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              clearButtonMode="while-editing"
+              returnKeyType="search"
+            />
+            {searchQuery ? (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={HitSlop.sm}>
+                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+              </Pressable>
+            ) : null}
+          </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search notifications..."
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            clearButtonMode="while-editing"
-            returnKeyType="search"
-          />
-          {searchQuery ? (
-            <Pressable onPress={() => setSearchQuery('')} hitSlop={HitSlop.sm}>
-              <Ionicons name="close-circle" size={18} color="#94A3B8" />
-            </Pressable>
-          ) : null}
+          {/* Notification Filter Dropdown Selector */}
+          <View style={styles.dropdownBarRow}>
+            <TouchableOpacity
+              style={[styles.dropdownTrigger, dropdownOpen && styles.dropdownTriggerActive]}
+              onPress={() => setDropdownOpen(true)}
+              activeOpacity={0.75}
+              accessibilityRole="combobox"
+              accessibilityLabel={`Filter notifications. Currently selected: ${activeOption.label}`}
+            >
+              <View style={[styles.dropdownIconBox, { backgroundColor: activeOption.bgColor }]}>
+                <Ionicons name={activeOption.iconName} size={16} color={activeOption.color} />
+              </View>
+
+              <View style={styles.dropdownTextCol}>
+                <Text style={styles.dropdownSubLabel}>Category Filter</Text>
+                <Text style={styles.dropdownActiveLabel} numberOfLines={1}>
+                  {activeOption.label}
+                </Text>
+              </View>
+
+              <View style={styles.dropdownRightRow}>
+                <View style={styles.dropdownCountBadge}>
+                  <Text style={styles.dropdownCountText}>{tabCounts[activeOption.key]}</Text>
+                </View>
+                <Ionicons
+                  name={dropdownOpen ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color="#64748B"
+                  style={{ marginLeft: 6 }}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {activeFilter !== 'ALL' && (
+              <TouchableOpacity
+                style={styles.resetFilterBtn}
+                onPress={() => setActiveFilter('ALL')}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Reset filter to all updates"
+              >
+                <Ionicons name="refresh-outline" size={14} color="#64748B" style={{ marginRight: 4 }} />
+                <Text style={styles.resetFilterText}>Reset</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Quick Shortcuts Bar (All Updates, Unread, and Quick Dropdown Launcher) */}
+          <View style={styles.quickShortcutsRow}>
+            <TouchableOpacity
+              style={[
+                styles.quickShortcutPill,
+                activeFilter === 'ALL' && styles.quickShortcutPillActive,
+              ]}
+              onPress={() => setActiveFilter('ALL')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="layers-outline"
+                size={13}
+                color={activeFilter === 'ALL' ? '#FFFFFF' : '#64748B'}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[
+                  styles.quickShortcutText,
+                  activeFilter === 'ALL' && styles.quickShortcutTextActive,
+                ]}
+              >
+                All updates
+              </Text>
+              <View
+                style={[
+                  styles.quickShortcutBadge,
+                  activeFilter === 'ALL' && styles.quickShortcutBadgeActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.quickShortcutBadgeText,
+                    activeFilter === 'ALL' && styles.quickShortcutBadgeTextActive,
+                  ]}
+                >
+                  {tabCounts.ALL}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.quickShortcutPill,
+                activeFilter === 'UNREAD' && styles.quickShortcutPillActive,
+              ]}
+              onPress={() => setActiveFilter('UNREAD')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="mail-unread-outline"
+                size={13}
+                color={activeFilter === 'UNREAD' ? '#FFFFFF' : BrandColors.pink.dark}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[
+                  styles.quickShortcutText,
+                  activeFilter === 'UNREAD' && styles.quickShortcutTextActive,
+                ]}
+              >
+                Unread
+              </Text>
+              <View
+                style={[
+                  styles.quickShortcutBadge,
+                  activeFilter === 'UNREAD' && styles.quickShortcutBadgeActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.quickShortcutBadgeText,
+                    activeFilter === 'UNREAD' && styles.quickShortcutBadgeTextActive,
+                  ]}
+                >
+                  {tabCounts.UNREAD}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.moreCategoriesBtn}
+              onPress={() => setDropdownOpen(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Select from all categories"
+            >
+              <Ionicons
+                name="options-outline"
+                size={13}
+                color={BrandColors.pink.dark}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.moreCategoriesText}>More Categories</Text>
+              <Ionicons
+                name="chevron-down"
+                size={12}
+                color={BrandColors.pink.dark}
+                style={{ marginLeft: 2 }}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Section Heading & Subtitle */}
@@ -507,7 +731,7 @@ export default function NotificationsScreen() {
           <Text style={styles.sectionHeaderTitle}>
             {activeFilter === 'ALL'
               ? `All Updates (${filteredNotifications.length})`
-              : `${FILTER_TABS.find((t) => t.key === activeFilter)?.label || 'Updates'} (${filteredNotifications.length})`}
+              : `${activeOption.label} (${filteredNotifications.length})`}
           </Text>
           <Text style={styles.sectionHeaderSubtitle}>
             Click any notification to open the associated operational module.
@@ -526,7 +750,16 @@ export default function NotificationsScreen() {
             <EmptyState
               icon="notifications-off-outline"
               title="No Notifications Found"
-              description={`There are currently no alerts matching "${FILTER_TABS.find((t) => t.key === activeFilter)?.label}".`}
+              description={
+                searchQuery
+                  ? `No updates match "${searchQuery}". Try a different search term.`
+                  : `There are currently no alerts matching "${activeOption.label}".`
+              }
+              actionTitle="Show All Updates"
+              onAction={() => {
+                setActiveFilter('ALL');
+                setSearchQuery('');
+              }}
             />
           </View>
         ) : (
@@ -546,6 +779,123 @@ export default function NotificationsScreen() {
           />
         )}
       </View>
+
+      {/* Filter Dropdown Modal Sheet */}
+      <Modal
+        visible={dropdownOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setDropdownOpen(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setDropdownOpen(false)}>
+          <Pressable style={styles.dropdownModalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <View style={styles.modalHeaderIconBadge}>
+                  <Ionicons name="funnel" size={16} color={BrandColors.pink.primary} />
+                </View>
+                <View>
+                  <Text style={styles.modalHeaderTitle}>Filter Notifications</Text>
+                  <Text style={styles.modalHeaderSub}>Choose a category to filter live updates</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setDropdownOpen(false)}
+                hitSlop={HitSlop.md}
+                style={styles.modalCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close filter menu"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {FILTER_OPTIONS.map((opt) => {
+                const isSelected = activeFilter === opt.key;
+                const count = tabCounts[opt.key];
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.modalOptionRow, isSelected && styles.modalOptionRowSelected]}
+                    onPress={() => {
+                      setActiveFilter(opt.key);
+                      setDropdownOpen(false);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <View style={[styles.modalOptionIconCircle, { backgroundColor: opt.bgColor }]}>
+                      <Ionicons name={opt.iconName} size={18} color={opt.color} />
+                    </View>
+
+                    <View style={styles.modalOptionInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text
+                          style={[
+                            styles.modalOptionLabel,
+                            isSelected && styles.modalOptionLabelSelected,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                        <View
+                          style={[
+                            styles.modalOptionCountBadge,
+                            isSelected && styles.modalOptionCountBadgeSelected,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.modalOptionCountText,
+                              isSelected && styles.modalOptionCountTextSelected,
+                            ]}
+                          >
+                            {count}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.modalOptionDesc} numberOfLines={1}>
+                        {opt.description}
+                      </Text>
+                    </View>
+
+                    {isSelected ? (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={22}
+                        color={BrandColors.pink.primary}
+                        style={{ marginLeft: 8 }}
+                      />
+                    ) : (
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color="#CBD5E1"
+                        style={{ marginLeft: 8 }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalDoneBtn}
+                onPress={() => setDropdownOpen(false)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Done selecting filter"
+              >
+                <Text style={styles.modalDoneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -624,70 +974,24 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     minWidth: 160,
   },
-  tabsWrapper: {
-    paddingVertical: Spacing.xs,
-    backgroundColor: Colors.light.background,
+  controlsSection: {
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
-  },
-  tabsContent: {
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
-  },
-  filterTabPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.light.surface,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginRight: 6,
-  },
-  filterTabPillActive: {
-    backgroundColor: BrandColors.pink.dark,
-    borderColor: BrandColors.pink.dark,
-  },
-  filterTabText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-    marginRight: 6,
-  },
-  filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  countBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: Radius.full,
-    backgroundColor: '#F1F5F9',
-  },
-  countBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  countBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.light.textSecondary,
-  },
-  countBadgeTextActive: {
-    color: '#FFFFFF',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.sm,
     paddingHorizontal: Spacing.md,
     height: 44,
+    marginBottom: Spacing.xs,
   },
   searchInput: {
     flex: 1,
@@ -696,9 +1000,149 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     paddingVertical: 0,
   },
+  dropdownBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: 4,
+    marginBottom: Spacing.xs,
+  },
+  dropdownTrigger: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+    ...Shadows.sm,
+  },
+  dropdownTriggerActive: {
+    borderColor: BrandColors.pink.primary,
+  },
+  dropdownIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  dropdownTextCol: {
+    flex: 1,
+  },
+  dropdownSubLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dropdownActiveLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  dropdownRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 6,
+  },
+  dropdownCountBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  dropdownCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: '#F1F5F9',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  resetFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  quickShortcutsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  quickShortcutPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Radius.full,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  quickShortcutPillActive: {
+    backgroundColor: BrandColors.pink.dark,
+    borderColor: BrandColors.pink.dark,
+  },
+  quickShortcutText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginRight: 5,
+  },
+  quickShortcutTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  quickShortcutBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: Radius.full,
+  },
+  quickShortcutBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  quickShortcutBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickShortcutBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  moreCategoriesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: Radius.full,
+    backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
+    marginLeft: 'auto',
+  },
+  moreCategoriesText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
   sectionHeaderRow: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xs,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xs,
   },
   sectionHeaderTitle: {
@@ -756,12 +1200,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  unreadPulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: BrandColors.pink.primary,
+  unreadStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: Radius.full,
     marginRight: 6,
+  },
+  unreadPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: BrandColors.pink.primary,
+    marginRight: 4,
+  },
+  unreadStatusText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: BrandColors.pink.dark,
+    letterSpacing: 0.5,
   },
   timestampText: {
     ...Typography.caption,
@@ -791,10 +1250,12 @@ const styles = StyleSheet.create({
   actionLinkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: Radius.sm,
     backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
   },
   actionLinkBtnPressed: {
     opacity: 0.7,
@@ -817,6 +1278,135 @@ const styles = StyleSheet.create({
   markAllText: {
     ...Typography.caption,
     color: BrandColors.pink.primary,
+    fontWeight: '700',
+  },
+  // Modal styles for dropdown
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  dropdownModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    maxHeight: '80%',
+    paddingBottom: Platform.OS === 'ios' ? 32 : Spacing.md,
+    ...Shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalHeaderIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: BrandColors.pink.subtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  modalHeaderTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalHeaderSub: {
+    ...Typography.caption,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  modalCloseBtn: {
+    padding: 6,
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F9',
+  },
+  modalScrollView: {
+    maxHeight: 380,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  modalOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: Radius.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  modalOptionRowSelected: {
+    backgroundColor: BrandColors.pink.subtle,
+  },
+  modalOptionIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  modalOptionInfo: {
+    flex: 1,
+  },
+  modalOptionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginRight: 6,
+  },
+  modalOptionLabelSelected: {
+    color: BrandColors.pink.dark,
+  },
+  modalOptionCountBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: Radius.full,
+  },
+  modalOptionCountBadgeSelected: {
+    backgroundColor: BrandColors.pink.primary,
+  },
+  modalOptionCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  modalOptionCountTextSelected: {
+    color: '#FFFFFF',
+  },
+  modalOptionDesc: {
+    ...Typography.caption,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalFooter: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  modalDoneBtn: {
+    backgroundColor: BrandColors.pink.primary,
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalDoneBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '700',
   },
 });

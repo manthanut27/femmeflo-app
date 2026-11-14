@@ -98,4 +98,50 @@ describe('FemmeFlo Mobile Notification System Suite', () => {
     items = items.map((n: any) => ({ ...n, read: true }));
     assert.strictEqual(items.every((n: any) => n.read), true);
   });
+
+  it('verifies notification dropdown filter options include all 8 categories with metadata', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const notifPath = path.resolve(process.cwd(), 'src/app/(shared)/notifications.tsx');
+    const content = fs.readFileSync(notifPath, 'utf-8');
+
+    const expectedKeys = [
+      'ALL',
+      'UNREAD',
+      'SALE',
+      'APPROVAL',
+      'INVENTORY',
+      'SHIFT',
+      'CUSTOMER',
+      'OFFICER',
+    ];
+
+    for (const key of expectedKeys) {
+      assert.ok(
+        content.includes(`key: '${key}'`),
+        `Notification dropdown must include category key '${key}'`
+      );
+    }
+
+    assert.ok(content.includes('FILTER_OPTIONS'), 'Must define FILTER_OPTIONS array');
+    assert.ok(content.includes('dropdownOpen'), 'Must manage dropdownOpen state');
+    assert.ok(content.includes('Modal'), 'Must use Modal for dropdown selector');
+    assert.ok(content.includes('dropdownTrigger'), 'Must provide dropdown trigger button');
+  });
+
+  it('verifies admin index top page removed the Manage Warehouses, Team & Stock banner', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const adminIndexPath = path.resolve(process.cwd(), 'src/app/(admin)/index.tsx');
+    const content = fs.readFileSync(adminIndexPath, 'utf-8');
+
+    assert.ok(
+      !content.includes('Manage Warehouses, Team & Stock'),
+      'Admin top page should not contain "Manage Warehouses, Team & Stock"'
+    );
+    assert.ok(
+      !content.includes('bannerCard'),
+      'Admin top page should have removed the bannerCard style and component'
+    );
+  });
 });

@@ -307,22 +307,6 @@ export default function AdminDashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrapper}>
-          {/* National Governance Banner */}
-          <Card style={styles.bannerCard}>
-            <View style={styles.bannerHeader}>
-              <View style={styles.bannerInfo}>
-                <View style={styles.bannerTitleRow}>
-                  <View style={styles.bannerIconBadge}>
-                    <Ionicons name="shield-checkmark" size={18} color={BrandColors.pink.dark} />
-                  </View>
-                  <Text style={styles.bannerTitle}>Admin Center</Text>
-                </View>
-                <Text style={styles.bannerSub}>Manage Warehouses, Team & Stock</Text>
-              </View>
-              <Badge label="ADMIN" variant="ACTIVE" />
-            </View>
-          </Card>
-
           {/* Sync Error Alert Banner (if network or server error occurred) */}
           {loadError ? (
             <Card style={styles.errorAlertCard}>
@@ -1552,44 +1536,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-  },
-  bannerCard: {
-    marginBottom: Spacing.md,
-    backgroundColor: BrandColors.pink.surface,
-    borderColor: BrandColors.pink.subtle,
-    overflow: 'hidden',
-  },
-  bannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bannerInfo: {
-    flex: 1,
-    marginRight: Spacing.md,
-  },
-  bannerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  bannerIconBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: BrandColors.pink.tint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  bannerTitle: {
-    ...Typography.subtitle,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  bannerSub: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
   },
   errorAlertCard: {
     marginBottom: Spacing.md,
