@@ -1,9 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link, Stack, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BrandColors, Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { BrandColors, Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function NotFoundScreen() {
@@ -39,14 +42,12 @@ export default function NotFoundScreen() {
           },
         ]}
       >
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <View style={styles.iconCircle}>
             <Ionicons name="compass-outline" size={44} color={BrandColors.pink.primary} />
           </View>
 
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>ERROR 404</Text>
-          </View>
+          <Badge label="ERROR 404" variant="danger" size="sm" style={styles.badge} />
 
           <Text style={styles.title}>Lost in the Beat?</Text>
           <Text style={styles.description}>
@@ -54,34 +55,24 @@ export default function NotFoundScreen() {
           </Text>
 
           <View style={styles.actionsContainer}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Go to Home Dashboard"
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.buttonPressed,
-              ]}
+            <Button
+              title="Go to Dashboard"
               onPress={handleGoHome}
-            >
-              <Ionicons name="home-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.primaryButtonText}>Go to Dashboard</Text>
-            </Pressable>
+              size="md"
+              icon={<Ionicons name="home-outline" size={18} color="#FFFFFF" />}
+              style={styles.actionBtn}
+            />
 
-            <Link href="/(auth)/login" asChild>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Go to Login Screen"
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <Ionicons name="log-in-outline" size={18} color={Colors.light.textSecondary} style={{ marginRight: 8 }} />
-                <Text style={styles.secondaryButtonText}>Return to Login</Text>
-              </Pressable>
-            </Link>
+            <Button
+              title="Return to Login"
+              variant="outline"
+              onPress={() => router.replace('/(auth)/login' as any)}
+              size="md"
+              icon={<Ionicons name="log-in-outline" size={18} color={Colors.light.textSecondary} />}
+              style={styles.actionBtn}
+            />
           </View>
-        </View>
+        </Card>
 
         <Text style={styles.footerNote}>
           FemmeFlo Mobile Field Force System • v1.0.2
@@ -102,13 +93,8 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: Colors.light.surface,
-    borderRadius: Radius.xl,
-    padding: Spacing.xxl,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.borderSubtle,
-    ...Shadows.md,
+    padding: Spacing.xxl,
   },
   iconCircle: {
     width: 80,
@@ -153,40 +139,8 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: Spacing.sm,
   },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BrandColors.pink.primary,
-    paddingVertical: 14,
-    borderRadius: Radius.md,
-    minHeight: 48,
-    ...Shadows.sm,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.light.backgroundElement,
-    borderWidth: 1,
-    borderColor: Colors.light.borderSubtle,
-    paddingVertical: 13,
-    borderRadius: Radius.md,
-    minHeight: 48,
-  },
-  secondaryButtonText: {
-    color: Colors.light.textPrimary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.99 }],
+  actionBtn: {
+    width: '100%',
   },
   footerNote: {
     ...Typography.caption,

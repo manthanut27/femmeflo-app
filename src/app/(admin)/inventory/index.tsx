@@ -25,6 +25,7 @@ import type {
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
@@ -587,10 +588,7 @@ export default function AdminInventoryMainScreen() {
               By: {actorName}
             </Text>
           </View>
-          <View style={styles.txStatusPill}>
-            <Ionicons name="checkmark-circle" size={12} color={BrandColors.green.primary} />
-            <Text style={styles.txStatusText}>Recorded</Text>
-          </View>
+          <Badge label="Recorded" variant="success" size="sm" />
         </View>
       </Card>
     );
@@ -1159,24 +1157,18 @@ export default function AdminInventoryMainScreen() {
 
             {/* Empty History State */}
             {!historyLoading && !historyError && transactions.length === 0 && (
-              <Card style={styles.emptyStateCard}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="file-tray-outline" size={32} color={Colors.light.textMuted} />
-                </View>
-                <Text style={styles.emptyStateTitle}>No Movements Recorded</Text>
-                <Text style={styles.emptyStateText}>
-                  {historyFilter === 'All'
+              <EmptyState
+                icon="file-tray-outline"
+                title="No Movements Recorded"
+                description={
+                  historyFilter === 'All'
                     ? 'No stock movements or transactions found in the ledger.'
-                    : `No ${historyFilter.toLowerCase()} transactions found for this filter.`}
-                </Text>
-                <Button
-                  title="Refresh Ledger"
-                  variant="outline"
-                  size="sm"
-                  onPress={() => fetchTransactions(historyFilter, 1, true)}
-                  style={{ marginTop: Spacing.md }}
-                />
-              </Card>
+                    : `No ${historyFilter.toLowerCase()} transactions found for this filter.`
+                }
+                actionTitle="Refresh Ledger"
+                onAction={() => fetchTransactions(historyFilter, 1, true)}
+                buttonVariant="outline"
+              />
             )}
 
             {/* Transactions List */}
@@ -1754,34 +1746,5 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.danger,
     marginTop: 2,
-  },
-  emptyStateCard: {
-    padding: Spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  emptyIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.sm,
-  },
-  emptyStateTitle: {
-    ...Typography.h3,
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.light.heading,
-  },
-  emptyStateText: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 280,
   },
 });

@@ -68,7 +68,6 @@ export default function ManagerOnboardSellerScreen() {
   const [alternatePhone, setAlternatePhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   // Section 3: Identification Documents & Qualification
   const [aadhaarNumber, setAadhaarNumber] = useState('');
@@ -509,18 +508,9 @@ export default function ManagerOnboardSellerScreen() {
                   setPassword(t);
                   if (errors.password) setErrors((p) => ({ ...p, password: '' }));
                 }}
-                secureTextEntry={!showPassword}
+                isPassword
                 error={errors.password}
                 leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
-                rightIcon={
-                  <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={HitSlop.md}>
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#64748B"
-                    />
-                  </Pressable>
-                }
                 helperText="Temporary password used by officer to log in"
               />
             </View>

@@ -475,14 +475,16 @@ export default function ManagerSellersScreen() {
                   </Text>
                 </View>
                 <Pressable
-                  style={[styles.togglePill, editActive ? styles.togglePillActive : styles.togglePillInactive]}
                   onPress={() => setEditActive(!editActive)}
                   accessibilityRole="button"
                   accessibilityLabel="Toggle officer active status"
+                  hitSlop={HitSlop.md}
                 >
-                  <Text style={[styles.togglePillText, editActive ? styles.togglePillTextActive : styles.togglePillTextInactive]}>
-                    {editActive ? 'ACTIVE' : 'INACTIVE'}
-                  </Text>
+                  <Badge
+                    label={editActive ? 'ACTIVE' : 'INACTIVE'}
+                    variant={editActive ? 'ACTIVE' : 'INACTIVE'}
+                    size="md"
+                  />
                 </Pressable>
               </View>
             </ScrollView>
@@ -744,30 +746,6 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
     lineHeight: 16,
-  },
-  togglePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  togglePillActive: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-  },
-  togglePillInactive: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FCA5A5',
-  },
-  togglePillText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  togglePillTextActive: {
-    color: '#15803D',
-  },
-  togglePillTextInactive: {
-    color: '#B91C1C',
   },
   modalActionRow: {
     flexDirection: 'row',

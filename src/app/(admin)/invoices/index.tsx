@@ -20,8 +20,10 @@ import { adminApi } from '@/api/admin';
 import type { InvoiceItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
+import { LoadingState } from '@/components/ui/LoadingState';
 import {
   BorderRadius,
   BrandColors,
@@ -339,7 +341,7 @@ export default function AdminInvoicesScreen() {
 
         {loading ? (
           <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={BrandColors.pink.dark} />
+            <LoadingState message="Loading invoices..." color={BrandColors.pink.dark} />
           </View>
         ) : (
           <FlatList
@@ -349,15 +351,15 @@ export default function AdminInvoicesScreen() {
             contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="receipt-outline" size={56} color={Colors.light.textTertiary} />
-                <Text style={styles.emptyTitle}>No Invoices Found</Text>
-                <Text style={styles.emptySubtitle}>
-                  {search || paymentFilter !== 'ALL'
+              <EmptyState
+                icon="receipt-outline"
+                title="No Invoices Found"
+                description={
+                  search || paymentFilter !== 'ALL'
                     ? 'No invoices match your filter criteria.'
-                    : 'Generated customer tax invoices will appear here.'}
-                </Text>
-              </View>
+                    : 'Generated customer tax invoices will appear here.'
+                }
+              />
             }
           />
         )}
@@ -530,22 +532,5 @@ const styles = StyleSheet.create({
   },
   btnPressed: {
     opacity: 0.75,
-  },
-  emptyContainer: {
-    paddingVertical: Spacing.huge,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    color: Colors.light.text,
-    marginTop: Spacing.md,
-  },
-  emptySubtitle: {
-    ...Typography.bodySmall,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.xl,
   },
 });

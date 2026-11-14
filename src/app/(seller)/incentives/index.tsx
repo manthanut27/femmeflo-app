@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
 import type { SellerIncentiveData } from '@/api/types';
+import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { BrandColors, Colors, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
 
 export default function SellerIncentivesScreen() {
@@ -48,7 +50,7 @@ export default function SellerIncentivesScreen() {
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={BrandColors.pink.primary} />
+          <LoadingState message="Loading earnings..." color={BrandColors.pink.primary} />
         </View>
       ) : (
         <ScrollView
@@ -138,9 +140,11 @@ export default function SellerIncentivesScreen() {
                   <Text style={styles.historyMeta}>
                     {item.packetsSold} packets @ ₹{(item.ratePerPacketPaise / 100).toFixed(2)} / pkt
                   </Text>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.historyStatus}>{item.status}</Text>
-                  </View>
+                  <Badge
+                    label={item.status}
+                    variant={item.status === 'PAID' ? 'success' : 'warning'}
+                    size="sm"
+                  />
                 </View>
               </Card>
             ))}
@@ -290,17 +294,5 @@ const styles = StyleSheet.create({
   historyMeta: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
-  },
-  statusBadge: {
-    backgroundColor: Colors.light.backgroundElement,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.xs,
-  },
-  historyStatus: {
-    ...Typography.caption,
-    fontSize: 10,
-    color: Colors.light.textSecondary,
-    fontWeight: '600',
   },
 });

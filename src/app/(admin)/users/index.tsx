@@ -847,31 +847,29 @@ export default function AdminUsersScreen() {
                     );
                   }}
                   ListEmptyComponent={
-                    <View style={styles.pickerEmptyContainer}>
-                      <Ionicons name="search-outline" size={36} color={Colors.light.textTertiary} />
-                      <Text style={styles.pickerEmptyTitle}>
-                        {availableManagers.length === 0
+                    <EmptyState
+                      icon="search-outline"
+                      title={
+                        availableManagers.length === 0
                           ? 'No Territory Managers Found'
-                          : 'No matching managers found'}
-                      </Text>
-                      <Text style={styles.pickerEmptySub}>
-                        {availableManagers.length === 0
+                          : 'No matching managers found'
+                      }
+                      description={
+                        availableManagers.length === 0
                           ? 'Please onboard a Territory Manager first before adding sellers.'
-                          : 'Try searching with a different name, district, or phone number.'}
-                      </Text>
-                      {availableManagers.length === 0 && (
-                        <Button
-                          title="+ Onboard Territory Manager First"
-                          size="sm"
-                          variant="admin"
-                          style={{ marginTop: Spacing.md }}
-                          onPress={() => {
-                            setIsManagerPickerOpen(false);
-                            setModalRole('MANAGER');
-                          }}
-                        />
-                      )}
-                    </View>
+                          : 'Try searching with a different name, district, or phone number.'
+                      }
+                      actionTitle={availableManagers.length === 0 ? '+ Onboard Territory Manager First' : undefined}
+                      onAction={
+                        availableManagers.length === 0
+                          ? () => {
+                              setIsManagerPickerOpen(false);
+                              setModalRole('MANAGER');
+                            }
+                          : undefined
+                      }
+                      buttonVariant="admin"
+                    />
                   }
                 />
 
@@ -1734,24 +1732,6 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textSecondary,
     fontSize: 11,
-  },
-  pickerEmptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.xxl,
-    paddingHorizontal: Spacing.lg,
-  },
-  pickerEmptyTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.light.textPrimary,
-    marginTop: Spacing.sm,
-  },
-  pickerEmptySub: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
   },
   pickerFooterRow: {
     paddingTop: Spacing.sm,

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authApi } from '@/api/auth';
 import { validateCustomerEmail } from '@/api/domainRules';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
@@ -79,7 +80,7 @@ export default function ForgotPasswordScreen() {
             </Text>
           </View>
 
-          <View style={styles.card}>
+          <Card style={styles.card}>
             {error ? (
               <View style={styles.errorBanner} accessibilityRole="alert">
                 <Ionicons name="alert-circle" size={16} color="#B4234D" style={{ marginRight: 6 }} />
@@ -123,7 +124,7 @@ export default function ForgotPasswordScreen() {
                 />
               </>
             )}
-          </View>
+          </Card>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

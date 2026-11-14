@@ -67,7 +67,6 @@ export default function AdminOnboardManagerScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [state, setState] = useState('Maharashtra');
   const [district, setDistrict] = useState('Thane');
   const [town, setTown] = useState('Thane City');
@@ -374,18 +373,9 @@ export default function AdminOnboardManagerScreen() {
                   setPassword(t);
                   if (errors.password) setErrors((p) => ({ ...p, password: '' }));
                 }}
-                secureTextEntry={!showPassword}
+                isPassword
                 error={errors.password}
                 leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
-                rightIcon={
-                  <Pressable onPress={() => setShowPassword((p) => !p)} hitSlop={HitSlop.md}>
-                    <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                      size={20}
-                      color="#64748B"
-                    />
-                  </Pressable>
-                }
                 helperText="At least 12 characters"
               />
             </View>

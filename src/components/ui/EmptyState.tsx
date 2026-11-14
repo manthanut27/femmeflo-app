@@ -15,6 +15,7 @@ export interface EmptyStateProps {
   iconBgColor?: string;
   iconBorderColor?: string;
   buttonVariant?: ButtonProps['variant'];
+  children?: React.ReactNode;
 }
 
 export function EmptyState({
@@ -28,6 +29,7 @@ export function EmptyState({
   iconBgColor = BrandColors.pink.subtle,
   iconBorderColor = BrandColors.pink.tint,
   buttonVariant = 'primary',
+  children,
 }: EmptyStateProps) {
   return (
     <View style={[styles.container, style]} accessibilityRole="summary">
@@ -45,6 +47,7 @@ export function EmptyState({
           style={styles.actionButton}
         />
       ) : null}
+      {children}
     </View>
   );
 }

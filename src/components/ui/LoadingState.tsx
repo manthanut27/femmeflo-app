@@ -4,11 +4,10 @@ import {
   Animated,
   StyleProp,
   StyleSheet,
-  Text,
   View,
   ViewStyle,
 } from 'react-native';
-import { BrandColors, Colors, Radius, Spacing, Typography } from '../../constants/theme';
+import { BrandColors, Colors, Spacing, Typography } from '../../constants/theme';
 import { PulseIndicator } from './PulseIndicator';
 
 export interface LoadingStateProps {
