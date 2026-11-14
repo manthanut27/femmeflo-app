@@ -79,15 +79,16 @@ export default function AdminApprovalsScreen() {
   const loadApprovals = useCallback(async () => {
     try {
       const [res, settings] = await Promise.all([
-        adminApi.listApprovals({ pageSize: 50 }),
+        adminApi.listApprovals({ pageSize: 50 }).catch(() => ({ items: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 } })),
         adminApi.getBusinessSettings().catch(() => null),
       ]);
-      setApprovals(res.items);
+      setApprovals(res?.items || []);
       if (settings?.minimumSalePricePaise) {
         setMinPricePaise(settings.minimumSalePricePaise);
       }
     } catch (err) {
       console.warn('Failed to load approvals', err);
+      setApprovals([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -17,14 +17,21 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 250 }}>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(seller)" options={{ headerShown: false }} />
-          <Stack.Screen name="(manager)" options={{ headerShown: false }} />
-          <Stack.Screen name="(admin)" options={{ headerShown: false }} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            animationDuration: 250,
+            presentation: 'card',
+          }}
+        >
+          <Stack.Screen name="index" options={{ headerShown: false, presentation: 'card' }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false, presentation: 'card' }} />
+          <Stack.Screen name="(seller)" options={{ headerShown: false, presentation: 'card' }} />
+          <Stack.Screen name="(manager)" options={{ headerShown: false, presentation: 'card' }} />
+          <Stack.Screen name="(admin)" options={{ headerShown: false, presentation: 'card' }} />
           <Stack.Screen name="(shared)" options={{ headerShown: false, presentation: 'modal' }} />
-          <Stack.Screen name="+not-found" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" options={{ headerShown: false, presentation: 'card' }} />
         </Stack>
       </AuthProvider>
     </SafeAreaProvider>
