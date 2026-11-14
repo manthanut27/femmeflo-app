@@ -50,6 +50,8 @@ export default function AdminDashboardScreen() {
 
   // Filters State
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activePicker, setActivePicker] = useState<'state' | 'district' | 'village' | 'manager' | 'seller' | 'category' | null>(null);
+  const [pickerSearch, setPickerSearch] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedVillage, setSelectedVillage] = useState('');
@@ -150,6 +152,18 @@ export default function AdminDashboardScreen() {
     datePreset,
   ]);
 
+  const selectedManagerName = useMemo(() => {
+    return filterOptions.managers.find((m) => m.id === selectedManagerId)?.name || '';
+  }, [filterOptions.managers, selectedManagerId]);
+
+  const selectedSellerName = useMemo(() => {
+    return filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || '';
+  }, [filterOptions.sellers, selectedSellerId]);
+
+  const selectedCategoryName = useMemo(() => {
+    return filterOptions.categories.find((c) => c.id === selectedCategoryId)?.name || '';
+  }, [filterOptions.categories, selectedCategoryId]);
+
   const resetFilters = () => {
     setSelectedState('');
     setSelectedDistrict('');
@@ -160,6 +174,8 @@ export default function AdminDashboardScreen() {
     setDatePreset('all');
     setCustomFrom('');
     setCustomTo('');
+    setActivePicker(null);
+    setPickerSearch('');
   };
 
   const loadData = useCallback(async () => {
@@ -441,7 +457,14 @@ export default function AdminDashboardScreen() {
                   </View>
                 ) : null}
               </ScrollView>
-            ) : null}
+            ) : (
+              <View style={styles.filterEmptyNoticeRow}>
+                <Ionicons name="sparkles-outline" size={13} color={BrandColors.pink.primary} />
+                <Text style={styles.filterEmptyNoticeText}>
+                  Showing all metrics • Tap Filters to scope by date, territory, or category
+                </Text>
+              </View>
+            )}
           </Card>
 
           {/* Pending Approvals Alert Banner */}
@@ -729,268 +752,785 @@ export default function AdminDashboardScreen() {
         animationType="slide"
         transparent
         statusBarTranslucent
-        onRequestClose={() => setFiltersOpen(false)}
+        onRequestClose={() => {
+          if (activePicker) {
+            setActivePicker(null);
+            setPickerSearch('');
+          } else {
+            setFiltersOpen(false);
+          }
+        }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
-          <Pressable style={styles.backdropDismiss} onPress={() => setFiltersOpen(false)} />
+          <Pressable
+            style={styles.backdropDismiss}
+            onPress={() => {
+              setActivePicker(null);
+              setPickerSearch('');
+              setFiltersOpen(false);
+            }}
+          />
           <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Territory & Scope Filters</Text>
-                <Text style={styles.modalSub}>Filter live operational metrics by geographic hierarchy and category</Text>
-              </View>
-              <Pressable onPress={() => setFiltersOpen(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={22} color={Colors.light.text} />
-              </Pressable>
-            </View>
-
-            <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Date Range */}
-              <Text style={styles.filterSectionTitle}>Date Range:</Text>
-              <View style={styles.chipGrid}>
-                {(
-                  [
-                    { id: 'today', label: 'Today' },
-                    { id: '7days', label: 'Last 7 Days' },
-                    { id: '30days', label: 'Last 30 Days' },
-                    { id: 'this_month', label: 'This Month' },
-                  ] as const
-                ).map((d) => {
-                  const isSelected = datePreset === d.id && !customFrom && !customTo;
-                  return (
-                    <TouchableOpacity
-                      key={d.id}
-                      style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                      onPress={() => {
-                        setDatePreset(isSelected ? 'all' : d.id);
-                        setCustomFrom('');
-                        setCustomTo('');
-                      }}
-                    >
-                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
-                        {d.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <View style={styles.customDateRow}>
-                <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                  <Text style={styles.inputLabel}>From:</Text>
-                  <TextInput
-                    style={styles.dateInput}
-                    value={customFrom}
-                    onChangeText={(val) => {
-                      setCustomFrom(val);
-                      if (val) setDatePreset('custom');
-                    }}
-                    placeholder="dd-mm-yyyy"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>To:</Text>
-                  <TextInput
-                    style={styles.dateInput}
-                    value={customTo}
-                    onChangeText={(val) => {
-                      setCustomTo(val);
-                      if (val) setDatePreset('custom');
-                    }}
-                    placeholder="dd-mm-yyyy"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              {/* State */}
-              <Text style={styles.filterSectionTitle}>State</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !selectedState && styles.filterChipActive]}
-                  onPress={() => setSelectedState('')}
-                >
-                  <Text style={[styles.filterChipText, !selectedState && styles.filterChipTextActive]}>
-                    All states
-                  </Text>
-                </TouchableOpacity>
-                {filterOptions.states.map((st, idx) => {
-                  const stateName = typeof st === 'string' ? st : (st as any)?.state || '';
-                  if (!stateName) return null;
-                  const isSelected = selectedState === stateName;
-                  return (
-                    <TouchableOpacity
-                      key={`st-${stateName}-${idx}`}
-                      style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                      onPress={() => setSelectedState(isSelected ? '' : stateName)}
-                    >
-                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
-                        {stateName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* District */}
-              <Text style={styles.filterSectionTitle}>District</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !selectedDistrict && styles.filterChipActive]}
-                  onPress={() => setSelectedDistrict('')}
-                >
-                  <Text style={[styles.filterChipText, !selectedDistrict && styles.filterChipTextActive]}>
-                    All districts
-                  </Text>
-                </TouchableOpacity>
-                {filterOptions.districts.map((dst, idx) => {
-                  const districtName = typeof dst === 'string' ? dst : (dst as any)?.district || '';
-                  if (!districtName) return null;
-                  const isSelected = selectedDistrict === districtName;
-                  return (
-                    <TouchableOpacity
-                      key={`dst-${districtName}-${idx}`}
-                      style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                      onPress={() => setSelectedDistrict(isSelected ? '' : districtName)}
-                    >
-                      <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
-                        {districtName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              {/* Village / Area */}
-              <Text style={styles.filterSectionTitle}>Village / Area</Text>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="All villages"
-                placeholderTextColor="#94A3B8"
-                value={selectedVillage}
-                onChangeText={setSelectedVillage}
-              />
-              {filterOptions.villages.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.horizontalChips, { marginTop: 6 }]}>
+            {activePicker ? (
+              <View style={styles.pickerContainer}>
+                {/* Picker Header */}
+                <View style={styles.pickerHeader}>
                   <TouchableOpacity
-                    style={[styles.filterChip, !selectedVillage && styles.filterChipActive]}
-                    onPress={() => setSelectedVillage('')}
+                    style={styles.pickerBackBtn}
+                    onPress={() => {
+                      setActivePicker(null);
+                      setPickerSearch('');
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back to Filters"
                   >
-                    <Text style={[styles.filterChipText, !selectedVillage && styles.filterChipTextActive]}>
-                      All villages
-                    </Text>
+                    <Ionicons name="arrow-back" size={20} color={Colors.light.text} />
+                    <Text style={styles.pickerBackText}>Back</Text>
                   </TouchableOpacity>
-                  {filterOptions.villages.map((v, idx) => {
-                    const isSelected = selectedVillage.toLowerCase() === v.toLowerCase();
+
+                  <Text style={styles.pickerHeaderTitle}>
+                    {activePicker === 'state' && 'Select State'}
+                    {activePicker === 'district' && 'Select District'}
+                    {activePicker === 'village' && 'Select Village / Area'}
+                    {activePicker === 'manager' && 'Select Manager'}
+                    {activePicker === 'seller' && 'Select Field Officer'}
+                    {activePicker === 'category' && 'Select Category'}
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (activePicker === 'state') setSelectedState('');
+                      if (activePicker === 'district') setSelectedDistrict('');
+                      if (activePicker === 'village') setSelectedVillage('');
+                      if (activePicker === 'manager') setSelectedManagerId('');
+                      if (activePicker === 'seller') setSelectedSellerId('');
+                      if (activePicker === 'category') setSelectedCategoryId('');
+                      setActivePicker(null);
+                      setPickerSearch('');
+                    }}
+                    style={styles.pickerResetBtn}
+                  >
+                    <Text style={styles.pickerResetText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Search Input Bar */}
+                <View style={styles.pickerSearchBox}>
+                  <Ionicons name="search-outline" size={18} color="#94A3B8" />
+                  <TextInput
+                    style={styles.pickerSearchInput}
+                    placeholder={
+                      activePicker === 'state'
+                        ? 'Search states...'
+                        : activePicker === 'district'
+                        ? 'Search districts...'
+                        : activePicker === 'village'
+                        ? 'Search village or area...'
+                        : activePicker === 'manager'
+                        ? 'Search managers by name...'
+                        : activePicker === 'seller'
+                        ? 'Search field officers...'
+                        : 'Search categories...'
+                    }
+                    placeholderTextColor="#94A3B8"
+                    value={pickerSearch}
+                    onChangeText={setPickerSearch}
+                    autoFocus
+                    clearButtonMode="while-editing"
+                  />
+                  {pickerSearch ? (
+                    <Pressable onPress={() => setPickerSearch('')} hitSlop={HitSlop.sm}>
+                      <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                    </Pressable>
+                  ) : null}
+                </View>
+
+                {/* Options List */}
+                <ScrollView contentContainerStyle={styles.pickerListContent} showsVerticalScrollIndicator={false}>
+                  {/* Default All Option */}
+                  {(() => {
+                    let allLabel = '';
+                    let isAllSelected = false;
+                    let iconName: keyof typeof Ionicons.glyphMap = 'globe-outline';
+
+                    if (activePicker === 'state') {
+                      allLabel = 'All states';
+                      isAllSelected = !selectedState;
+                      iconName = 'globe-outline';
+                    } else if (activePicker === 'district') {
+                      allLabel = 'All districts';
+                      isAllSelected = !selectedDistrict;
+                      iconName = 'business-outline';
+                    } else if (activePicker === 'village') {
+                      allLabel = 'All villages';
+                      isAllSelected = !selectedVillage;
+                      iconName = 'home-outline';
+                    } else if (activePicker === 'manager') {
+                      allLabel = 'All managers';
+                      isAllSelected = !selectedManagerId;
+                      iconName = 'people-outline';
+                    } else if (activePicker === 'seller') {
+                      allLabel = 'All field officers';
+                      isAllSelected = !selectedSellerId;
+                      iconName = 'walk-outline';
+                    } else if (activePicker === 'category') {
+                      allLabel = 'All categories';
+                      isAllSelected = !selectedCategoryId;
+                      iconName = 'grid-outline';
+                    }
+
+                    const showAll = !pickerSearch || allLabel.toLowerCase().includes(pickerSearch.toLowerCase());
+                    if (!showAll) return null;
+
                     return (
                       <TouchableOpacity
-                        key={`v-${v}-${idx}`}
-                        style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                        onPress={() => setSelectedVillage(isSelected ? '' : v)}
+                        style={[styles.pickerOptionItem, isAllSelected && styles.pickerOptionItemSelected]}
+                        onPress={() => {
+                          if (activePicker === 'state') setSelectedState('');
+                          if (activePicker === 'district') setSelectedDistrict('');
+                          if (activePicker === 'village') setSelectedVillage('');
+                          if (activePicker === 'manager') setSelectedManagerId('');
+                          if (activePicker === 'seller') setSelectedSellerId('');
+                          if (activePicker === 'category') setSelectedCategoryId('');
+                          setActivePicker(null);
+                          setPickerSearch('');
+                        }}
                       >
-                        <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
-                          {v}
-                        </Text>
+                        <View style={styles.pickerOptionLeft}>
+                          <View style={[styles.pickerOptionIconCircle, isAllSelected && styles.pickerOptionIconCircleActive]}>
+                            <Ionicons name={iconName} size={18} color={isAllSelected ? BrandColors.pink.primary : '#64748B'} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.pickerOptionTitle, isAllSelected && styles.pickerOptionTitleActive]}>
+                              {allLabel}
+                            </Text>
+                            <Text style={styles.pickerOptionSub}>Reset to view all</Text>
+                          </View>
+                        </View>
+                        {isAllSelected ? (
+                          <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                        ) : null}
                       </TouchableOpacity>
                     );
-                  })}
+                  })()}
+
+                  {/* State Options */}
+                  {activePicker === 'state' &&
+                    filterOptions.states
+                      .filter((s) => !pickerSearch || s.toLowerCase().includes(pickerSearch.toLowerCase()))
+                      .map((st, idx) => {
+                        const isSelected = selectedState === st;
+                        return (
+                          <TouchableOpacity
+                            key={`st-${st}-${idx}`}
+                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                            onPress={() => {
+                              setSelectedState(st);
+                              setActivePicker(null);
+                              setPickerSearch('');
+                            }}
+                          >
+                            <View style={styles.pickerOptionLeft}>
+                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                <Ionicons name="location-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                              </View>
+                              <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                {st}
+                              </Text>
+                            </View>
+                            {isSelected ? (
+                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                  {/* District Options */}
+                  {activePicker === 'district' &&
+                    filterOptions.districts
+                      .filter((d) => !pickerSearch || d.toLowerCase().includes(pickerSearch.toLowerCase()))
+                      .map((dst, idx) => {
+                        const isSelected = selectedDistrict === dst;
+                        return (
+                          <TouchableOpacity
+                            key={`dst-${dst}-${idx}`}
+                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                            onPress={() => {
+                              setSelectedDistrict(dst);
+                              setActivePicker(null);
+                              setPickerSearch('');
+                            }}
+                          >
+                            <View style={styles.pickerOptionLeft}>
+                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                <Ionicons name="business-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                              </View>
+                              <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                {dst}
+                              </Text>
+                            </View>
+                            {isSelected ? (
+                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                  {/* Village / Area Options */}
+                  {activePicker === 'village' && (
+                    <>
+                      {pickerSearch.trim() && !filterOptions.villages.some((v) => v.toLowerCase() === pickerSearch.trim().toLowerCase()) ? (
+                        <TouchableOpacity
+                          style={[styles.pickerOptionItem, selectedVillage.toLowerCase() === pickerSearch.trim().toLowerCase() && styles.pickerOptionItemSelected]}
+                          onPress={() => {
+                            setSelectedVillage(pickerSearch.trim());
+                            setActivePicker(null);
+                            setPickerSearch('');
+                          }}
+                        >
+                          <View style={styles.pickerOptionLeft}>
+                            <View style={[styles.pickerOptionIconCircle, styles.pickerOptionIconCircleActive]}>
+                              <Ionicons name="add-circle-outline" size={18} color={BrandColors.pink.primary} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.pickerOptionTitle, styles.pickerOptionTitleActive]}>
+                                Filter by: "{pickerSearch.trim()}"
+                              </Text>
+                              <Text style={styles.pickerOptionSub}>Custom village or area</Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      ) : null}
+
+                      {filterOptions.villages
+                        .filter((v) => !pickerSearch || v.toLowerCase().includes(pickerSearch.toLowerCase()))
+                        .map((v, idx) => {
+                          const isSelected = selectedVillage.toLowerCase() === v.toLowerCase();
+                          return (
+                            <TouchableOpacity
+                              key={`v-${v}-${idx}`}
+                              style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                              onPress={() => {
+                                setSelectedVillage(v);
+                                setActivePicker(null);
+                                setPickerSearch('');
+                              }}
+                            >
+                              <View style={styles.pickerOptionLeft}>
+                                <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                  <Ionicons name="home-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                                </View>
+                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                  {v}
+                                </Text>
+                              </View>
+                              {isSelected ? (
+                                <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                              ) : null}
+                            </TouchableOpacity>
+                          );
+                        })}
+                    </>
+                  )}
+
+                  {/* Manager Options */}
+                  {activePicker === 'manager' &&
+                    filterOptions.managers
+                      .filter((m) => {
+                        if (!pickerSearch) return true;
+                        const q = pickerSearch.toLowerCase();
+                        return (
+                          m.name.toLowerCase().includes(q) ||
+                          (m.state && m.state.toLowerCase().includes(q)) ||
+                          (m.district && m.district.toLowerCase().includes(q))
+                        );
+                      })
+                      .map((m) => {
+                        const isSelected = selectedManagerId === m.id;
+                        return (
+                          <TouchableOpacity
+                            key={`mgr-${m.id}`}
+                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                            onPress={() => {
+                              setSelectedManagerId(m.id);
+                              setActivePicker(null);
+                              setPickerSearch('');
+                            }}
+                          >
+                            <View style={styles.pickerOptionLeft}>
+                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                <Ionicons name="person-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                  {m.name}
+                                </Text>
+                                {m.state || m.district ? (
+                                  <Text style={styles.pickerOptionSub}>
+                                    {[m.district, m.state].filter(Boolean).join(', ')}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </View>
+                            {isSelected ? (
+                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                  {/* Field Officer Options */}
+                  {activePicker === 'seller' &&
+                    filterOptions.sellers
+                      .filter((s) => {
+                        if (!pickerSearch) return true;
+                        const q = pickerSearch.toLowerCase();
+                        return (
+                          s.name.toLowerCase().includes(q) ||
+                          (s.state && s.state.toLowerCase().includes(q)) ||
+                          (s.district && s.district.toLowerCase().includes(q))
+                        );
+                      })
+                      .map((s) => {
+                        const isSelected = selectedSellerId === s.id;
+                        return (
+                          <TouchableOpacity
+                            key={`sell-${s.id}`}
+                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                            onPress={() => {
+                              setSelectedSellerId(s.id);
+                              setActivePicker(null);
+                              setPickerSearch('');
+                            }}
+                          >
+                            <View style={styles.pickerOptionLeft}>
+                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                <Ionicons name="walk-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                  {s.name}
+                                </Text>
+                                {s.state || s.district ? (
+                                  <Text style={styles.pickerOptionSub}>
+                                    {[s.district, s.state].filter(Boolean).join(', ')}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </View>
+                            {isSelected ? (
+                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+
+                  {/* Category Options */}
+                  {activePicker === 'category' &&
+                    filterOptions.categories
+                      .filter((c) => !pickerSearch || c.name.toLowerCase().includes(pickerSearch.toLowerCase()))
+                      .map((c) => {
+                        const isSelected = selectedCategoryId === c.id;
+                        return (
+                          <TouchableOpacity
+                            key={`cat-${c.id}`}
+                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                            onPress={() => {
+                              setSelectedCategoryId(c.id);
+                              setActivePicker(null);
+                              setPickerSearch('');
+                            }}
+                          >
+                            <View style={styles.pickerOptionLeft}>
+                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                <Ionicons name="pricetag-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                              </View>
+                              <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                {c.name}
+                              </Text>
+                            </View>
+                            {isSelected ? (
+                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                            ) : null}
+                          </TouchableOpacity>
+                        );
+                      })}
                 </ScrollView>
-              )}
-
-              {/* Manager */}
-              <Text style={styles.filterSectionTitle}>Manager</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !selectedManagerId && styles.filterChipActive]}
-                  onPress={() => setSelectedManagerId('')}
-                >
-                  <Text style={[styles.filterChipText, !selectedManagerId && styles.filterChipTextActive]}>
-                    All managers
-                  </Text>
-                </TouchableOpacity>
-                {filterOptions.managers.map((m) => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={[styles.filterChip, selectedManagerId === m.id && styles.filterChipActive]}
-                    onPress={() => setSelectedManagerId(selectedManagerId === m.id ? '' : m.id)}
-                  >
-                    <Text style={[styles.filterChipText, selectedManagerId === m.id && styles.filterChipTextActive]}>
-                      {m.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Field Officer */}
-              <Text style={styles.filterSectionTitle}>Field Officer</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !selectedSellerId && styles.filterChipActive]}
-                  onPress={() => setSelectedSellerId('')}
-                >
-                  <Text style={[styles.filterChipText, !selectedSellerId && styles.filterChipTextActive]}>
-                    All field officers
-                  </Text>
-                </TouchableOpacity>
-                {filterOptions.sellers.map((s) => (
-                  <TouchableOpacity
-                    key={s.id}
-                    style={[styles.filterChip, selectedSellerId === s.id && styles.filterChipActive]}
-                    onPress={() => setSelectedSellerId(selectedSellerId === s.id ? '' : s.id)}
-                  >
-                    <Text style={[styles.filterChipText, selectedSellerId === s.id && styles.filterChipTextActive]}>
-                      {s.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Category */}
-              <Text style={styles.filterSectionTitle}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-                <TouchableOpacity
-                  style={[styles.filterChip, !selectedCategoryId && styles.filterChipActive]}
-                  onPress={() => setSelectedCategoryId('')}
-                >
-                  <Text style={[styles.filterChipText, !selectedCategoryId && styles.filterChipTextActive]}>
-                    All categories
-                  </Text>
-                </TouchableOpacity>
-                {filterOptions.categories.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={[styles.filterChip, selectedCategoryId === c.id && styles.filterChipActive]}
-                    onPress={() => setSelectedCategoryId(selectedCategoryId === c.id ? '' : c.id)}
-                  >
-                    <Text style={[styles.filterChipText, selectedCategoryId === c.id && styles.filterChipTextActive]}>
-                      {c.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <View style={styles.modalBtnRow}>
-                <Button
-                  title="Reset All"
-                  variant="outline"
-                  onPress={resetFilters}
-                  style={{ flex: 1, marginRight: Spacing.sm }}
-                />
-                <Button
-                  title="Apply Filters"
-                  variant="admin"
-                  onPress={() => {
-                    setFiltersOpen(false);
-                    loadData();
-                  }}
-                  style={{ flex: 1 }}
-                />
               </View>
-            </ScrollView>
+            ) : (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.modalTitle}>Territory & Scope Filters</Text>
+                    <Text style={styles.modalSub}>Filter live operational metrics by geographic hierarchy and category</Text>
+                  </View>
+                  <Pressable onPress={() => setFiltersOpen(false)} style={styles.modalCloseBtn}>
+                    <Ionicons name="close" size={22} color={Colors.light.text} />
+                  </Pressable>
+                </View>
+
+                <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+                  {/* Date Range */}
+                  <Text style={styles.filterSectionTitle}>Date Range:</Text>
+                  <View style={styles.chipGrid}>
+                    {(
+                      [
+                        { id: 'today', label: 'Today' },
+                        { id: '7days', label: 'Last 7 Days' },
+                        { id: '30days', label: 'Last 30 Days' },
+                        { id: 'this_month', label: 'This Month' },
+                      ] as const
+                    ).map((d) => {
+                      const isSelected = datePreset === d.id && !customFrom && !customTo;
+                      return (
+                        <TouchableOpacity
+                          key={d.id}
+                          style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                          onPress={() => {
+                            setDatePreset(isSelected ? 'all' : d.id);
+                            setCustomFrom('');
+                            setCustomTo('');
+                          }}
+                        >
+                          <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                            {d.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <View style={styles.customDateRow}>
+                    <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                      <Text style={styles.inputLabel}>From:</Text>
+                      <View style={styles.dateInputWrapper}>
+                        <Ionicons name="calendar-outline" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+                        <TextInput
+                          style={styles.dateInput}
+                          value={customFrom}
+                          onChangeText={(val) => {
+                            setCustomFrom(val);
+                            if (val) setDatePreset('custom');
+                          }}
+                          placeholder="dd-mm-yyyy"
+                          placeholderTextColor="#94A3B8"
+                        />
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>To:</Text>
+                      <View style={styles.dateInputWrapper}>
+                        <Ionicons name="calendar-outline" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
+                        <TextInput
+                          style={styles.dateInput}
+                          value={customTo}
+                          onChangeText={(val) => {
+                            setCustomTo(val);
+                            if (val) setDatePreset('custom');
+                          }}
+                          placeholder="dd-mm-yyyy"
+                          placeholderTextColor="#94A3B8"
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Geographic & Operational Scope Dropdowns with Search */}
+                  <View style={styles.dropdownsContainer}>
+                    {/* State */}
+                    <View style={styles.dropdownField}>
+                      <Text style={styles.filterSectionTitle}>State</Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerBox, Boolean(selectedState) && styles.dropdownTriggerBoxActive]}
+                        onPress={() => {
+                          setActivePicker('state');
+                          setPickerSearch('');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`State: ${selectedState || 'All states'}`}
+                      >
+                        <View style={styles.dropdownTriggerLeft}>
+                          <View style={[styles.dropdownIconBox, Boolean(selectedState) && styles.dropdownIconBoxActive]}>
+                            <Ionicons
+                              name="map-outline"
+                              size={18}
+                              color={selectedState ? BrandColors.pink.primary : '#64748B'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownValueText, Boolean(selectedState) && styles.dropdownValueTextActive]}>
+                              {selectedState || 'All states'}
+                            </Text>
+                            <Text style={styles.dropdownSubText}>Tap to search and select state</Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownRightIcons}>
+                          {selectedState ? (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedState('');
+                              }}
+                              hitSlop={HitSlop.sm}
+                              style={styles.dropdownClearBtn}
+                            >
+                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </Pressable>
+                          ) : null}
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* District */}
+                    <View style={styles.dropdownField}>
+                      <Text style={styles.filterSectionTitle}>District</Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerBox, Boolean(selectedDistrict) && styles.dropdownTriggerBoxActive]}
+                        onPress={() => {
+                          setActivePicker('district');
+                          setPickerSearch('');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`District: ${selectedDistrict || 'All districts'}`}
+                      >
+                        <View style={styles.dropdownTriggerLeft}>
+                          <View style={[styles.dropdownIconBox, Boolean(selectedDistrict) && styles.dropdownIconBoxActive]}>
+                            <Ionicons
+                              name="business-outline"
+                              size={18}
+                              color={selectedDistrict ? BrandColors.pink.primary : '#64748B'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownValueText, Boolean(selectedDistrict) && styles.dropdownValueTextActive]}>
+                              {selectedDistrict || 'All districts'}
+                            </Text>
+                            <Text style={styles.dropdownSubText}>Tap to search and select district</Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownRightIcons}>
+                          {selectedDistrict ? (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedDistrict('');
+                              }}
+                              hitSlop={HitSlop.sm}
+                              style={styles.dropdownClearBtn}
+                            >
+                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </Pressable>
+                          ) : null}
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Village / Area */}
+                    <View style={styles.dropdownField}>
+                      <Text style={styles.filterSectionTitle}>Village / Area</Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerBox, Boolean(selectedVillage) && styles.dropdownTriggerBoxActive]}
+                        onPress={() => {
+                          setActivePicker('village');
+                          setPickerSearch('');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Village / Area: ${selectedVillage || 'All villages'}`}
+                      >
+                        <View style={styles.dropdownTriggerLeft}>
+                          <View style={[styles.dropdownIconBox, Boolean(selectedVillage) && styles.dropdownIconBoxActive]}>
+                            <Ionicons
+                              name="home-outline"
+                              size={18}
+                              color={selectedVillage ? BrandColors.pink.primary : '#64748B'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownValueText, Boolean(selectedVillage) && styles.dropdownValueTextActive]}>
+                              {selectedVillage || 'All villages'}
+                            </Text>
+                            <Text style={styles.dropdownSubText}>Tap to search or enter village name</Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownRightIcons}>
+                          {selectedVillage ? (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedVillage('');
+                              }}
+                              hitSlop={HitSlop.sm}
+                              style={styles.dropdownClearBtn}
+                            >
+                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </Pressable>
+                          ) : null}
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Manager */}
+                    <View style={styles.dropdownField}>
+                      <Text style={styles.filterSectionTitle}>Manager</Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerBox, Boolean(selectedManagerId) && styles.dropdownTriggerBoxActive]}
+                        onPress={() => {
+                          setActivePicker('manager');
+                          setPickerSearch('');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Manager: ${selectedManagerName || 'All managers'}`}
+                      >
+                        <View style={styles.dropdownTriggerLeft}>
+                          <View style={[styles.dropdownIconBox, Boolean(selectedManagerId) && styles.dropdownIconBoxActive]}>
+                            <Ionicons
+                              name="people-outline"
+                              size={18}
+                              color={selectedManagerId ? BrandColors.pink.primary : '#64748B'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownValueText, Boolean(selectedManagerId) && styles.dropdownValueTextActive]}>
+                              {selectedManagerName || 'All managers'}
+                            </Text>
+                            <Text style={styles.dropdownSubText}>Tap to search territory managers</Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownRightIcons}>
+                          {selectedManagerId ? (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedManagerId('');
+                              }}
+                              hitSlop={HitSlop.sm}
+                              style={styles.dropdownClearBtn}
+                            >
+                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </Pressable>
+                          ) : null}
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Field Officer */}
+                    <View style={styles.dropdownField}>
+                      <Text style={styles.filterSectionTitle}>Field Officer</Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerBox, Boolean(selectedSellerId) && styles.dropdownTriggerBoxActive]}
+                        onPress={() => {
+                          setActivePicker('seller');
+                          setPickerSearch('');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Field Officer: ${selectedSellerName || 'All field officers'}`}
+                      >
+                        <View style={styles.dropdownTriggerLeft}>
+                          <View style={[styles.dropdownIconBox, Boolean(selectedSellerId) && styles.dropdownIconBoxActive]}>
+                            <Ionicons
+                              name="walk-outline"
+                              size={18}
+                              color={selectedSellerId ? BrandColors.pink.primary : '#64748B'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownValueText, Boolean(selectedSellerId) && styles.dropdownValueTextActive]}>
+                              {selectedSellerName || 'All field officers'}
+                            </Text>
+                            <Text style={styles.dropdownSubText}>Tap to search field officers</Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownRightIcons}>
+                          {selectedSellerId ? (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedSellerId('');
+                              }}
+                              hitSlop={HitSlop.sm}
+                              style={styles.dropdownClearBtn}
+                            >
+                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </Pressable>
+                          ) : null}
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Category */}
+                    <View style={styles.dropdownField}>
+                      <Text style={styles.filterSectionTitle}>Category</Text>
+                      <TouchableOpacity
+                        style={[styles.dropdownTriggerBox, Boolean(selectedCategoryId) && styles.dropdownTriggerBoxActive]}
+                        onPress={() => {
+                          setActivePicker('category');
+                          setPickerSearch('');
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Category: ${selectedCategoryName || 'All categories'}`}
+                      >
+                        <View style={styles.dropdownTriggerLeft}>
+                          <View style={[styles.dropdownIconBox, Boolean(selectedCategoryId) && styles.dropdownIconBoxActive]}>
+                            <Ionicons
+                              name="pricetag-outline"
+                              size={18}
+                              color={selectedCategoryId ? BrandColors.pink.primary : '#64748B'}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.dropdownValueText, Boolean(selectedCategoryId) && styles.dropdownValueTextActive]}>
+                              {selectedCategoryName || 'All categories'}
+                            </Text>
+                            <Text style={styles.dropdownSubText}>Tap to search retail categories</Text>
+                          </View>
+                        </View>
+                        <View style={styles.dropdownRightIcons}>
+                          {selectedCategoryId ? (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setSelectedCategoryId('');
+                              }}
+                              hitSlop={HitSlop.sm}
+                              style={styles.dropdownClearBtn}
+                            >
+                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                            </Pressable>
+                          ) : null}
+                          <Ionicons name="chevron-down" size={18} color="#64748B" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.modalBtnRow}>
+                    <Button
+                      title="Reset All"
+                      variant="outline"
+                      onPress={resetFilters}
+                      style={{ flex: 1, marginRight: Spacing.sm }}
+                    />
+                    <Button
+                      title="Apply Filters"
+                      variant="admin"
+                      onPress={() => {
+                        setFiltersOpen(false);
+                        loadData();
+                      }}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                </ScrollView>
+              </>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1479,19 +2019,222 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontSize: 11,
     color: Colors.light.textSecondary,
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  dateInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 10,
+    height: 42,
   },
   dateInput: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
+    flex: 1,
     fontSize: 13,
     color: Colors.light.text,
-    backgroundColor: Colors.light.surfaceSecondary,
+    paddingVertical: 0,
   },
   modalBtnRow: {
     flexDirection: 'row',
     marginTop: Spacing.lg,
+  },
+  filterEmptyNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    paddingTop: 4,
+  },
+  filterEmptyNoticeText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#64748B',
+  },
+  dropdownsContainer: {
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  dropdownField: {
+    marginBottom: 2,
+  },
+  dropdownTriggerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dropdownTriggerBoxActive: {
+    backgroundColor: '#FFF1F2',
+    borderColor: BrandColors.pink.primary,
+  },
+  dropdownTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  dropdownIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  dropdownIconBoxActive: {
+    backgroundColor: '#FFE4E6',
+  },
+  dropdownValueText: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  dropdownValueTextActive: {
+    color: BrandColors.pink.dark,
+    fontWeight: '700',
+  },
+  dropdownSubText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+  dropdownRightIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dropdownClearBtn: {
+    padding: 2,
+  },
+  pickerContainer: {
+    flex: 1,
+    paddingBottom: 20,
+    minHeight: 380,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickerBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  pickerBackText: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  pickerHeaderTitle: {
+    ...Typography.title,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  pickerResetBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  pickerResetText: {
+    ...Typography.caption,
+    fontSize: 13,
+    fontWeight: '600',
+    color: BrandColors.pink.dark,
+  },
+  pickerSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pickerSearchInput: {
+    flex: 1,
+    marginLeft: 8,
+    ...Typography.body,
+    fontSize: 14,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+  pickerListContent: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    paddingBottom: 40,
+  },
+  pickerOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.md,
+    marginVertical: 3,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  pickerOptionItemSelected: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FECDD3',
+  },
+  pickerOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  pickerOptionIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  pickerOptionIconCircleActive: {
+    backgroundColor: '#FFE4E6',
+  },
+  pickerOptionTitle: {
+    ...Typography.body,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  pickerOptionTitleActive: {
+    color: BrandColors.pink.dark,
+    fontWeight: '700',
+  },
+  pickerOptionSub: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 1,
   },
 });
