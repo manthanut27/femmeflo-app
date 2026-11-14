@@ -1,4 +1,5 @@
 import { apiRequest, uploadFileMultipart } from './client';
+import { handleMockRequest } from './mockService';
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import type {
   BulkCustomerResponse,
@@ -289,10 +290,26 @@ export const managerApi = {
         }
       }
 
-      return {
-        items: [],
-        pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
-      };
+      // Backend 500/404 or connection failure fallback to local mock engine
+      try {
+        const mockRaw = await handleMockRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination?: PaginationMeta }>(
+          'manager/sales',
+          {
+            method: 'GET',
+            params,
+          }
+        );
+        const list = mockRaw?.sales ?? mockRaw?.items ?? [];
+        return {
+          items: list,
+          pagination: mockRaw?.pagination ?? { page: 1, pageSize: params?.pageSize || 20, total: list.length, totalPages: 1 },
+        };
+      } catch {
+        return {
+          items: [],
+          pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
+        };
+      }
     }
   },
 

@@ -108,13 +108,14 @@ export default function AdminSalesScreen() {
         period: periodFilter,
         search: search.trim() || undefined,
       });
-      let fetched = res.items || res.sales || [];
+      let fetched = res?.items || res?.sales || [];
       if (statusFilter === 'RESUBMITTED') {
         fetched = fetched.filter((s) => isSaleResubmitted(s));
       }
       setSales(fetched);
     } catch (err: any) {
       console.warn('Failed to load sales list', err);
+      setSales([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

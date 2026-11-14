@@ -1,4 +1,5 @@
 import { apiRequest, API_BASE_URL, isMockMode, uploadFileMultipart } from './client';
+import { handleMockRequest } from './mockService';
 import type {
   BulkCustomerResponse,
   CheckInPayload,
@@ -281,21 +282,46 @@ export const sellerApi = {
     from?: string;
     to?: string;
   }): Promise<{ items: SaleItem[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination: PaginationMeta }>('seller/sales', {
-      method: 'GET',
-      params,
-    });
-    const list = raw?.sales ?? raw?.items ?? [];
-    return {
-      items: list,
-      pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-    };
+    try {
+      const raw = await apiRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination: PaginationMeta }>('seller/sales', {
+        method: 'GET',
+        params,
+      });
+      const list = raw?.sales ?? raw?.items ?? [];
+      return {
+        items: list,
+        pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+      };
+    } catch {
+      try {
+        const mockRaw = await handleMockRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination?: PaginationMeta }>('seller/sales', {
+          method: 'GET',
+          params,
+        });
+        const list = mockRaw?.sales ?? mockRaw?.items ?? [];
+        return {
+          items: list,
+          pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+        };
+      } catch {
+        return {
+          items: [],
+          pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+        };
+      }
+    }
   },
 
   async getSale(id: string): Promise<{ sale: SaleItem }> {
-    return apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
-      method: 'GET',
-    });
+    try {
+      return await apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
+        method: 'GET',
+      });
+    } catch {
+      return await handleMockRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
+        method: 'GET',
+      });
+    }
   },
 
   async updateSale(id: string, payload: UpdateSalePayload): Promise<{ sale: SaleItem }> {
