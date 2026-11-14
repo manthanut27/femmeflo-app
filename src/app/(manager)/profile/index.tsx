@@ -249,6 +249,23 @@ export default function ManagerProfileScreen() {
 
             <TouchableOpacity
               style={styles.menuItem}
+              onPress={() => router.push('/(shared)/permissions' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="App Permissions"
+            >
+              <View style={styles.menuLeft}>
+                <View style={[styles.iconBadge, { backgroundColor: '#F1F5F9' }]}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={BrandColors.pink.primary} />
+                </View>
+                <Text style={styles.menuText}>App Permissions</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
               onPress={() => router.push('/(shared)/change-password' as any)}
               accessibilityRole="button"
               accessibilityLabel="Change Password"

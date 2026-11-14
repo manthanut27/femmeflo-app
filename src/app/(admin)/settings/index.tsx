@@ -635,6 +635,23 @@ export default function AdminSettingsScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
               </Pressable>
+
+              <View style={styles.menuDivider} />
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="App Permissions"
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => router.push('/(shared)/permissions' as any)}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.menuIconCircle}>
+                    <Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.dark} />
+                  </View>
+                  <Text style={styles.menuText}>App Permissions</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
+              </Pressable>
             </Card>
 
             {/* Change Password Button (Located directly above Sign Out) */}

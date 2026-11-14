@@ -268,6 +268,23 @@ export default function SellerProfileScreen() {
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="App Permissions"
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => router.push('/(shared)/permissions' as any)}
+            >
+              <View style={styles.menuLeft}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.primary} />
+                </View>
+                <Text style={styles.menuText}>App Permissions</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Change Password"
               style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
               onPress={() => router.push('/(shared)/change-password' as any)}
