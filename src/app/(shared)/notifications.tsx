@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -10,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { notificationsApi } from '@/api/notifications';
@@ -67,19 +69,30 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<NotificationFilter>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isMarkingAll, setIsMarkingAll] = useState(false);
 
-  // Desktop / Web notification permission state
+  // Desktop / Mobile notification permission state
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
-  // Check initial notification permission on Web
+  // Check initial notification permission on Mobile/Web
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'granted') {
-        setNotificationsEnabled(true);
+    async function checkPermission() {
+      try {
+        const stored = await AsyncStorage.getItem('@femmeflo:mobile_notifications_enabled');
+        if (stored === 'true') {
+          setNotificationsEnabled(true);
+          return;
+        }
+      } catch {}
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          setNotificationsEnabled(true);
+        }
       }
     }
+    checkPermission();
   }, []);
 
   const loadNotifications = useCallback(async () => {
@@ -167,10 +180,12 @@ export default function NotificationsScreen() {
         const perm = await Notification.requestPermission();
         if (perm === 'granted') {
           setNotificationsEnabled(true);
+          await AsyncStorage.setItem('@femmeflo:mobile_notifications_enabled', 'true');
         }
       } else {
-        // Mobile / fallback simulation
+        // Mobile platform: activate mobile alerts authorization
         setNotificationsEnabled(true);
+        await AsyncStorage.setItem('@femmeflo:mobile_notifications_enabled', 'true');
       }
     } catch (err) {
       console.warn('Notification permission request error', err);
@@ -194,17 +209,30 @@ export default function NotificationsScreen() {
     return counts;
   }, [notifications]);
 
-  // Filtered list
+  // Filtered list with tab filter and real-time search
   const filteredNotifications = useMemo(() => {
-    if (activeFilter === 'ALL') return notifications;
-    if (activeFilter === 'UNREAD') return notifications.filter((n) => !n.read);
-    if (activeFilter === 'INVENTORY') {
-      return notifications.filter(
+    let list = notifications;
+    if (activeFilter === 'UNREAD') {
+      list = list.filter((n) => !n.read);
+    } else if (activeFilter === 'INVENTORY') {
+      list = list.filter(
         (n) => (n.type || '').toUpperCase() === 'INVENTORY' || (n.type || '').toUpperCase() === 'STOCK'
       );
+    } else if (activeFilter !== 'ALL') {
+      list = list.filter((n) => (n.type || '').toUpperCase() === activeFilter);
     }
-    return notifications.filter((n) => (n.type || '').toUpperCase() === activeFilter);
-  }, [notifications, activeFilter]);
+
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+
+    return list.filter((n) => {
+      const matchTitle = (n.title || '').toLowerCase().includes(q);
+      const matchMsg = (n.message || '').toLowerCase().includes(q);
+      const matchCat = (n.categoryLabel || '').toLowerCase().includes(q);
+      const matchType = (n.type || '').toLowerCase().includes(q);
+      return matchTitle || matchMsg || matchCat || matchType;
+    });
+  }, [notifications, activeFilter, searchQuery]);
 
   function formatTimestamp(isoString: string): string {
     try {
@@ -300,7 +328,7 @@ export default function NotificationsScreen() {
 
     return (
       <Card
-        onPress={() => handleItemPress(item)}
+        onPress={() => handleActionClick(item)}
         accessibilityRole="button"
         accessibilityLabel={`${item.title}, ${item.read ? 'read' : 'unread'}`}
         style={[styles.card, !item.read && styles.unreadCard]}
@@ -349,18 +377,28 @@ export default function NotificationsScreen() {
         subtitle="Live system feeds"
         showBack
         rightAction={
-          unreadCount > 0 ? (
-            <Pressable
-              onPress={handleMarkAllAsRead}
-              hitSlop={HitSlop.md}
-              accessibilityRole="button"
-              accessibilityLabel="Mark all notifications as read"
-              style={({ pressed }) => [styles.markAllBtn, pressed && styles.markAllBtnPressed]}
-            >
-              <Ionicons name="checkmark-done" size={16} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
-              <Text style={styles.markAllText}>Mark all read</Text>
-            </Pressable>
-          ) : undefined
+          <Pressable
+            onPress={handleMarkAllAsRead}
+            disabled={unreadCount === 0 || isMarkingAll}
+            hitSlop={HitSlop.md}
+            accessibilityRole="button"
+            accessibilityLabel="Mark all notifications as read"
+            style={({ pressed }) => [
+              styles.markAllBtn,
+              unreadCount === 0 && { opacity: 0.5 },
+              pressed && styles.markAllBtnPressed,
+            ]}
+          >
+            <Ionicons
+              name="checkmark-done"
+              size={16}
+              color={unreadCount > 0 ? BrandColors.pink.primary : '#94A3B8'}
+              style={{ marginRight: 4 }}
+            />
+            <Text style={[styles.markAllText, unreadCount === 0 && { color: '#94A3B8' }]}>
+              Mark all as read
+            </Text>
+          </Pressable>
         }
       />
 
@@ -372,24 +410,24 @@ export default function NotificationsScreen() {
             <Text style={styles.breadcrumbText}>{workspaceBreadcrumb}</Text>
           </View>
           <Text style={styles.workspaceLeadDescription}>
-            Real-time web notification center for sales, stock allocations, shop duty shifts, approvals, and team activity.
+            Real-time notification center for sales, stock allocations, shop duty shifts, approvals, and team activity.
           </Text>
         </View>
 
-        {/* Enable Desktop / Web Notifications Card */}
+        {/* Enable Desktop mobile Notifications Card */}
         <Card variant="flat" style={styles.desktopNotificationCard}>
           <View style={styles.desktopCardLeft}>
             <View style={styles.desktopIconCircle}>
               <Ionicons
-                name={notificationsEnabled ? 'notifications' : 'desktop-outline'}
+                name={notificationsEnabled ? 'notifications' : 'phone-portrait-outline'}
                 size={22}
                 color={notificationsEnabled ? BrandColors.green.primary : BrandColors.pink.primary}
               />
             </View>
             <View style={{ flex: 1, paddingRight: Spacing.sm }}>
-              <Text style={styles.desktopCardTitle}>Enable Desktop Web Notifications</Text>
+              <Text style={styles.desktopCardTitle}>Enable Desktop mobile Notifications</Text>
               <Text style={styles.desktopCardDesc}>
-                Receive browser alerts when sales are booked, stock is moved, or shifts are started.
+                Receive alerts when sales are booked, stock is moved, or shifts are started.
               </Text>
             </View>
           </View>
@@ -432,15 +470,36 @@ export default function NotificationsScreen() {
                   <Text style={[styles.filterTabText, isSelected && styles.filterTabTextActive]}>
                     {tab.label}
                   </Text>
-                  <View style={[styles.countBadge, isSelected && styles.countBadgeActive]}>
-                    <Text style={[styles.countBadgeText, isSelected && styles.countBadgeTextActive]}>
-                      {count}
-                    </Text>
-                  </View>
+                  {count > 0 || tab.key === 'ALL' || tab.key === 'UNREAD' ? (
+                    <View style={[styles.countBadge, isSelected && styles.countBadgeActive]}>
+                      <Text style={[styles.countBadgeText, isSelected && styles.countBadgeTextActive]}>
+                        {count}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Pressable>
               );
             })}
           </ScrollView>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={18} color="#94A3B8" style={{ marginRight: 8 }} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search notifications..."
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+          />
+          {searchQuery ? (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={HitSlop.sm}>
+              <Ionicons name="close-circle" size={18} color="#94A3B8" />
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Section Heading & Subtitle */}
@@ -617,9 +676,29 @@ const styles = StyleSheet.create({
   countBadgeTextActive: {
     color: '#FFFFFF',
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    ...Typography.body,
+    fontSize: 14,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
   sectionHeaderRow: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
     paddingBottom: Spacing.xs,
   },
   sectionHeaderTitle: {
