@@ -1,8 +1,34 @@
+import { adminApi } from '@/api/admin';
+import { categoriesApi } from '@/api/categories';
+import { validateCustomerEmail } from '@/api/domainRules';
+import { sellerApi } from '@/api/seller';
+import type { CategoryItem, CustomerItem, PublicUser } from '@/api/types';
+import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
+import { Input } from '@/components/ui/Input';
+import {
+  BorderRadius,
+  BrandColors,
+  HitSlop,
+  MaxContentWidth,
+  Radius,
+  Shadows,
+  Spacing,
+  Typography
+} from '@/constants/theme';
+import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
+import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
+import {
+  SpeechRecognizer,
+  type SupportedSpeechLanguage
+} from '@/utils/voiceUtils';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,34 +45,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { adminApi } from '@/api/admin';
-import { categoriesApi } from '@/api/categories';
-import { validateCustomerEmail } from '@/api/domainRules';
-import { sellerApi } from '@/api/seller';
-import type { CategoryItem, CustomerItem, PublicUser } from '@/api/types';
-import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
-import { Input } from '@/components/ui/Input';
-import {
-  BorderRadius,
-  BrandColors,
-  Colors,
-  HitSlop,
-  MaxContentWidth,
-  Radius,
-  Shadows,
-  Spacing,
-  Typography,
-} from '@/constants/theme';
-import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
-import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
-import {
-  isSpeechRecognitionSupported,
-  SpeechRecognizer,
-  type SupportedSpeechLanguage,
-} from '@/utils/voiceUtils';
 
 const DEFAULT_CATEGORIES: Array<{ id: string; name: string }> = [
   { id: 'cat_chemist_default', name: 'Chemist / Pharmacy' },
@@ -220,7 +218,7 @@ export default function AdminAddCustomerScreen() {
           setSellerId(res.items[0].id);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // 3. Acquire GPS
     startGps();
@@ -1092,18 +1090,8 @@ export default function AdminAddCustomerScreen() {
               </View>
             </View>
 
-            {/* Mandatory Exemption Reason when photo missing, Disabled when photo uploaded */}
-            {photoUri ? (
-              <View style={[styles.exemptionBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', opacity: 0.85 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" style={{ marginRight: 8 }} />
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569', flex: 1 }}>
-                    Storefront photo uploaded — exemption reason not required
-                  </Text>
-                  <Ionicons name="lock-closed" size={16} color="#94A3B8" />
-                </View>
-              </View>
-            ) : (
+            {/* Mandatory Exemption Reason when photo missing */}
+            {!photoUri && (
               <View style={styles.exemptionBox}>
                 <View style={styles.exemptionHeaderRow}>
                   <Text style={styles.exemptionTitle}>
