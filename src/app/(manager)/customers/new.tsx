@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,8 +16,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { adminApi } from '@/api/admin';
 import { categoriesApi } from '@/api/categories';
 import { managerApi } from '@/api/manager';
+import { MOCK_ALL_MANAGERS } from '@/api/mockData';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem, PublicUser } from '@/api/types';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
@@ -38,6 +39,16 @@ const PHOTO_REASONS = [
   { label: 'Indoor shop / poor lighting', icon: 'sunny-outline' as const },
 ];
 
+const DEFAULT_TRADE_CATEGORIES: Array<{ id: string; name: string; icon?: any }> = [
+  { id: 'cat_chemist_default', name: 'Chemist / Pharmacy', icon: 'medkit-outline' },
+  { id: 'cat_general_default', name: 'General Store', icon: 'cart-outline' },
+  { id: 'cat_supermarket_default', name: 'Supermarket', icon: 'basket-outline' },
+  { id: 'cat_cosmetic_default', name: 'Beauty / Cosmetic', icon: 'sparkles-outline' },
+  { id: 'cat_clinic_default', name: 'Clinic / Maternity', icon: 'fitness-outline' },
+  { id: 'cat_retail_default', name: 'FMCG / Retail', icon: 'bag-handle-outline' },
+  { id: 'cat_wholesale_default', name: 'Wholesale / Dist.', icon: 'cube-outline' },
+];
+
 export default function ManagerAddCustomerScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -47,18 +58,22 @@ export default function ManagerAddCustomerScreen() {
   const [ownerName, setOwnerName] = useState('Store Manager');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('9820012345');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState('cat_retail_default');
   const [address, setAddress] = useState('Shop No. 12, GB Road');
   const [pincode, setPincode] = useState('400601');
   const [stateName, setStateName] = useState('Maharashtra');
   const [district, setDistrict] = useState('Thane');
   const [village, setVillage] = useState('Thane West');
   const [noPhotoReason, setNoPhotoReason] = useState('Poor network connectivity');
-  const [sellerId, setSellerId] = useState('');
+
+  // Manager Searchable Dropdown State
+  const [managers, setManagers] = useState<PublicUser[]>([]);
+  const [selectedManagerId, setSelectedManagerId] = useState<string>('');
+  const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
+  const [managerSearchQuery, setManagerSearchQuery] = useState('');
 
   // UI Interactive States
-  const [isReasonDropdownOpen, setIsReasonDropdownOpen] = useState(true);
-  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [isReasonDropdownOpen, setIsReasonDropdownOpen] = useState(false);
 
   // GPS Location State
   const [latitude, setLatitude] = useState<number | null>(19.2183);
@@ -71,7 +86,6 @@ export default function ManagerAddCustomerScreen() {
 
   // Aux data
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [sellers, setSellers] = useState<PublicUser[]>([]);
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,42 +103,39 @@ export default function ManagerAddCustomerScreen() {
     categoriesApi
       .listCategories()
       .then((res) => {
-        setCategories(res.items);
-        if (res.items.length > 0 && !categoryId) {
-          setCategoryId(res.items[0].id);
+        if (res.items && res.items.length > 0) {
+          setCategories(res.items);
+          if (!categoryId) setCategoryId(res.items[0].id);
         }
       })
       .catch(() => {});
 
-    // 2. Fetch territory sellers
-    managerApi
-      .listSellers({ pageSize: 50 })
-      .then((res) => {
-        const team = res.items || [];
-        // Add sample fallback if team list is sparse
-        if (team.length === 0) {
-          setSellers([
-            { id: 'usr_seller_45', name: 'test45', email: 'test45@femmeflo.com', role: 'SELLER' as any, active: true },
-          ]);
-        } else {
-          setSellers(team);
-        }
+    // 2. Fetch managers & sellers for assignment
+    const currentUserOption: PublicUser = {
+      id: user?.id || 'usr_manager_me',
+      name: user?.name ? `${user.name} (Myself)` : 'Myself (Personal Van Stock)',
+      email: user?.email || 'manager@femmeflo.com',
+      role: 'MANAGER' as any,
+      active: true,
+    };
 
-        if (user?.isSeller) {
-          setSellerId(user.id);
-        } else if (team.length > 0 && !sellerId) {
-          setSellerId(team[0].id);
-        }
+    adminApi
+      .listManagers({ pageSize: 50 })
+      .then((res) => {
+        const list = res.items || [];
+        const deduped = [currentUserOption, ...list.filter((m) => m.id !== user?.id)];
+        setManagers(deduped);
+        setSelectedManagerId(currentUserOption.id);
       })
       .catch(() => {
-        setSellers([
-          { id: 'usr_seller_45', name: 'test45', email: 'test45@femmeflo.com', role: 'SELLER' as any, active: true },
-        ]);
+        const fallback = [currentUserOption, ...MOCK_ALL_MANAGERS.filter((m) => m.id !== user?.id)];
+        setManagers(fallback);
+        setSelectedManagerId(currentUserOption.id);
       });
 
     // 3. Acquire GPS coordinates
     startGps();
-  }, []);
+  }, [user]);
 
   async function startGps() {
     setGpsStatus('acquiring_high');
@@ -142,16 +153,19 @@ export default function ManagerAddCustomerScreen() {
   }
 
   async function handlePincodeChange(text: string) {
-    setPincode(text);
-    if (text.length === 6 && /^\d{6}$/.test(text)) {
+    const clean = text.replace(/\D/g, '').slice(0, 6);
+    setPincode(clean);
+    if (errors.pincode) setErrors((prev) => ({ ...prev, pincode: '' }));
+
+    if (clean.length === 6 && /^\d{6}$/.test(clean)) {
       setPincodeLoading(true);
       try {
-        const lookup = await sellerApi.lookupPincode(text);
+        const lookup = await sellerApi.lookupPincode(clean);
         if (lookup.state) setStateName(lookup.state);
         if (lookup.district) setDistrict(lookup.district);
         if (lookup.village) setVillage(lookup.village);
       } catch {
-        // Keep fallback
+        // Keep user typed values
       } finally {
         setPincodeLoading(false);
       }
@@ -173,6 +187,9 @@ export default function ManagerAddCustomerScreen() {
             const compressed = await compressImage(res.assets[0].uri);
             setPhotoUri(compressed.uri);
             setIsReasonDropdownOpen(false);
+            if (errors.noPhotoReason) {
+              setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
+            }
           }
         },
       },
@@ -189,6 +206,9 @@ export default function ManagerAddCustomerScreen() {
             const compressed = await compressImage(res.assets[0].uri);
             setPhotoUri(compressed.uri);
             setIsReasonDropdownOpen(false);
+            if (errors.noPhotoReason) {
+              setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
+            }
           }
         },
       },
@@ -204,13 +224,15 @@ export default function ManagerAddCustomerScreen() {
     if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
       errs.phone = 'Valid 10-digit Indian mobile number is required.';
     }
-    if (!categoryId && categories.length > 0) errs.categoryId = 'Category selection is required.';
+    if (!categoryId) errs.categoryId = 'Trade category selection is required.';
     if (!address.trim()) errs.address = 'Street address is required.';
-    if (!pincode.trim() || pincode.trim().length !== 6) errs.pincode = 'Valid 6-digit PIN code is required.';
+    if (!pincode.trim() || !/^\d{6}$/.test(pincode.trim())) {
+      errs.pincode = 'Valid 6-digit PIN code is required.';
+    }
     if (!stateName.trim()) errs.stateName = 'State is required.';
     if (!district.trim()) errs.district = 'District is required.';
 
-    // Mandatory photo exemption reason if photo not taken
+    // Mandatory photo exemption reason ONLY if storefront photo is omitted
     if (!photoUri && !noPhotoReason.trim()) {
       errs.noPhotoReason = 'Reason is required when photo is omitted.';
     }
@@ -239,10 +261,13 @@ export default function ManagerAddCustomerScreen() {
     setFeedback(null);
     try {
       const selectedCatId = categoryId || categories[0]?.id || 'cat_retail_default';
+      const effectiveSellerId =
+        selectedManagerId && selectedManagerId !== 'usr_manager_me' ? selectedManagerId : user?.id;
+
       const res = await managerApi.createCustomer({
         shopName: shopName.trim(),
         ownerName: ownerName.trim() || 'Store Manager',
-        email: email.trim() || undefined as any,
+        email: email.trim() || (undefined as any),
         phone: phone.trim() || '9820012345',
         categoryId: selectedCatId,
         address: address.trim(),
@@ -250,11 +275,12 @@ export default function ManagerAddCustomerScreen() {
         state: stateName.trim(),
         district: district.trim(),
         village: village.trim() || undefined,
-        sellerId: sellerId || (user?.isSeller ? user.id : undefined),
+        sellerId: effectiveSellerId,
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
+        accuracy: gpsAccuracy ?? undefined,
         photoUri: photoUri || undefined,
-        noPhotoReason: photoUri ? (noPhotoReason.trim() || 'Storefront photo captured') : noPhotoReason.trim(),
+        noPhotoReason: photoUri ? 'Storefront photo captured' : noPhotoReason.trim(),
       });
 
       if (photoUri && res.customer.id) {
@@ -278,14 +304,54 @@ export default function ManagerAddCustomerScreen() {
     }
   }
 
+  const isPhotoUploaded = Boolean(photoUri);
+
+  const tradeCategories = useMemo(() => {
+    if (categories && categories.length > 0) {
+      return categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        icon: 'storefront-outline' as const,
+      }));
+    }
+    return DEFAULT_TRADE_CATEGORIES;
+  }, [categories]);
+
+  const filteredManagers = useMemo(() => {
+    const q = managerSearchQuery.trim().toLowerCase();
+    if (!q) return managers;
+    return managers.filter(
+      (m) =>
+        (m.name && m.name.toLowerCase().includes(q)) ||
+        (m.email && m.email.toLowerCase().includes(q)) ||
+        ((m as any).phone && (m as any).phone.toLowerCase().includes(q))
+    );
+  }, [managers, managerSearchQuery]);
+
+  const currentSelectedManager = useMemo(() => {
+    const match = managers.find((m) => m.id === selectedManagerId);
+    if (match) return match;
+    return (
+      managers[0] || {
+        id: user?.id || 'usr_manager_me',
+        name: user?.name ? `${user.name} (Myself)` : 'Myself (Personal Van Stock)',
+        email: user?.email || 'manager@femmeflo.com',
+      }
+    );
+  }, [managers, selectedManagerId, user]);
+
   const formattedAddress = useMemo(() => {
     const parts = [
       address.trim(),
       village.trim(),
       district.trim(),
-      stateName.trim() && pincode.trim() ? `${stateName.trim()} – ${pincode.trim()}` : (stateName.trim() || pincode.trim()),
+      stateName.trim() && pincode.trim()
+        ? `${stateName.trim()} – ${pincode.trim()}`
+        : stateName.trim() || pincode.trim(),
     ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'Shop No. 12, GB Road, Thane West, Maharashtra – 400601';
+    return parts.length > 0
+      ? parts.join(', ')
+      : 'Shop No. 12, GB Road, Thane West, Maharashtra – 400601';
   }, [address, village, district, stateName, pincode]);
 
   if (savedCustomer) {
@@ -321,6 +387,7 @@ export default function ManagerAddCustomerScreen() {
                 setShopName('Reliance Smart');
                 setOwnerName('Store Manager');
                 setPhone('9820012345');
+                setEmail('');
                 setAddress('Shop No. 12, GB Road');
                 setPincode('400601');
                 setVillage('Thane West');
@@ -376,7 +443,7 @@ export default function ManagerAddCustomerScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      {/* Top Header matching image */}
+      {/* Top Header matching reference image */}
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -421,7 +488,7 @@ export default function ManagerAddCustomerScreen() {
             />
           )}
 
-          {/* Current Location Card matching image */}
+          {/* Current Location Banner Card */}
           <View style={styles.locationCard}>
             <View style={styles.locationLeft}>
               <View style={styles.locationIconCircle}>
@@ -430,7 +497,12 @@ export default function ManagerAddCustomerScreen() {
               <View>
                 <View style={styles.locationTitleRow}>
                   <Text style={styles.locationTitle}>Current Location</Text>
-                  <Ionicons name="checkmark-circle" size={16} color="#16A34A" style={{ marginLeft: 5 }} />
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={16}
+                    color="#16A34A"
+                    style={{ marginLeft: 5 }}
+                  />
                 </View>
                 <Text style={styles.locationSubtitle}>
                   {district ? `${district}, ${stateName}` : 'Thane, Maharashtra'}
@@ -450,18 +522,202 @@ export default function ManagerAddCustomerScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Main Store Form Card matching image */}
+          {/* Card 1: Storefront Photo & Photo Exemption Reason */}
           <View style={styles.storeCard}>
-            {/* 1. Shop / Store Name */}
             <View style={styles.fieldSection}>
               <View style={styles.fieldLabelRow}>
                 <View style={styles.storeIconCircle}>
-                  <Ionicons name="storefront" size={15} color="#FFFFFF" />
+                  <Ionicons name="camera" size={15} color="#FFFFFF" />
                 </View>
+                <Text style={styles.fieldLabel}>Storefront Photo Verification</Text>
+              </View>
+
+              {/* Take Storefront Photo Dashed Box */}
+              <TouchableOpacity
+                style={[styles.photoDashedBox, isPhotoUploaded && styles.photoDashedBoxActive]}
+                onPress={pickPhoto}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Take Storefront Photo"
+              >
+                {photoUri ? (
+                  <View style={styles.photoPreviewWrapper}>
+                    <Image
+                      source={{ uri: photoUri }}
+                      style={styles.photoPreviewThumb}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.photoPreviewMeta}>
+                      <View style={styles.photoCapturedBadge}>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={15}
+                          color="#16A34A"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.photoCapturedText}>Storefront Photo Uploaded</Text>
+                      </View>
+                      <View style={styles.photoActionsRow}>
+                        <Text style={styles.photoActionLink}>Retake Photo</Text>
+                        <Text style={styles.photoActionDot}>•</Text>
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setPhotoUri(null);
+                          }}
+                        >
+                          <Text style={[styles.photoActionLink, { color: '#DC2626' }]}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.photoPlaceholderCenter}>
+                    <View style={styles.photoCameraIconBox}>
+                      <Ionicons name="camera" size={20} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.photoTakeTitle}>Take Storefront Photo</Text>
+                    <Text style={styles.photoTakeSub}>Upload store entrance or signboard</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Reason for not adding shopkeeper photo (DISABLED if photo is uploaded) */}
+            <View style={[styles.fieldSection, { marginBottom: 0 }]}>
+              <View style={styles.fieldLabelRow}>
+                <Ionicons name="help-circle" size={18} color="#881337" style={{ marginRight: 6 }} />
                 <Text style={styles.fieldLabel}>
-                  Shop / Store Name <Text style={styles.reqAsterisk}>*</Text>
+                  Reason for not adding shopkeeper photo{' '}
+                  {!isPhotoUploaded && <Text style={styles.reqAsterisk}>*</Text>}
                 </Text>
               </View>
+
+              {isPhotoUploaded ? (
+                // Disabled State: Photo is uploaded, exemption not required
+                <View style={styles.dropdownDisabled}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={18}
+                      color="#16A34A"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.dropdownDisabledText}>
+                      Storefront photo uploaded — exemption reason not required
+                    </Text>
+                  </View>
+                  <Ionicons name="lock-closed" size={16} color="#94A3B8" />
+                </View>
+              ) : (
+                // Enabled State: Photo is not uploaded, user must select a reason
+                <View
+                  style={[
+                    styles.dropdownContainer,
+                    errors.noPhotoReason && styles.inputErrorBorder,
+                  ]}
+                >
+                  <TouchableOpacity
+                    style={styles.dropdownHeader}
+                    onPress={() => setIsReasonDropdownOpen(!isReasonDropdownOpen)}
+                    activeOpacity={0.8}
+                    accessibilityRole="combobox"
+                    accessibilityState={{ expanded: isReasonDropdownOpen }}
+                    accessibilityLabel="Reason for not adding shopkeeper photo"
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <Ionicons name="images" size={17} color="#881337" style={{ marginRight: 8 }} />
+                      <Text
+                        style={[
+                          styles.dropdownHeaderText,
+                          !noPhotoReason && styles.dropdownPlaceholderText,
+                        ]}
+                      >
+                        {noPhotoReason || 'Select a reason'}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={isReasonDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                      size={17}
+                      color="#881337"
+                    />
+                  </TouchableOpacity>
+
+                  {isReasonDropdownOpen && (
+                    <View style={styles.dropdownList}>
+                      {PHOTO_REASONS.map((item, idx) => {
+                        const isSelected = noPhotoReason === item.label;
+                        return (
+                          <TouchableOpacity
+                            key={item.label}
+                            style={[
+                              styles.dropdownItem,
+                              idx === 0 && { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+                              isSelected && styles.dropdownItemSelected,
+                            ]}
+                            onPress={() => {
+                              setNoPhotoReason(item.label);
+                              setIsReasonDropdownOpen(false);
+                              if (errors.noPhotoReason) {
+                                setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
+                              }
+                            }}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: isSelected }}
+                          >
+                            <Ionicons
+                              name={item.icon}
+                              size={16}
+                              color={isSelected ? '#881337' : '#475569'}
+                              style={{ marginRight: 10, width: 20 }}
+                            />
+                            <Text
+                              style={[
+                                styles.dropdownItemText,
+                                isSelected && styles.dropdownItemTextSelected,
+                              ]}
+                            >
+                              {item.label}
+                            </Text>
+                            {isSelected && (
+                              <Ionicons
+                                name="checkmark"
+                                size={16}
+                                color="#881337"
+                                style={{ marginLeft: 'auto' }}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              )}
+              {Boolean(!isPhotoUploaded && errors.noPhotoReason) && (
+                <Text style={styles.errorText}>{errors.noPhotoReason}</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Section 2: Shop Information (Shop Name *, Owner Name *, Mobile Number *, Email) */}
+          <View style={styles.sectionCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.iconCircleMaroon}>
+                <Ionicons name="storefront" size={16} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Shop Information</Text>
+                <Text style={styles.cardHeaderSubtitle}>Store name and owner contact details</Text>
+              </View>
+            </View>
+
+            {/* Shop Name * */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Shop / Store Name <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
               <TextInput
                 style={[styles.textInput, errors.shopName && styles.inputErrorBorder]}
                 value={shopName}
@@ -469,240 +725,329 @@ export default function ManagerAddCustomerScreen() {
                   setShopName(text);
                   if (errors.shopName) setErrors((prev) => ({ ...prev, shopName: '' }));
                 }}
-                placeholder="Reliance Smart"
+                placeholder="e.g. Reliance Smart"
+                placeholderTextColor="#94A3B8"
+              />
+              {Boolean(errors.shopName) && (
+                <Text style={styles.errorText}>{errors.shopName}</Text>
+              )}
+            </View>
+
+            {/* Owner Name * */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Owner Name <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
+              <TextInput
+                style={[styles.textInput, errors.ownerName && styles.inputErrorBorder]}
+                value={ownerName}
+                onChangeText={(text) => {
+                  setOwnerName(text);
+                  if (errors.ownerName) setErrors((prev) => ({ ...prev, ownerName: '' }));
+                }}
+                placeholder="e.g. Ramesh Kumar / Store Manager"
+                placeholderTextColor="#94A3B8"
+              />
+              {Boolean(errors.ownerName) && (
+                <Text style={styles.errorText}>{errors.ownerName}</Text>
+              )}
+            </View>
+
+            {/* Mobile Number * */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Mobile Number <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
+              <View style={[styles.phoneInputWrap, errors.phone && styles.inputErrorBorder]}>
+                <View style={styles.phoneCountryBadge}>
+                  <Text style={styles.phoneCountryText}>+91</Text>
+                </View>
+                <TextInput
+                  style={styles.phoneTextInput}
+                  value={phone}
+                  onChangeText={(text) => {
+                    const clean = text.replace(/\D/g, '').slice(0, 10);
+                    setPhone(clean);
+                    if (errors.phone) setErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  placeholder="9820012345"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+              {Boolean(errors.phone) && <Text style={styles.errorText}>{errors.phone}</Text>}
+            </View>
+
+            {/* Email (Optional) */}
+            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+              <Text style={styles.inputLabel}>Email (Optional)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="e.g. store@reliancesmart.com"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+          </View>
+
+          {/* Section 3: Account Assignment to Manager (Searchable Dropdown) & Trade Category */}
+          <View style={styles.sectionCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.iconCircleGreen}>
+                <Ionicons name="shield-checkmark" size={16} color="#16A34A" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Account Assignment</Text>
+                <Text style={styles.cardHeaderSubtitle}>
+                  Assign territory manager and select trade category
+                </Text>
+              </View>
+            </View>
+
+            {/* Account Assignment to Manager using Searchable Dropdown */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Assign to Manager <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
+              <TouchableOpacity
+                style={styles.managerDropdownTrigger}
+                onPress={() => setIsManagerModalOpen(true)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Select territory manager"
+              >
+                <View style={styles.managerTriggerLeft}>
+                  <View style={styles.managerTriggerAvatar}>
+                    <Ionicons name="person" size={16} color="#881337" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.managerTriggerName} numberOfLines={1}>
+                      {currentSelectedManager.name}
+                    </Text>
+                    <Text style={styles.managerTriggerSubtitle} numberOfLines={1}>
+                      {currentSelectedManager.email ||
+                        currentSelectedManager.role ||
+                        'Territory Lead'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.managerTriggerSearchBtn}>
+                  <Ionicons name="search" size={14} color="#881337" style={{ marginRight: 4 }} />
+                  <Text style={styles.managerTriggerSearchText}>Search</Text>
+                  <Ionicons
+                    name="chevron-down"
+                    size={15}
+                    color="#881337"
+                    style={{ marginLeft: 4 }}
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Trade Category */}
+            <View style={[styles.inputGroup, { marginBottom: 0 }]}>
+              <Text style={styles.inputLabel}>
+                Trade Category <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
+              <View style={styles.categoriesWrap}>
+                {tradeCategories.map((cat) => {
+                  const isSelected = categoryId === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
+                      onPress={() => {
+                        setCategoryId(cat.id);
+                        if (errors.categoryId) {
+                          setErrors((prev) => ({ ...prev, categoryId: '' }));
+                        }
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <Ionicons
+                        name={cat.icon || 'storefront-outline'}
+                        size={14}
+                        color={isSelected ? '#FFFFFF' : '#475569'}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          isSelected && styles.categoryChipTextActive,
+                        ]}
+                      >
+                        {cat.name}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={14}
+                          color="#FFFFFF"
+                          style={{ marginLeft: 4 }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {Boolean(errors.categoryId) && (
+                <Text style={styles.errorText}>{errors.categoryId}</Text>
+              )}
+            </View>
+          </View>
+
+          {/* Section 4: Address Details (PIN Code *, Street Address, Village / Locality, District *, State *) */}
+          <View style={styles.sectionCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.iconCircleMaroon}>
+                <Ionicons name="location-sharp" size={16} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Address Details</Text>
+                <Text style={styles.cardHeaderSubtitle}>
+                  Store location and territory info
+                </Text>
+              </View>
+            </View>
+
+            {/* PIN Code * with 6-digit auto lookup */}
+            <View style={styles.inputGroup}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={styles.inputLabel}>
+                  PIN Code <Text style={styles.reqAsterisk}>*</Text>
+                </Text>
+                {pincodeLoading && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#881337" style={{ marginRight: 4 }} />
+                    <Text style={{ fontSize: 11, color: '#881337', fontWeight: '600' }}>
+                      Looking up PIN...
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <TextInput
+                style={[styles.textInput, errors.pincode && styles.inputErrorBorder]}
+                value={pincode}
+                onChangeText={handlePincodeChange}
+                keyboardType="numeric"
+                maxLength={6}
+                placeholder="e.g. 400601 (6 digits)"
+                placeholderTextColor="#94A3B8"
+              />
+              {Boolean(errors.pincode) && (
+                <Text style={styles.errorText}>{errors.pincode}</Text>
+              )}
+            </View>
+
+            {/* Street Address */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Street Address <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
+              <TextInput
+                style={[styles.textInput, errors.address && styles.inputErrorBorder]}
+                value={address}
+                onChangeText={(text) => {
+                  setAddress(text);
+                  if (errors.address) setErrors((prev) => ({ ...prev, address: '' }));
+                }}
+                placeholder="Shop No. 12, GB Road, Near Market"
+                placeholderTextColor="#94A3B8"
+              />
+              {Boolean(errors.address) && (
+                <Text style={styles.errorText}>{errors.address}</Text>
+              )}
+            </View>
+
+            {/* Village / Locality */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Village / Locality</Text>
+              <TextInput
+                style={styles.textInput}
+                value={village}
+                onChangeText={setVillage}
+                placeholder="e.g. Thane West / Main Bazaar"
                 placeholderTextColor="#94A3B8"
               />
             </View>
 
-            {/* 2. Address */}
-            <View style={styles.fieldSection}>
-              <View style={styles.fieldLabelRow}>
-                <Ionicons name="location-sharp" size={16} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.fieldLabel}>
-                  Address <Text style={styles.reqAsterisk}>*</Text>
+            {/* District * & State * in 2 Columns */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>
+                  District <Text style={styles.reqAsterisk}>*</Text>
                 </Text>
+                <TextInput
+                  style={[styles.textInput, errors.district && styles.inputErrorBorder]}
+                  value={district}
+                  onChangeText={(text) => {
+                    setDistrict(text);
+                    if (errors.district) setErrors((prev) => ({ ...prev, district: '' }));
+                  }}
+                  placeholder="e.g. Thane"
+                  placeholderTextColor="#94A3B8"
+                />
+                {Boolean(errors.district) && (
+                  <Text style={styles.errorText}>{errors.district}</Text>
+                )}
               </View>
 
-              <TouchableOpacity
-                style={styles.addressBox}
-                onPress={() => setIsAddressModalOpen(true)}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Edit address details"
-              >
-                {/* Mini Map Tile */}
-                <View style={styles.miniMap}>
-                  <View style={styles.mapRoadH1} />
-                  <View style={styles.mapRoadH2} />
-                  <View style={styles.mapRoadV1} />
-                  <View style={styles.mapRoadDiag} />
-                  <View style={styles.mapPinContainer}>
-                    <Ionicons name="location-sharp" size={22} color="#E11D48" />
-                    <View style={styles.mapPinShadow} />
-                  </View>
-                </View>
-
-                {/* Formatted Address Text */}
-                <Text style={styles.addressText} numberOfLines={2}>
-                  {formattedAddress}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>
+                  State <Text style={styles.reqAsterisk}>*</Text>
                 </Text>
-
-                {/* Edit Link Button */}
-                <View style={styles.addressEditBtn}>
-                  <Ionicons name="pencil" size={13} color="#881337" style={{ marginRight: 3 }} />
-                  <Text style={styles.addressEditText}>Edit</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* 3. Reason for not adding shopkeeper photo */}
-            <View style={styles.fieldSection}>
-              <View style={styles.fieldLabelRow}>
-                <Ionicons name="help-circle" size={18} color="#881337" style={{ marginRight: 6 }} />
-                <Text style={styles.fieldLabel}>
-                  Reason for not adding shopkeeper photo <Text style={styles.reqAsterisk}>*</Text>
-                </Text>
-              </View>
-
-              <View style={[styles.dropdownContainer, errors.noPhotoReason && styles.inputErrorBorder]}>
-                <TouchableOpacity
-                  style={styles.dropdownHeader}
-                  onPress={() => setIsReasonDropdownOpen(!isReasonDropdownOpen)}
-                  activeOpacity={0.8}
-                  accessibilityRole="combobox"
-                  accessibilityState={{ expanded: isReasonDropdownOpen }}
-                  accessibilityLabel="Reason for not adding shopkeeper photo"
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    <Ionicons name="images" size={17} color="#881337" style={{ marginRight: 8 }} />
-                    <Text style={[styles.dropdownHeaderText, !noPhotoReason && styles.dropdownPlaceholderText]}>
-                      {noPhotoReason || 'Select a reason'}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={isReasonDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                    size={17}
-                    color="#881337"
-                  />
-                </TouchableOpacity>
-
-                {isReasonDropdownOpen && (
-                  <View style={styles.dropdownList}>
-                    {PHOTO_REASONS.map((item, idx) => {
-                      const isSelected = noPhotoReason === item.label;
-                      return (
-                        <TouchableOpacity
-                          key={item.label}
-                          style={[
-                            styles.dropdownItem,
-                            idx === 0 && { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-                            isSelected && styles.dropdownItemSelected,
-                          ]}
-                          onPress={() => {
-                            setNoPhotoReason(item.label);
-                            setIsReasonDropdownOpen(false);
-                            if (errors.noPhotoReason) {
-                              setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
-                            }
-                          }}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: isSelected }}
-                        >
-                          <Ionicons
-                            name={item.icon}
-                            size={16}
-                            color={isSelected ? '#881337' : '#475569'}
-                            style={{ marginRight: 10, width: 20 }}
-                          />
-                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
-                            {item.label}
-                          </Text>
-                          {isSelected && (
-                            <Ionicons name="checkmark" size={16} color="#881337" style={{ marginLeft: 'auto' }} />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                <TextInput
+                  style={[styles.textInput, errors.stateName && styles.inputErrorBorder]}
+                  value={stateName}
+                  onChangeText={(text) => {
+                    setStateName(text);
+                    if (errors.stateName) setErrors((prev) => ({ ...prev, stateName: '' }));
+                  }}
+                  placeholder="e.g. Maharashtra"
+                  placeholderTextColor="#94A3B8"
+                />
+                {Boolean(errors.stateName) && (
+                  <Text style={styles.errorText}>{errors.stateName}</Text>
                 )}
               </View>
             </View>
 
-            {/* 4. Take Storefront Photo */}
-            <TouchableOpacity
-              style={[styles.photoDashedBox, photoUri && styles.photoDashedBoxActive]}
-              onPress={pickPhoto}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Take Storefront Photo"
-            >
-              {photoUri ? (
-                <View style={styles.photoPreviewWrapper}>
-                  <Image source={{ uri: photoUri }} style={styles.photoPreviewThumb} resizeMode="cover" />
-                  <View style={styles.photoPreviewMeta}>
-                    <View style={styles.photoCapturedBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginRight: 4 }} />
-                      <Text style={styles.photoCapturedText}>Storefront Photo Added</Text>
-                    </View>
-                    <View style={styles.photoActionsRow}>
-                      <Text style={styles.photoActionLink}>Retake Photo</Text>
-                      <Text style={styles.photoActionDot}>•</Text>
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setPhotoUri(null);
-                        }}
-                      >
-                        <Text style={[styles.photoActionLink, { color: '#DC2626' }]}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+            {/* Live Formatted Address Preview Box with Mini Map */}
+            <View style={[styles.addressBox, { marginTop: 14 }]}>
+              <View style={styles.miniMap}>
+                <View style={styles.mapRoadH1} />
+                <View style={styles.mapRoadH2} />
+                <View style={styles.mapRoadV1} />
+                <View style={styles.mapRoadDiag} />
+                <View style={styles.mapPinContainer}>
+                  <Ionicons name="location-sharp" size={22} color="#E11D48" />
+                  <View style={styles.mapPinShadow} />
                 </View>
-              ) : (
-                <View style={styles.photoPlaceholderCenter}>
-                  <View style={styles.photoCameraIconBox}>
-                    <Ionicons name="camera" size={20} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.photoTakeTitle}>Take Storefront Photo</Text>
-                  <Text style={styles.photoTakeSub}>Upload store entrance or signboard</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Account Assignment Card matching image */}
-          <View style={styles.assignmentCard}>
-            <View style={styles.assignmentHeaderRow}>
-              <View style={styles.shieldIconCircle}>
-                <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.assignmentTitle}>Account Assignment</Text>
-                <Text style={styles.assignmentSubtitle}>Select who will be assigned to this store</Text>
+              <View style={{ flex: 1, marginHorizontal: 10 }}>
+                <Text style={styles.addressText} numberOfLines={2}>
+                  {formattedAddress}
+                </Text>
+                {Boolean(latitude && longitude) && (
+                  <Text style={styles.addressGpsCoordinates}>
+                    GPS: {latitude?.toFixed(4)}, {longitude?.toFixed(4)} (
+                    {gpsStatus === 'acquired' ? 'Acquired' : gpsStatus})
+                  </Text>
+                )}
               </View>
             </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.assignmentPillsRow}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.assignmentPill,
-                  (!sellerId || sellerId === user?.id) && styles.assignmentPillActive,
-                ]}
-                onPress={() => setSellerId(user?.id || '')}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Assign to Myself"
-              >
-                <Ionicons
-                  name="person"
-                  size={15}
-                  color={(!sellerId || sellerId === user?.id) ? '#FFFFFF' : '#64748B'}
-                  style={{ marginRight: 6 }}
-                />
-                <Text
-                  style={[
-                    styles.assignmentPillText,
-                    (!sellerId || sellerId === user?.id) && styles.assignmentPillTextActive,
-                  ]}
-                >
-                  Myself (Personal Van Stock)
-                </Text>
-              </TouchableOpacity>
-
-              {sellers.map((s) => {
-                const isSelected = sellerId === s.id;
-                return (
-                  <TouchableOpacity
-                    key={s.id}
-                    style={[styles.assignmentPill, isSelected && styles.assignmentPillActive]}
-                    onPress={() => setSellerId(s.id)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Assign to ${s.name || (s as any).username || 'Seller'}`}
-                  >
-                    <Ionicons
-                      name="person"
-                      size={15}
-                      color={isSelected ? '#FFFFFF' : '#64748B'}
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text
-                      style={[
-                        styles.assignmentPillText,
-                        isSelected && styles.assignmentPillTextActive,
-                      ]}
-                    >
-                      {s.name || (s as any).username || 'test45'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
           </View>
 
           {/* Prominent Register Customer Pill Button */}
@@ -726,151 +1071,131 @@ export default function ManagerAddCustomerScreen() {
         </View>
       </ScrollView>
 
-      {/* Edit Address & Store Details Modal */}
+      {/* Searchable Manager Dropdown Modal */}
       <Modal
-        visible={isAddressModalOpen}
-        animationType="slide"
+        visible={isManagerModalOpen}
+        animationType="fade"
         transparent
-        onRequestClose={() => setIsAddressModalOpen(false)}
+        onRequestClose={() => {
+          setIsManagerModalOpen(false);
+          setManagerSearchQuery('');
+        }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
-          <View style={styles.modalContent}>
+          <View style={styles.managerModalContent}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Edit Address & Details</Text>
-                <Text style={styles.modalSubtitle}>Configure store address & contact credentials</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Assign Territory Manager</Text>
+                <Text style={styles.modalSubtitle}>Search and select a manager for this store</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
-                onPress={() => setIsAddressModalOpen(false)}
+                onPress={() => {
+                  setIsManagerModalOpen(false);
+                  setManagerSearchQuery('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
               >
                 <Ionicons name="close" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              <Text style={styles.modalInputLabel}>Street / Shop No. / Landmark *</Text>
+            {/* Search Bar with live search */}
+            <View style={styles.modalSearchBar}>
+              <Ionicons name="search" size={18} color="#64748B" style={{ marginRight: 8 }} />
               <TextInput
-                style={styles.modalTextInput}
-                value={address}
-                onChangeText={setAddress}
-                placeholder="Shop No. 12, GB Road"
+                style={styles.modalSearchInput}
+                placeholder="Search manager by name or email..."
                 placeholderTextColor="#94A3B8"
+                value={managerSearchQuery}
+                onChangeText={setManagerSearchQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
               />
+              {managerSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setManagerSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>PIN Code (6 digits) *</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={pincode}
-                    onChangeText={handlePincodeChange}
-                    keyboardType="numeric"
-                    maxLength={6}
-                    placeholder="400601"
-                    placeholderTextColor="#94A3B8"
-                  />
-                  {pincodeLoading && (
-                    <Text style={{ fontSize: 11, color: '#881337', marginTop: 2 }}>Looking up pin...</Text>
-                  )}
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>Village / Area</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={village}
-                    onChangeText={setVillage}
-                    placeholder="Thane West"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>District *</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={district}
-                    onChangeText={setDistrict}
-                    placeholder="Thane"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>State *</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={stateName}
-                    onChangeText={setStateName}
-                    placeholder="Maharashtra"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>Contact Person / Owner *</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={ownerName}
-                    onChangeText={setOwnerName}
-                    placeholder="Store Manager"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>Phone Number *</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    placeholder="9820012345"
-                    placeholderTextColor="#94A3B8"
-                  />
-                </View>
-              </View>
-
-              {/* Trade Categories */}
-              {categories.length > 0 && (
-                <View style={{ marginTop: 8 }}>
-                  <Text style={styles.modalInputLabel}>Trade Category</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
-                    {categories.map((cat) => {
-                      const isSel = categoryId === cat.id;
-                      return (
-                        <TouchableOpacity
-                          key={cat.id}
-                          style={[styles.modalCatChip, isSel && styles.modalCatChipActive]}
-                          onPress={() => setCategoryId(cat.id)}
+            {/* Filtered Manager List */}
+            <ScrollView
+              style={styles.managerListScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {filteredManagers.map((mgr) => {
+                const isSelected = selectedManagerId === mgr.id;
+                return (
+                  <TouchableOpacity
+                    key={mgr.id}
+                    style={[
+                      styles.managerOptionRow,
+                      isSelected && styles.managerOptionRowSelected,
+                    ]}
+                    onPress={() => {
+                      setSelectedManagerId(mgr.id);
+                      setIsManagerModalOpen(false);
+                      setManagerSearchQuery('');
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <View
+                      style={[
+                        styles.managerAvatarCircle,
+                        isSelected && styles.managerAvatarCircleSelected,
+                      ]}
+                    >
+                      <Ionicons
+                        name={mgr.id.includes('seller') ? 'person' : 'briefcase'}
+                        size={16}
+                        color={isSelected ? '#881337' : '#64748B'}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text
+                          style={[
+                            styles.managerOptionName,
+                            isSelected && styles.managerOptionNameSelected,
+                          ]}
                         >
-                          <Text style={[styles.modalCatChipText, isSel && styles.modalCatChipTextActive]}>
-                            {cat.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                          {mgr.name}
+                        </Text>
+                        {isSelected && (
+                          <View style={styles.selectedPillBadge}>
+                            <Text style={styles.selectedPillBadgeText}>Selected</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.managerOptionEmail} numberOfLines={1}>
+                        {mgr.email || mgr.role || 'Territory Lead'}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={isSelected ? 'checkmark-circle' : 'chevron-forward'}
+                      size={20}
+                      color={isSelected ? '#881337' : '#CBD5E1'}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+              {filteredManagers.length === 0 && (
+                <View style={styles.emptyManagerContainer}>
+                  <Ionicons name="person-outline" size={32} color="#94A3B8" />
+                  <Text style={styles.emptyManagerText}>
+                    No managers found matching "{managerSearchQuery}"
+                  </Text>
                 </View>
               )}
             </ScrollView>
-
-            <TouchableOpacity
-              style={styles.modalSaveBtn}
-              onPress={() => setIsAddressModalOpen(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalSaveBtnText}>Apply Address Details</Text>
-            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1014,6 +1339,52 @@ const styles = StyleSheet.create({
     elevation: 2,
     marginBottom: 14,
   },
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 14,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  iconCircleMaroon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#881337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  iconCircleGreen: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  cardHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  cardHeaderSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
   fieldSection: {
     marginBottom: 16,
   },
@@ -1039,6 +1410,15 @@ const styles = StyleSheet.create({
   reqAsterisk: {
     color: '#E11D48',
   },
+  inputGroup: {
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 6,
+  },
   textInput: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -1052,83 +1432,41 @@ const styles = StyleSheet.create({
   inputErrorBorder: {
     borderColor: '#EF4444',
   },
-  addressBox: {
-    backgroundColor: '#F1F5F9',
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+    marginLeft: 2,
+  },
+  phoneInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     borderRadius: 12,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  miniMap: {
-    width: 64,
-    height: 48,
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
-    backgroundColor: '#E2E8F0',
-    position: 'relative',
-    alignItems: 'center',
+  },
+  phoneCountryBadge: {
+    backgroundColor: '#F8FAFC',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     justifyContent: 'center',
-  },
-  mapRoadH1: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 14,
-    height: 6,
-    backgroundColor: '#CBD5E1',
-  },
-  mapRoadH2: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 12,
-    height: 5,
-    backgroundColor: '#CBD5E1',
-  },
-  mapRoadV1: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 24,
-    width: 6,
-    backgroundColor: '#CBD5E1',
-  },
-  mapRoadDiag: {
-    position: 'absolute',
-    top: -10,
-    bottom: -10,
-    right: 14,
-    width: 5,
-    backgroundColor: '#CBD5E1',
-    transform: [{ rotate: '30deg' }],
-  },
-  mapPinContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapPinShadow: {
-    width: 8,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    marginTop: -2,
-  },
-  addressText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#334155',
-    flex: 1,
-    marginHorizontal: 10,
-    lineHeight: 18,
-  },
-  addressEditBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
-  addressEditText: {
-    fontSize: 12,
+  phoneCountryText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#881337',
+    color: '#475569',
+  },
+  phoneTextInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 15,
+    color: '#0F172A',
   },
   dropdownContainer: {
     borderWidth: 1,
@@ -1174,6 +1512,25 @@ const styles = StyleSheet.create({
   dropdownItemTextSelected: {
     color: '#881337',
     fontWeight: '700',
+  },
+  dropdownDisabled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    opacity: 0.85,
+  },
+  dropdownDisabledText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    flex: 1,
+    lineHeight: 18,
   },
   photoDashedBox: {
     borderWidth: 1.5,
@@ -1250,70 +1607,160 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     color: '#CBD5E1',
   },
-  assignmentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: 16,
-  },
-  assignmentHeaderRow: {
+  managerDropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  shieldIconCircle: {
+  managerTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  managerTriggerAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#FFE4E6',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
-  assignmentTitle: {
+  managerTriggerName: {
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
   },
-  assignmentSubtitle: {
+  managerTriggerSubtitle: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
-  assignmentPillsRow: {
+  managerTriggerSearchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  assignmentPill: {
+  managerTriggerSearchText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#881337',
+  },
+  categoriesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
   },
-  assignmentPillActive: {
+  categoryChipActive: {
     backgroundColor: '#881337',
     borderColor: '#881337',
   },
-  assignmentPillText: {
-    fontSize: 13,
+  categoryChipText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#334155',
+    color: '#475569',
   },
-  assignmentPillTextActive: {
+  categoryChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  addressBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  miniMap: {
+    width: 64,
+    height: 48,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapRoadH1: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 14,
+    height: 6,
+    backgroundColor: '#CBD5E1',
+  },
+  mapRoadH2: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 12,
+    height: 5,
+    backgroundColor: '#CBD5E1',
+  },
+  mapRoadV1: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 24,
+    width: 6,
+    backgroundColor: '#CBD5E1',
+  },
+  mapRoadDiag: {
+    position: 'absolute',
+    top: -10,
+    bottom: -10,
+    right: 14,
+    width: 5,
+    backgroundColor: '#CBD5E1',
+    transform: [{ rotate: '30deg' }],
+  },
+  mapPinContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPinShadow: {
+    width: 8,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    marginTop: -2,
+  },
+  addressText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#334155',
+    lineHeight: 18,
+  },
+  addressGpsCoordinates: {
+    fontSize: 11,
+    color: '#16A34A',
+    fontWeight: '600',
+    marginTop: 2,
   },
   registerBtn: {
     backgroundColor: '#881337',
@@ -1350,12 +1797,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  managerModalContent: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '85%',
+    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1381,52 +1828,86 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalInputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 4,
-    marginTop: 8,
-  },
-  modalTextInput: {
+  modalSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 9,
+    marginBottom: 12,
+  },
+  modalSearchInput: {
+    flex: 1,
     fontSize: 14,
     color: '#0F172A',
-    backgroundColor: '#F8FAFC',
   },
-  modalCatChip: {
+  managerListScroll: {
+    maxHeight: 320,
+  },
+  managerOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  managerOptionRowSelected: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FDA4AF',
+  },
+  managerAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#F1F5F9',
-    marginRight: 6,
-  },
-  modalCatChipActive: {
-    backgroundColor: '#881337',
-  },
-  modalCatChipText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  modalCatChipTextActive: {
-    color: '#FFFFFF',
-  },
-  modalSaveBtn: {
-    backgroundColor: '#881337',
-    borderRadius: 14,
-    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 18,
+    marginRight: 12,
   },
-  modalSaveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+  managerAvatarCircleSelected: {
+    backgroundColor: '#FFE4E6',
+  },
+  managerOptionName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  managerOptionNameSelected: {
+    color: '#881337',
     fontWeight: '700',
+  },
+  selectedPillBadge: {
+    backgroundColor: '#881337',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  selectedPillBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  managerOptionEmail: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  emptyManagerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  emptyManagerText: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

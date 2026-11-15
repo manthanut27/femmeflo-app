@@ -1092,8 +1092,18 @@ export default function AdminAddCustomerScreen() {
               </View>
             </View>
 
-            {/* Mandatory Exemption Reason when photo missing */}
-            {!photoUri && (
+            {/* Mandatory Exemption Reason when photo missing, Disabled when photo uploaded */}
+            {photoUri ? (
+              <View style={[styles.exemptionBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', opacity: 0.85 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="checkmark-circle" size={18} color="#16A34A" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569', flex: 1 }}>
+                    Storefront photo uploaded — exemption reason not required
+                  </Text>
+                  <Ionicons name="lock-closed" size={16} color="#94A3B8" />
+                </View>
+              </View>
+            ) : (
               <View style={styles.exemptionBox}>
                 <View style={styles.exemptionHeaderRow}>
                   <Text style={styles.exemptionTitle}>
