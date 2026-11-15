@@ -26,6 +26,7 @@ import type {
 } from './types';
 
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
+import { draftStorage } from '../utils/draftStorage';
 
 export { sanitizeUpdateSalePayload };
 
@@ -373,6 +374,16 @@ export const sellerApi = {
     const lat = Number(payload.latitude ?? payload.startLatitude ?? 0);
     const lng = Number(payload.longitude ?? payload.startLongitude ?? 0);
 
+    // If an active shift is already active on the server, return it directly to avoid duplicate start 500 error
+    try {
+      const current = await sellerApi.getCurrentShift();
+      if (current?.shift && current.shift.status === 'ACTIVE' && !current.shift.endTime) {
+        return { shift: current.shift };
+      }
+    } catch {
+      // Ignore and proceed to startShift
+    }
+
     // Backend startShiftSchema is strictly: { latitude, longitude, address? }
     // Unrecognized keys trigger Zod validation error or HTTP 500 on strict backends.
     const body: Record<string, any> = {
@@ -384,10 +395,15 @@ export const sellerApi = {
     }
 
     try {
-      return await apiRequest<{ shift: Shift }>('seller/shifts/start', {
+      const res = await apiRequest<{ shift: Shift }>('seller/shifts/start', {
         method: 'POST',
         body: JSON.stringify(body),
       });
+      const shift = res?.shift;
+      if (shift && shift.sellerId) {
+        draftStorage.saveActiveShift(shift.sellerId, shift).catch(() => {});
+      }
+      return res;
     } catch (err: any) {
       console.warn('[sellerApi.startShift] Server rejected shift start, falling back to resilient local active shift:', err?.message);
       // Fallback: create resilient local active shift so managers and sellers are not blocked
@@ -401,6 +417,7 @@ export const sellerApi = {
         startOdometerKm: payload.startOdometerKm ?? 0,
         startAddress: payload.address,
       };
+      draftStorage.saveActiveShift(localShift.sellerId, localShift).catch(() => {});
       return { shift: localShift };
     }
   },

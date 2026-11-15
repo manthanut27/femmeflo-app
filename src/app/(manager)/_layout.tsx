@@ -195,7 +195,7 @@ export default function ManagerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="quick-actions"
+        name="quick-actions/index"
         options={{
           title: 'Quick Actions',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
