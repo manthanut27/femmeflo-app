@@ -11,10 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ManagerQuickActionsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
   const handleNewSale = () => {
@@ -44,21 +46,29 @@ export default function ManagerQuickActionsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={22} color="#0F172A" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleWrap}>
+      {/* Top Header with Safe Area Insets & Clean Alignment */}
+      <View
+        style={[
+          styles.headerRow,
+          {
+            paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 14 : 20) + 6,
+          },
+        ]}
+      >
+        <View style={styles.headerTitleRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color="#0F172A" />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Quick Actions</Text>
-          <Text style={styles.headerSubtitle}>Choose what you want to do</Text>
         </View>
+        <Text style={styles.headerSubtitle}>Choose what you want to do</Text>
       </View>
 
       <ScrollView
@@ -77,7 +87,7 @@ export default function ManagerQuickActionsScreen() {
             <View style={styles.heroIconBox}>
               <Ionicons name="cart" size={24} color="#FFFFFF" />
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text style={styles.heroActionTitle}>New Sale</Text>
               <Text style={styles.heroActionSubtitle}>Record a new sale</Text>
             </View>
@@ -95,7 +105,7 @@ export default function ManagerQuickActionsScreen() {
             <View style={styles.actionIconCircle}>
               <Ionicons name="time-outline" size={22} color="#881337" />
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text style={styles.actionTitle}>Daily Shift</Text>
               <Text style={styles.actionSubtitle}>(Punch-In / Route)</Text>
             </View>
@@ -113,7 +123,7 @@ export default function ManagerQuickActionsScreen() {
             <View style={styles.actionIconCircle}>
               <Ionicons name="cube-outline" size={22} color="#881337" />
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text style={styles.actionTitle}>Check Van Stock</Text>
               <Text style={styles.actionSubtitle}>View stock in van</Text>
             </View>
@@ -131,7 +141,7 @@ export default function ManagerQuickActionsScreen() {
             <View style={styles.actionIconCircle}>
               <Ionicons name="storefront-outline" size={22} color="#881337" />
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text style={styles.actionTitle}>Add New Shop</Text>
               <Text style={styles.actionSubtitle}>Register a new shop</Text>
             </View>
@@ -149,7 +159,7 @@ export default function ManagerQuickActionsScreen() {
             <View style={styles.actionIconCircle}>
               <Ionicons name="people-outline" size={22} color="#881337" />
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text style={styles.actionTitle}>Manage Sellers</Text>
               <Text style={styles.actionSubtitle}>View & manage sellers</Text>
             </View>
@@ -167,7 +177,7 @@ export default function ManagerQuickActionsScreen() {
             <View style={styles.actionIconCircle}>
               <Ionicons name="stats-chart-outline" size={22} color="#881337" />
             </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
               <Text style={styles.actionTitle}>All Sales</Text>
               <Text style={styles.actionSubtitle}>Check sales history</Text>
             </View>
@@ -227,31 +237,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FBF9FA',
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 12 : 16,
     paddingBottom: 14,
     backgroundColor: '#FBF9FA',
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+  headerTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  headerTitleWrap: {
-    flex: 1,
-    marginLeft: 14,
+  backBtn: {
+    paddingVertical: 2,
+    paddingRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
@@ -263,6 +261,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+    paddingLeft: 34,
   },
   scrollContent: {
     paddingBottom: 20,

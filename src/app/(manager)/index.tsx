@@ -810,6 +810,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 1,
+    paddingLeft: 23,
   },
   quickSaleBanner: {
     backgroundColor: '#881337',
