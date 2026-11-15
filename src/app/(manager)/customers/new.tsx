@@ -914,34 +914,6 @@ export default function ManagerAddCustomerScreen() {
                 </View>
                 <Ionicons name="chevron-down" size={18} color="#64748B" />
               </TouchableOpacity>
-
-              {/* Quick horizontal category chips */}
-              {categories.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.categoryChipsRow}
-                >
-                  {categories.map((cat) => {
-                    const isSel = categoryId === cat.id;
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[styles.categoryQuickChip, isSel && styles.categoryQuickChipActive]}
-                        onPress={() => {
-                          setCategoryId(cat.id);
-                          if (errors.categoryId) setErrors((prev) => ({ ...prev, categoryId: '' }));
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.categoryQuickChipText, isSel && styles.categoryQuickChipTextActive]}>
-                          {cat.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
               {errors.categoryId ? <Text style={styles.errorSubText}>{errors.categoryId}</Text> : null}
             </View>
           </View>
@@ -1564,32 +1536,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#881337',
-  },
-  categoryChipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 8,
-    gap: 6,
-  },
-  categoryQuickChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  categoryQuickChipActive: {
-    backgroundColor: '#881337',
-    borderColor: '#881337',
-  },
-  categoryQuickChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  categoryQuickChipTextActive: {
-    color: '#FFFFFF',
   },
   addressSummaryTile: {
     backgroundColor: '#F8FAFC',
