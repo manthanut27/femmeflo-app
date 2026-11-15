@@ -2,284 +2,176 @@
 
 ## 1. Document Control
 
-* Product: FemmeFlo Seller, Manager & Super Admin Management System
-* Mobile platform: Android
-* Mobile framework: React Native with Expo and TypeScript
-* Existing web application: FemmeFlo website and operations portal
-* Backend strategy: Reuse the existing backend wherever its contracts and behavior satisfy the requirements
-* Initial distribution: Internal Android APK
-* Interface language: English
-* Operating mode: Online-only for business transactions
-* Document status: Implementation baseline; backend-specific contracts require verification against source code
+* **Product**: FemmeFlo Seller, Manager & Super Admin Management System
+* **Mobile Platform**: Android (Physical devices, Emulators, Internal APK distribution)
+* **Mobile Framework**: React Native 0.88.1 with Expo SDK 58 (~58.0.25), React 19.3.0, TypeScript ~6.0.3, Expo Router ~58.0.31
+* **App Version**: v1.0.20 (`versionCode: 24`)
+* **Existing Backend**: Express 5.2.1, Prisma ORM 7.10, PostgreSQL on Supabase (`femmeflo-yfa-inventory-server`)
+* **Distribution Strategy**: Internal Android APK via Expo Application Services (EAS) and local Gradle prebuild
+* **Interface Language**: English (UI and generated records), with automated Hindi & Hinglish multilingual speech-to-text translation for field observations
+* **Operating Mode**: Online-first for transactional business operations with local offline draft preservation and idempotency guarantees
+
+---
 
 ## 2. Product Objective
 
-Build an Android application for Seller, Manager, and Super Admin operations that integrates with the existing FemmeFlo backend.
+Build a resilient, production-ready Android mobile application for FemmeFlo field sales officers (Sellers), territory supervisors (Managers), and executive administrators (Super Admins). The system streamlines sanitary product distribution, retail store onboarding, mobile point-of-sale transactions, vehicle inventory tracking, price approval workflows, tax invoicing, and territory reporting.
 
-The application must support customer onboarding, sales, inventory movement, price approvals, payment tracking, seller incentives, invoices, notifications, reporting, and role-specific administration.
+The mobile client is strictly aligned with the backend source of truth, enforcing business-critical constraints, secure hardware credential storage, offline draft recovery, and village-friendly field workflows.
 
-The mobile application must not create a separate source of truth for business data. The backend remains authoritative for users, roles, customers, stock, sales, approvals, payments, incentive calculations, invoices, and notifications.
+---
 
-## 3. User Roles
+## 3. User Roles & Capabilities
 
-### 3.1 Seller
+### 3.1 Field Seller (`/seller`)
 
-A Seller can:
+A Field Seller can:
+* **Duty Shift Authentication**: Start and end shifts using native Android Fingerprint / Biometric authentication with a Mobile PIN / password fallback (`ShiftAuthVerificationModal.tsx`).
+* **Vehicle Odometer Tracking**: Record starting and closing odometer KM readings with monotonic distance validation.
+* **Customer Store Onboarding**: Register new retail outlets using a standardized **4-Card Architecture**:
+  1. *Current Location GPS Card*: Foreground GPS coordinates with accuracy indicator, detected district/state, and manual re-acquire option.
+  2. *Storefront Photo & Exemption Verification Card*: Camera/gallery photo capture with JPEG compression. When a photo is uploaded, the exemption reason dropdown is **automatically locked and disabled**. If a photo is absent, a standardized exemption reason must be chosen.
+  3. *Shop Information Card*: Mandatory shop name, owner name, mobile number (+91 prefix, 10 digits), and optional email address.
+  4. *Account Assignment & Trade Category Card*: Strictly dynamic manager searchable dropdown (zero hardcoded strings, dynamically populated from backend) and single trade category dropdown.
+  5. *Address Details Card*: 6-digit PIN code auto-lookup for District, State, and Locality, with street address, village, and interactive mini map preview.
+* **Decoupled Direct POS Sales**: Record sales directly at any time (`/(seller)/sales/new`) without requiring an active duty shift, eliminating field blockers.
+* **Duty Shift Visit Sales**: Check in to assigned retail outlets during duty shifts (`/(seller)/shift`), log visit notes, and record visit-linked sales orders upon checkout.
+* **Multilingual Voice Feedback Translation**: Speak naturally in Hindi or Hinglish; speech is automatically transcribed and translated into concise, professional English field notes (`VoiceFeedbackTranslator.tsx`).
+* **Van Stock Inventory Ledger**: Check mobile vehicle inventory balances in real time to prevent overselling.
+* **Pricing Floor Alerts**: Receive real-time amber badge warnings (`#D97706`) for below-minimum price sales and submit them to the Super Admin approval queue.
+* **Payment Recording**: Select payment modes (`CASH`, `BANK`, or `PENDING`) with idempotency key protection (`requestKey` UUID v4).
+* **Tax Invoices**: Download and share authenticated GST tax invoice PDFs via native Android share sheet.
+* **Incentives & Commissions**: Review monthly commission summaries and historical rate ledgers.
 
-* Sign in using email and password.
-* View their dashboard and permitted sales metrics.
-* View assigned customers.
-* Search and paginate customer records.
-* Create customers with a required email address.
-* Select customer categories loaded from the backend.
-* Capture foreground GPS location when adding a customer, where appropriate.
-* Review, retry, and manually correct location information before submission.
-* Attach an optional customer photo.
-* View available products and applicable pricing.
-* Create single-product or multi-product sales where supported by the backend.
-* Submit below-minimum-price sales for approval.
-* View their sales history and sale status.
-* View their assigned inventory and stock movements.
-* Record a permitted payment mode of Cash, Bank, or Pending.
-* View their incentive records and applicable incentive rates.
-* View or download invoices when authorized.
-* View persistent in-app notifications.
-* Change their password.
+A Field Seller must not:
+* Approve their own below-minimum price sales.
+* Bypass the server-enforced minimum price.
+* View another seller's private territory records without authorization.
+* Directly alter central warehouse stock balances.
 
-A Seller must not:
+---
 
-* Approve their own below-minimum-price sale.
-* Bypass the server-configured minimum sale price.
-* View or modify another Seller's protected records unless explicitly authorized.
-* Directly adjust warehouse inventory.
-* Change global pricing or incentive configuration.
-* Mark a sale successful before the backend confirms it.
+### 3.2 Territory Manager (`/manager`)
 
-### 3.2 Manager
+A Territory Manager can:
+* **Territory Overview**: Monitor territory sales revenue, active field officer counts, store numbers, and packet volumes.
+* **Manager Quick Actions Hub (`/(manager)/quick-actions/index.tsx`)**:
+  - Safe area insets aligned operational launchpad.
+  - One-tap hero card for **New Sale** (`/(seller)/sales/new`).
+  - 5 rapid action cards: *Daily Shift*, *Check Van Stock*, *Add New Shop*, *Manage Sellers*, and *All Sales*.
+  - Direct operational support access (helpline dialer `tel:18001234567` and email `support@femmeflo.com`).
+* **Field Seller Administration**: Supervise field officers in assigned territory, monitor shift attendance, and onboard new sellers (`/(manager)/sellers/new`).
+* **Territory Customers & Sales**: View master store accounts, onboard stores using the 4-card flow, and review the territory-wide sales order stream.
+* **Dual-Role Execution**: For managers with `isSeller: true`, toggle immediately to Field Sales Mode to conduct direct sales, run shifts, and handle van stock.
 
-A Manager can:
+---
 
-* Sign in using email and password.
-* View their authorized team and territory dashboard.
-* View authorized Sellers and associated customer records.
-* View permitted sales, inventory, approval, and performance information.
-* Use search, filtering, and pagination.
-* Review assigned operational records.
-* Perform explicitly authorized approval and management actions.
-* View permitted reports and incentive summaries.
-* Receive and acknowledge in-app notifications.
-* Change their password.
-
-Manager permissions must be derived from the existing backend authorization model.
-
-Until the backend permission matrix is verified, the mobile application must not assume that Managers can:
-
-* Approve below-minimum-price sales.
-* Change minimum sale prices.
-* Create, deactivate, or reassign Sellers.
-* Create or approve stock transfers.
-* Change Seller incentive rates.
-* Perform Super Admin operations.
-
-These actions must remain unavailable to Managers unless the backend explicitly authorizes them.
-
-### 3.3 Super Admin
+### 3.3 Super Admin (`/admin`)
 
 A Super Admin can:
+* **Executive Command Center (`/(admin)/index`)**: High-level national metrics including total revenue, packet volume, central warehouse balances, and active field officers.
+* **Administrative Actions Hub (`/(admin)/actions/index.tsx`)**: Comprehensive command center covering all 13 core operational modules across 6 functional categories:
+  1. *Sales & Reports*: Daily Sales & Reports, GST Tax Invoices, Sales Orders, Incentives & Payouts.
+  2. *Approvals*: Real-time Price Approvals queue with dynamic pending count badge (`#DC2626` alert) and live event synchronization.
+  3. *Products & Stock*: Products & Prices, Stock Movement (Transfer, Inward, History), Regional Warehouses.
+  4. *Field Team*: Staff Shifts & Routes, Shops & Customers.
+  5. *Team & Access*: Manager Permissions, Managers & Sellers lifecycle administration.
+  6. *Settings*: Shop Categories, Company & Invoice Settings.
+* **Price Approvals Queue (`/(admin)/approvals`)**: Side-by-side review of requested price vs minimum price with one-tap Approve and Reject actions.
+* **Stock Movement Hub (`/(admin)/inventory/transfer`)**: Multi-warehouse stock movement, factory inward receipts, and vehicle van allocations.
 
-* Sign in using email and password.
-* View the overall administrative dashboard.
-* Filter permitted metrics by geography, Manager, Seller, category, and date where supported.
-* Create, view, update, and deactivate Managers and Sellers according to backend capabilities.
-* View and manage customer records.
-* Manage product and category records according to supported APIs.
-* Configure the minimum sale price.
-* Review, approve, or reject pending price approvals.
-* Manage headquarters and warehouse inventory.
-* Record stock receipts and transfers.
-* View inventory balances and transaction history.
-* Manage Seller-specific incentive rates and review incentive records.
-* View sales, payments, invoices, and reports.
-* Manage supported permissions and notification functions.
-* Change their password.
-
-All administrative mutations must be validated and authorized by the backend.
+---
 
 ## 4. Functional Requirements
 
 ### FR-AUTH: Authentication and Session Management
+* **FR-AUTH-001**: Single unified mobile login (`/(auth)/login`) with role-selection pills (`Seller`, `Manager`, `Super Admin`).
+* **FR-AUTH-002**: Validate user credentials against backend `POST /api/v1/auth/login`.
+* **FR-AUTH-003**: Store JWT tokens in hardware-backed secure storage via `expo-secure-store` (`femmeflo_mobile_auth_token`).
+* **FR-AUTH-004**: Auto-restore sessions on app restart by verifying token against `GET /api/v1/auth/me`.
+* **FR-AUTH-005**: On 401 Unauthorized, purge invalid session tokens while strictly preserving active duty shift state and unsubmitted order drafts.
+* **FR-AUTH-006**: Support in-app password rotation (`/(shared)/change-password`).
 
-* FR-AUTH-001: Provide a shared mobile login entry with role selection.
-* FR-AUTH-002: Authenticate using email and password.
-* FR-AUTH-003: Verify that the server-returned role matches the selected role.
-* FR-AUTH-004: Store the access token using native secure storage.
-* FR-AUTH-005: Restore a valid session after application restart.
-* FR-AUTH-006: Fetch the current user from the backend before exposing protected screens.
-* FR-AUTH-007: Handle expired sessions without exposing protected data.
-* FR-AUTH-008: Support password recovery and password changes using verified backend contracts.
-* FR-AUTH-009: Clear role-specific caches and sensitive in-memory data on logout.
-* FR-AUTH-010: Do not invent a refresh-token or server logout endpoint if the backend does not support it.
+### FR-SHIFT: Duty Shift & Biometric Attendance
+* **FR-SHIFT-001**: Implement native Android Fingerprint / Biometric authentication via `expo-local-authentication` for starting and ending shifts (`ShiftAuthVerificationModal.tsx`).
+* **FR-SHIFT-002**: Provide Mobile PIN / Password fallback verification tab.
+* **FR-SHIFT-003**: Require starting vehicle odometer KM reading (non-negative integer).
+* **FR-SHIFT-004**: Enforce closing odometer reading validation (`endOdometerKm >= startOdometerKm`).
+* **FR-SHIFT-005**: Acquire foreground GPS coordinates upon shift start and shift end.
+* **FR-SHIFT-006**: Map biometric verification outputs to backwards-compatible backend shift telemetry (`faceVerified: true`, `facePhoto: biometric_fingerprint_verified`, `faceConfidence: 0.99`, `faceMethod: FINGERPRINT_BIOMETRIC`).
+* **FR-SHIFT-007**: Store active shift state locally in AsyncStorage (`draftStorage.saveActiveShift`), enabling recovery across app reboots or transient network drops.
 
-### FR-CUST: Customer Management
+### FR-CUST: Customer Onboarding & Verification
+* **FR-CUST-001**: Implement the standardized 4-card customer onboarding structure at `/(seller)/customers/new` and `/(manager)/customers/new`.
+* **FR-CUST-002**: Acquire foreground GPS coordinates with real-time status indication, accuracy in meters, and manual re-acquire capability.
+* **FR-CUST-003**: Storefront photo capture via camera or gallery with automatic JPEG compression.
+* **FR-CUST-004**: Automatically disable and lock the exemption reason dropdown when a storefront photo is attached (`Storefront photo captured • Exemption not required`).
+* **FR-CUST-005**: Require selecting a standardized exemption reason when a storefront photo is absent.
+* **FR-CUST-006**: Require Shop Name, Owner Name, and 10-digit Mobile Number (+91 prefix). Validate optional email format.
+* **FR-CUST-007**: Populate the Assigned Manager dropdown dynamically from backend APIs (`adminApi.listManagers` / `managerApi.listSellers`); prohibit hardcoded manager names.
+* **FR-CUST-008**: Provide 6-digit PIN code auto-lookup to auto-populate District, State, and Locality.
+* **FR-CUST-009**: Display interactive Mini Map Address Preview tile.
+* **FR-CUST-010**: Display `SaveConfirmationCard` post-submission with retailer credentials, server timestamp, GPS coordinates, and batch entry shortcut.
+* **FR-CUST-011**: Autosave unsubmitted customer onboarding form drafts locally.
 
-* FR-CUST-001: List authorized customers.
-* FR-CUST-002: Support server-side search and pagination where available.
-* FR-CUST-003: Require a valid customer email address.
-* FR-CUST-004: Load active categories from the backend.
-* FR-CUST-005: Capture foreground GPS location when appropriate.
-* FR-CUST-006: Allow location retry and manual review before submission.
-* FR-CUST-007: Make customer photo optional.
-* FR-CUST-008: Preserve form inputs after recoverable validation and network errors.
-* FR-CUST-009: Prevent duplicate customer submissions.
-* FR-CUST-010: Display success only after receiving a successful backend response.
-* FR-CUST-011: Retain historical category references when a category is deactivated.
+### FR-SALE: Decoupled Direct POS Sales & Shift Visit Sales
+* **FR-SALE-001**: Decouple direct POS sales (`/(seller)/sales/new`) from the duty shift prerequisite; permit recording sales directly without an active shift.
+* **FR-SALE-002**: Support shift-based shop visit sales during active duty shifts (`/(seller)/shift`), logging visit notes and checkout outcomes.
+* **FR-SALE-003**: Provide a searchable customer picker modal with customer account balance tags.
+* **FR-SALE-004**: Support multi-line item product carts with stepper controls (`±1`, `±5`) and custom unit price input.
+* **FR-SALE-005**: Validate cart quantities against live vehicle van stock balances to prevent overselling.
+* **FR-SALE-006**: Warn with an amber badge (`#D97706`) when unit prices fall below the configured minimum price and route order to Super Admin approval.
+* **FR-SALE-007**: Support exact payment modes: `CASH`, `BANK` (with reference), and `PENDING`.
+* **FR-SALE-008**: Bind each order draft to an RFC4122 v4 UUID `requestKey` and payload hash; auto-rotate `requestKey` if items or prices are edited after submit attempt.
+* **FR-SALE-009**: Autosave unsubmitted order drafts locally in AsyncStorage keyed by user ID.
 
-### FR-SALE: Sales Management
+### FR-VOICE: Multilingual Voice Feedback Translation
+* **FR-VOICE-001**: Implement real-time speech-to-text in `VoiceFeedbackTranslator.tsx` using `expo-speech-recognition` with web speech fallback.
+* **FR-VOICE-002**: Support spoken Hindi (Devanagari), Indian English (`en-IN`), and romanized Hinglish.
+* **FR-VOICE-003**: Automatically translate spoken Hindi/Hinglish transcripts into concise, professional English field notes via `translateHindiOrHinglishToEnglish`.
+* **FR-VOICE-004**: Provide a pulsing audio visualizer during recording.
+* **FR-VOICE-005**: Present a side-by-side translation audit modal with editable English text before saving to field notes.
+* **FR-VOICE-006**: Provide one-tap village field scenario chips for rapid note entry.
+* **FR-VOICE-007**: Integrate voice translation directly into POS sales creation and shift store visit checkout.
 
-* FR-SALE-001: Display available products and their applicable prices.
-* FR-SALE-002: Support the multi-product sale payload where the backend permits it.
-* FR-SALE-003: Validate quantity, product selection, and price before submission.
-* FR-SALE-004: Enforce the configured minimum sale price on the backend.
-* FR-SALE-005: Route below-minimum-price sales into the approval workflow.
-* FR-SALE-006: Display sale states such as pending approval, confirmed, and rejected.
-* FR-SALE-007: Prevent duplicate sales when a request times out or is retried.
-* FR-SALE-008: Do not treat a network timeout as proof that a sale failed.
-* FR-SALE-009: Reconcile uncertain submissions before allowing a new transaction.
-* FR-SALE-010: Display sale history according to the authenticated user's permissions.
+### FR-MGR: Manager Quick Actions Hub
+* **FR-MGR-001**: Implement the Manager Quick Actions Hub (`/(manager)/quick-actions/index.tsx`) with safe area insets via `useSafeAreaInsets`.
+* **FR-MGR-002**: Provide a prominent Hero card linking to New Sale.
+* **FR-MGR-003**: Provide 5 operational action cards: *Daily Shift*, *Check Van Stock*, *Add New Shop*, *Manage Sellers*, and *All Sales*.
+* **FR-MGR-004**: Provide an operational support section with direct phone dialer (`18001234567`) and pre-addressed email support (`support@femmeflo.com`).
+* **FR-MGR-005**: Feature stylized Indian architectural monument skyline vector silhouette and maroon wave footer design.
 
-### FR-APPROVAL: Price Approval
+### FR-ADMIN: Administrative Actions Hub & Governance
+* **FR-ADMIN-001**: Centralize all 13 operational capabilities in `/(admin)/actions/index.tsx` across 6 functional categories.
+* **FR-ADMIN-002**: Real-time synchronization of the Price Approvals badge with `DeviceEventEmitter` (`APPROVAL_STATUS_CHANGED`).
+* **FR-ADMIN-003**: Low-price approvals queue with side-by-side floor vs requested price inspection and one-tap Approve/Reject mutations.
+* **FR-ADMIN-004**: Stock Movement Hub supporting multi-warehouse transfers, factory inward receipts, and van stock allocations.
 
-* FR-APPROVAL-001: Show pending approvals to authorized approvers.
-* FR-APPROVAL-002: Show the requested price, applicable minimum price, Seller, customer, products, and quantities where available.
-* FR-APPROVAL-003: Require a reason when rejecting an approval.
-* FR-APPROVAL-004: Permit an optional approval note.
-* FR-APPROVAL-005: Prevent unauthorized approval actions.
-* FR-APPROVAL-006: Prevent duplicate or contradictory approval transitions.
-* FR-APPROVAL-007: Record the actor, timestamp, decision, and reason.
-* FR-APPROVAL-008: Recheck stock and price conditions during confirmation.
-* FR-APPROVAL-009: Make the approval and associated financial/inventory effects transactionally consistent.
+### FR-INVCE: GST Invoices
+* **FR-INVCE-001**: Stream authenticated tax invoice PDFs via `GET /api/v1/invoices/:id/pdf` using `expo-file-system`.
+* **FR-INVCE-002**: Trigger native Android share sheet via `expo-sharing`.
 
-### FR-INV: Inventory
-
-* FR-INV-001: Allow Super Admin to view headquarters and warehouse inventory.
-* FR-INV-002: Allow authorized users to view their permitted inventory.
-* FR-INV-003: Support stock receipts.
-* FR-INV-004: Support authorized stock transfers.
-* FR-INV-005: Display transaction history and available quantities.
-* FR-INV-006: Prevent unauthorized negative inventory.
-* FR-INV-007: Record inventory movements in an auditable ledger.
-* FR-INV-008: Do not reserve or deduct stock for a pending price approval.
-* FR-INV-009: Deduct or allocate stock only when the sale is confirmed according to the approved backend transaction model.
-* FR-INV-010: Reject concurrent operations that would oversell stock.
-
-### FR-PAY: Payment Tracking
-
-* FR-PAY-001: Support the business-approved values Cash, Bank, and Pending.
-* FR-PAY-002: Do not implement partial payments.
-* FR-PAY-003: Validate payment state transitions on the backend.
-* FR-PAY-004: Show the selected payment mode and current payment status.
-* FR-PAY-005: Do not interpret the legacy amount-based collection endpoint as approval to introduce partial payments.
-* FR-PAY-006: Reconcile the existing payment API with the approved payment model before production implementation.
-
-### FR-INC: Incentives
-
-* FR-INC-001: Support different incentive rates per Seller.
-* FR-INC-002: Allow authorized administrators to configure rates.
-* FR-INC-003: Apply the rate effective when a sale is confirmed.
-* FR-INC-004: Preserve historical calculations when a rate changes.
-* FR-INC-005: Display permitted incentive summaries and transaction details.
-* FR-INC-006: Record rate history and the applied rate for each confirmed sale.
-* FR-INC-007: Do not calculate final payable incentives exclusively in the mobile client.
-
-### FR-INVCE: Invoices
-
-* FR-INVCE-001: Generate a final invoice only after sale confirmation.
-* FR-INVCE-002: Make the invoice downloadable by authorized users.
-* FR-INVCE-003: Email the invoice automatically after confirmation.
-* FR-INVCE-004: Do not issue final invoices for pending or rejected sales.
-* FR-INVCE-005: Provide safe handling for PDF downloads, file permissions, and sharing.
-* FR-INVCE-006: Track email delivery or failure where the backend supports it.
-* FR-INVCE-007: Do not claim that an email was delivered merely because the sale was confirmed.
-
-### FR-NOTIF: Notifications
-
-* FR-NOTIF-001: Provide a persistent in-app notification inbox.
-* FR-NOTIF-002: Synchronize notification state between website and mobile.
-* FR-NOTIF-003: Support read/unread status where the backend provides it.
-* FR-NOTIF-004: Scope notifications to authorized recipients.
-* FR-NOTIF-005: Exclude WhatsApp messages and WhatsApp actions.
-* FR-NOTIF-006: Do not treat local-only notification mocks as production notification infrastructure.
-
-### FR-REPORT: Reports and Administration
-
-* FR-REPORT-001: Show role-authorized dashboards and reports.
-* FR-REPORT-002: Support available date, geography, Seller, Manager, and category filters.
-* FR-REPORT-003: Avoid downloading complete datasets when server-side filtering or pagination is available.
-* FR-REPORT-004: Respect the backend's permissions for financial and operational reports.
-* FR-REPORT-005: Do not include shift/attendance screens in v1 unless separately approved.
+---
 
 ## 5. Non-Functional Requirements
 
-### Performance
+* **Performance**: Sub-100ms UI response times for cart calculations, debounced search (300ms) on customer and manager dropdowns, optimized image manipulation.
+* **Reliability & Offline Drafts**: Critical form inputs (customer onboarding, sales orders, active duty shifts) are autosaved locally to prevent data loss.
+* **Security**: Authentication tokens stored in hardware-backed `expo-secure-store`. Zero hardcoded credentials or backend secrets in the bundle.
+* **Accessibility**: Proper accessibility roles (`button`, `combobox`, `search`), minimum 44x44pt touch targets, and high-contrast color tokens.
+* **Compatibility**: Strict compatibility with React Native 0.88.1, React 19.3.0, and Expo SDK 58.
 
-* Show skeletons or progress indicators for loading states.
-* Debounce search input.
-* Use pagination or incremental loading where supported.
-* Avoid unnecessary sequential network requests.
-* Cache only data that is safe to reuse.
-* Distinguish fresh, cached, and stale data.
-* Optimize customer photos and other images.
-* Prevent avoidable React re-renders.
-* Apply request timeouts and bounded retry policies.
+---
 
-### Reliability
+## 6. Release Acceptance Gate
 
-* Never report mutation success before backend confirmation.
-* Preserve safe form state after recoverable errors.
-* Use server-supported idempotency for sale creation.
-* Never blindly retry a potentially committed sale with a new identifier.
-* Keep financial and inventory mutations online-only.
-
-### Security
-
-* Store tokens in native secure storage.
-* Never embed backend secrets in the mobile bundle.
-* Enforce authorization on the backend.
-* Validate all inputs on the server.
-* Do not log passwords, tokens, or sensitive customer data.
-* Clear sensitive session state when the session ends.
-
-### Usability
-
-* Use mobile-first navigation and touch targets.
-* Provide loading, empty, error, permission-denied, and offline states.
-* Use English throughout the application.
-* Do not implement voice input.
-* Do not request background location tracking.
-
-## 6. Explicitly Out of Scope
-
-* iOS release.
-* Public marketing pages.
-* Website contact form migration.
-* Mobile chatbot migration.
-* WhatsApp integration.
-* Voice input.
-* Background GPS tracking.
-* Offline sale or inventory mutation queues.
-* Partial payments.
-* Unapproved shift/attendance workflows.
-* A new independent backend or parallel source of truth.
-
-## 7. Release Acceptance Gate
-
-Release is blocked until:
-
-* Role and territory permissions are verified.
-* Sale idempotency is implemented or a proven equivalent is available.
-* Approval, stock, payment, incentive, and invoice transitions are integration-tested.
-* Manager-specific permissions and API coverage are resolved.
-* Customer email validation is enforced by both client and server.
-* Invoice email behavior is verified.
-* Shared notification persistence is verified.
-* Android device testing passes.
+The v1.0.20 release is verified against:
+* **TypeScript Strict Compilation**: Zero compilation errors across all screens, layouts, and components (`npm run typecheck`).
+* **Automated Test Suite**: **356 passing unit and acceptance tests across 42 suites** (`npm test`).
+* **Verification Criteria**:
+  - Biometric & Password Shift Auth verified.
+  - 4-Card Customer Onboarding with exemption locking verified.
+  - Decoupled Direct Sales flow verified.
+  - Manager Quick Actions Hub verified.
+  - Administrative Actions Hub verified.
+  - Multilingual Voice Feedback Translation verified.

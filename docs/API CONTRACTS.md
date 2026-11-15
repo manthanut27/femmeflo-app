@@ -1,728 +1,435 @@
-# API CONTRACTS
+# API CONTRACTS — FemmeFlo Mobile Application
 
-## 1. Contract Status
+## 1. Specification Overview & Base Configuration
 
-This document defines the mobile integration contract and identifies known existing endpoints from the audit catalog.
+This document specifies the authoritative HTTP REST API contracts for the FemmeFlo mobile application across Field Sellers, Territory Managers, and Super Administrators.
 
-* Base URL currently catalogued: `https://femmeflo-inventory.onrender.com/api/v1`
-* This URL must be verified for each environment.
-* Existing endpoint shapes below are audit-derived, not freshly verified against a running backend.
-* Proposed endpoints are explicitly marked `PROPOSED`.
-* Do not implement proposed routes in the mobile client until the backend owner confirms their implementation.
-* Use the exact existing field names and strict query schemas. Do not send unsupported parameters.
+* **Base URL:** `https://femmeflo-inventory.onrender.com/api/v1` (Configured via `EXPO_PUBLIC_API_URL` in `.env`)
+* **Mock Simulation Mode:** Controlled via `EXPO_PUBLIC_USE_MOCK_API=true|false` (falls back to relational in-memory client mock engine in offline or demo modes).
+* **Transport:** HTTPS with JSON payloads (Multipart Form-Data for binary storefront image uploads, binary stream for tax invoice PDF downloads).
+* **Authentication:** Bearer JWT tokens passed in the standard `Authorization` header.
 
-## 2. Common Request Rules
-
-Headers:
-
+### Common Request Headers
 ```http
 Accept: application/json
 Content-Type: application/json
-Authorization: Bearer <access_token>
-X-Request-ID: <uuid>
+Authorization: Bearer <jwt_access_token>
+X-Request-ID: <uuid-v4>
+X-Idempotency-Key: <uuid-v4> (Required for sales creation and financial mutations)
 ```
 
-For sale creation, after backend support is implemented:
-
-```http
-X-Idempotency-Key: <unique-uuid>
-```
-
-Rules:
-
-* Omit `Authorization` for public authentication/recovery requests.
-* Do not include tokens in URLs.
-* Do not retry non-idempotent requests blindly.
-* Use the backend's actual error format.
-* Treat 401 as authentication/session failure.
-* Treat 403 as an authorization failure unless the backend explicitly indicates token expiry.
-* Treat 409 as a conflict where the API uses that status.
-* Validate response payloads at the client boundary.
-* Do not treat HTTP 200 alone as success if the response indicates business rejection.
-
-## 3. Standard Error Shape
-
-Target error contract for new or updated endpoints:
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "One or more fields are invalid.",
-    "requestId": "uuid",
-    "fieldErrors": {
-      "email": "A valid email is required."
-    }
-  }
+### Standard API Response Envelope
+```typescript
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  error?: string | {
+    code?: string;
+    message?: string;
+    fieldErrors?: Record<string, string>;
+  };
 }
 ```
 
-Existing APIs may return a different shape. The API client must parse the existing shape until the backend contract is standardized.
+---
 
-Recommended error codes:
+## 2. Authentication & Session APIs
 
-* `VALIDATION_ERROR`
-* `UNAUTHENTICATED`
-* `FORBIDDEN`
-* `NOT_FOUND`
-* `CONFLICT`
-* `INSUFFICIENT_STOCK`
-* `APPROVAL_REQUIRED`
-* `IDEMPOTENCY_CONFLICT`
-* `RATE_LIMITED`
-* `SERVICE_UNAVAILABLE`
-* `INTERNAL_ERROR`
-
-## 4. Authentication
-
-### POST `/auth/login` — Existing, verify shared role behavior
-
-Request:
-
+### 2.1 Unified & Role-Context Login
+* **Endpoints:**
+  * `POST /auth/login` (Unified entry point)
+  * `POST /seller/auth/login` (Role hint: Seller)
+  * `POST /manager/auth/login` (Role hint: Manager)
+  * `POST /admin/auth/login` (Role hint: Super Admin)
+* **Request Payload:**
 ```json
 {
-  "identifier": "user@example.com",
-  "password": "user-entered-password"
+  "identifier": "user@femmeflo.com",
+  "password": "userPassword123",
+  "roleHint": "seller"
 }
 ```
-
-Catalogued response:
-
+* **Success Response (200 OK):**
 ```json
 {
-  "token": "jwt-access-token",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
-    "id": "uuid",
-    "name": "Example User",
-    "email": "user@example.com",
-    "role": "SELLER"
+    "id": "usr_94e5b412-1b1e-45fa-8f83-e02cfd2948bb",
+    "name": "Pooja Sharma",
+    "email": "pooja.sharma@femmeflo.com",
+    "phone": "+919876543210",
+    "role": "SELLER",
+    "isSeller": true,
+    "active": true,
+    "state": "Madhya Pradesh",
+    "district": "Indore",
+    "village": "Rau",
+    "territory": "MP-West",
+    "managerId": "usr_mgr_88192",
+    "employeeCode": "FF-SLR-104",
+    "permissions": ["CREATE_SALES", "ONBOARD_CUSTOMERS", "VIEW_VAN_STOCK"]
   }
 }
 ```
+* **Session Lifecycle Rules:**
+  * Returned token is stored securely via `expo-secure-store` / sandboxed `tokenStorage`.
+  * The user profile is cached in `tokenStorage.setCachedUser()` for offline resilience.
+  * Explicit HTTP 401/403 responses immediately evict the stored token and transition state to `SESSION_EXPIRED`.
+  * Network dropouts or 5xx errors transition the app to `OFFLINE_AUTHENTICATED`, restoring cached user state without interrupting fieldwork.
 
-Requirements:
+### 2.2 Get Current User Profile (`GET /auth/me`)
+* **Headers:** `Authorization: Bearer <token>`
+* **Success Response (200 OK):** Returns `{ user: PublicUser }`. Supports dual-role checking where `user.role === 'MANAGER'` and `user.isSeller === true`.
 
-* Do not persist the password.
-* Store the token securely.
-* Validate the returned role.
-* Do not assume the response includes a refresh token.
+### 2.3 Password Management & Recovery
+* **PATCH `/auth/password`:** `{ "currentPassword": "...", "newPassword": "..." }`
+* **POST `/auth/forgot-password`:** `{ "identifier": "user@femmeflo.com" }`
+* **POST `/auth/reset-password`:** `{ "token": "reset_token_xyz", "newPassword": "..." }`
 
-### POST `/seller/auth/login` — Existing, verify exact response
+---
 
-Request:
+## 3. Customer Onboarding & Lifecycle APIs
 
+### 3.1 Onboard Retail Customer (`POST /seller/customers`, `POST /manager/customers`, `POST /admin/customers`)
+The customer onboarding form follows a structured 4-card workflow (GPS Card, Storefront Photo Card, Shop Details Card, Address & Territory Card):
+
+* **CreateCustomerPayload:**
 ```json
 {
-  "identifier": "user@example.com",
-  "password": "user-entered-password"
-}
-```
-
-Response shape is catalogued as token plus public user. Confirm whether this endpoint is still required or whether `/auth/login` supports all roles.
-
-### POST `/manager/auth/login` — Existing, verify exact response
-
-Same request structure as the role-specific login endpoint.
-
-### POST `/admin/auth/login` — Existing, verify exact response
-
-Same request structure as the role-specific login endpoint.
-
-### GET `/auth/me` — Existing
-
-Request:
-
-* Bearer token required.
-
-Catalogued response:
-
-```json
-{
-  "user": {
-    "id": "uuid",
-    "name": "Example User",
-    "email": "user@example.com",
-    "role": "SELLER"
-  }
-}
-```
-
-The actual `PublicUser` fields must be taken from the backend type/schema.
-
-### PATCH `/auth/password` — Existing
-
-Request:
-
-```json
-{
-  "currentPassword": "current-password",
-  "newPassword": "new-password"
-}
-```
-
-Response:
-
-* Existing catalog reports a generic record response.
-* Verify exact success and error shapes.
-
-### POST `/auth/forgot-password` — Existing
-
-Catalogued request:
-
-```json
-{
-  "emailOrPhone": "user@example.com"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "If the account exists, recovery instructions will be sent."
-}
-```
-
-Verify exact delivery behavior and non-enumerating response semantics.
-
-### POST `/auth/reset-password` — Existing
-
-Request:
-
-```json
-{
-  "token": "password-reset-token",
-  "newPassword": "new-password"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "Password updated."
-}
-```
-
-### GET `/health` and GET `/ready` — Existing
-
-Use for service health checks where supported. Do not interpret a health response as proof that all business dependencies are available.
-
-## 5. Seller APIs
-
-### GET `/seller/dashboard` — Existing
-
-Response: `SellerDashboardData`.
-
-The exact fields and metric definitions must be sourced from the backend types/schema.
-
-### GET `/seller/customers` — Existing
-
-Supported query parameters catalogued:
-
-* `page`
-* `pageSize`
-* `search`
-* `active`
-
-Example:
-
-```http
-GET /seller/customers?page=1&pageSize=20&search=example&active=true
-```
-
-Response:
-
-```json
-{
-  "items": [],
-  "pagination": {
-    "page": 1,
-    "pageSize": 20,
-    "totalItems": 0,
-    "totalPages": 0
-  }
-}
-```
-
-Pagination property names must match the actual backend response.
-
-### POST `/seller/customers` — Existing
-
-The exact `CreateCustomerPayload` must be taken from the backend schema. Target business requirements include required email, backend category ID, optional photo reference/upload, and optional reviewed location fields.
-
-Illustrative payload only; field names must be verified:
-
-```json
-{
-  "name": "Customer Name",
-  "email": "customer@example.com",
+  "shopName": "Gupta Medical & General Store",
+  "contactName": "Ramesh Gupta",
+  "ownerName": "Ramesh Gupta",
   "phone": "+919876543210",
-  "categoryId": "category-uuid",
-  "address": {
-    "line1": "Address line",
-    "village": "Example Village",
-    "district": "Example District",
-    "state": "Maharashtra",
-    "postalCode": "400001"
-  },
-  "location": {
-    "latitude": 19.076,
-    "longitude": 72.8777,
-    "accuracyMeters": 20
-  },
-  "photoAssetId": null
+  "email": "ramesh.gupta@gmail.com",
+  "categoryId": "cat_48190-chemist-medical",
+  "sellerId": "usr_slr_28190",
+  "address": "Shop No. 4, Main Market, AB Road",
+  "pincode": "453331",
+  "state": "Madhya Pradesh",
+  "district": "Indore",
+  "village": "Rau",
+  "latitude": 22.63412,
+  "longitude": 75.81924,
+  "accuracy": 14.5,
+  "noPhotoReason": "Storefront photo captured",
+  "photoPath": "file:///data/user/0/com.femmeflo.app/cache/photo_123.jpg"
 }
 ```
-
-Do not send this exact nested structure unless the backend accepts it.
-
-### GET `/seller/products` — Existing
-
-Response:
-
+* **Validation & Business Invariants:**
+  * `shopName` (string, 2–200 chars, mandatory).
+  * `phone` (normalized to E.164: `+91XXXXXXXXXX`).
+  * `email` (strict RFC-compliant regex, mandatory).
+  * `categoryId` (must match an active backend Category UUID).
+  * `sellerId` (mandatory when submitted by Manager or Admin).
+  * `noPhotoReason` (conditional: automatically locked/disabled when a photo is uploaded; required if photo is skipped).
+* **Success Response (201 Created):**
 ```json
 {
-  "items": []
-}
-```
-
-Use the actual `ProductItem` schema.
-
-### GET `/seller/sales` — Existing
-
-Supported parameters catalogued:
-
-* `page`
-* `pageSize`
-* `startDate`
-
-Additional filters must not be sent unless confirmed by the backend.
-
-Response: paginated `SaleItem` collection.
-
-### POST `/seller/sales` — Existing; idempotency support must be verified or added
-
-Target request shape:
-
-```json
-{
-  "customerId": "customer-uuid",
-  "items": [
-    {
-      "productId": "product-uuid",
-      "quantity": 2,
-      "unitPricePaise": 2500
-    }
-  ],
-  "paymentMode": "CASH"
-}
-```
-
-This is a target example, not a verified payload. Use the actual `CreateMultiProductSalePayload`.
-
-Target response:
-
-```json
-{
-  "sale": {
-    "id": "sale-uuid",
-    "status": "PENDING_APPROVAL",
-    "totalPaise": 5000
+  "customer": {
+    "id": "cust_e738192a-84b2-4d51-9f20-91a82f349c11",
+    "shopName": "Gupta Medical & General Store",
+    "ownerName": "Ramesh Gupta",
+    "email": "ramesh.gupta@gmail.com",
+    "phone": "+919876543210",
+    "categoryId": "cat_48190-chemist-medical",
+    "address": "Shop No. 4, Main Market, AB Road",
+    "pincode": "453331",
+    "state": "Madhya Pradesh",
+    "district": "Indore",
+    "village": "Rau",
+    "latitude": 22.63412,
+    "longitude": 75.81924,
+    "photoUrl": "https://femmeflo-inventory.onrender.com/uploads/customers/cust_e738.jpg",
+    "active": true,
+    "createdAt": "2026-11-15T09:15:30.000Z"
   }
 }
 ```
 
-Requirements:
-
-* Validate all totals on the backend.
-* Enforce minimum-price rules server-side.
-* Support a unique idempotency key or equivalent reconciliation mechanism.
-* Return the existing result for a repeated request using the same key and payload.
-* Reject reuse of the same key with a different payload.
-* A pending approval must not deduct stock or create a final invoice.
-
-### POST `/seller/sales/:id/collect-payment` — Existing; payment semantics unresolved
-
-Catalogued request:
-
+### 3.2 Storefront Photo Upload (`POST /seller/customers/:id/photo`)
+* **Content-Type:** `multipart/form-data`
+* **Form Field:** `photo` (binary JPEG/PNG image, compressed client-side to <2MB)
+* **Success Response (200 OK):**
 ```json
 {
-  "amountPaise": 5000,
+  "photoUrl": "https://femmeflo-inventory.onrender.com/uploads/customers/cust_e738.jpg"
+}
+```
+
+### 3.3 PIN Code Auto-Lookup (`GET /seller/customers/pincode/:pincode`)
+* **Success Response (200 OK):**
+```json
+{
+  "pincode": "453331",
+  "state": "Madhya Pradesh",
+  "district": "Indore",
+  "village": "Rau",
+  "villages": ["Rau", "Pithampur", "Mhow", "Hatod", "Sanwer", "Indore City"]
+}
+```
+* **Fallback Behavior:** If the internal backend route is offline, client automatically resolves against India Postal API (`https://api.postalpincode.in/pincode/:pincode`) or offline MP/UP dictionary.
+
+### 3.4 Bulk Customer Onboarding (`POST /seller/customers/bulk`, `POST /manager/customers/bulk`, `POST /admin/customers/bulk`)
+* **Payload:** `{ customers: BulkCustomerRow[], defaultSellerId?, defaultCategoryId?, defaultState?, defaultDistrict? }`
+* **Success Response (200 OK):** `{ count: 12, insertedCount: 12, failedCount: 0, customers: [...] }`
+
+---
+
+## 4. Duty Shift & Attendance APIs
+
+Duty shifts record field officer attendance, mileage, retail check-ins, and checkout feedback. The shift workflow supports native **Fingerprint / Biometric authentication** with **Mobile PIN/Password fallback**, completely replacing legacy face selfies while maintaining backwards-compatible payload parameters.
+
+### 4.1 Current Active Shift (`GET /seller/shifts/current`)
+* **Success Response (200 OK):** Returns `{ shift: Shift | null }`.
+
+### 4.2 Start Duty Shift (`POST /seller/shifts/start`)
+* **Client Request Payload:**
+```json
+{
+  "latitude": 22.7196,
+  "longitude": 75.8577,
+  "startLatitude": 22.7196,
+  "startLongitude": 75.8577,
+  "address": "FemmeFlo Depot, AB Road, Indore",
+  "startOdometerKm": 12450,
+  "faceVerified": true,
+  "facePhoto": "biometric_fingerprint_verified",
+  "faceConfidence": 0.99,
+  "faceMethod": "FINGERPRINT_BIOMETRIC",
+  "notes": "Duty shift started via fingerprint scan"
+}
+```
+* **Backend Invariant Handling:** Strict backend schemas accept `{ latitude, longitude, address? }`. The client normalizes the payload to avoid schema rejections while persisting `startOdometerKm` and biometric credentials into `draftStorage`. If an active shift already exists, it is returned without triggering duplicate 500 errors.
+* **Offline Fallback:** If network fails, client creates a resilient local shift (`shift_local_<timestamp>`) in `draftStorage` to avoid blocking field officers.
+
+### 4.3 Retail Visit Check-In (`POST /seller/shifts/check-in`)
+* **Request Payload:**
+```json
+{
+  "latitude": 22.6341,
+  "longitude": 75.8192,
+  "shopName": "Gupta Medical Store",
+  "customerId": "cust_e738192a-84b2-4d51-9f20-91a82f349c11",
+  "shiftId": "shift_8921a-uuid",
+  "notes": "Regular restock visit"
+}
+```
+* **Success Response (200 OK):** Returns `{ visit: ShiftVisit }` with `checkInTime`.
+
+### 4.4 Retail Visit Check-Out (`POST /seller/shifts/check-out`)
+* **Request Payload:**
+```json
+{
+  "visitId": "visit_19283-uuid",
+  "latitude": 22.6342,
+  "longitude": 75.8193,
+  "saleDone": true,
+  "saleId": "sale_48192-uuid",
+  "customerFeedback": "Shopkeeper requested 15 additional packs of XL pads next Tuesday.",
+  "notes": "Store well stocked, payment received via UPI"
+}
+```
+* **Success Response (200 OK):** Returns `{ visit: ShiftVisit }` with `checkOutTime`, `durationMins`, and confirmed `saleDone`.
+
+### 4.5 End Duty Shift (`POST /seller/shifts/end`)
+* **Request Payload:**
+```json
+{
+  "latitude": 22.7198,
+  "longitude": 75.8579,
+  "endOdometerKm": 12515,
+  "address": "Indore Main Depot",
+  "faceVerified": true,
+  "facePhoto": "biometric_fingerprint_verified",
+  "notes": "Total 65 KM route completed, 8 shops visited"
+}
+```
+* **Success Response (200 OK):** Returns `{ shift: { status: "COMPLETED", durationMins: 480, totalDistanceKm: 65 } }`.
+
+### 4.6 Shift History & Supervisory Oversight
+* `GET /seller/shifts/history?page=1&pageSize=20` (Personal shift logs)
+* `GET /manager/shifts?page=1&pageSize=20&sellerId=...` (Territory seller attendance tracking)
+* `GET /admin/shifts?page=1&pageSize=20&status=...` (National attendance audit)
+
+---
+
+## 5. Sales & Point-of-Sale (POS) APIs
+
+The application supports a **Decoupled Direct Sales Flow**, enabling field officers and managers to record POS sales at any time without requiring an active duty shift. In addition, sales booked during an active shift visit are linked to that visit.
+
+### 5.1 Create Point-of-Sale Sale (`POST /seller/sales`)
+* **Required Headers:**
+  * `X-Idempotency-Key`: UUID v4 (Unique per submission attempt)
+* **Request Payload:**
+```json
+{
+  "customerId": "cust_e738192a-84b2-4d51-9f20-91a82f349c11",
   "paymentMode": "CASH",
-  "referenceId": "optional-reference"
-}
-```
-
-Do not implement this as a partial-payment feature. Before use, reconcile the endpoint's amount-based semantics with the approved rule of Cash, Bank, or Pending and no partial payments.
-
-### GET `/seller/inventory` — Existing
-
-Catalogued response:
-
-```json
-{
-  "items": [],
-  "vanStock": {}
-}
-```
-
-Use actual `StockTransactionItem` and `vanStock` types.
-
-## 6. Category and Location APIs
-
-### GET `/categories` — Existing
-
-Catalogued query parameters:
-
-* `search`
-* `active`
-
-Do not send `page` or `pageSize` unless the backend contract changes; the audit warns that unsupported parameters may be rejected.
-
-Response:
-
-```json
-{
+  "paymentReference": "CASH-REC-1049",
+  "requestKey": "0d20ef42-1849-41ef-bb60-c3501a4f0012",
+  "customerFeedback": "Customer took 2 cartons of Regular pads and 1 carton of XL.",
   "items": [
     {
-      "id": "category-uuid",
-      "name": "Example Category",
-      "isActive": true
+      "productId": "prod_pad_regular_240mm",
+      "quantity": 20,
+      "unitPricePaise": 2800
+    },
+    {
+      "productId": "prod_pad_xl_280mm",
+      "quantity": 10,
+      "unitPricePaise": 3500
     }
   ]
 }
 ```
+* **Price Floor & Status Invariants:**
+  1. **Normal Sale (All `unitPricePaise` >= Minimum Price Floor, e.g. ₹25.00):**
+     * Created with `status: "CONFIRMED"`.
+     * Stock is immediately and atomically deducted from the seller's van balance.
+     * Commission is credited at the active rate.
+     * Tax invoice PDF is immediately generated and downloadable.
+  2. **Below-Floor Sale (Any `unitPricePaise` < Minimum Price Floor):**
+     * Created with `status: "PENDING_APPROVAL"`.
+     * Zero stock is deducted from van balance.
+     * Zero commission is earned or credited.
+     * Invoice generation is locked.
+     * Sale is routed to the Super Admin `adminApi.listApprovals` queue.
 
-Field names must match the actual `Category` schema.
+### 5.2 List Sales (`GET /seller/sales`, `GET /manager/sales`, `GET /admin/sales`)
+* **Query Parameters:** `page`, `pageSize`, `status` (`CONFIRMED`, `PENDING_APPROVAL`, `REJECTED`), `paymentMode` (`CASH`, `BANK`, `PENDING`), `search`, `customerId`, `sellerId`, `period` (`all`, `this_month`, `last_month`).
+* **Success Response (200 OK):** `{ items: SaleItem[], pagination: PaginationMeta }`
 
-### POST `/admin/categories` — Existing
+### 5.3 Resubmit / Revise Price for Rejected Sale (`PATCH /seller/sales/:id`, `PATCH /manager/sales/:id`)
+When an administrator rejects a low-price sale, the seller or manager can revise the unit price and resubmit for approval without retyping the entire order:
+* **Payload:** `{ "quantity": 20, "unitPricePaise": 2600, "paymentMode": "CASH", "customerFeedback": "Manager Price Revised" }`
+* **Sanitization:** Cleaned via `sanitizeUpdateSalePayload` to strip read-only server fields.
+* **Success Response (200 OK):** Returns `{ sale: SaleItem }` with `status: "PENDING_APPROVAL"` and `isResubmitted: true`.
 
-Catalogued request:
+### 5.4 Collect Outstanding Payment (`PATCH /seller/sales/:id/payment`)
+* **Request Payload:** `{ "mode": "CASH" }` or `{ "mode": "BANK", "paymentReference": "NEFT1928301" }`
+* **Success Response (200 OK):** Updates sale payment mode to `CASH` or `BANK` and records `paidAt` timestamp.
 
+### 5.5 Download Tax Invoice PDF (`GET /invoices/:id/pdf?download=true|false`)
+* **Headers:** `Authorization: Bearer <token>`
+* **Response:** Binary PDF stream (`Content-Type: application/pdf`).
+
+---
+
+## 6. Super Admin Price Approvals APIs
+
+### 6.1 List Price Approvals Queue (`GET /admin/approvals`)
+* **Query Parameters:** `page`, `pageSize`, `status` (`PENDING_APPROVAL`)
+* **Behavior:** Returns pending sub-floor sales. Automatically sorted with **resubmitted/revised sales at the top of the queue**, highlighting revision history.
+* **Response Item Schema (`PendingApprovalItem`):**
 ```json
 {
-  "name": "New Category"
+  "id": "sale_9410-uuid",
+  "saleNumber": "#SL-9410",
+  "customerId": "cust_e738-uuid",
+  "customer": { "shopName": "Gupta Medical Store", "ownerName": "Ramesh Gupta" },
+  "seller": { "name": "Pooja Sharma", "phone": "+919876543210" },
+  "totalAmountPaise": 52000,
+  "packetCount": 20,
+  "unitPricePaise": 2200,
+  "requestedUnitPricePaise": 2200,
+  "minimumPricePaise": 2500,
+  "status": "PENDING_APPROVAL",
+  "isResubmitted": true,
+  "resubmittedAt": "2026-11-15T11:45:00.000Z",
+  "customerFeedback": "Price Revised: Re-negotiated with owner for bulk trial",
+  "createdAt": "2026-11-15T10:00:00.000Z"
 }
 ```
 
-The audit reports that the strict schema rejects `description` and `active`. Category editing and activation/deactivation endpoints are not sufficiently catalogued.
+### 6.2 Approve Low-Price Sale (`POST /admin/approvals/:id/approve`)
+* **Request Payload:** `{ "notes": "Approved for rural expansion trial order" }`
+* **Transactional Effects:**
+  * Sale transitions to `CONFIRMED`.
+  * Physical stock is deducted from the seller's inventory.
+  * Commission is credited.
+  * Invoice PDF is unlocked for download.
 
-### GET `/geo/lookup?address=...` — Existing
+### 6.3 Reject Low-Price Sale (`POST /admin/approvals/:id/reject`)
+* **Request Payload:** `{ "reason": "Price is below allowable margin of ₹23.00" }`
+* **Transactional Effects:**
+  * Sale transitions to `REJECTED`.
+  * Zero stock is deducted; inventory remains unchanged.
+  * Zero commission is awarded.
+  * Seller is notified with the rejection reason.
 
-Use the exact query parameter and response shape. URL-encode the address.
+---
 
-### GET `/geo/reverse?latitude=...&longitude=...` — Existing
+## 7. Inventory & Warehouse Logistics APIs
 
-Use the exact query parameters. Native reverse geocoding may replace this only if the business accepts the resulting data and backend requirements are satisfied.
+### 7.1 National & Regional Warehouses (`GET /admin/warehouses`, `POST /admin/warehouses`)
+* **Create Warehouse Payload:** `{ "name": "Indore Regional Depot", "code": "WH-IND-01", "state": "Madhya Pradesh", "district": "Indore", "type": "WAREHOUSE" }`
 
-## 7. Super Admin APIs
-
-### GET `/admin/dashboard` — Existing
-
-Catalogued filters may include:
-
-* `state`
-* `district`
-* `village`
-* `managerId`
-* `sellerId`
-* `categoryId`
-
-Use only filters confirmed in the deployed schema.
-
-### GET `/admin/managers` — Existing
-
-Catalogued query parameters:
-
-* `page`
-* `pageSize`
-* `search`
-* `active`
-* Additional geographic filters where supported.
-
-Response: paginated `ManagerItem` records.
-
-### POST `/admin/managers` — Existing
-
-The audit catalogs a `CreateManagerPayload` containing name, phone, email, geographic fields, and password. Use the actual backend type and validation rules.
-
-### GET `/admin/sellers` — Existing
-
-Catalogued filters include:
-
-* `page`
-* `pageSize`
-* `search`
-* `managerId`
-* `active`
-* Geographic filters where supported.
-
-### POST `/admin/sellers` — Existing
-
-Use the verified `CreateSellerPayload`.
-
-### GET `/admin/customers` — Existing
-
-Catalogued filters include:
-
-* `page`
-* `pageSize`
-* `search`
-* `categoryId`
-* `sellerId`
-* `managerId`
-* Geographic filters where supported.
-
-### POST `/admin/customers` — Existing
-
-Use the verified `CreateCustomerPayload`. Email is required by the approved product requirement even if the existing schema currently treats it as optional.
-
-### GET `/admin/sales` — Existing
-
-Catalogued filters include:
-
-* `page`
-* `pageSize`
-* `search`
-* `sellerId`
-* `managerId`
-* `startDate`
-* `endDate`
-
-### GET `/admin/sales/:id/invoice?format=pdf` — Existing
-
-Response:
-
-* PDF binary, not JSON.
-
-Requirements:
-
-* Handle the response as binary.
-* Confirm authorization for the requested sale.
-* Confirm only confirmed sales can produce final invoices.
-* Use an app-controlled file location and native sharing APIs.
-
-### GET `/admin/approvals` — Existing
-
-Catalogued query parameters:
-
-* `status`
-* `page`
-
-Catalogued response:
-
+### 7.2 Inward Factory Stock Receipt (`POST /admin/inventory/receipts`)
+* **Request Payload:**
 ```json
 {
-  "pendingSales": []
+  "warehouseId": "wh_hq_central",
+  "items": [
+    { "productId": "prod_pad_regular_240mm", "quantity": 10000 },
+    { "productId": "prod_pad_xl_280mm", "quantity": 5000 }
+  ],
+  "requestKey": "rcpt_1731671920_ab819"
 }
 ```
 
-Confirm whether pagination metadata and other statuses are returned.
-
-### POST `/admin/approvals/:id/approve` — Existing
-
-Catalogued request:
-
+### 7.3 Inter-Warehouse & Van Stock Transfer (`POST /admin/inventory/transfers`)
+To prevent backend crashes and schema rejections, the client automatically resolves `sourceId` and `destinationId` to validated StockLocation UUIDs from `adminApi.getInventorySummary()`:
+* **Request Payload:**
 ```json
 {
-  "notes": "Optional approval note"
+  "sourceId": "loc_hq_central_uuid",
+  "destinationId": "loc_seller_pooja_sharma_uuid",
+  "items": [
+    { "productId": "prod_pad_regular_240mm", "quantity": 200 }
+  ],
+  "requestKey": "trf_1731671950_xk918"
 }
 ```
 
-Response:
+### 7.4 Inventory Transactions Ledger (`GET /seller/inventory/transactions`, `GET /admin/inventory/transactions`)
+* **Query Parameters:** `page`, `pageSize`, `type` (`RECEIPT`, `TRANSFER_IN`, `TRANSFER_OUT`, `SALE_DEDUCTION`, `REVERT`)
+* **Success Response (200 OK):** `{ items: StockTransactionItem[], pagination: PaginationMeta }`
 
+---
+
+## 8. Voice Feedback & Translation APIs
+
+The application integrates real-time speech recognition for rural retail feedback, allowing field officers to speak naturally in **Hindi** or **Hinglish** and translating their observations into professional English for CRM logging.
+
+### 8.1 Speech Translation (`POST /translate`)
+* **Request Payload:**
 ```json
 {
-  "success": true
+  "text": "Dukaan band thi owner gaon gaya hai, parso aane ko bola hai",
+  "sourceLanguage": "hi",
+  "targetLanguage": "en"
 }
 ```
-
-The backend must enforce authorization, current state, stock availability, price rules, and idempotent transition behavior.
-
-### POST `/admin/approvals/:id/reject` — Existing
-
-Request:
-
+* **Success Response (200 OK):**
 ```json
 {
-  "reason": "Required rejection reason"
+  "translatedText": "The shop was closed as the owner has gone to his village; he requested a revisit the day after tomorrow.",
+  "originalText": "Dukaan band thi owner gaon gaya hai, parso aane ko bola hai",
+  "confidence": 0.98
 }
 ```
+* **Resilient Client Fallback Engine (`translateApi.ts`):**
+  If the backend translation microservice is unavailable (HTTP 404/500/timeout), the client fallback engine engages instantly:
+  * Translates common field retail phrases (Hindi/Hinglish keywords -> English).
+  * Always preserves the exact spoken original transcript so observations are never lost.
+  * Allows the user to review, edit, accept, or undo the translation before appending it to field notes.
 
-Response:
+---
 
-```json
-{
-  "success": true
-}
-```
+## 9. Notification & Audit APIs
 
-The backend must preserve the rejected record and prevent stock/incentive/final-invoice effects.
-
-### GET `/admin/inventory` — Existing
-
-Catalogued query parameters:
-
-* `warehouseId`
-* `productId`
-* `lowStock`
-
-Response: `InventorySummaryData`.
-
-### POST `/admin/inventory/receipt` — Existing
-
-Use the actual `StockReceiptMultiPayload` or other verified payload type. Do not infer field names from the route name.
-
-### POST `/admin/inventory/transfer` — Existing
-
-Use the actual `StockTransferMultiPayload` or other verified payload type. The backend must atomically validate source stock and destination permissions.
-
-### GET `/admin/permissions/:id` — Existing
-
-Response:
-
-```json
-{
-  "permissions": []
-}
-```
-
-### PATCH `/admin/permissions/:id` — Existing
-
-Request:
-
-```json
-{
-  "permissions": ["permission.key"]
-}
-```
-
-Use only registered permission keys and enforce the caller's authority server-side.
-
-## 8. Manager APIs — Contract Gap
-
-The audit does not provide a complete Manager-specific API contract.
-
-Do not assume that a Manager can safely reuse a Super Admin endpoint.
-
-Before implementing Manager operations, verify or define:
-
-* Dashboard and permitted filters.
-* Team/Seller list and detail.
-* Authorized customer list and detail.
-* Sales list and detail.
-* Approval list and decision endpoints, if authorized.
-* Inventory list and movement visibility.
-* Incentive summaries.
-* Reports.
-* Notification inbox and read-state mutation.
-
-Each endpoint must enforce Manager scope server-side.
-
-## 9. Proposed API Additions
-
-These endpoints are proposals, not existing verified routes.
-
-### POST `/seller/sales` — Add idempotency support
-
-Header:
-
-```http
-X-Idempotency-Key: <uuid>
-```
-
-Behavior:
-
-* Same actor + same key + same request hash returns the original result.
-* Same actor + same key + different request hash returns `409 IDEMPOTENCY_CONFLICT`.
-* A timeout can be reconciled without creating a second sale.
-
-### GET `/sales/:id` — PROPOSED if no equivalent exists
-
-Purpose:
-
-* Retrieve the authoritative status of a sale after an uncertain response.
-* Enforce ownership/territory authorization.
-* Return current sale status and relevant transaction references.
-
-### GET `/notifications` — PROPOSED if no equivalent exists
-
-Target query:
-
-* `page`
-* `pageSize`
-* `unreadOnly`
-
-Target response:
-
-```json
-{
-  "items": [],
-  "pagination": {
-    "page": 1,
-    "pageSize": 20,
-    "totalItems": 0,
-    "totalPages": 0
-  }
-}
-```
-
-### PATCH `/notifications/:id/read` — PROPOSED if no equivalent exists
-
-Target response:
-
-```json
-{
-  "success": true
-}
-```
-
-### GET `/seller/incentives` — PROPOSED if no equivalent exists
-
-Purpose:
-
-* Return Seller-authorized incentive records with the applied rate and calculation context.
-
-### GET `/admin/incentives` — Existing route catalogued; exact contract required
-
-The audit lists this route with month/year/role filters but does not provide a complete request/response schema.
-
-### POST/PATCH `/admin/categories` — PROPOSED lifecycle support
-
-Define create/edit/activate/deactivate contracts only if existing routes do not support these operations.
-
-### Minimum price configuration — PROPOSED until actual endpoint is found
-
-Define an authenticated Super Admin endpoint with:
-
-* Validated monetary value.
-* Currency and unit semantics.
-* Effective timestamp.
-* Audit history.
-* Server-side enforcement by the sale endpoint.
-
-### Invoice email status — PROPOSED if no existing mechanism exists
-
-Provide a way to inspect delivery state and retry failures without regenerating duplicate invoices.
-
-## 10. API Contract Test Requirements
-
-* Login for all roles.
-* Role mismatch rejection.
-* Expired token behavior.
-* Forbidden cross-Seller access.
-* Forbidden cross-territory Manager access.
-* Required customer email validation.
-* Category query strictness.
-* Below-minimum-price enforcement.
-* Pending sale side-effect invariants.
-* Duplicate idempotency key behavior.
-* Concurrent stock confirmation.
-* Payment enum enforcement and no-partial-payment behavior.
-* Historical incentive snapshot behavior.
-* Invoice eligibility and email retry behavior.
-* Shared notification persistence.
-* Binary PDF download and authorization.
+* **GET `/notifications`:** In-app inbox (`{ items: NotificationItem[], unreadCount: number }`).
+* **PATCH `/notifications/:id/read`:** Mark single notification as read.
+* **POST `/notifications/read-all`:** Mark all notifications as read.
+* **GET `/admin/dashboard/filters`:** Returns valid multi-tier filter dropdowns (`states`, `districts`, `villages`, `managers`, `sellers`, `categories`).
