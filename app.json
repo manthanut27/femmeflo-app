@@ -26,7 +26,9 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.READ_MEDIA_IMAGES"
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
@@ -35,6 +37,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow FemmeFlo to authenticate your shift using fingerprint or biometric recognition."
+        }
+      ],
       [
         "expo-splash-screen",
         {

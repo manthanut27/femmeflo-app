@@ -66,7 +66,7 @@ export function ShiftRequiredGate({
         <View style={styles.contentWrapper}>
           <Card style={styles.gateCard} variant="elevated">
             <View style={styles.iconCircle}>
-              <Ionicons name="camera-outline" size={32} color="#FFFFFF" />
+              <Ionicons name="finger-print-outline" size={32} color="#FFFFFF" />
             </View>
 
             <View style={styles.badgeRow}>
@@ -78,13 +78,13 @@ export function ShiftRequiredGate({
 
             <Text style={styles.title}>Start Your Duty Shift First</Text>
             <Text style={styles.description}>
-              To {actionName}, you must first start your daily duty shift with your vehicle odometer reading and selfie attendance verification.
+              To {actionName}, you must first start your daily duty shift with your vehicle odometer reading and fingerprint or mobile password verification.
             </Text>
 
             <View style={styles.checklist}>
               <View style={styles.checkItem}>
                 <Ionicons name="checkmark-circle" size={18} color={BrandColors.green.primary} />
-                <Text style={styles.checkText}>Face ID biometric selfie verification</Text>
+                <Text style={styles.checkText}>Biometric fingerprint or mobile password verification</Text>
               </View>
               <View style={styles.checkItem}>
                 <Ionicons name="checkmark-circle" size={18} color={BrandColors.green.primary} />

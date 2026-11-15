@@ -1,6 +1,7 @@
 import { sellerApi } from '@/api/seller';
 import type { SellerDashboardData, Shift } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
+import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -48,9 +49,10 @@ export default function SellerDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Shift Modal & Face Verification State
+  // Shift Modal & Verification State
   const [startShiftModalVisible, setStartShiftModalVisible] = useState(false);
   const [endShiftModalVisible, setEndShiftModalVisible] = useState(false);
+  const [shiftAuthModalVisible, setShiftAuthModalVisible] = useState(false);
   const [faceModalVisible, setFaceModalVisible] = useState(false);
   const [faceModalMode, setFaceModalMode] = useState<'START' | 'END'>('START');
   const [pendingOdometerKm, setPendingOdometerKm] = useState<number>(0);
@@ -152,12 +154,11 @@ export default function SellerDashboardScreen() {
 
     setPendingOdometerKm(kmNum);
     setStartShiftModalVisible(false);
-    setFaceModalMode('START');
-    setFaceModalVisible(true);
+    setShiftAuthModalVisible(true);
   }
 
-  async function handleVerifiedShiftStart(faceResult: FaceVerificationResult) {
-    setFaceModalVisible(false);
+  async function handleVerifiedShiftStart(authResult: ShiftAuthResult) {
+    setShiftAuthModalVisible(false);
     setIsShiftSubmitting(true);
     try {
       const coords = await acquireCoordinates();
@@ -166,10 +167,10 @@ export default function SellerDashboardScreen() {
         latitude: coords.latitude,
         longitude: coords.longitude,
         address: `Start reading: ${pendingOdometerKm} km`,
-        faceVerified: faceResult?.faceVerified ?? true,
-        facePhoto: faceResult?.facePhoto || 'verified_selfie_start',
-        faceConfidence: faceResult?.faceConfidence ?? 0.98,
-        faceMethod: faceResult?.faceMethod || 'FACE_ID_BIOMETRIC',
+        faceVerified: authResult?.faceVerified ?? true,
+        facePhoto: authResult?.facePhoto || (authResult.method === 'FINGERPRINT' ? 'biometric_fingerprint_start' : 'mobile_password_start'),
+        faceConfidence: authResult?.confidence ?? 1.0,
+        faceMethod: authResult?.method === 'FINGERPRINT' ? 'FINGERPRINT_BIOMETRIC' : 'MOBILE_PASSWORD',
       });
 
       const startedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
@@ -184,9 +185,10 @@ export default function SellerDashboardScreen() {
         }
       }
       setOdometerKm('');
+      const authLabel = authResult.method === 'FINGERPRINT' ? 'fingerprint verification' : 'mobile password';
       Alert.alert(
         'Shift Started',
-        `Duty shift active with verified selfie attendance. Starting reading: ${pendingOdometerKm} KM`
+        `Duty shift active with ${authLabel}. Starting reading: ${pendingOdometerKm} KM`
       );
       loadDashboard();
     } catch (err: any) {
@@ -547,7 +549,7 @@ export default function SellerDashboardScreen() {
                 </Pressable>
               </View>
               <Text style={styles.modalSubtitle}>
-                Enter your vehicle odometer starting KM before beginning travel or store visits. You will take a selfie next to verify attendance.
+                Enter your vehicle odometer starting KM before beginning travel or store visits. You will verify attendance next with fingerprint or mobile password.
               </Text>
 
               <Input
@@ -568,11 +570,11 @@ export default function SellerDashboardScreen() {
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title="Continue to Selfie"
-                  variant="secondary"
+                  title="Verify & Start"
+                  variant="primary"
                   onPress={handleInitiateStartShift}
                   loading={isShiftSubmitting}
-                  icon={<Ionicons name="camera-outline" size={16} color="#FFFFFF" />}
+                  icon={<Ionicons name="finger-print-outline" size={16} color="#FFFFFF" />}
                   style={{ flex: 1.4 }}
                 />
               </View>
@@ -668,7 +670,18 @@ export default function SellerDashboardScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Biometric / Face Selfie Verification Modal */}
+      {/* Mobile Password & Fingerprint Duty Shift Start Verification Modal */}
+      <ShiftAuthVerificationModal
+        visible={shiftAuthModalVisible}
+        mode="START"
+        odometerKm={pendingOdometerKm}
+        userName={user?.name || 'Field Officer'}
+        userRole={user?.role || 'SELLER'}
+        onClose={() => setShiftAuthModalVisible(false)}
+        onVerified={handleVerifiedShiftStart}
+      />
+
+      {/* Biometric / Face Selfie Verification Modal for Shift End */}
       <FaceVerificationModal
         visible={faceModalVisible}
         mode={faceModalMode}
@@ -676,11 +689,7 @@ export default function SellerDashboardScreen() {
         userRole={user?.role || 'SELLER'}
         onClose={() => setFaceModalVisible(false)}
         onVerified={(res) => {
-          if (faceModalMode === 'START') {
-            handleVerifiedShiftStart(res);
-          } else {
-            handleVerifiedShiftEnd(res);
-          }
+          handleVerifiedShiftEnd(res);
         }}
       />
 
@@ -689,7 +698,7 @@ export default function SellerDashboardScreen() {
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={BrandColors.pink.primary} />
           <Text style={styles.loadingOverlayText}>
-            {faceModalMode === 'START' ? 'Locking GPS & Starting Shift...' : 'Locking GPS & Closing Shift...'}
+            {shiftAuthModalVisible ? 'Locking GPS & Starting Shift...' : 'Locking GPS & Updating Shift...'}
           </Text>
         </View>
       )}

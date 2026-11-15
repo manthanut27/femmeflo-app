@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
 import type { CustomerItem, PaymentMode, ProductItem, Shift, ShiftVisit } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
+import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -112,7 +113,10 @@ export default function ShiftScreen() {
   const [endNotes, setEndNotes] = useState('');
   const [isEndingShift, setIsEndingShift] = useState(false);
 
-  // Biometric / Face Selfie Verification Modal State
+  // Duty Shift Start Authentication Modal (Fingerprint & Mobile Password)
+  const [shiftAuthModalVisible, setShiftAuthModalVisible] = useState(false);
+
+  // Biometric / Face Selfie Verification Modal State (Shift End)
   const [faceModalVisible, setFaceModalVisible] = useState(false);
   const [faceModalMode, setFaceModalMode] = useState<'START' | 'END'>('START');
   const [pendingOdometerKm, setPendingOdometerKm] = useState<number>(0);
@@ -269,7 +273,7 @@ export default function ShiftScreen() {
   }
 
   // ----------------------------------------------------
-  // SHIFT START WITH FACE VERIFICATION
+  // SHIFT START WITH FINGERPRINT / MOBILE PASSWORD
   // ----------------------------------------------------
   function handleInitiateStartShift() {
     const km = parseFloat(startOdometer);
@@ -281,12 +285,11 @@ export default function ShiftScreen() {
     setPendingOdometerKm(km);
     setPendingNotes(startNotes.trim());
     setStartModalVisible(false);
-    setFaceModalMode('START');
-    setFaceModalVisible(true);
+    setShiftAuthModalVisible(true);
   }
 
-  async function handleVerifiedShiftStart(faceResult: FaceVerificationResult) {
-    setFaceModalVisible(false);
+  async function handleVerifiedShiftStart(authResult: ShiftAuthResult) {
+    setShiftAuthModalVisible(false);
     setIsStartingShift(true);
     setFeedback(null);
 
@@ -297,10 +300,10 @@ export default function ShiftScreen() {
         latitude: coords.latitude,
         longitude: coords.longitude,
         address: pendingNotes ? `Start notes: ${pendingNotes}` : undefined,
-        faceVerified: faceResult?.faceVerified ?? true,
-        facePhoto: faceResult?.facePhoto || 'verified_selfie_start',
-        faceConfidence: faceResult?.faceConfidence ?? 0.98,
-        faceMethod: faceResult?.faceMethod || 'FACE_ID_BIOMETRIC',
+        faceVerified: authResult?.faceVerified ?? true,
+        facePhoto: authResult?.facePhoto || (authResult.method === 'FINGERPRINT' ? 'biometric_fingerprint_start' : 'mobile_password_start'),
+        faceConfidence: authResult?.confidence ?? 1.0,
+        faceMethod: authResult?.method === 'FINGERPRINT' ? 'FINGERPRINT_BIOMETRIC' : 'MOBILE_PASSWORD',
       });
 
       const startedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
@@ -315,12 +318,13 @@ export default function ShiftScreen() {
       setStartOdometer('');
       setStartNotes('');
 
+      const authMethodLabel = authResult.method === 'FINGERPRINT' ? 'fingerprint verification' : 'mobile password';
       setFeedback({
         type: 'success',
         title: 'Shift Started',
-        message: `Shift started at ${pendingOdometerKm} km.`,
+        message: `Duty shift active with ${authMethodLabel} at ${pendingOdometerKm} km.`,
       });
-      Alert.alert('Shift Started', `Shift started at ${pendingOdometerKm} km.`);
+      Alert.alert('Shift Started', `Duty shift active with ${authMethodLabel} at ${pendingOdometerKm} km.`);
     } catch (err: any) {
       console.warn('Shift start API error, falling back to local active shift:', err);
       const fallbackShift: Shift = {
@@ -975,7 +979,7 @@ export default function ShiftScreen() {
             >
               <Text style={styles.modalTitle}>Start Field Duty Shift</Text>
               <Text style={styles.modalSubtitle}>
-                Confirm starting odometer reading and proceed to selfie attendance verification.
+                Confirm starting odometer reading and proceed to fingerprint or mobile password verification.
               </Text>
 
               <Input
@@ -1002,8 +1006,9 @@ export default function ShiftScreen() {
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title="Proceed to Face ID"
+                  title="Proceed to Verify"
                   variant="primary"
+                  icon={<Ionicons name="finger-print-outline" size={16} color="#FFFFFF" />}
                   onPress={handleInitiateStartShift}
                   style={{ flex: 1.4 }}
                 />
@@ -1507,7 +1512,20 @@ export default function ShiftScreen() {
       </Modal>
 
       {/* ---------------------------------------------------- */}
-      {/* 5. FACE VERIFICATION / ATTENDANCE SELFIE MODAL */}
+      {/* 5. DUTY SHIFT START: FINGERPRINT & PASSWORD MODAL    */}
+      {/* ---------------------------------------------------- */}
+      <ShiftAuthVerificationModal
+        visible={shiftAuthModalVisible}
+        mode="START"
+        odometerKm={pendingOdometerKm}
+        userName={user?.name || 'Field Officer'}
+        userRole={user?.role || 'SELLER'}
+        onClose={() => setShiftAuthModalVisible(false)}
+        onVerified={handleVerifiedShiftStart}
+      />
+
+      {/* ---------------------------------------------------- */}
+      {/* 6. FACE VERIFICATION / ATTENDANCE SELFIE MODAL (END) */}
       {/* ---------------------------------------------------- */}
       <FaceVerificationModal
         visible={faceModalVisible}
@@ -1516,11 +1534,7 @@ export default function ShiftScreen() {
         userRole={user?.role || 'SELLER'}
         onClose={() => setFaceModalVisible(false)}
         onVerified={(res) => {
-          if (faceModalMode === 'START') {
-            handleVerifiedShiftStart(res);
-          } else {
-            handleVerifiedShiftEnd(res);
-          }
+          handleVerifiedShiftEnd(res);
         }}
       />
     </View>
