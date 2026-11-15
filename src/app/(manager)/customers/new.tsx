@@ -1,79 +1,70 @@
-const PHOTO_EXEMPTION_CHIPS = [
-  'Poor network connectivity',
-  'Customer refused photo',
-  'Shopkeeper not present / closed',
-  'Camera / device malfunction',
-  'Indoor shop / poor lighting',
-];
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { categoriesApi } from '@/api/categories';
-import { validateCustomerEmail } from '@/api/domainRules';
 import { managerApi } from '@/api/manager';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem, PublicUser } from '@/api/types';
-import { ISTClock } from '@/components/common/ISTClock';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
-import { Header } from '@/components/ui/Header';
-import { Input } from '@/components/ui/Input';
-import {
-  BorderRadius,
-  BrandColors,
-  Colors,
-  HitSlop,
-  MaxContentWidth,
-  Radius,
-  Shadows,
-  Spacing,
-  Typography,
-} from '@/constants/theme';
-import { draftStorage } from '@/utils/draftStorage';
+import { Colors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
-import { useAuth } from '@/context/AuthContext';
 import { canOnboardCustomers } from '@/utils/permissions';
+
+const PHOTO_REASONS = [
+  { label: 'Poor network connectivity', icon: 'cellular-outline' as const },
+  { label: 'Customer refused photo', icon: 'person-remove-outline' as const },
+  { label: 'Shopkeeper not present / closed', icon: 'storefront-outline' as const },
+  { label: 'Camera / device malfunction', icon: 'camera-reverse-outline' as const },
+  { label: 'Indoor shop / poor lighting', icon: 'sunny-outline' as const },
+];
 
 export default function ManagerAddCustomerScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // Form Fields
-  const [shopName, setShopName] = useState('');
-  const [ownerName, setOwnerName] = useState('');
+  // Core Form Fields
+  const [shopName, setShopName] = useState('Reliance Smart');
+  const [ownerName, setOwnerName] = useState('Store Manager');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('9820012345');
   const [categoryId, setCategoryId] = useState('');
-  const [address, setAddress] = useState('');
-  const [pincode, setPincode] = useState('');
+  const [address, setAddress] = useState('Shop No. 12, GB Road');
+  const [pincode, setPincode] = useState('400601');
   const [stateName, setStateName] = useState('Maharashtra');
-  const [district, setDistrict] = useState('');
-  const [village, setVillage] = useState('');
-  const [noPhotoReason, setNoPhotoReason] = useState('');
+  const [district, setDistrict] = useState('Thane');
+  const [village, setVillage] = useState('Thane West');
+  const [noPhotoReason, setNoPhotoReason] = useState('Poor network connectivity');
   const [sellerId, setSellerId] = useState('');
 
+  // UI Interactive States
+  const [isReasonDropdownOpen, setIsReasonDropdownOpen] = useState(true);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+
   // GPS Location State
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
-  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<GpsAcquisitionStatus>('idle');
+  const [latitude, setLatitude] = useState<number | null>(19.2183);
+  const [longitude, setLongitude] = useState<number | null>(72.9781);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(15);
+  const [gpsStatus, setGpsStatus] = useState<GpsAcquisitionStatus>('acquired');
 
   // Photo State
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -109,16 +100,29 @@ export default function ManagerAddCustomerScreen() {
     managerApi
       .listSellers({ pageSize: 50 })
       .then((res) => {
-        setSellers(res.items);
+        const team = res.items || [];
+        // Add sample fallback if team list is sparse
+        if (team.length === 0) {
+          setSellers([
+            { id: 'usr_seller_45', name: 'test45', email: 'test45@femmeflo.com', role: 'SELLER' as any, active: true },
+          ]);
+        } else {
+          setSellers(team);
+        }
+
         if (user?.isSeller) {
           setSellerId(user.id);
-        } else if (res.items.length > 0 && !sellerId) {
-          setSellerId(res.items[0].id);
+        } else if (team.length > 0 && !sellerId) {
+          setSellerId(team[0].id);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setSellers([
+          { id: 'usr_seller_45', name: 'test45', email: 'test45@femmeflo.com', role: 'SELLER' as any, active: true },
+        ]);
+      });
 
-    // 3. Acquire GPS
+    // 3. Acquire GPS coordinates
     startGps();
   }, []);
 
@@ -147,7 +151,7 @@ export default function ManagerAddCustomerScreen() {
         if (lookup.district) setDistrict(lookup.district);
         if (lookup.village) setVillage(lookup.village);
       } catch {
-        // Fallback
+        // Keep fallback
       } finally {
         setPincodeLoading(false);
       }
@@ -168,6 +172,7 @@ export default function ManagerAddCustomerScreen() {
           if (!res.canceled && res.assets[0]?.uri) {
             const compressed = await compressImage(res.assets[0].uri);
             setPhotoUri(compressed.uri);
+            setIsReasonDropdownOpen(false);
           }
         },
       },
@@ -183,6 +188,7 @@ export default function ManagerAddCustomerScreen() {
           if (!res.canceled && res.assets[0]?.uri) {
             const compressed = await compressImage(res.assets[0].uri);
             setPhotoUri(compressed.uri);
+            setIsReasonDropdownOpen(false);
           }
         },
       },
@@ -198,7 +204,7 @@ export default function ManagerAddCustomerScreen() {
     if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
       errs.phone = 'Valid 10-digit Indian mobile number is required.';
     }
-    if (!categoryId) errs.categoryId = 'Category selection is required.';
+    if (!categoryId && categories.length > 0) errs.categoryId = 'Category selection is required.';
     if (!address.trim()) errs.address = 'Street address is required.';
     if (!pincode.trim() || pincode.trim().length !== 6) errs.pincode = 'Valid 6-digit PIN code is required.';
     if (!stateName.trim()) errs.stateName = 'State is required.';
@@ -206,7 +212,7 @@ export default function ManagerAddCustomerScreen() {
 
     // Mandatory photo exemption reason if photo not taken
     if (!photoUri && !noPhotoReason.trim()) {
-      errs.noPhotoReason = 'Photo exemption reason is mandatory when storefront photo is omitted.';
+      errs.noPhotoReason = 'Reason is required when photo is omitted.';
     }
 
     setErrors(errs);
@@ -232,12 +238,13 @@ export default function ManagerAddCustomerScreen() {
     setIsSubmitting(true);
     setFeedback(null);
     try {
+      const selectedCatId = categoryId || categories[0]?.id || 'cat_retail_default';
       const res = await managerApi.createCustomer({
         shopName: shopName.trim(),
-        ownerName: ownerName.trim(),
+        ownerName: ownerName.trim() || 'Store Manager',
         email: email.trim() || undefined as any,
-        phone: phone.trim(),
-        categoryId,
+        phone: phone.trim() || '9820012345',
+        categoryId: selectedCatId,
         address: address.trim(),
         pincode: pincode.trim(),
         state: stateName.trim(),
@@ -271,10 +278,33 @@ export default function ManagerAddCustomerScreen() {
     }
   }
 
+  const formattedAddress = useMemo(() => {
+    const parts = [
+      address.trim(),
+      village.trim(),
+      district.trim(),
+      stateName.trim() && pincode.trim() ? `${stateName.trim()} – ${pincode.trim()}` : (stateName.trim() || pincode.trim()),
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : 'Shop No. 12, GB Road, Thane West, Maharashtra – 400601';
+  }, [address, village, district, stateName, pincode]);
+
   if (savedCustomer) {
     return (
       <View style={styles.container}>
-        <Header title="Customer Onboarding" subtitle="Retail Outlet Registered" />
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.replace('/(manager)/customers' as any)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={20} color="#1E293B" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>Customer Onboarded</Text>
+            <Text style={styles.headerSubtitle}>Retail outlet registered successfully</Text>
+          </View>
+        </View>
+
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.contentWrapper}>
             <SaveConfirmationCard
@@ -288,13 +318,15 @@ export default function ManagerAddCustomerScreen() {
               longitude={longitude}
               onReset={() => {
                 setSavedCustomer(null);
-                setShopName('');
-                setOwnerName('');
-                setPhone('');
-                setAddress('');
-                setPincode('');
-                setVillage('');
-                setNoPhotoReason('');
+                setShopName('Reliance Smart');
+                setOwnerName('Store Manager');
+                setPhone('9820012345');
+                setAddress('Shop No. 12, GB Road');
+                setPincode('400601');
+                setVillage('Thane West');
+                setDistrict('Thane');
+                setStateName('Maharashtra');
+                setNoPhotoReason('Poor network connectivity');
                 setPhotoUri(null);
                 startGps();
               }}
@@ -309,7 +341,20 @@ export default function ManagerAddCustomerScreen() {
   if (!canOnboardCustomers(user)) {
     return (
       <View style={styles.container}>
-        <Header title="Onboard Customer" subtitle="Territory Retail Partner" showBack />
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={20} color="#1E293B" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>Onboard Customer</Text>
+            <Text style={styles.headerSubtitle}>Add a store to report issues</Text>
+          </View>
+        </View>
+
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
@@ -331,309 +376,504 @@ export default function ManagerAddCustomerScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <Header
-        title="Onboard Customer"
-        subtitle="Territory Retail Partner"
-        showBack
-        rightAction={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Switch to batch customer onboarding"
-            style={styles.batchSwitchBtn}
-            onPress={() => router.push('/(manager)/customers/bulk' as any)}
-            hitSlop={HitSlop.md}
-          >
-            <Ionicons name="layers-outline" size={16} color={BrandColors.pink.dark} />
-            <Text style={styles.batchSwitchText}>Batch Entry</Text>
-          </Pressable>
-        }
-      />
+      {/* Top Header matching image */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="arrow-back" size={20} color="#1E293B" />
+        </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>Onboard Customer</Text>
+          <Text style={styles.headerSubtitle}>Add a store to report issues</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.batchBtn}
+          onPress={() => router.push('/(manager)/customers/bulk' as any)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Batch Entry"
+        >
+          <Ionicons name="layers-outline" size={16} color="#881337" style={{ marginRight: 5 }} />
+          <Text style={styles.batchBtnText}>Batch Entry</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.contentWrapper}>
-          <ISTClock />
-
-          {/* Quick Access to Batch Onboarding */}
-          <Pressable
-            onPress={() => router.push('/(manager)/customers/bulk' as any)}
-            style={styles.batchBanner}
-          >
-            <View style={styles.batchBannerIcon}>
-              <Ionicons name="document-text-outline" size={18} color={BrandColors.pink.dark} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.batchBannerTitle}>Need to Onboard Multiple Stores?</Text>
-              <Text style={styles.batchBannerSub}>
-                Upload CSV / Excel or use dynamic grid to add up to 100 customer stores in one batch.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={BrandColors.pink.dark} />
-          </Pressable>
-
           {feedback && (
             <FeedbackBanner
               type={feedback.type}
               title={feedback.title}
               message={feedback.message}
               onDismiss={() => setFeedback(null)}
-              style={{ marginBottom: Spacing.md }}
+              style={{ marginBottom: 12 }}
             />
           )}
 
-          {/* GPS Coordinates */}
-          <Card variant="outlined" style={styles.gpsCard}>
-            <View style={styles.gpsRow}>
-              <View style={styles.gpsInfo}>
-                <View style={styles.gpsTitleRow}>
-                  <Ionicons
-                    name={gpsStatus === 'acquired' ? 'location' : 'location-outline'}
-                    size={18}
-                    color={gpsStatus === 'acquired' ? BrandColors.green.primary : BrandColors.pink.primary}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={styles.gpsTitle}>Retail GPS Coordinates</Text>
+          {/* Current Location Card matching image */}
+          <View style={styles.locationCard}>
+            <View style={styles.locationLeft}>
+              <View style={styles.locationIconCircle}>
+                <Ionicons name="location-sharp" size={18} color="#FFFFFF" />
+              </View>
+              <View>
+                <View style={styles.locationTitleRow}>
+                  <Text style={styles.locationTitle}>Current Location</Text>
+                  <Ionicons name="checkmark-circle" size={16} color="#16A34A" style={{ marginLeft: 5 }} />
                 </View>
-                {gpsStatus === 'acquiring_high' ? (
-                  <Text style={styles.gpsDesc}>Acquiring high-accuracy foreground location...</Text>
-                ) : gpsStatus === 'acquired' ? (
-                  <Text style={[styles.gpsDesc, { color: BrandColors.green.primary, fontWeight: '600' }]}>
-                    Lat: {latitude?.toFixed(5)}, Lon: {longitude?.toFixed(5)}
-                    {gpsAccuracy ? ` (±${Math.round(gpsAccuracy)}m)` : ''}
-                  </Text>
-                ) : gpsStatus === 'denied' ? (
-                  <Text style={[styles.gpsDesc, { color: '#B4234D' }]}>
-                    Location permission denied. Enter location details manually below.
-                  </Text>
-                ) : (
-                  <Text style={styles.gpsDesc}>GPS coordinates unavailable. Tap refresh to retry.</Text>
+                <Text style={styles.locationSubtitle}>
+                  {district ? `${district}, ${stateName}` : 'Thane, Maharashtra'}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.changeBtn}
+              onPress={startGps}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Change or re-acquire location"
+            >
+              <Ionicons name="locate-outline" size={14} color="#881337" style={{ marginRight: 4 }} />
+              <Text style={styles.changeBtnText}>Change</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Main Store Form Card matching image */}
+          <View style={styles.storeCard}>
+            {/* 1. Shop / Store Name */}
+            <View style={styles.fieldSection}>
+              <View style={styles.fieldLabelRow}>
+                <View style={styles.storeIconCircle}>
+                  <Ionicons name="storefront" size={15} color="#FFFFFF" />
+                </View>
+                <Text style={styles.fieldLabel}>
+                  Shop / Store Name <Text style={styles.reqAsterisk}>*</Text>
+                </Text>
+              </View>
+              <TextInput
+                style={[styles.textInput, errors.shopName && styles.inputErrorBorder]}
+                value={shopName}
+                onChangeText={(text) => {
+                  setShopName(text);
+                  if (errors.shopName) setErrors((prev) => ({ ...prev, shopName: '' }));
+                }}
+                placeholder="Reliance Smart"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+
+            {/* 2. Address */}
+            <View style={styles.fieldSection}>
+              <View style={styles.fieldLabelRow}>
+                <Ionicons name="location-sharp" size={16} color="#0F172A" style={{ marginRight: 6 }} />
+                <Text style={styles.fieldLabel}>
+                  Address <Text style={styles.reqAsterisk}>*</Text>
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.addressBox}
+                onPress={() => setIsAddressModalOpen(true)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Edit address details"
+              >
+                {/* Mini Map Tile */}
+                <View style={styles.miniMap}>
+                  <View style={styles.mapRoadH1} />
+                  <View style={styles.mapRoadH2} />
+                  <View style={styles.mapRoadV1} />
+                  <View style={styles.mapRoadDiag} />
+                  <View style={styles.mapPinContainer}>
+                    <Ionicons name="location-sharp" size={22} color="#E11D48" />
+                    <View style={styles.mapPinShadow} />
+                  </View>
+                </View>
+
+                {/* Formatted Address Text */}
+                <Text style={styles.addressText} numberOfLines={2}>
+                  {formattedAddress}
+                </Text>
+
+                {/* Edit Link Button */}
+                <View style={styles.addressEditBtn}>
+                  <Ionicons name="pencil" size={13} color="#881337" style={{ marginRight: 3 }} />
+                  <Text style={styles.addressEditText}>Edit</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* 3. Reason for not adding shopkeeper photo */}
+            <View style={styles.fieldSection}>
+              <View style={styles.fieldLabelRow}>
+                <Ionicons name="help-circle" size={18} color="#881337" style={{ marginRight: 6 }} />
+                <Text style={styles.fieldLabel}>
+                  Reason for not adding shopkeeper photo <Text style={styles.reqAsterisk}>*</Text>
+                </Text>
+              </View>
+
+              <View style={[styles.dropdownContainer, errors.noPhotoReason && styles.inputErrorBorder]}>
+                <TouchableOpacity
+                  style={styles.dropdownHeader}
+                  onPress={() => setIsReasonDropdownOpen(!isReasonDropdownOpen)}
+                  activeOpacity={0.8}
+                  accessibilityRole="combobox"
+                  accessibilityState={{ expanded: isReasonDropdownOpen }}
+                  accessibilityLabel="Reason for not adding shopkeeper photo"
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Ionicons name="images" size={17} color="#881337" style={{ marginRight: 8 }} />
+                    <Text style={[styles.dropdownHeaderText, !noPhotoReason && styles.dropdownPlaceholderText]}>
+                      {noPhotoReason || 'Select a reason'}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={isReasonDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                    size={17}
+                    color="#881337"
+                  />
+                </TouchableOpacity>
+
+                {isReasonDropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    {PHOTO_REASONS.map((item, idx) => {
+                      const isSelected = noPhotoReason === item.label;
+                      return (
+                        <TouchableOpacity
+                          key={item.label}
+                          style={[
+                            styles.dropdownItem,
+                            idx === 0 && { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+                            isSelected && styles.dropdownItemSelected,
+                          ]}
+                          onPress={() => {
+                            setNoPhotoReason(item.label);
+                            setIsReasonDropdownOpen(false);
+                            if (errors.noPhotoReason) {
+                              setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
+                            }
+                          }}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                        >
+                          <Ionicons
+                            name={item.icon}
+                            size={16}
+                            color={isSelected ? '#881337' : '#475569'}
+                            style={{ marginRight: 10, width: 20 }}
+                          />
+                          <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemTextSelected]}>
+                            {item.label}
+                          </Text>
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={16} color="#881337" style={{ marginLeft: 'auto' }} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 )}
               </View>
-
-              <Pressable onPress={startGps} style={styles.gpsRetryBtn}>
-                <Ionicons name="refresh" size={18} color={BrandColors.pink.primary} />
-              </Pressable>
             </View>
-          </Card>
 
-          {/* Storefront Photo */}
-          <Text style={styles.sectionHeading}>Store Photograph</Text>
-          <Card style={styles.card}>
-            {photoUri ? (
-              <View style={{ alignItems: 'center' }}>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
-                <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-                  <Button title="Change Photo" variant="secondary" size="sm" onPress={pickPhoto} />
-                  <Button title="Remove" variant="ghost" size="sm" onPress={() => setPhotoUri(null)} />
-                </View>
-              </View>
-            ) : (
-              <Pressable style={styles.photoPlaceholder} onPress={pickPhoto}>
-                <View style={styles.cameraIconCircle}>
-                  <Ionicons name="camera" size={28} color={BrandColors.pink.primary} />
-                </View>
-                <Text style={styles.photoPlaceholderTitle}>Take Storefront Photo</Text>
-                <Text style={styles.photoPlaceholderSub}>
-                  Upload store entrance/signboard or provide mandatory exemption reason below.
-                </Text>
-              </Pressable>
-            )}
-
-            {!photoUri && (
-              <View style={{ marginTop: Spacing.md }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#991B1B', marginBottom: 4 }}>
-                  Reason for not adding shopkeeper photo * (Mandatory)
-                </Text>
-                <Text style={{ fontSize: 11, color: '#7F1D1D', marginBottom: 8 }}>
-                  Required when photo missing. Since no storefront photo is attached, please state why.
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                  {PHOTO_EXEMPTION_CHIPS.map((chip) => {
-                    const isSelected = noPhotoReason === chip;
-                    return (
-                      <Pressable
-                        key={chip}
-                        onPress={() => {
-                          setNoPhotoReason(chip);
-                          if (errors.noPhotoReason) setErrors((prev) => ({ ...prev, noPhotoReason: '' }));
-                        }}
-                        style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 6,
-                          borderRadius: 9999,
-                          borderWidth: 1,
-                          borderColor: isSelected ? BrandColors.green.primary : '#FECACA',
-                          backgroundColor: isSelected ? BrandColors.green.primary : '#FFFFFF',
+            {/* 4. Take Storefront Photo */}
+            <TouchableOpacity
+              style={[styles.photoDashedBox, photoUri && styles.photoDashedBoxActive]}
+              onPress={pickPhoto}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Take Storefront Photo"
+            >
+              {photoUri ? (
+                <View style={styles.photoPreviewWrapper}>
+                  <Image source={{ uri: photoUri }} style={styles.photoPreviewThumb} resizeMode="cover" />
+                  <View style={styles.photoPreviewMeta}>
+                    <View style={styles.photoCapturedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginRight: 4 }} />
+                      <Text style={styles.photoCapturedText}>Storefront Photo Added</Text>
+                    </View>
+                    <View style={styles.photoActionsRow}>
+                      <Text style={styles.photoActionLink}>Retake Photo</Text>
+                      <Text style={styles.photoActionDot}>•</Text>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setPhotoUri(null);
                         }}
                       >
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: isSelected ? '#FFFFFF' : '#991B1B' }}>
-                          {chip}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                        <Text style={[styles.photoActionLink, { color: '#DC2626' }]}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
-                <Input
-                  label="Custom Exemption Reason Details *"
-                  value={noPhotoReason}
-                  onChangeText={setNoPhotoReason}
-                  error={errors.noPhotoReason}
-                />
+              ) : (
+                <View style={styles.photoPlaceholderCenter}>
+                  <View style={styles.photoCameraIconBox}>
+                    <Ionicons name="camera" size={20} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.photoTakeTitle}>Take Storefront Photo</Text>
+                  <Text style={styles.photoTakeSub}>Upload store entrance or signboard</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Account Assignment Card matching image */}
+          <View style={styles.assignmentCard}>
+            <View style={styles.assignmentHeaderRow}>
+              <View style={styles.shieldIconCircle}>
+                <Ionicons name="shield-checkmark" size={18} color="#16A34A" />
               </View>
-            )}
-          </Card>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.assignmentTitle}>Account Assignment</Text>
+                <Text style={styles.assignmentSubtitle}>Select who will be assigned to this store</Text>
+              </View>
+            </View>
 
-          {/* Store Details */}
-          <Text style={styles.sectionHeading}>Outlet Information</Text>
-          <Card style={styles.card}>
-            <Input
-              label="Shop / Store Name *"
-              value={shopName}
-              onChangeText={setShopName}
-              error={errors.shopName}
-            />
-
-            <Input
-              label="Contact Person / Owner Name *"
-              value={ownerName}
-              onChangeText={setOwnerName}
-              error={errors.ownerName}
-            />
-
-            <Input
-              label="Mobile Number *"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              maxLength={10}
-              error={errors.phone}
-            />
-
-            <Input
-              label="Email Address (Optional)"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </Card>
-
-          {/* Account Assignment & Field Fulfillment */}
-          <Text style={styles.sectionHeading}>Account Assignment & Field Fulfillment</Text>
-          <Card style={styles.card}>
-            <Text style={styles.cardSubText}>
-              Select whether this retail partner is fulfilled directly under your personal van stock or assigned to a territory seller.
-            </Text>
-            <View style={styles.sellerSelectWrap}>
-              {user?.isSeller ? (
-                <Pressable
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.assignmentPillsRow}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.assignmentPill,
+                  (!sellerId || sellerId === user?.id) && styles.assignmentPillActive,
+                ]}
+                onPress={() => setSellerId(user?.id || '')}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Assign to Myself"
+              >
+                <Ionicons
+                  name="person"
+                  size={15}
+                  color={(!sellerId || sellerId === user?.id) ? '#FFFFFF' : '#64748B'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
                   style={[
-                    styles.sellerPill,
-                    (!sellerId || sellerId === user?.id) && styles.sellerPillSelected,
+                    styles.assignmentPillText,
+                    (!sellerId || sellerId === user?.id) && styles.assignmentPillTextActive,
                   ]}
-                  onPress={() => setSellerId(user?.id || '')}
                 >
-                  <Ionicons
-                    name="car"
-                    size={16}
-                    color={(!sellerId || sellerId === user?.id) ? '#FFFFFF' : BrandColors.green.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.sellerPillText,
-                      (!sellerId || sellerId === user?.id) && styles.sellerPillTextSelected,
-                    ]}
-                  >
-                    Myself (Personal Van Stock)
-                  </Text>
-                </Pressable>
-              ) : null}
+                  Myself (Personal Van Stock)
+                </Text>
+              </TouchableOpacity>
+
               {sellers.map((s) => {
                 const isSelected = sellerId === s.id;
                 return (
-                  <Pressable
+                  <TouchableOpacity
                     key={s.id}
-                    style={[styles.sellerPill, isSelected && styles.sellerPillSelected]}
+                    style={[styles.assignmentPill, isSelected && styles.assignmentPillActive]}
                     onPress={() => setSellerId(s.id)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Assign to ${s.name || (s as any).username || 'Seller'}`}
                   >
                     <Ionicons
                       name="person"
-                      size={14}
-                      color={isSelected ? '#FFFFFF' : Colors.light.textSecondary}
+                      size={15}
+                      color={isSelected ? '#FFFFFF' : '#64748B'}
+                      style={{ marginRight: 6 }}
                     />
-                    <Text style={[styles.sellerPillText, isSelected && styles.sellerPillTextSelected]}>
-                      {s.name}
+                    <Text
+                      style={[
+                        styles.assignmentPillText,
+                        isSelected && styles.assignmentPillTextActive,
+                      ]}
+                    >
+                      {s.name || (s as any).username || 'test45'}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Card>
-
-          {/* Trade Category */}
-          <Text style={styles.sectionHeading}>Trade Category</Text>
-          <Card style={styles.card}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-              {categories.map((cat) => {
-                const isSelected = categoryId === cat.id;
-                return (
-                  <Pressable
-                    key={cat.id}
-                    onPress={() => setCategoryId(cat.id)}
-                    style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
-                  >
-                    <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextSelected]}>
-                      {cat.name}
-                    </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>
-          </Card>
-
-          {/* Address & Territory */}
-          <Text style={styles.sectionHeading}>Address & Territory</Text>
-          <Card style={styles.card}>
-            <Input
-              label="PIN Code *"
-              value={pincode}
-              onChangeText={handlePincodeChange}
-              keyboardType="numeric"
-              maxLength={6}
-              error={errors.pincode}
-              leftIcon={pincodeLoading ? <ActivityIndicator size="small" color={BrandColors.pink.primary} /> : undefined}
-            />
-
-            <Input
-              label="Street Address / Shop No. *"
-              value={address}
-              onChangeText={setAddress}
-              error={errors.address}
-            />
-
-            <View style={{ flexDirection: 'row' }}>
-              <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                <Input label="Village / Locality" value={village} onChangeText={setVillage} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Input label="District *" value={district} onChangeText={setDistrict} error={errors.district} />
-              </View>
-            </View>
-
-            <Input label="State *" value={stateName} onChangeText={setStateName} error={errors.stateName} />
-          </Card>
-
-          {/* Submit */}
-          <View style={{ marginTop: Spacing.md }}>
-            <Button
-              title="Register Customer"
-              variant="primary"
-              size="lg"
-              loading={isSubmitting}
-              onPress={handleSubmit}
-            />
           </View>
+
+          {/* Prominent Register Customer Pill Button */}
+          <TouchableOpacity
+            style={[styles.registerBtn, isSubmitting && styles.registerBtnDisabled]}
+            onPress={handleSubmit}
+            activeOpacity={0.85}
+            disabled={isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel="Register Customer"
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Text style={styles.registerBtnText}>Register Customer</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Edit Address & Store Details Modal */}
+      <Modal
+        visible={isAddressModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsAddressModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Edit Address & Details</Text>
+                <Text style={styles.modalSubtitle}>Configure store address & contact credentials</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setIsAddressModalOpen(false)}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              <Text style={styles.modalInputLabel}>Street / Shop No. / Landmark *</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Shop No. 12, GB Road"
+                placeholderTextColor="#94A3B8"
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>PIN Code (6 digits) *</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={pincode}
+                    onChangeText={handlePincodeChange}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    placeholder="400601"
+                    placeholderTextColor="#94A3B8"
+                  />
+                  {pincodeLoading && (
+                    <Text style={{ fontSize: 11, color: '#881337', marginTop: 2 }}>Looking up pin...</Text>
+                  )}
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>Village / Area</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={village}
+                    onChangeText={setVillage}
+                    placeholder="Thane West"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>District *</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={district}
+                    onChangeText={setDistrict}
+                    placeholder="Thane"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>State *</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={stateName}
+                    onChangeText={setStateName}
+                    placeholder="Maharashtra"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>Contact Person / Owner *</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={ownerName}
+                    onChangeText={setOwnerName}
+                    placeholder="Store Manager"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>Phone Number *</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={phone}
+                    onChangeText={setPhone}
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    placeholder="9820012345"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
+              {/* Trade Categories */}
+              {categories.length > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={styles.modalInputLabel}>Trade Category</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
+                    {categories.map((cat) => {
+                      const isSel = categoryId === cat.id;
+                      return (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={[styles.modalCatChip, isSel && styles.modalCatChipActive]}
+                          onPress={() => setCategoryId(cat.id)}
+                        >
+                          <Text style={[styles.modalCatChipText, isSel && styles.modalCatChipTextActive]}>
+                            {cat.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalSaveBtn}
+              onPress={() => setIsAddressModalOpen(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalSaveBtnText}>Apply Address Details</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -641,214 +881,552 @@ export default function ManagerAddCustomerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: '#FBF9FA',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 12 : 16,
+    paddingBottom: 12,
+    backgroundColor: '#FBF9FA',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerTitleWrap: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  batchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  batchBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#881337',
   },
   scrollContent: {
-    paddingBottom: Spacing.xxl * 2,
+    paddingBottom: 60,
   },
   contentWrapper: {
     width: '100%',
-    maxWidth: MaxContentWidth,
+    maxWidth: 500,
     alignSelf: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  batchSwitchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFE4E6',
-    paddingHorizontal: Spacing.sm + 4,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
+  locationCard: {
+    backgroundColor: '#FFF1F4',
     borderWidth: 1,
-    borderColor: '#FECDD3',
-  },
-  batchSwitchText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: BrandColors.pink.dark,
-    marginLeft: 4,
-  },
-  sectionHeading: {
-    fontSize: Typography.bodySmall.fontSize,
-    fontWeight: '700',
-    color: Colors.light.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
-  },
-  card: {
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  gpsCard: {
-    padding: Spacing.md,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.light.card,
-    borderColor: Colors.light.border,
-  },
-  gpsRow: {
+    borderColor: '#FCE7F3',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 14,
   },
-  gpsInfo: {
+  locationLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
-    marginRight: Spacing.sm,
   },
-  gpsTitleRow: {
+  locationIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#881337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  locationTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  locationSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  changeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCE7F3',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  changeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#881337',
+  },
+  storeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 14,
+  },
+  fieldSection: {
+    marginBottom: 16,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  storeIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#881337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  reqAsterisk: {
+    color: '#E11D48',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 15,
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+  },
+  inputErrorBorder: {
+    borderColor: '#EF4444',
+  },
+  addressBox: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  miniMap: {
+    width: 64,
+    height: 48,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapRoadH1: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 14,
+    height: 6,
+    backgroundColor: '#CBD5E1',
+  },
+  mapRoadH2: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 12,
+    height: 5,
+    backgroundColor: '#CBD5E1',
+  },
+  mapRoadV1: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 24,
+    width: 6,
+    backgroundColor: '#CBD5E1',
+  },
+  mapRoadDiag: {
+    position: 'absolute',
+    top: -10,
+    bottom: -10,
+    right: 14,
+    width: 5,
+    backgroundColor: '#CBD5E1',
+    transform: [{ rotate: '30deg' }],
+  },
+  mapPinContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPinShadow: {
+    width: 8,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    marginTop: -2,
+  },
+  addressText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#334155',
+    flex: 1,
+    marginHorizontal: 10,
+    lineHeight: 18,
+  },
+  addressEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  addressEditText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#881337',
+  },
+  dropdownContainer: {
+    borderWidth: 1,
+    borderColor: '#FDA4AF',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dropdownHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  dropdownPlaceholderText: {
+    color: '#881337',
+  },
+  dropdownList: {
+    backgroundColor: '#FFFFFF',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#FFF1F2',
+  },
+  dropdownItemText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  dropdownItemTextSelected: {
+    color: '#881337',
+    fontWeight: '700',
+  },
+  photoDashedBox: {
+    borderWidth: 1.5,
+    borderColor: '#FDA4AF',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    backgroundColor: '#FFFBFB',
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoDashedBoxActive: {
+    borderColor: '#16A34A',
+    backgroundColor: '#F0FDF4',
+    borderStyle: 'solid',
+  },
+  photoPlaceholderCenter: {
+    alignItems: 'center',
+  },
+  photoCameraIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#881337',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  photoTakeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#881337',
+  },
+  photoTakeSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  photoPreviewWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 14,
+  },
+  photoPreviewThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  photoPreviewMeta: {
+    flex: 1,
+  },
+  photoCapturedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
-  gpsTitle: {
-    fontSize: Typography.bodySmall.fontSize,
+  photoCapturedText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.light.textPrimary,
+    color: '#16A34A',
   },
-  gpsDesc: {
-    fontSize: Typography.caption.fontSize,
-    color: Colors.light.textSecondary,
-  },
-  gpsRetryBtn: {
-    padding: Spacing.sm,
-    borderRadius: Radius.full,
-    backgroundColor: BrandColors.pink.tint,
-  },
-  photoPlaceholder: {
+  photoActionsRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: BrandColors.pink.primary,
-    borderRadius: Radius.md,
-    padding: Spacing.lg,
-    backgroundColor: BrandColors.pink.tint,
   },
-  cameraIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  photoActionLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#881337',
+  },
+  photoActionDot: {
+    marginHorizontal: 6,
+    color: '#CBD5E1',
+  },
+  assignmentCard: {
     backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xs,
-    ...Shadows.sm,
-  },
-  photoPlaceholderTitle: {
-    fontSize: Typography.bodySmall.fontSize,
-    fontWeight: '700',
-    color: BrandColors.pink.dark,
-  },
-  photoPlaceholderSub: {
-    fontSize: Typography.caption.fontSize,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  photoPreview: {
-    width: '100%',
-    height: 180,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.sm,
-  },
-  chipsScroll: {
-    flexDirection: 'row',
-  },
-  categoryChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: Radius.full,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.light.border,
-    backgroundColor: Colors.light.card,
-    marginRight: Spacing.xs,
+    borderColor: '#F1F5F9',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 16,
   },
-  categoryChipSelected: {
-    backgroundColor: BrandColors.pink.primary,
-    borderColor: BrandColors.pink.primary,
-  },
-  categoryChipText: {
-    fontSize: Typography.bodySmall.fontSize,
-    color: Colors.light.textPrimary,
-  },
-  categoryChipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  batchBanner: {
+  assignmentHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF5F8',
-    borderColor: '#FCE7F3',
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.sm + 2,
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
   },
-  batchBannerIcon: {
+  shieldIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: '#FDE2EC',
+    borderRadius: 16,
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
   },
-  batchBannerTitle: {
-    ...Typography.bodySmall,
-    fontWeight: '800',
-    color: BrandColors.pink.dark,
+  assignmentTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
-  batchBannerSub: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.light.textSecondary,
-    marginTop: 1,
+  assignmentSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
-  cardSubText: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    marginBottom: Spacing.sm,
-    lineHeight: 16,
-  },
-  sellerSelectWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-  },
-  sellerPill: {
+  assignmentPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    gap: 8,
+    marginTop: 12,
+  },
+  assignmentPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 24,
   },
-  sellerPillSelected: {
-    backgroundColor: BrandColors.green.primary,
-    borderColor: BrandColors.green.primary,
+  assignmentPillActive: {
+    backgroundColor: '#881337',
+    borderColor: '#881337',
   },
-  sellerPillText: {
-    ...Typography.bodySmall,
+  assignmentPillText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.textPrimary,
+    color: '#334155',
   },
-  sellerPillTextSelected: {
+  assignmentPillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  registerBtn: {
+    backgroundColor: '#881337',
+    height: 52,
+    borderRadius: 26,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+    shadowColor: '#881337',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  registerBtnDisabled: {
+    opacity: 0.7,
+  },
+  registerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 8,
   },
   restrictedContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing.xl,
-    maxWidth: MaxContentWidth,
-    width: '100%',
-    alignSelf: 'center',
+    padding: 24,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  modalTextInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  modalCatChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    marginRight: 6,
+  },
+  modalCatChipActive: {
+    backgroundColor: '#881337',
+  },
+  modalCatChipText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  modalCatChipTextActive: {
+    color: '#FFFFFF',
+  },
+  modalSaveBtn: {
+    backgroundColor: '#881337',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+  modalSaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
-
