@@ -12,19 +12,13 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
-import { requireActiveShift } from '@/utils/shiftGuard';
 
 export default function ManagerQuickActionsScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const handleNewSale = async () => {
-    const hasActive = await requireActiveShift(user?.id, 'record field sales', () => {
-      router.push('/(seller)/shift' as any);
-    });
-    if (hasActive) {
-      router.push('/(seller)/sales/new' as any);
-    }
+  const handleNewSale = () => {
+    router.push('/(seller)/sales/new' as any);
   };
 
   const handleContactSupport = () => {

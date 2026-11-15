@@ -2,7 +2,6 @@ import { categoriesApi } from '@/api/categories';
 import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem } from '@/api/types';
-import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { useAuth } from '@/context/AuthContext';
@@ -225,20 +224,6 @@ export default function AddCustomerScreen() {
   async function handleSubmit() {
     if (isSubmitting) return;
 
-    const shiftCheck = await checkHasActiveShift(user?.id);
-    if (!shiftCheck.hasActiveShift) {
-      setFeedback({
-        type: 'error',
-        title: 'Duty Shift Required',
-        message: 'You must start your daily duty shift with selfie attendance before onboarding retailers.',
-      });
-      Alert.alert(
-        'Duty Shift Required',
-        'You must start your daily duty shift with selfie attendance before onboarding retailers.'
-      );
-      return;
-    }
-
     if (!validate()) {
       setFeedback({
         type: 'error',
@@ -364,16 +349,6 @@ export default function AddCustomerScreen() {
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#881337" />
       </View>
-    );
-  }
-
-  if (hasActiveShift === false) {
-    return (
-      <ShiftRequiredGate
-        title="Onboard Customer"
-        subtitle="Daily Duty Shift Required"
-        actionName="onboard new retailers or register new stores"
-      />
     );
   }
 

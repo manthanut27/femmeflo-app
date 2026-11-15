@@ -23,7 +23,6 @@ import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanne
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PageTransition } from '@/components/ui/PageTransition';
-import { ShiftRequiredGate } from '@/components/common/ShiftRequiredGate';
 import {
   DropdownOption,
   DropdownTrigger,
@@ -406,20 +405,6 @@ export default function NewSaleScreen() {
   async function handleConfirmSale() {
     if (isSubmitting) return;
 
-    const shiftCheck = await checkHasActiveShift(userId);
-    if (!shiftCheck.hasActiveShift) {
-      setFeedback({
-        type: 'error',
-        title: 'Duty Shift Required',
-        message: 'Please start your daily shift before recording sales.',
-      });
-      Alert.alert(
-        'Duty Shift Required',
-        'Please start your daily shift before recording sales.'
-      );
-      return;
-    }
-
     if (!validate()) {
       Alert.alert('Please Check', 'Please check the items in your cart.');
       return;
@@ -500,16 +485,6 @@ export default function NewSaleScreen() {
     return <LoadingState message="Loading POS catalog & inventory..." />;
   }
 
-  if (hasActiveShift === false) {
-    return (
-      <ShiftRequiredGate
-        title="New Store Sale (POS)"
-        subtitle="Daily Duty Shift Required"
-        actionName="record store sales or create new orders"
-      />
-    );
-  }
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -526,6 +501,30 @@ export default function NewSaleScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.contentWrapper}>
+          {/* Sale Flow Mode Indicator (On-Duty vs Direct Sale) */}
+          <View
+            style={[
+              styles.modeBadgeBanner,
+              hasActiveShift ? styles.modeBadgeOnDuty : styles.modeBadgeDirect,
+            ]}
+          >
+            <Ionicons
+              name={hasActiveShift ? 'shield-checkmark' : 'flash'}
+              size={15}
+              color={hasActiveShift ? '#16A34A' : '#881337'}
+              style={{ marginRight: 6 }}
+            />
+            <Text
+              style={[
+                styles.modeBadgeText,
+                hasActiveShift ? styles.modeBadgeTextOnDuty : styles.modeBadgeTextDirect,
+              ]}
+            >
+              {hasActiveShift
+                ? 'On-Duty Shift Active • Linked to Shift Route'
+                : 'Direct Sale Mode • Ad-hoc Order Entry'}
+            </Text>
+          </View>
           {feedback && (
             <FeedbackBanner
               type={feedback.type}
@@ -1300,5 +1299,32 @@ const styles = StyleSheet.create({
     color: Colors.light.danger,
     marginTop: 4,
     fontWeight: '600',
+  },
+  modeBadgeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  modeBadgeOnDuty: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  modeBadgeDirect: {
+    backgroundColor: '#FFF1F4',
+    borderColor: '#FCE7F3',
+  },
+  modeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modeBadgeTextOnDuty: {
+    color: '#15803D',
+  },
+  modeBadgeTextDirect: {
+    color: '#881337',
   },
 });

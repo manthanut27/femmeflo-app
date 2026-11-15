@@ -23,7 +23,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { checkHasActiveShift, requireActiveShift } from '@/utils/shiftGuard';
+import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 320);
@@ -59,18 +59,6 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
   };
 
   const handleItemPress = (item: (typeof NAV_ITEMS)[0]) => {
-    if (item.route === '/(seller)/sales/new') {
-      onClose();
-      setTimeout(async () => {
-        const canProceed = await requireActiveShift(user?.id, 'record field sales', () => {
-          router.push('/(seller)/shift' as any);
-        });
-        if (canProceed) {
-          router.push('/(seller)/sales/new' as any);
-        }
-      }, 150);
-      return;
-    }
     handleNavigate(item.route);
   };
 

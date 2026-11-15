@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -46,6 +47,7 @@ const PREDEFINED_VISIT_REASONS = [
 
 export default function ShiftScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id || 'anonymous';
 
@@ -915,9 +917,23 @@ export default function ShiftScreen() {
 
                     {/* Action button if visit is active */}
                     {!isCheckedOut ? (
-                      <View style={{ marginTop: Spacing.sm, alignItems: 'flex-end' }}>
+                      <View style={{ marginTop: Spacing.sm, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+                        {v.customerId ? (
+                          <Button
+                            title="New POS Sale"
+                            variant="secondary"
+                            size="sm"
+                            icon={<Ionicons name="cart-outline" size={15} color={BrandColors.pink.primary} />}
+                            onPress={() => {
+                              router.push({
+                                pathname: '/(seller)/sales/new' as any,
+                                params: { customerId: v.customerId, customerName: v.shopName },
+                              });
+                            }}
+                          />
+                        ) : null}
                         <Button
-                          title="Check Out & Log Feedback"
+                          title="Check Out Visit"
                           variant="primary"
                           size="sm"
                           icon={<Ionicons name="log-out-outline" size={15} color="#FFFFFF" />}

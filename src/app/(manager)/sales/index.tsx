@@ -40,7 +40,6 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { requireActiveShift } from '@/utils/shiftGuard';
 import {
   formatCurrencyINR,
   formatDateIST,
@@ -347,13 +346,8 @@ export default function ManagerSalesScreen() {
     );
   };
 
-  const handleNewSale = async () => {
-    const hasActive = await requireActiveShift(user?.id, 'record field sales', () => {
-      router.push('/(seller)/shift' as any);
-    });
-    if (hasActive) {
-      router.push('/(seller)/sales/new' as any);
-    }
+  const handleNewSale = () => {
+    router.push('/(seller)/sales/new' as any);
   };
 
   return (

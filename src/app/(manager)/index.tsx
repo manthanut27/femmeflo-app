@@ -15,7 +15,6 @@ import type { ManagerDashboardData } from '@/api/types';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { useAuth } from '@/context/AuthContext';
 import { acquireGpsCoordinates } from '@/utils/locationUtils';
-import { requireActiveShift } from '@/utils/shiftGuard';
 
 export default function ManagerDashboardScreen() {
   const { user } = useAuth();
@@ -27,13 +26,8 @@ export default function ManagerDashboardScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentLocation, setCurrentLocation] = useState('Thane, Maharashtra');
 
-  const handleNewSale = async () => {
-    const hasActive = await requireActiveShift(user?.id, 'record field sales', () => {
-      router.push('/(seller)/shift' as any);
-    });
-    if (hasActive) {
-      router.push('/(seller)/sales/new' as any);
-    }
+  const handleNewSale = () => {
+    router.push('/(seller)/sales/new' as any);
   };
 
   const loadData = useCallback(async () => {

@@ -9,7 +9,6 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
-import { requireActiveShift } from '@/utils/shiftGuard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -55,11 +54,6 @@ export default function CustomerDetailScreen() {
 
   async function handleUpdatePhoto() {
     if (!customer?.id || uploadingPhoto) return;
-
-    const hasShift = await requireActiveShift(user?.id, 'capture or update store storefront photos', () => {
-      router.push('/(seller)' as any);
-    });
-    if (!hasShift) return;
 
     Alert.alert('Store Photograph', 'Select photo source', [
       {
@@ -316,11 +310,7 @@ export default function CustomerDetailScreen() {
             title={`Create New Sale for ${customer.shopName.split(' ')[0]}`}
             variant="primary"
             size="lg"
-            onPress={async () => {
-              const hasShift = await requireActiveShift(user?.id, 'create new store sales', () => {
-                router.push('/(seller)' as any);
-              });
-              if (!hasShift) return;
+            onPress={() => {
               router.push({
                 pathname: '/(seller)/sales/new' as any,
                 params: { customerId: customer.id, customerName: customer.shopName },
@@ -338,11 +328,7 @@ export default function CustomerDetailScreen() {
               title="No Orders Recorded"
               description="No past orders found for this customer. Create their first POS sale now."
               actionTitle="New Store Sale"
-              onAction={async () => {
-                const hasShift = await requireActiveShift(user?.id, 'create new store sales', () => {
-                  router.push('/(seller)' as any);
-                });
-                if (!hasShift) return;
+              onAction={() => {
                 router.push({
                   pathname: '/(seller)/sales/new' as any,
                   params: { customerId: customer.id, customerName: customer.shopName },
