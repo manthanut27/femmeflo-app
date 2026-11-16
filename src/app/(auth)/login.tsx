@@ -20,6 +20,10 @@ import { Input } from '@/components/ui/Input';
 import { BrandColors, Colors, HitSlop, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { loginAttemptLimiter, type LoginAttemptStatus } from '@/utils/loginLimiter';
+import {
+  checkIdentifierForRoleSection,
+  validateLoginRoleSection,
+} from '@/utils/roleLoginValidator';
 
 export type LoginRole = 'seller' | 'manager' | 'admin';
 
@@ -81,7 +85,7 @@ export default function LoginScreen() {
   const [attemptStatus, setAttemptStatus] = useState<LoginAttemptStatus | null>(null);
 
   const passwordInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
-  const { login } = useAuth();
+  const { login, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -89,7 +93,40 @@ export default function LoginScreen() {
 
   function handleSelectRole(role: LoginRole) {
     setSelectedRole(role);
+    const trimmed = identifier.trim();
+    if (trimmed) {
+      const preCheck = checkIdentifierForRoleSection(role, trimmed);
+      if (!preCheck.isValid && preCheck.error) {
+        setError(preCheck.error);
+        return;
+      }
+    }
     setError(null);
+  }
+
+  function handleIdentifierChange(text: string) {
+    setIdentifier(text);
+    const trimmed = text.trim();
+    if (trimmed) {
+      const preCheck = checkIdentifierForRoleSection(selectedRole, trimmed);
+      if (!preCheck.isValid && preCheck.error) {
+        setError(preCheck.error);
+      } else if (error && error.includes('tab above to sign in')) {
+        setError(null);
+      }
+    } else if (error && error.includes('tab above to sign in')) {
+      setError(null);
+    }
+  }
+
+  function handleIdentifierBlur() {
+    const trimmed = identifier.trim();
+    if (trimmed) {
+      const preCheck = checkIdentifierForRoleSection(selectedRole, trimmed);
+      if (!preCheck.isValid && preCheck.error) {
+        setError(preCheck.error);
+      }
+    }
   }
 
   // Check attempt status when identifier changes
@@ -139,6 +176,13 @@ export default function LoginScreen() {
       return;
     }
 
+    // Role section pre-check before network call
+    const preCheck = checkIdentifierForRoleSection(selectedRole, trimmedId);
+    if (!preCheck.isValid && preCheck.error) {
+      setError(preCheck.error);
+      return;
+    }
+
     // Check if account is currently locked out
     const currentStatus = await loginAttemptLimiter.getStatus(trimmedId);
     if (currentStatus.isLocked) {
@@ -153,18 +197,32 @@ export default function LoginScreen() {
 
     try {
       const { user } = await login(trimmedId, password, selectedRole);
+
+      // Post-login role section authorization validation
+      const postValidation = validateLoginRoleSection(selectedRole, user);
+      if (!postValidation.isValid) {
+        await logout(user.id);
+        setError(postValidation.error || 'This account is not authorized for this section.');
+        return;
+      }
+
       // Reset failed attempts on successful authentication
       await loginAttemptLimiter.recordSuccessfulLogin(trimmedId);
-      const role = user.role;
 
-      // Role-based routing based on verified backend user object
-      if (role === 'SUPER_ADMIN') {
+      // Role-based routing based on verified backend user object and selected portal
+      if (user.role === 'SUPER_ADMIN') {
         router.replace('/(admin)' as any);
-      } else if (role === 'MANAGER') {
-        router.replace('/(manager)' as any);
-      } else if (role === 'SELLER') {
+      } else if (user.role === 'MANAGER') {
+        // Dual-role manager routing distinction
+        if (selectedRole === 'seller' && user.isSeller) {
+          router.replace('/(seller)' as any);
+        } else {
+          router.replace('/(manager)' as any);
+        }
+      } else if (user.role === 'SELLER') {
         router.replace('/(seller)' as any);
       } else {
+        await logout(user.id);
         setError('Account role is not recognized. Please contact support.');
       }
     } catch (err: any) {
@@ -323,10 +381,8 @@ export default function LoginScreen() {
             <Input
               label="Email Address or Mobile Number"
               value={identifier}
-              onChangeText={(text) => {
-                setIdentifier(text);
-                if (error) setError(null);
-              }}
+              onChangeText={handleIdentifierChange}
+              onBlur={handleIdentifierBlur}
               autoCapitalize="none"
               keyboardType="email-address"
               autoCorrect={false}

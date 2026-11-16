@@ -8,7 +8,8 @@ import {
   canViewCustomers,
   canViewSellers,
   syncPermissionAliases,
-} from '../utils/permissions';
+} from '../utils/permissions.ts';
+import { resolveKnownUserRole } from '../utils/roleLoginValidator.ts';
 import {
   MOCK_ADMIN_DASHBOARD,
   MOCK_ALL_MANAGERS,
@@ -27,7 +28,7 @@ import {
   MOCK_STOCK_TRANSACTIONS,
   MOCK_USERS,
   MOCK_WAREHOUSES,
-} from './mockData';
+} from './mockData.ts';
 import {
   ApiError,
   type AdminDashboardData,
@@ -50,7 +51,7 @@ import {
   type StartShiftPayload,
   type StockTransactionItem,
   type WarehouseItem,
-} from './types';
+} from './types.ts';
 
 // ====================================================
 // Stateful In-Memory Mock Database
@@ -169,37 +170,45 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     const customMgr = mockDb.managers.find((m) => matchesLoginIdentifier(m, rawId));
     const customSeller = mockDb.sellers.find((s) => matchesLoginIdentifier(s, rawId));
 
-    if (
+    // Resolve true user identity from rawId matching FIRST, avoiding blind roleHint override
+    const knownRole = resolveKnownUserRole(rawId, [
+      ...mockDb.managers,
+      ...mockDb.sellers.map((s) => ({ ...s, isSeller: true })),
+      MOCK_USERS.admin,
+    ]);
+
+    if (customMgr && (!customSeller || knownRole?.role === 'MANAGER')) {
+      selectedUser = customMgr;
+    } else if (customSeller) {
+      selectedUser = customSeller as unknown as PublicUser;
+    } else if (knownRole) {
+      if (knownRole.role === 'SUPER_ADMIN') {
+        selectedUser = MOCK_USERS.admin;
+      } else if (knownRole.role === 'MANAGER') {
+        selectedUser = MOCK_USERS.manager;
+      } else if (knownRole.role === 'SELLER') {
+        selectedUser = MOCK_USERS.seller;
+      }
+    } else if (
       roleHint === 'admin' ||
-      cleanEndpoint.startsWith('admin') ||
-      rawId.includes('admin') ||
-      rawId.includes('super') ||
-      rawId === '9876543230' ||
-      rawId === 'admin@femmeflo.com' ||
-      rawId === 'admin@femmeflo.in'
+      cleanEndpoint.startsWith('admin')
     ) {
       selectedUser = MOCK_USERS.admin;
     } else if (
       roleHint === 'manager' ||
-      cleanEndpoint.startsWith('manager') ||
-      rawId.includes('manager') ||
-      rawId === '9876543220' ||
-      rawId === 'manager@femmeflo.com' ||
-      rawId === 'manager@femmeflo.in' ||
-      Boolean(customMgr)
+      cleanEndpoint.startsWith('manager')
     ) {
-      selectedUser = customMgr || MOCK_USERS.manager;
+      selectedUser = MOCK_USERS.manager;
     } else if (
       roleHint === 'seller' ||
-      cleanEndpoint.startsWith('seller') ||
-      rawId.includes('seller') ||
-      rawId === '9876543210' ||
-      rawId === 'seller@femmeflo.com' ||
-      rawId === 'seller@femmeflo.in' ||
-      Boolean(customSeller)
+      cleanEndpoint.startsWith('seller')
     ) {
-      selectedUser = (customSeller as unknown as PublicUser) || MOCK_USERS.seller;
+      selectedUser = MOCK_USERS.seller;
     } else {
+      throw new ApiError('Invalid login credentials.', 401);
+    }
+
+    if (!selectedUser) {
       throw new ApiError('Invalid login credentials.', 401);
     }
 

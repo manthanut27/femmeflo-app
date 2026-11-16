@@ -20,7 +20,7 @@ interface AuthContextType {
   isLoading: boolean;
   isOffline: boolean;
   login: (identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') => Promise<{ user: PublicUser; token: string }>;
-  logout: () => Promise<void>;
+  logout: (specificUserId?: string) => Promise<void>;
   refreshUser: () => Promise<PublicUser | null>;
   updateProfile: (updates: Partial<PublicUser>) => Promise<PublicUser>;
 }
@@ -151,12 +151,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function logout() {
+  async function logout(specificUserId?: string) {
     setIsActionLoading(true);
     try {
-      if (user?.id) {
+      const idToClear = specificUserId || user?.id;
+      if (idToClear) {
         try {
-          await draftStorage.clearUserStorage(user.id);
+          await draftStorage.clearUserStorage(idToClear);
         } catch (storageErr) {
           console.warn('Failed to clear user draft storage on logout:', storageErr);
         }
