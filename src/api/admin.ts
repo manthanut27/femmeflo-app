@@ -728,6 +728,19 @@ export const adminApi = {
     };
   },
 
+  async getCustomer(id: string): Promise<{ customer: CustomerItem }> {
+    const res = await apiRequest<{ customer: CustomerItem }>(`admin/customers/${id}`, {
+      method: 'GET',
+    });
+    if (res?.customer) {
+      res.customer = {
+        ...res.customer,
+        photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
+      };
+    }
+    return res;
+  },
+
   async createCustomer(payload: CreateCustomerPayload): Promise<{ customer: CustomerItem }> {
     const rawPhone = (payload.phone || '').trim();
     const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
