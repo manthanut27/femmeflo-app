@@ -321,8 +321,13 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     } as unknown as T;
   }
 
-  if (cleanEndpoint.startsWith('seller/customers/') && method === 'GET') {
-    const id = cleanEndpoint.replace('seller/customers/', '');
+  if (
+    (cleanEndpoint.startsWith('seller/customers/') ||
+      cleanEndpoint.startsWith('manager/customers/') ||
+      cleanEndpoint.startsWith('admin/customers/')) &&
+    method === 'GET'
+  ) {
+    const id = cleanEndpoint.replace(/^(?:seller|manager|admin)\/customers\//, '');
     if (id.startsWith('pincode/')) {
       const pincode = id.replace('pincode/', '');
       const response: PincodeLookupResponse = {
@@ -366,6 +371,112 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     };
     mockDb.customers.unshift(newCustomer);
     return { customer: newCustomer } as unknown as T;
+  }
+
+  // ----------------------------------------------------
+  // Customer: PATCH Update
+  // ----------------------------------------------------
+  if (
+    (cleanEndpoint.startsWith('seller/customers/') ||
+      cleanEndpoint.startsWith('manager/customers/') ||
+      cleanEndpoint.startsWith('admin/customers/')) &&
+    method === 'PATCH' &&
+    !cleanEndpoint.endsWith('/photo')
+  ) {
+    const customerId = cleanEndpoint.replace(/^(?:seller|manager|admin)\/customers\//, '');
+    let customer = mockDb.customers.find((c) => c.id === customerId);
+
+    let matchedCategory: CategoryItem | undefined;
+    if (body.categoryId) {
+      matchedCategory = mockDb.categories.find((cat) => cat.id === body.categoryId);
+    }
+
+    if (customer) {
+      if (body.shopName !== undefined) {
+        customer.shopName = body.shopName;
+        customer.name = body.shopName;
+      }
+      if (body.ownerName !== undefined) {
+        customer.ownerName = body.ownerName;
+        customer.contactName = body.ownerName;
+      } else if (body.contactName !== undefined) {
+        customer.ownerName = body.contactName;
+        customer.contactName = body.contactName;
+      }
+      if (body.email !== undefined) customer.email = body.email;
+      if (body.phone !== undefined) customer.phone = body.phone;
+      if (body.categoryId !== undefined) {
+        customer.categoryId = body.categoryId;
+        if (matchedCategory) {
+          customer.category = matchedCategory;
+        } else if (body.categoryId) {
+          customer.category = {
+            id: body.categoryId,
+            name: (body as any).category?.name || (body as any).categoryName || 'General Store',
+            active: true,
+          };
+        }
+      }
+      if (body.address !== undefined) customer.address = body.address;
+      if (body.pincode !== undefined) customer.pincode = body.pincode;
+      if (body.state !== undefined) customer.state = body.state;
+      if (body.district !== undefined) customer.district = body.district;
+      if (body.village !== undefined) customer.village = body.village;
+      if (body.latitude !== undefined) customer.latitude = Number(body.latitude);
+      if (body.longitude !== undefined) customer.longitude = Number(body.longitude);
+      if (body.sellerId !== undefined) {
+        customer.sellerId = body.sellerId;
+        const matchedSeller = mockDb.sellers.find((s) => s.id === body.sellerId || (s as any).sellerId === body.sellerId);
+        if (matchedSeller) {
+          customer.seller = { id: matchedSeller.id, name: matchedSeller.name };
+        }
+      }
+      if (body.photoUrl !== undefined) customer.photoUrl = body.photoUrl;
+      if (body.photoPath !== undefined) customer.photoPath = body.photoPath;
+      if (body.noPhotoReason !== undefined) customer.noPhotoReason = body.noPhotoReason;
+      if (body.active !== undefined) customer.active = Boolean(body.active);
+      customer.updatedAt = new Date().toISOString();
+    } else {
+      const category =
+        matchedCategory ||
+        (body.categoryId ? mockDb.categories.find((cat) => cat.id === body.categoryId) : undefined) ||
+        mockDb.categories[0];
+      const sellerId = body.sellerId || mockDb.currentUser?.id || 'usr_seller_default';
+      const matchedSeller = mockDb.sellers.find((s) => s.id === sellerId || (s as any).sellerId === sellerId);
+      const sellerInfo = matchedSeller
+        ? { id: matchedSeller.id, name: matchedSeller.name }
+        : { id: mockDb.currentUser?.id || 'usr_seller_default', name: mockDb.currentUser?.name || 'Assigned Seller' };
+
+      customer = {
+        id: customerId,
+        shopName: body.shopName || body.name || 'Retail Shop',
+        ownerName: body.ownerName || body.contactName || 'Store Owner',
+        contactName: body.ownerName || body.contactName || 'Store Owner',
+        name: body.shopName || body.name || 'Retail Shop',
+        email: body.email || '',
+        phone: body.phone || '+91 98765 00000',
+        categoryId: body.categoryId || category?.id || 'cat_kirana',
+        category: category || { id: body.categoryId || 'cat_kirana', name: 'Kirana', active: true },
+        sellerId,
+        seller: sellerInfo,
+        address: body.address || 'Market Road',
+        pincode: body.pincode || '452001',
+        state: body.state || 'Madhya Pradesh',
+        district: body.district || 'Indore',
+        village: body.village || null,
+        latitude: body.latitude != null ? Number(body.latitude) : 22.7196,
+        longitude: body.longitude != null ? Number(body.longitude) : 75.8577,
+        photoUrl: body.photoUrl || body.photoPath || 'https://images.unsplash.com/photo-1586015555751-63bb77f4322a?w=400',
+        photoPath: body.photoPath || null,
+        noPhotoReason: body.noPhotoReason || null,
+        active: body.active !== undefined ? Boolean(body.active) : true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      mockDb.customers.unshift(customer);
+    }
+
+    return { customer } as unknown as T;
   }
 
   if (cleanEndpoint.includes('/photo') && method === 'POST') {
@@ -741,7 +852,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { seller } as unknown as T;
   }
 
-  if (cleanEndpoint === 'manager/customers') {
+  if (cleanEndpoint === 'manager/customers' || cleanEndpoint === 'admin/customers') {
     if (mockDb.currentUser.role === 'MANAGER' && !canViewCustomers(mockDb.currentUser)) {
       throw new ApiError('Forbidden: Your territory manager account does not have permission to view customer directory.', 403);
     }

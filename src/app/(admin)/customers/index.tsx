@@ -121,7 +121,12 @@ export default function AdminCustomersScreen() {
     const onboardedDate = formatISTDate(item.createdAt || (item as any).createdDate);
 
     return (
-      <Card style={styles.card}>
+      <Card
+        style={styles.card}
+        onPress={() => router.push(`/(admin)/customers/${item.id}` as any)}
+        accessibilityLabel={`Store ${item.shopName}, Owner ${item.ownerName || item.contactName || 'Owner'}, Category ${item.category?.name || 'Retail'}`}
+        accessibilityHint="Tap to view and edit store details"
+      >
         <View style={styles.header}>
           <View style={{ flex: 1, marginRight: Spacing.sm }}>
             <Text style={styles.shopName}>{item.shopName}</Text>
@@ -129,9 +134,12 @@ export default function AdminCustomersScreen() {
               Contact: {item.contactName || item.ownerName || 'Owner'} • Phone: {item.phone}
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
-            <Badge label={item.active ? 'Active' : 'Inactive'} variant={item.active ? 'ACTIVE' : 'INACTIVE'} size="sm" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+              <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
+              <Badge label={item.active ? 'Active' : 'Inactive'} variant={item.active ? 'ACTIVE' : 'INACTIVE'} size="sm" />
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </View>
         </View>
 

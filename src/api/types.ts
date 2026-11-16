@@ -118,6 +118,24 @@ export interface CreateCustomerPayload {
   sellerId?: string;
 }
 
+export interface UpdateCustomerPayload {
+  shopName?: string;
+  ownerName?: string;
+  email?: string;
+  phone?: string;
+  categoryId?: string;
+  address?: string;
+  pincode?: string;
+  state?: string;
+  district?: string;
+  village?: string;
+  latitude?: number;
+  longitude?: number;
+  sellerId?: string;
+  photoUrl?: string;
+  noPhotoReason?: string;
+}
+
 export interface BulkCustomerRow {
   shopName: string;
   contactName: string;

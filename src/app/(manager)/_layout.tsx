@@ -2,6 +2,7 @@ import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AutoHideBottomTabBar } from '@/components/navigation/AutoHideBottomTabBar';
 import { TabBarIcon } from '@/components/ui/TabBarIcon';
 import { BrandColors, Colors, Shadows } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
@@ -48,6 +49,7 @@ export default function ManagerTabsLayout() {
   return (
     <Tabs
       backBehavior="history"
+      tabBar={(props) => <AutoHideBottomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: BrandColors.green.primary,

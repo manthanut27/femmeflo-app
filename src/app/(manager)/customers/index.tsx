@@ -78,13 +78,21 @@ export default function ManagerCustomersScreen() {
   }, [loadCustomers]);
 
   const renderItem = ({ item }: { item: CustomerItem }) => (
-    <Card style={styles.card}>
+    <Card
+      style={styles.card}
+      onPress={() => router.push(`/(manager)/customers/${item.id}` as any)}
+      accessibilityLabel={`Store ${item.shopName}, Owner ${item.ownerName}, Category ${item.category?.name || 'Retail'}`}
+      accessibilityHint="Tap to view and edit store details"
+    >
       <View style={styles.header}>
         <View style={{ flex: 1, marginRight: Spacing.sm }}>
           <Text style={styles.shopName}>{item.shopName}</Text>
           <Text style={styles.owner}>Owner: {item.ownerName}</Text>
         </View>
-        <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </View>
       </View>
       <View style={styles.footer}>
         <View style={styles.contactRow}>

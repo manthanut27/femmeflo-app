@@ -1,0 +1,184 @@
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { StatusBar as RNStatusBar, Platform, Pressable, StyleSheet, View } from 'react-native';
+
+export interface ImmersiveNavigationContextType {
+  isNavVisible: boolean;
+  isStatusBarVisible: boolean;
+  showNavigation: () => void;
+  hideNavigation: () => void;
+  toggleNavigation: () => void;
+  revealStatusBar: () => void;
+  hideStatusBar: () => void;
+  resetInactivityTimer: () => void;
+}
+
+const defaultContext: ImmersiveNavigationContextType = {
+  isNavVisible: true,
+  isStatusBarVisible: true,
+  showNavigation: () => {},
+  hideNavigation: () => {},
+  toggleNavigation: () => {},
+  revealStatusBar: () => {},
+  hideStatusBar: () => {},
+  resetInactivityTimer: () => {},
+};
+
+export const ImmersiveNavigationContext = createContext<ImmersiveNavigationContextType>(defaultContext);
+
+export const useImmersiveNavigation = () => useContext(ImmersiveNavigationContext);
+
+export const INITIAL_HIDE_DELAY_MS = 1500;
+export const INACTIVITY_AUTO_HIDE_MS = 4000;
+
+export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isNavVisible, setIsNavVisible] = useState(true);
+  const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
+  const autoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Helper to safely set native status bar hidden state with fade animation
+  const updateNativeStatusBar = useCallback((hidden: boolean) => {
+    try {
+      if (Platform.OS !== 'web' && RNStatusBar && typeof RNStatusBar.setHidden === 'function') {
+        RNStatusBar.setHidden(hidden, 'fade');
+      }
+    } catch {
+      // Ignore if not supported on platform
+    }
+  }, []);
+
+  const hideNavigation = useCallback(() => {
+    if (autoHideTimerRef.current) {
+      clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
+    }
+    setIsNavVisible(false);
+    setIsStatusBarVisible(false);
+    updateNativeStatusBar(true);
+  }, [updateNativeStatusBar]);
+
+  const showNavigation = useCallback(() => {
+    if (autoHideTimerRef.current) {
+      clearTimeout(autoHideTimerRef.current);
+    }
+    setIsNavVisible(true);
+    setIsStatusBarVisible(true);
+    updateNativeStatusBar(false);
+
+    // Auto-hide after inactivity (4 seconds) to restore the immersive full-screen view
+    autoHideTimerRef.current = setTimeout(() => {
+      hideNavigation();
+    }, INACTIVITY_AUTO_HIDE_MS);
+  }, [hideNavigation, updateNativeStatusBar]);
+
+  const toggleNavigation = useCallback(() => {
+    if (isNavVisible) {
+      hideNavigation();
+    } else {
+      showNavigation();
+    }
+  }, [isNavVisible, hideNavigation, showNavigation]);
+
+  const revealStatusBar = useCallback(() => {
+    if (autoHideTimerRef.current) {
+      clearTimeout(autoHideTimerRef.current);
+    }
+    setIsStatusBarVisible(true);
+    updateNativeStatusBar(false);
+
+    autoHideTimerRef.current = setTimeout(() => {
+      hideNavigation();
+    }, INACTIVITY_AUTO_HIDE_MS);
+  }, [hideNavigation, updateNativeStatusBar]);
+
+  const hideStatusBar = useCallback(() => {
+    setIsStatusBarVisible(false);
+    updateNativeStatusBar(true);
+  }, [updateNativeStatusBar]);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (autoHideTimerRef.current) {
+      clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
+    }
+    if (isNavVisible) {
+      autoHideTimerRef.current = setTimeout(() => {
+        hideNavigation();
+      }, INACTIVITY_AUTO_HIDE_MS);
+    }
+  }, [isNavVisible, hideNavigation]);
+
+  // Requirement:
+  // When the app opens, notification bar and bottom nav bar are initially visible.
+  // After exactly 1.5 seconds (1500ms), it hides with fade animation: StatusBar.setHidden(true, 'fade').
+  useEffect(() => {
+    updateNativeStatusBar(false);
+
+    const initialTimer = setTimeout(() => {
+      hideNavigation();
+    }, INITIAL_HIDE_DELAY_MS);
+
+    return () => {
+      clearTimeout(initialTimer);
+      if (autoHideTimerRef.current) {
+        clearTimeout(autoHideTimerRef.current);
+      }
+    };
+  }, [hideNavigation, updateNativeStatusBar]);
+
+  return (
+    <ImmersiveNavigationContext.Provider
+      value={{
+        isNavVisible,
+        isStatusBarVisible,
+        showNavigation,
+        hideNavigation,
+        toggleNavigation,
+        revealStatusBar,
+        hideStatusBar,
+        resetInactivityTimer,
+      }}
+    >
+      <View style={styles.providerContainer}>
+        {children}
+        <TopStatusBarTrigger />
+      </View>
+    </ImmersiveNavigationContext.Provider>
+  );
+};
+
+export const TopStatusBarTrigger: React.FC = () => {
+  const { isStatusBarVisible, revealStatusBar, showNavigation } = useImmersiveNavigation();
+
+  // If status bar is already visible, unmount so headers, back buttons, and titles receive all touches freely
+  if (isStatusBarVisible) {
+    return null;
+  }
+
+  return (
+    <Pressable
+      onPress={() => {
+        revealStatusBar();
+        showNavigation();
+      }}
+      style={styles.topTriggerArea}
+      accessibilityLabel="Access notification bar"
+      accessibilityRole="button"
+      hitSlop={{ top: 0, bottom: 8, left: 0, right: 0 }}
+    />
+  );
+};
+
+const styles = StyleSheet.create({
+  providerContainer: {
+    flex: 1,
+  },
+  topTriggerArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Platform.OS === 'ios' ? 28 : 24,
+    zIndex: 99999,
+    backgroundColor: 'transparent',
+  },
+});

@@ -24,6 +24,7 @@ import type {
   SalesReportData,
   SalesReportQuery,
   Shift,
+  UpdateCustomerPayload,
   UpdateProductPayload,
   UpdateUserRatePayload,
   UserIncentiveDetails,
@@ -756,6 +757,20 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<{ customer: CustomerItem }> {
+    const res = await apiRequest<{ customer: CustomerItem }>(`admin/customers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    if (res?.customer) {
+      res.customer = {
+        ...res.customer,
+        photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
+      };
+    }
+    return res;
   },
 
   async uploadCustomerPhoto(customerId: string, fileUri: string): Promise<{ photoUrl: string }> {

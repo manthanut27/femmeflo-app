@@ -7,6 +7,7 @@ export default function AdminCustomersLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="new" />
       <Stack.Screen name="bulk" />
+      <Stack.Screen name="[id]" />
     </Stack>
   );
 }

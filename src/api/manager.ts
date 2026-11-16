@@ -14,6 +14,7 @@ import type {
   PublicUser,
   SaleItem,
   Shift,
+  UpdateCustomerPayload,
   UpdateSalePayload,
 } from './types';
 
@@ -218,6 +219,20 @@ export const managerApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<{ customer: CustomerItem }> {
+    const res = await apiRequest<{ customer: CustomerItem }>(`manager/customers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    if (res?.customer) {
+      res.customer = {
+        ...res.customer,
+        photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
+      };
+    }
+    return res;
   },
 
   async createBulkCustomers(payload: CreateBulkCustomersPayload): Promise<BulkCustomerResponse> {

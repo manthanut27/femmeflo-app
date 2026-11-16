@@ -22,6 +22,7 @@ import type {
   ShiftVisit,
   StartShiftPayload,
   StockTransactionItem,
+  UpdateCustomerPayload,
   UpdateSalePayload,
 } from './types';
 
@@ -140,6 +141,20 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  async updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<{ customer: CustomerItem }> {
+    const res = await apiRequest<{ customer: CustomerItem }>(`seller/customers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+    if (res?.customer) {
+      res.customer = {
+        ...res.customer,
+        photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
+      };
+    }
+    return res;
   },
 
   async createBulkCustomers(payload: CreateBulkCustomersPayload): Promise<BulkCustomerResponse> {
