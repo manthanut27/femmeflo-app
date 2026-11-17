@@ -19,7 +19,12 @@ import {
   Typography
 } from '@/constants/theme';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
-import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
+import {
+  acquireGpsCoordinates,
+  isWithinIndiaBounds,
+  sanitizeIndiaCoordinates,
+  type GpsAcquisitionStatus,
+} from '@/utils/locationUtils';
 import {
   SpeechRecognizer,
   type SupportedSpeechLanguage
@@ -233,9 +238,21 @@ export default function AdminAddCustomerScreen() {
     });
     setGpsStatus(res.status);
     if (res.status === 'acquired' && res.latitude !== null && res.longitude !== null) {
-      setLatitude(res.latitude);
-      setLongitude(res.longitude);
-      setGpsAccuracy(res.accuracy);
+      if (!isWithinIndiaBounds(res.latitude, res.longitude) || res.isEmulatorFallback) {
+        const sanitized = sanitizeIndiaCoordinates(res.latitude, res.longitude);
+        setLatitude(sanitized.latitude);
+        setLongitude(sanitized.longitude);
+        setGpsAccuracy(res.accuracy || 15);
+        setFeedback({
+          type: 'info',
+          title: 'Location Notice',
+          message: 'Emulator / overseas location detected; using default Indian territory coordinates.',
+        });
+      } else {
+        setLatitude(res.latitude);
+        setLongitude(res.longitude);
+        setGpsAccuracy(res.accuracy);
+      }
     }
   }
 
@@ -252,13 +269,14 @@ export default function AdminAddCustomerScreen() {
       const query = parts.join(', ');
       const results = await Location.geocodeAsync(query);
       if (results && results.length > 0) {
-        setLatitude(results[0].latitude);
-        setLongitude(results[0].longitude);
+        const sanitized = sanitizeIndiaCoordinates(results[0].latitude, results[0].longitude);
+        setLatitude(sanitized.latitude);
+        setLongitude(sanitized.longitude);
         setGpsAccuracy(25);
         setGpsStatus('acquired');
         Alert.alert(
           'Address Geocoded',
-          `Coordinates verified:\nLatitude: ${results[0].latitude.toFixed(5)}\nLongitude: ${results[0].longitude.toFixed(5)}`
+          `Coordinates verified:\nLatitude: ${sanitized.latitude.toFixed(5)}\nLongitude: ${sanitized.longitude.toFixed(5)}`
         );
       } else {
         Alert.alert('Lookup Result', 'Could not resolve exact coordinates for this address. Please use device GPS.');
@@ -280,6 +298,11 @@ export default function AdminAddCustomerScreen() {
         if (lookup.state) setStateName(lookup.state);
         if (lookup.district) setDistrict(lookup.district);
         if (lookup.village) setVillage(lookup.village);
+        if ((lookup as any).latitude != null || (lookup as any).longitude != null) {
+          const sanitized = sanitizeIndiaCoordinates((lookup as any).latitude, (lookup as any).longitude);
+          setLatitude(sanitized.latitude);
+          setLongitude(sanitized.longitude);
+        }
       } catch {
         // Fallback
       } finally {
@@ -462,6 +485,7 @@ export default function AdminAddCustomerScreen() {
     const effectiveAddress = [unitNumber.trim(), streetName.trim(), address.trim()].filter(Boolean).join(', ');
 
     try {
+      const coords = sanitizeIndiaCoordinates(latitude, longitude);
       const res = await adminApi.createCustomer({
         shopName: shopName.trim(),
         ownerName: ownerName.trim(),
@@ -473,8 +497,8 @@ export default function AdminAddCustomerScreen() {
         state: stateName.trim(),
         district: district.trim(),
         village: village.trim() || undefined,
-        latitude: latitude ?? undefined,
-        longitude: longitude ?? undefined,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
         photoUri: photoUri || undefined,
         sellerId: sellerId || undefined,
         noPhotoReason: photoUri

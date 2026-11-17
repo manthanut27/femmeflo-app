@@ -746,27 +746,49 @@ describe('Store Detail Page & In-Place Editing Acceptance Suite', () => {
       );
     });
 
-    it('verifies layout stack files register [id] dynamic routes in all customer navigators', () => {
+    it('verifies layout stack files configure customer navigators without extraneous [id] screen warnings', () => {
       const managerLayout = readFile('src/app/(manager)/customers/_layout.tsx');
       const adminLayout = readFile('src/app/(admin)/customers/_layout.tsx');
       const sellerLayout = readFile('src/app/(seller)/customers/_layout.tsx');
+      const salesLayout = readFile('src/app/(seller)/sales/_layout.tsx');
 
-      assert.match(
-        managerLayout,
-        /<Stack\.Screen[\s\S]*?name="\[id\]"/,
-        'Manager customers _layout.tsx must register Stack.Screen name="[id]"'
+      // Verify all customer and sales layouts configure Stack navigation with proper animations and headers
+      for (const [name, code] of [
+        ['Manager', managerLayout],
+        ['Admin', adminLayout],
+        ['Seller', sellerLayout],
+        ['Sales', salesLayout],
+      ] as const) {
+        assert.match(
+          code,
+          /<Stack[\s\S]*?screenOptions=\{\{[\s\S]*?headerShown:\s*false/,
+          `${name} layout must configure Stack with headerShown: false`
+        );
+        assert.match(
+          code,
+          /animation:\s*['"]slide_from_right['"]/,
+          `${name} layout must configure slide_from_right animation`
+        );
+        // Clean layout: No extraneous [id] screen registration that causes Metro warning
+        assert.doesNotMatch(
+          code,
+          /<Stack\.Screen[\s\S]*?name=["']\[id\]["']/,
+          `${name} layout must NOT contain extraneous Stack.Screen name="[id]" declaration`
+        );
+      }
+
+      // Verify dynamic store detail route files exist on the filesystem for file-based routing
+      assert.ok(
+        fs.existsSync(path.join(rootDir, 'src/app/(manager)/customers/[id].tsx')),
+        'Manager [id].tsx dynamic route file must exist'
       );
-
-      assert.match(
-        adminLayout,
-        /<Stack\.Screen[\s\S]*?name="\[id\]"/,
-        'Admin customers _layout.tsx must register Stack.Screen name="[id]"'
+      assert.ok(
+        fs.existsSync(path.join(rootDir, 'src/app/(admin)/customers/[id].tsx')),
+        'Admin [id].tsx dynamic route file must exist'
       );
-
-      assert.match(
-        sellerLayout,
-        /<Stack\.Screen[\s\S]*?name="\[id\]"/,
-        'Seller customers _layout.tsx must register Stack.Screen name="[id]"'
+      assert.ok(
+        fs.existsSync(path.join(rootDir, 'src/app/(seller)/customers/[id].tsx')),
+        'Seller [id].tsx dynamic route file must exist'
       );
     });
   });

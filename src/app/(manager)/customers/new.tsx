@@ -10,7 +10,12 @@ import { SearchableDropdownModal, type DropdownOption } from '@/components/ui/Se
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
-import { acquireGpsCoordinates, type GpsAcquisitionStatus } from '@/utils/locationUtils';
+import {
+  acquireGpsCoordinates,
+  isWithinIndiaBounds,
+  sanitizeIndiaCoordinates,
+  type GpsAcquisitionStatus,
+} from '@/utils/locationUtils';
 import { canOnboardCustomers } from '@/utils/permissions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
@@ -154,9 +159,21 @@ export default function ManagerAddCustomerScreen() {
     });
     setGpsStatus(res.status);
     if (res.status === 'acquired' && res.latitude !== null && res.longitude !== null) {
-      setLatitude(res.latitude);
-      setLongitude(res.longitude);
-      setGpsAccuracy(res.accuracy);
+      if (!isWithinIndiaBounds(res.latitude, res.longitude) || res.isEmulatorFallback) {
+        const sanitized = sanitizeIndiaCoordinates(res.latitude, res.longitude);
+        setLatitude(sanitized.latitude);
+        setLongitude(sanitized.longitude);
+        setGpsAccuracy(res.accuracy || 15);
+        setFeedback({
+          type: 'info',
+          title: 'Location Notice',
+          message: 'Emulator / overseas location detected; using default Indian territory coordinates.',
+        });
+      } else {
+        setLatitude(res.latitude);
+        setLongitude(res.longitude);
+        setGpsAccuracy(res.accuracy);
+      }
     }
   }
 
@@ -172,6 +189,11 @@ export default function ManagerAddCustomerScreen() {
         if (lookup.state) setStateName(lookup.state);
         if (lookup.district) setDistrict(lookup.district);
         if (lookup.village) setVillage(lookup.village);
+        if ((lookup as any).latitude != null || (lookup as any).longitude != null) {
+          const sanitized = sanitizeIndiaCoordinates((lookup as any).latitude, (lookup as any).longitude);
+          setLatitude(sanitized.latitude);
+          setLongitude(sanitized.longitude);
+        }
       } catch {
         // Keep fallback
       } finally {
@@ -348,6 +370,7 @@ export default function ManagerAddCustomerScreen() {
     setFeedback(null);
     try {
       const selectedCatId = categoryId || categories[0]?.id || 'cat_retail_default';
+      const coords = sanitizeIndiaCoordinates(latitude, longitude);
       const res = await managerApi.createCustomer({
         shopName: shopName.trim(),
         ownerName: ownerName.trim(),
@@ -360,8 +383,8 @@ export default function ManagerAddCustomerScreen() {
         district: district.trim(),
         village: village.trim() || undefined,
         sellerId: selectedManagerId || (user?.isSeller ? user.id : undefined),
-        latitude: latitude ?? undefined,
-        longitude: longitude ?? undefined,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
         accuracy: gpsAccuracy ?? undefined,
         photoUri: photoUri || undefined,
         noPhotoReason: photoUri ? 'Storefront photo captured' : noPhotoReason.trim(),

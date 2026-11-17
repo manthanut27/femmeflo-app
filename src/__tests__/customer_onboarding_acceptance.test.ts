@@ -1,10 +1,17 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBulkCustomersCsv, parseRawCsv } from '../utils/csvParser.ts';
-import { validateCoordinates } from '../utils/geoValidation.ts';
+import { parseBulkCustomersCsv } from '../utils/csvParser.ts';
+import {
+  validateCoordinates,
+  isWithinIndiaBounds,
+  sanitizeIndiaCoordinates,
+  DEFAULT_INDIA_COORDINATES,
+} from '../utils/geoValidation.ts';
 import { draftStorage, type CustomerDraft } from '../utils/draftStorage.ts';
 import { validateCustomerEmail } from '../api/domainRules.ts';
 import type { BulkCustomerRow, CreateBulkCustomersPayload } from '../api/types.ts';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 // Helper: Indian mobile phone validator & normalizer
 function validateAndNormalizeIndianPhone(phone: string): { valid: boolean; normalized?: string; error?: string } {
@@ -508,5 +515,118 @@ describe('FemmeFlo Advanced Customer Onboarding Acceptance Suite', () => {
     await draftStorage.clearCustomerDraft();
     const emptyDraft = await draftStorage.getCustomerDraft();
     assert.equal(emptyDraft, null);
+  });
+
+  // Scenario 17: Precise Indian Territory bounds verification
+  it('Scenario 17: isWithinIndiaBounds validates Indian subcontinent boundary [Lat: 6.5°-37.5°, Lng: 68°-97.5°]', () => {
+    // Valid locations in India
+    assert.equal(isWithinIndiaBounds(19.0760, 72.8777), true); // Mumbai
+    assert.equal(isWithinIndiaBounds(28.6139, 77.2090), true); // New Delhi
+    assert.equal(isWithinIndiaBounds(12.9716, 77.5946), true); // Bengaluru
+    assert.equal(isWithinIndiaBounds(22.5726, 88.3639), true); // Kolkata
+    assert.equal(isWithinIndiaBounds(22.7196, 75.8577), true); // Indore
+    assert.equal(isWithinIndiaBounds(8.0883, 77.5385), true);  // Kanyakumari
+    assert.equal(isWithinIndiaBounds(34.0837, 74.7973), true); // Srinagar
+    assert.equal(isWithinIndiaBounds(6.5, 68.0), true);        // South-West corner bound
+    assert.equal(isWithinIndiaBounds(37.5, 97.5), true);       // North-East corner bound
+
+    // Android Emulator Mountain View, CA default coordinates (from user screenshot bug)
+    assert.equal(isWithinIndiaBounds(37.4219983, -122.084), false);
+
+    // Foreign coordinates
+    assert.equal(isWithinIndiaBounds(51.5074, -0.1278), false); // London
+    assert.equal(isWithinIndiaBounds(40.7128, -74.0060), false); // New York
+    assert.equal(isWithinIndiaBounds(0, 0), false);              // Null Island
+    assert.equal(isWithinIndiaBounds(6.4, 75.0), false);         // Below Lat 6.5
+    assert.equal(isWithinIndiaBounds(37.6, 75.0), false);        // Above Lat 37.5
+    assert.equal(isWithinIndiaBounds(20.0, 67.9), false);        // West of Lng 68.0
+    assert.equal(isWithinIndiaBounds(20.0, 97.6), false);        // East of Lng 97.5
+
+    // Invalid / undefined inputs
+    assert.equal(isWithinIndiaBounds(null, null), false);
+    assert.equal(isWithinIndiaBounds(undefined, 75.0), false);
+    assert.equal(isWithinIndiaBounds('invalid', 75.0), false);
+  });
+
+  // Scenario 18: sanitizeIndiaCoordinates handles Android Emulator and out-of-bounds coordinates
+  it('Scenario 18: sanitizeIndiaCoordinates replaces overseas / emulator coordinates with safe Indian fallback', () => {
+    // Preserves valid Indian coordinates
+    const indore = sanitizeIndiaCoordinates(22.7196, 75.8577);
+    assert.equal(indore.latitude, 22.7196);
+    assert.equal(indore.longitude, 75.8577);
+    assert.equal(indore.isFallback, false);
+
+    // Sanitizes Android Emulator Mountain View coordinates (user bug: 37.4219983, -122.084)
+    const emulatorSanitized = sanitizeIndiaCoordinates(37.4219983, -122.084);
+    assert.equal(emulatorSanitized.latitude, DEFAULT_INDIA_COORDINATES.latitude);
+    assert.equal(emulatorSanitized.longitude, DEFAULT_INDIA_COORDINATES.longitude);
+    assert.equal(emulatorSanitized.latitude, 19.2183);
+    assert.equal(emulatorSanitized.longitude, 72.9781);
+    assert.equal(emulatorSanitized.isFallback, true);
+
+    // Sanitizes missing / invalid coordinates
+    const missingSanitized = sanitizeIndiaCoordinates(undefined, undefined);
+    assert.equal(missingSanitized.latitude, 19.2183);
+    assert.equal(missingSanitized.longitude, 72.9781);
+    assert.equal(missingSanitized.isFallback, true);
+
+    // Custom fallback support
+    const customFallback = sanitizeIndiaCoordinates(51.5074, -0.1278, { latitude: 22.7196, longitude: 75.8577 });
+    assert.equal(customFallback.latitude, 22.7196);
+    assert.equal(customFallback.longitude, 75.8577);
+    assert.equal(customFallback.isFallback, true);
+  });
+
+  // Scenario 19: APIs and onboarding screens defensively sanitize out-of-bounds coordinates before submission
+  it('Scenario 19: sellerApi, managerApi, adminApi, and customer screens defensively sanitize Android emulator coordinates', () => {
+    const root = process.cwd();
+    const read = (p: string) => fs.readFileSync(path.join(root, p), 'utf-8');
+
+    // 1. Verify sellerApi defensively sanitizes coordinates using sanitizeIndiaCoordinates
+    const sellerApiCode = read('src/api/seller.ts');
+    assert.match(sellerApiCode, /import\s*\{[^}]*sanitizeIndiaCoordinates[^}]*\}\s*from\s*['"]\.\.\/utils\/geoValidation['"]/);
+    assert.match(sellerApiCode, /const\s+coords\s*=\s*sanitizeIndiaCoordinates\s*\(\s*payload\.latitude\s*,\s*payload\.longitude\s*\)/);
+
+    // 2. Verify managerApi defensively sanitizes coordinates using sanitizeIndiaCoordinates
+    const managerApiCode = read('src/api/manager.ts');
+    assert.match(managerApiCode, /import\s*\{[^}]*sanitizeIndiaCoordinates[^}]*\}\s*from\s*['"]\.\.\/utils\/geoValidation['"]/);
+    assert.match(managerApiCode, /const\s+coords\s*=\s*sanitizeIndiaCoordinates\s*\(\s*payload\.latitude\s*,\s*payload\.longitude\s*\)/);
+
+    // 3. Verify adminApi defensively sanitizes coordinates using sanitizeIndiaCoordinates
+    const adminApiCode = read('src/api/admin.ts');
+    assert.match(adminApiCode, /import\s*\{[^}]*sanitizeIndiaCoordinates[^}]*\}\s*from\s*['"]\.\.\/utils\/geoValidation['"]/);
+    assert.match(adminApiCode, /const\s+coords\s*=\s*sanitizeIndiaCoordinates\s*\(\s*payload\.latitude\s*,\s*payload\.longitude\s*\)/);
+
+    // 4. Verify seller screen sanitizes on GPS acquisition and form submission
+    const sellerScreenCode = read('src/app/(seller)/customers/new.tsx');
+    assert.match(sellerScreenCode, /isWithinIndiaBounds/);
+    assert.match(sellerScreenCode, /sanitizeIndiaCoordinates/);
+    assert.match(sellerScreenCode, /Emulator \/ overseas location detected; using default Indian territory coordinates/);
+    assert.match(sellerScreenCode, /const\s+coords\s*=\s*sanitizeIndiaCoordinates\s*\(\s*latitude\s*,\s*longitude\s*\)/);
+
+    // 5. Verify manager screen sanitizes on GPS acquisition and form submission
+    const managerScreenCode = read('src/app/(manager)/customers/new.tsx');
+    assert.match(managerScreenCode, /isWithinIndiaBounds/);
+    assert.match(managerScreenCode, /sanitizeIndiaCoordinates/);
+    assert.match(managerScreenCode, /Emulator \/ overseas location detected; using default Indian territory coordinates/);
+    assert.match(managerScreenCode, /const\s+coords\s*=\s*sanitizeIndiaCoordinates\s*\(\s*latitude\s*,\s*longitude\s*\)/);
+
+    // 6. Verify admin screen sanitizes on GPS acquisition, address lookup, and form submission
+    const adminScreenCode = read('src/app/(admin)/customers/new.tsx');
+    assert.match(adminScreenCode, /isWithinIndiaBounds/);
+    assert.match(adminScreenCode, /sanitizeIndiaCoordinates/);
+    assert.match(adminScreenCode, /Emulator \/ overseas location detected; using default Indian territory coordinates/);
+    assert.match(adminScreenCode, /const\s+coords\s*=\s*sanitizeIndiaCoordinates\s*\(\s*latitude\s*,\s*longitude\s*\)/);
+
+    // 7. Verify simulation of the exact bug reported in the screenshot:
+    // Mountain View, CA Android Emulator GPS: (37.4219983, -122.084)
+    const rawEmulatorPayload = {
+      latitude: 37.4219983,
+      longitude: -122.084,
+    };
+    const sanitized = sanitizeIndiaCoordinates(rawEmulatorPayload.latitude, rawEmulatorPayload.longitude);
+    assert.equal(isWithinIndiaBounds(sanitized.latitude, sanitized.longitude), true);
+    assert.equal(sanitized.latitude, 19.2183);
+    assert.equal(sanitized.longitude, 72.9781);
   });
 });

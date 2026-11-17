@@ -1,9 +1,19 @@
 import * as Location from 'expo-location';
 import { geoApi } from '@/api/geo';
 import type { ReverseGeocodeResult } from '@/api/types';
-import { validateCoordinates } from './geoValidation';
+import {
+  validateCoordinates,
+  isWithinIndiaBounds,
+  sanitizeIndiaCoordinates,
+  DEFAULT_INDIA_COORDINATES,
+} from './geoValidation';
 
-export { validateCoordinates };
+export {
+  validateCoordinates,
+  isWithinIndiaBounds,
+  sanitizeIndiaCoordinates,
+  DEFAULT_INDIA_COORDINATES,
+};
 
 export interface LocationResult {
   latitude: number;
@@ -14,6 +24,7 @@ export interface LocationResult {
   district?: string | null;
   village?: string | null;
   pincode?: string | null;
+  isEmulatorFallback?: boolean;
 }
 
 export type GpsAcquisitionStatus =
@@ -32,9 +43,36 @@ export interface GpsState {
   longitude: number | null;
   accuracy: number | null;
   errorMessage?: string | null;
+  isEmulatorFallback?: boolean;
 }
 
+function processAcquiredCoords(coords: {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+}): GpsState {
+  if (!isWithinIndiaBounds(coords.latitude, coords.longitude)) {
+    console.warn(
+      `[locationUtils] Acquired coordinates (${coords.latitude}, ${coords.longitude}) fall outside Indian territory bounds [6.5°-37.5° N, 68.0°-97.5° E]. Applying Indian territory fallback.`
+    );
+    const sanitized = sanitizeIndiaCoordinates(coords.latitude, coords.longitude);
+    return {
+      status: 'acquired',
+      latitude: sanitized.latitude,
+      longitude: sanitized.longitude,
+      accuracy: coords.accuracy || 15,
+      isEmulatorFallback: true,
+    };
+  }
 
+  return {
+    status: 'acquired',
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+    accuracy: coords.accuracy,
+    isEmulatorFallback: false,
+  };
+}
 
 /**
  * Robust GPS acquisition strategy:
@@ -42,6 +80,8 @@ export interface GpsState {
  * 2. Attempts High Accuracy position with a timeout (default 6000ms).
  * 3. If High Accuracy times out or fails, falls back to Balanced Accuracy (default 4000ms).
  * 4. If that fails, falls back to the device's last known position.
+ * 5. Checks if acquired coordinates fall within Indian subcontinent bounds; if outside (e.g. Android Emulator in CA),
+ *    sanitizes to valid Indian coordinates and flags isEmulatorFallback: true.
  * Non-blocking: returns a structured GpsState without halting execution.
  */
 export async function acquireGpsCoordinates(options?: {
@@ -82,12 +122,7 @@ export async function acquireGpsCoordinates(options?: {
     const highResult = await Promise.race([highPromise, highTimeoutPromise]);
     if (highResult && highResult.coords) {
       notify('acquired');
-      return {
-        status: 'acquired',
-        latitude: highResult.coords.latitude,
-        longitude: highResult.coords.longitude,
-        accuracy: highResult.coords.accuracy,
-      };
+      return processAcquiredCoords(highResult.coords);
     }
 
     // Step 3: Balanced accuracy fallback
@@ -102,24 +137,14 @@ export async function acquireGpsCoordinates(options?: {
     const fallbackResult = await Promise.race([fallbackPromise, fallbackTimeoutPromise]);
     if (fallbackResult && fallbackResult.coords) {
       notify('acquired');
-      return {
-        status: 'acquired',
-        latitude: fallbackResult.coords.latitude,
-        longitude: fallbackResult.coords.longitude,
-        accuracy: fallbackResult.coords.accuracy,
-      };
+      return processAcquiredCoords(fallbackResult.coords);
     }
 
     // Step 4: Last known location fallback
     const lastKnown = await Location.getLastKnownPositionAsync();
     if (lastKnown && lastKnown.coords) {
       notify('acquired');
-      return {
-        status: 'acquired',
-        latitude: lastKnown.coords.latitude,
-        longitude: lastKnown.coords.longitude,
-        accuracy: lastKnown.coords.accuracy,
-      };
+      return processAcquiredCoords(lastKnown.coords);
     }
 
     notify('timeout');

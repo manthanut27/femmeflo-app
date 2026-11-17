@@ -7,7 +7,6 @@ export default function CustomersLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="new" options={{ headerShown: false }} />
       <Stack.Screen name="bulk" options={{ headerShown: false }} />
-      <Stack.Screen name="[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

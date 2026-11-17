@@ -28,6 +28,7 @@ import type {
 
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import { draftStorage } from '../utils/draftStorage';
+import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
 
 export { sanitizeUpdateSalePayload };
 
@@ -119,6 +120,8 @@ export const sellerApi = {
     const contactName = (payload as any).contactName || payload.ownerName?.trim() || payload.shopName.trim();
     const noPhotoReason = payload.noPhotoReason || payload.photoSkipReason || (payload.photoUri ? 'Storefront photo captured' : undefined);
 
+    const coords = sanitizeIndiaCoordinates(payload.latitude, payload.longitude);
+
     const body: Record<string, any> = {
       shopName: payload.shopName.trim(),
       contactName,
@@ -129,10 +132,10 @@ export const sellerApi = {
       state: payload.state,
       district: payload.district,
       village: payload.village || 'Default',
+      latitude: coords.latitude,
+      longitude: coords.longitude,
     };
     if (payload.email) body.email = payload.email.trim();
-    if (payload.latitude != null) body.latitude = payload.latitude;
-    if (payload.longitude != null) body.longitude = payload.longitude;
     if (payload.accuracy != null) body.accuracy = payload.accuracy;
     if (noPhotoReason) body.noPhotoReason = noPhotoReason;
     if (payload.photoPath) body.photoPath = payload.photoPath;
@@ -144,9 +147,15 @@ export const sellerApi = {
   },
 
   async updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<{ customer: CustomerItem }> {
+    const body: Record<string, any> = { ...payload };
+    if (payload.latitude != null || payload.longitude != null) {
+      const coords = sanitizeIndiaCoordinates(payload.latitude, payload.longitude);
+      body.latitude = coords.latitude;
+      body.longitude = coords.longitude;
+    }
     const res = await apiRequest<{ customer: CustomerItem }>(`seller/customers/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
     if (res?.customer) {
       res.customer = {
@@ -158,9 +167,17 @@ export const sellerApi = {
   },
 
   async createBulkCustomers(payload: CreateBulkCustomersPayload): Promise<BulkCustomerResponse> {
+    const sanitizedCustomers = (payload.customers || []).map((c) => {
+      const coords = sanitizeIndiaCoordinates(c.latitude, c.longitude);
+      return {
+        ...c,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      };
+    });
     return apiRequest<BulkCustomerResponse>('seller/customers/bulk', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, customers: sanitizedCustomers }),
     });
   },
 
