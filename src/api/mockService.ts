@@ -984,19 +984,24 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'admin/dashboard/filters') {
+    const custLocs = mockDb.customers.map((c) => ({
+      state: (c.state || '').trim(),
+      district: (c.district || '').trim(),
+      village: (c.village || '').trim(),
+    })).filter((loc) => loc.state || loc.district || loc.village);
+
+    const states = Array.from(new Set(custLocs.map((c) => c.state).filter(Boolean))).sort();
+    const districts = Array.from(new Set(custLocs.map((c) => c.district).filter(Boolean))).sort();
+    const villages = Array.from(new Set(custLocs.map((c) => c.village).filter(Boolean))).sort();
+
     return {
       categories: mockDb.categories,
-      customerLocations: [
-        { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Shivpur' },
-        { state: 'Uttar Pradesh', district: 'Varanasi', village: 'Cantonment' },
-        { state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
-        { state: 'Madhya Pradesh', district: 'Bhopal', village: 'Kolar' },
-      ],
+      customerLocations: custLocs,
       managers: mockDb.managers,
       sellers: mockDb.sellers,
-      states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
-      districts: ['Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-      villages: ['Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+      states,
+      districts,
+      villages,
     } as unknown as T;
   }
 

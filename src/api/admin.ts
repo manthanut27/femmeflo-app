@@ -208,9 +208,9 @@ export const adminApi = {
         customerLocations: [],
         managers: [],
         sellers: [],
-        states: ['Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan', 'Maharashtra'],
-        districts: ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-        villages: ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+        states: [],
+        districts: [],
+        villages: [],
       };
     }
   },

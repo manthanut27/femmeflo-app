@@ -50,57 +50,121 @@ export default function AdminDashboardScreen() {
 
   // Filters State
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [activePicker, setActivePicker] = useState<'state' | 'district' | 'village' | 'manager' | 'seller' | 'category' | null>(null);
+  const [activePicker, setActivePicker] = useState<'state' | 'district' | 'village' | null>(null);
   const [pickerSearch, setPickerSearch] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedDistrict, setSelectedDistrict] = useState('');
   const [selectedVillage, setSelectedVillage] = useState('');
-  const [selectedManagerId, setSelectedManagerId] = useState('');
-  const [selectedSellerId, setSelectedSellerId] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [datePreset, setDatePreset] = useState<'all' | 'today' | '7days' | '30days' | 'this_month' | 'custom'>('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
-  // Available filter options
+  // Available filter options (strictly populated from DB records)
   const [filterOptions, setFilterOptions] = useState<{
-    categories: Array<{ id: string; name: string }>;
-    managers: Array<{ id: string; name: string; state?: string; district?: string }>;
-    sellers: Array<{ id: string; name: string; managerId?: string; state?: string; district?: string }>;
     states: string[];
     districts: string[];
     villages: string[];
   }>({
-    categories: [],
-    managers: [],
-    sellers: [],
     states: [],
     districts: [],
     villages: [],
   });
 
-  // Load filter options on mount
-  useEffect(() => {
-    adminApi
-      .getDashboardFilters()
-      .then((opts) => {
-        setFilterOptions({
-          categories: Array.isArray(opts.categories) ? opts.categories : [],
-          managers: Array.isArray(opts.managers) ? opts.managers : [],
-          sellers: Array.isArray(opts.sellers) ? opts.sellers : [],
-          states: Array.isArray(opts.states) && opts.states.length > 0
-            ? opts.states
-            : ['Maharashtra', 'Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
-          districts: Array.isArray(opts.districts) && opts.districts.length > 0
-            ? opts.districts
-            : ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-          villages: Array.isArray(opts.villages) && opts.villages.length > 0
-            ? opts.villages
-            : ['Diva', 'Shivpur', 'Cantonment', 'Indore City', 'Kolar'],
+  const [customerLocations, setCustomerLocations] = useState<
+    Array<{ state: string; district: string; village: string }>
+  >([]);
+
+  // Load filter options directly from database records
+  const loadFilterOptions = useCallback(async () => {
+    try {
+      const [filterMetaRes, customersRes] = await Promise.allSettled([
+        adminApi.getDashboardFilters(),
+        adminApi.listCustomers({ pageSize: 100 }),
+      ]);
+
+      const opts = filterMetaRes.status === 'fulfilled' ? filterMetaRes.value : null;
+      const customerItems =
+        customersRes.status === 'fulfilled' && Array.isArray(customersRes.value?.items)
+          ? customersRes.value.items
+          : [];
+
+      const rawLocations: Array<{ state: string; district: string; village: string }> = [];
+
+      // Extract from customerLocations returned by dashboard API
+      if (opts?.customerLocations && Array.isArray(opts.customerLocations)) {
+        opts.customerLocations.forEach((loc) => {
+          if (loc.state || loc.district || loc.village) {
+            rawLocations.push({
+              state: (loc.state || '').trim(),
+              district: (loc.district || '').trim(),
+              village: (loc.village || '').trim(),
+            });
+          }
         });
-      })
-      .catch(() => {});
+      }
+
+      // Extract directly from customer records in database
+      customerItems.forEach((c) => {
+        if (c.state || c.district || c.village) {
+          rawLocations.push({
+            state: (c.state || '').trim(),
+            district: (c.district || '').trim(),
+            village: (c.village || '').trim(),
+          });
+        }
+      });
+
+      setCustomerLocations(rawLocations);
+
+      // Collect unique villages from database records & API
+      const vSet = new Set<string>();
+      if (opts?.villages && Array.isArray(opts.villages)) {
+        opts.villages.forEach((v) => {
+          const name = (typeof v === 'string' ? v : (v as any)?.village || '').trim();
+          if (name) vSet.add(name);
+        });
+      }
+      rawLocations.forEach((loc) => {
+        if (loc.village) vSet.add(loc.village);
+      });
+
+      // Collect unique states from database records & API
+      const sSet = new Set<string>();
+      if (opts?.states && Array.isArray(opts.states)) {
+        opts.states.forEach((s) => {
+          const name = (typeof s === 'string' ? s : (s as any)?.state || '').trim();
+          if (name) sSet.add(name);
+        });
+      }
+      rawLocations.forEach((loc) => {
+        if (loc.state) sSet.add(loc.state);
+      });
+
+      // Collect unique districts from database records & API
+      const dSet = new Set<string>();
+      if (opts?.districts && Array.isArray(opts.districts)) {
+        opts.districts.forEach((d) => {
+          const name = (typeof d === 'string' ? d : (d as any)?.district || '').trim();
+          if (name) dSet.add(name);
+        });
+      }
+      rawLocations.forEach((loc) => {
+        if (loc.district) dSet.add(loc.district);
+      });
+
+      setFilterOptions({
+        states: Array.from(sSet).sort((a, b) => a.localeCompare(b)),
+        districts: Array.from(dSet).sort((a, b) => a.localeCompare(b)),
+        villages: Array.from(vSet).sort((a, b) => a.localeCompare(b)),
+      });
+    } catch (err) {
+      console.warn('Failed to load filter options from database', err);
+    }
   }, []);
+
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
 
   // Compute active date boundaries
   const dateRange = useMemo(() => {
@@ -132,45 +196,61 @@ export default function AdminDashboardScreen() {
     return { from: undefined, to: undefined };
   }, [datePreset, customFrom, customTo]);
 
+  // Active filters count restricted exclusively to: Date Range, State, District, Village / Area
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (selectedState) count++;
     if (selectedDistrict) count++;
     if (selectedVillage) count++;
-    if (selectedManagerId) count++;
-    if (selectedSellerId) count++;
-    if (selectedCategoryId) count++;
-    if (datePreset !== 'all') count++;
+    if (datePreset !== 'all' || customFrom || customTo) count++;
     return count;
   }, [
     selectedState,
     selectedDistrict,
     selectedVillage,
-    selectedManagerId,
-    selectedSellerId,
-    selectedCategoryId,
     datePreset,
+    customFrom,
+    customTo,
   ]);
 
-  const selectedManagerName = useMemo(() => {
-    return filterOptions.managers.find((m) => m.id === selectedManagerId)?.name || '';
-  }, [filterOptions.managers, selectedManagerId]);
+  // Filter districts dynamically based on selected state if available
+  const displayedDistricts = useMemo(() => {
+    if (selectedState) {
+      const match = customerLocations.filter(
+        (loc) => loc.state?.toLowerCase() === selectedState.toLowerCase() && loc.district
+      );
+      if (match.length > 0) {
+        return Array.from(new Set(match.map((m) => m.district))).sort((a, b) => a.localeCompare(b));
+      }
+    }
+    return filterOptions.districts;
+  }, [customerLocations, filterOptions.districts, selectedState]);
 
-  const selectedSellerName = useMemo(() => {
-    return filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || '';
-  }, [filterOptions.sellers, selectedSellerId]);
-
-  const selectedCategoryName = useMemo(() => {
-    return filterOptions.categories.find((c) => c.id === selectedCategoryId)?.name || '';
-  }, [filterOptions.categories, selectedCategoryId]);
+  // Filter villages dynamically based on selected district or state if available
+  const displayedVillages = useMemo(() => {
+    if (selectedDistrict) {
+      const match = customerLocations.filter(
+        (loc) => loc.district?.toLowerCase() === selectedDistrict.toLowerCase() && loc.village
+      );
+      if (match.length > 0) {
+        return Array.from(new Set(match.map((m) => m.village))).sort((a, b) => a.localeCompare(b));
+      }
+    }
+    if (selectedState) {
+      const match = customerLocations.filter(
+        (loc) => loc.state?.toLowerCase() === selectedState.toLowerCase() && loc.village
+      );
+      if (match.length > 0) {
+        return Array.from(new Set(match.map((m) => m.village))).sort((a, b) => a.localeCompare(b));
+      }
+    }
+    return filterOptions.villages;
+  }, [customerLocations, filterOptions.villages, selectedDistrict, selectedState]);
 
   const resetFilters = () => {
     setSelectedState('');
     setSelectedDistrict('');
     setSelectedVillage('');
-    setSelectedManagerId('');
-    setSelectedSellerId('');
-    setSelectedCategoryId('');
     setDatePreset('all');
     setCustomFrom('');
     setCustomTo('');
@@ -185,9 +265,6 @@ export default function AdminDashboardScreen() {
         state: selectedState || undefined,
         district: selectedDistrict || undefined,
         village: selectedVillage || undefined,
-        managerId: selectedManagerId || undefined,
-        sellerId: selectedSellerId || undefined,
-        categoryId: selectedCategoryId || undefined,
         from: dateRange.from,
         to: dateRange.to,
       };
@@ -220,9 +297,6 @@ export default function AdminDashboardScreen() {
     selectedState,
     selectedDistrict,
     selectedVillage,
-    selectedManagerId,
-    selectedSellerId,
-    selectedCategoryId,
     dateRange,
   ]);
 
@@ -350,7 +424,7 @@ export default function AdminDashboardScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.filterMainSub}>
-                  Filter live operational metrics by geographic hierarchy and category
+                  Filter live operational metrics by date and territory
                 </Text>
               </View>
 
@@ -410,42 +484,12 @@ export default function AdminDashboardScreen() {
                     </Pressable>
                   </View>
                 ) : null}
-                {selectedManagerId ? (
-                  <View style={styles.activeChip}>
-                    <Text style={styles.activeChipText}>
-                      Manager: {filterOptions.managers.find((m) => m.id === selectedManagerId)?.name || 'Selected'}
-                    </Text>
-                    <Pressable onPress={() => setSelectedManagerId('')}>
-                      <Ionicons name="close-circle" size={14} color="#64748B" />
-                    </Pressable>
-                  </View>
-                ) : null}
-                {selectedSellerId ? (
-                  <View style={styles.activeChip}>
-                    <Text style={styles.activeChipText}>
-                      Field Officer: {filterOptions.sellers.find((s) => s.id === selectedSellerId)?.name || 'Selected'}
-                    </Text>
-                    <Pressable onPress={() => setSelectedSellerId('')}>
-                      <Ionicons name="close-circle" size={14} color="#64748B" />
-                    </Pressable>
-                  </View>
-                ) : null}
-                {selectedCategoryId ? (
-                  <View style={styles.activeChip}>
-                    <Text style={styles.activeChipText}>
-                      Category: {filterOptions.categories.find((c) => c.id === selectedCategoryId)?.name || 'Selected'}
-                    </Text>
-                    <Pressable onPress={() => setSelectedCategoryId('')}>
-                      <Ionicons name="close-circle" size={14} color="#64748B" />
-                    </Pressable>
-                  </View>
-                ) : null}
               </ScrollView>
             ) : (
               <View style={styles.filterEmptyNoticeRow}>
                 <Ionicons name="sparkles-outline" size={13} color={BrandColors.pink.primary} />
                 <Text style={styles.filterEmptyNoticeText}>
-                  Showing all metrics • Tap Filters to scope by date, territory, or category
+                  Showing all metrics • Tap Filters to scope by date, territory, or village
                 </Text>
               </View>
             )}
@@ -779,9 +823,6 @@ export default function AdminDashboardScreen() {
                     {activePicker === 'state' && 'Select State'}
                     {activePicker === 'district' && 'Select District'}
                     {activePicker === 'village' && 'Select Village / Area'}
-                    {activePicker === 'manager' && 'Select Manager'}
-                    {activePicker === 'seller' && 'Select Field Officer'}
-                    {activePicker === 'category' && 'Select Category'}
                   </Text>
 
                   <TouchableOpacity
@@ -789,9 +830,6 @@ export default function AdminDashboardScreen() {
                       if (activePicker === 'state') setSelectedState('');
                       if (activePicker === 'district') setSelectedDistrict('');
                       if (activePicker === 'village') setSelectedVillage('');
-                      if (activePicker === 'manager') setSelectedManagerId('');
-                      if (activePicker === 'seller') setSelectedSellerId('');
-                      if (activePicker === 'category') setSelectedCategoryId('');
                       setActivePicker(null);
                       setPickerSearch('');
                     }}
@@ -811,13 +849,7 @@ export default function AdminDashboardScreen() {
                         ? 'Search states...'
                         : activePicker === 'district'
                         ? 'Search districts...'
-                        : activePicker === 'village'
-                        ? 'Search village or area...'
-                        : activePicker === 'manager'
-                        ? 'Search managers by name...'
-                        : activePicker === 'seller'
-                        ? 'Search field officers...'
-                        : 'Search categories...'
+                        : 'Search or type village...'
                     }
                     placeholderTextColor="#94A3B8"
                     value={pickerSearch}
@@ -852,18 +884,6 @@ export default function AdminDashboardScreen() {
                       allLabel = 'All villages';
                       isAllSelected = !selectedVillage;
                       iconName = 'home-outline';
-                    } else if (activePicker === 'manager') {
-                      allLabel = 'All managers';
-                      isAllSelected = !selectedManagerId;
-                      iconName = 'people-outline';
-                    } else if (activePicker === 'seller') {
-                      allLabel = 'All field officers';
-                      isAllSelected = !selectedSellerId;
-                      iconName = 'walk-outline';
-                    } else if (activePicker === 'category') {
-                      allLabel = 'All categories';
-                      isAllSelected = !selectedCategoryId;
-                      iconName = 'grid-outline';
                     }
 
                     const showAll = !pickerSearch || allLabel.toLowerCase().includes(pickerSearch.toLowerCase());
@@ -876,9 +896,6 @@ export default function AdminDashboardScreen() {
                           if (activePicker === 'state') setSelectedState('');
                           if (activePicker === 'district') setSelectedDistrict('');
                           if (activePicker === 'village') setSelectedVillage('');
-                          if (activePicker === 'manager') setSelectedManagerId('');
-                          if (activePicker === 'seller') setSelectedSellerId('');
-                          if (activePicker === 'category') setSelectedCategoryId('');
                           setActivePicker(null);
                           setPickerSearch('');
                         }}
@@ -902,71 +919,97 @@ export default function AdminDashboardScreen() {
                   })()}
 
                   {/* State Options */}
-                  {activePicker === 'state' &&
-                    filterOptions.states
-                      .filter((s) => !pickerSearch || s.toLowerCase().includes(pickerSearch.toLowerCase()))
-                      .map((st, idx) => {
-                        const isSelected = selectedState === st;
-                        return (
-                          <TouchableOpacity
-                            key={`st-${st}-${idx}`}
-                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                            onPress={() => {
-                              setSelectedState(st);
-                              setActivePicker(null);
-                              setPickerSearch('');
-                            }}
-                          >
-                            <View style={styles.pickerOptionLeft}>
-                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
-                                <Ionicons name="location-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                  {activePicker === 'state' && (
+                    <>
+                      {filterOptions.states
+                        .filter((s) => !pickerSearch || s.toLowerCase().includes(pickerSearch.toLowerCase()))
+                        .map((st, idx) => {
+                          const isSelected = selectedState === st;
+                          return (
+                            <TouchableOpacity
+                              key={`st-${st}-${idx}`}
+                              style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                              onPress={() => {
+                                setSelectedState(st);
+                                setActivePicker(null);
+                                setPickerSearch('');
+                              }}
+                            >
+                              <View style={styles.pickerOptionLeft}>
+                                <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                  <Ionicons name="location-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                                </View>
+                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                  {st}
+                                </Text>
                               </View>
-                              <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
-                                {st}
-                              </Text>
-                            </View>
-                            {isSelected ? (
-                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
-                            ) : null}
-                          </TouchableOpacity>
-                        );
-                      })}
+                              {isSelected ? (
+                                <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                              ) : null}
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                      {filterOptions.states.length === 0 && !pickerSearch.trim() ? (
+                        <View style={styles.pickerEmptyContainer}>
+                          <Ionicons name="map-outline" size={32} color="#94A3B8" />
+                          <Text style={styles.pickerEmptyTitle}>No states in database</Text>
+                          <Text style={styles.pickerEmptySub}>
+                            No state records found in the database.
+                          </Text>
+                        </View>
+                      ) : null}
+                    </>
+                  )}
 
                   {/* District Options */}
-                  {activePicker === 'district' &&
-                    filterOptions.districts
-                      .filter((d) => !pickerSearch || d.toLowerCase().includes(pickerSearch.toLowerCase()))
-                      .map((dst, idx) => {
-                        const isSelected = selectedDistrict === dst;
-                        return (
-                          <TouchableOpacity
-                            key={`dst-${dst}-${idx}`}
-                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                            onPress={() => {
-                              setSelectedDistrict(dst);
-                              setActivePicker(null);
-                              setPickerSearch('');
-                            }}
-                          >
-                            <View style={styles.pickerOptionLeft}>
-                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
-                                <Ionicons name="business-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                  {activePicker === 'district' && (
+                    <>
+                      {displayedDistricts
+                        .filter((d) => !pickerSearch || d.toLowerCase().includes(pickerSearch.toLowerCase()))
+                        .map((dst, idx) => {
+                          const isSelected = selectedDistrict === dst;
+                          return (
+                            <TouchableOpacity
+                              key={`dst-${dst}-${idx}`}
+                              style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
+                              onPress={() => {
+                                setSelectedDistrict(dst);
+                                setActivePicker(null);
+                                setPickerSearch('');
+                              }}
+                            >
+                              <View style={styles.pickerOptionLeft}>
+                                <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
+                                  <Ionicons name="business-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
+                                </View>
+                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
+                                  {dst}
+                                </Text>
                               </View>
-                              <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
-                                {dst}
-                              </Text>
-                            </View>
-                            {isSelected ? (
-                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
-                            ) : null}
-                          </TouchableOpacity>
-                        );
-                      })}
+                              {isSelected ? (
+                                <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
+                              ) : null}
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                      {displayedDistricts.length === 0 && !pickerSearch.trim() ? (
+                        <View style={styles.pickerEmptyContainer}>
+                          <Ionicons name="business-outline" size={32} color="#94A3B8" />
+                          <Text style={styles.pickerEmptyTitle}>No districts in database</Text>
+                          <Text style={styles.pickerEmptySub}>
+                            No district records found in the database.
+                          </Text>
+                        </View>
+                      ) : null}
+                    </>
+                  )}
 
                   {/* Village / Area Options */}
                   {activePicker === 'village' && (
                     <>
-                      {pickerSearch.trim() && !filterOptions.villages.some((v) => v.toLowerCase() === pickerSearch.trim().toLowerCase()) ? (
+                      {pickerSearch.trim() && !displayedVillages.some((v) => v.toLowerCase() === pickerSearch.trim().toLowerCase()) ? (
                         <TouchableOpacity
                           style={[styles.pickerOptionItem, selectedVillage.toLowerCase() === pickerSearch.trim().toLowerCase() && styles.pickerOptionItemSelected]}
                           onPress={() => {
@@ -989,7 +1032,7 @@ export default function AdminDashboardScreen() {
                         </TouchableOpacity>
                       ) : null}
 
-                      {filterOptions.villages
+                      {displayedVillages
                         .filter((v) => !pickerSearch || v.toLowerCase().includes(pickerSearch.toLowerCase()))
                         .map((v, idx) => {
                           const isSelected = selectedVillage.toLowerCase() === v.toLowerCase();
@@ -1017,131 +1060,18 @@ export default function AdminDashboardScreen() {
                             </TouchableOpacity>
                           );
                         })}
+
+                      {displayedVillages.length === 0 && !pickerSearch.trim() ? (
+                        <View style={styles.pickerEmptyContainer}>
+                          <Ionicons name="home-outline" size={32} color="#94A3B8" />
+                          <Text style={styles.pickerEmptyTitle}>No villages in database</Text>
+                          <Text style={styles.pickerEmptySub}>
+                            No village records found in the database. Type a village or area name in the search box above to filter.
+                          </Text>
+                        </View>
+                      ) : null}
                     </>
                   )}
-
-                  {/* Manager Options */}
-                  {activePicker === 'manager' &&
-                    filterOptions.managers
-                      .filter((m) => {
-                        if (!pickerSearch) return true;
-                        const q = pickerSearch.toLowerCase();
-                        return (
-                          m.name.toLowerCase().includes(q) ||
-                          (m.state && m.state.toLowerCase().includes(q)) ||
-                          (m.district && m.district.toLowerCase().includes(q))
-                        );
-                      })
-                      .map((m) => {
-                        const isSelected = selectedManagerId === m.id;
-                        return (
-                          <TouchableOpacity
-                            key={`mgr-${m.id}`}
-                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                            onPress={() => {
-                              setSelectedManagerId(m.id);
-                              setActivePicker(null);
-                              setPickerSearch('');
-                            }}
-                          >
-                            <View style={styles.pickerOptionLeft}>
-                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
-                                <Ionicons name="person-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
-                                  {m.name}
-                                </Text>
-                                {m.state || m.district ? (
-                                  <Text style={styles.pickerOptionSub}>
-                                    {[m.district, m.state].filter(Boolean).join(', ')}
-                                  </Text>
-                                ) : null}
-                              </View>
-                            </View>
-                            {isSelected ? (
-                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
-                            ) : null}
-                          </TouchableOpacity>
-                        );
-                      })}
-
-                  {/* Field Officer Options */}
-                  {activePicker === 'seller' &&
-                    filterOptions.sellers
-                      .filter((s) => {
-                        if (!pickerSearch) return true;
-                        const q = pickerSearch.toLowerCase();
-                        return (
-                          s.name.toLowerCase().includes(q) ||
-                          (s.state && s.state.toLowerCase().includes(q)) ||
-                          (s.district && s.district.toLowerCase().includes(q))
-                        );
-                      })
-                      .map((s) => {
-                        const isSelected = selectedSellerId === s.id;
-                        return (
-                          <TouchableOpacity
-                            key={`sell-${s.id}`}
-                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                            onPress={() => {
-                              setSelectedSellerId(s.id);
-                              setActivePicker(null);
-                              setPickerSearch('');
-                            }}
-                          >
-                            <View style={styles.pickerOptionLeft}>
-                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
-                                <Ionicons name="walk-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
-                                  {s.name}
-                                </Text>
-                                {s.state || s.district ? (
-                                  <Text style={styles.pickerOptionSub}>
-                                    {[s.district, s.state].filter(Boolean).join(', ')}
-                                  </Text>
-                                ) : null}
-                              </View>
-                            </View>
-                            {isSelected ? (
-                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
-                            ) : null}
-                          </TouchableOpacity>
-                        );
-                      })}
-
-                  {/* Category Options */}
-                  {activePicker === 'category' &&
-                    filterOptions.categories
-                      .filter((c) => !pickerSearch || c.name.toLowerCase().includes(pickerSearch.toLowerCase()))
-                      .map((c) => {
-                        const isSelected = selectedCategoryId === c.id;
-                        return (
-                          <TouchableOpacity
-                            key={`cat-${c.id}`}
-                            style={[styles.pickerOptionItem, isSelected && styles.pickerOptionItemSelected]}
-                            onPress={() => {
-                              setSelectedCategoryId(c.id);
-                              setActivePicker(null);
-                              setPickerSearch('');
-                            }}
-                          >
-                            <View style={styles.pickerOptionLeft}>
-                              <View style={[styles.pickerOptionIconCircle, isSelected && styles.pickerOptionIconCircleActive]}>
-                                <Ionicons name="pricetag-outline" size={18} color={isSelected ? BrandColors.pink.primary : '#64748B'} />
-                              </View>
-                              <Text style={[styles.pickerOptionTitle, isSelected && styles.pickerOptionTitleActive]}>
-                                {c.name}
-                              </Text>
-                            </View>
-                            {isSelected ? (
-                              <Ionicons name="checkmark-circle" size={20} color={BrandColors.pink.primary} />
-                            ) : null}
-                          </TouchableOpacity>
-                        );
-                      })}
                 </ScrollView>
               </View>
             ) : (
@@ -1149,7 +1079,7 @@ export default function AdminDashboardScreen() {
                 <View style={styles.modalHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.modalTitle}>Territory & Scope Filters</Text>
-                    <Text style={styles.modalSub}>Filter live operational metrics by geographic hierarchy and category</Text>
+                    <Text style={styles.modalSub}>Filter live operational metrics by date and territory</Text>
                   </View>
                   <Pressable onPress={() => setFiltersOpen(false)} style={styles.modalCloseBtn}>
                     <Ionicons name="close" size={22} color={Colors.light.text} />
@@ -1347,141 +1277,6 @@ export default function AdminDashboardScreen() {
                               onPress={(e) => {
                                 e.stopPropagation();
                                 setSelectedVillage('');
-                              }}
-                              hitSlop={HitSlop.sm}
-                              style={styles.dropdownClearBtn}
-                            >
-                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                            </Pressable>
-                          ) : null}
-                          <Ionicons name="chevron-down" size={18} color="#64748B" />
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Manager */}
-                    <View style={styles.dropdownField}>
-                      <Text style={styles.filterSectionTitle}>Manager</Text>
-                      <TouchableOpacity
-                        style={[styles.dropdownTriggerBox, Boolean(selectedManagerId) && styles.dropdownTriggerBoxActive]}
-                        onPress={() => {
-                          setActivePicker('manager');
-                          setPickerSearch('');
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Manager: ${selectedManagerName || 'All managers'}`}
-                      >
-                        <View style={styles.dropdownTriggerLeft}>
-                          <View style={[styles.dropdownIconBox, Boolean(selectedManagerId) && styles.dropdownIconBoxActive]}>
-                            <Ionicons
-                              name="people-outline"
-                              size={18}
-                              color={selectedManagerId ? BrandColors.pink.primary : '#64748B'}
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.dropdownValueText, Boolean(selectedManagerId) && styles.dropdownValueTextActive]}>
-                              {selectedManagerName || 'All managers'}
-                            </Text>
-                            <Text style={styles.dropdownSubText}>Tap to search territory managers</Text>
-                          </View>
-                        </View>
-                        <View style={styles.dropdownRightIcons}>
-                          {selectedManagerId ? (
-                            <Pressable
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                setSelectedManagerId('');
-                              }}
-                              hitSlop={HitSlop.sm}
-                              style={styles.dropdownClearBtn}
-                            >
-                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                            </Pressable>
-                          ) : null}
-                          <Ionicons name="chevron-down" size={18} color="#64748B" />
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Field Officer */}
-                    <View style={styles.dropdownField}>
-                      <Text style={styles.filterSectionTitle}>Field Officer</Text>
-                      <TouchableOpacity
-                        style={[styles.dropdownTriggerBox, Boolean(selectedSellerId) && styles.dropdownTriggerBoxActive]}
-                        onPress={() => {
-                          setActivePicker('seller');
-                          setPickerSearch('');
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Field Officer: ${selectedSellerName || 'All field officers'}`}
-                      >
-                        <View style={styles.dropdownTriggerLeft}>
-                          <View style={[styles.dropdownIconBox, Boolean(selectedSellerId) && styles.dropdownIconBoxActive]}>
-                            <Ionicons
-                              name="walk-outline"
-                              size={18}
-                              color={selectedSellerId ? BrandColors.pink.primary : '#64748B'}
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.dropdownValueText, Boolean(selectedSellerId) && styles.dropdownValueTextActive]}>
-                              {selectedSellerName || 'All field officers'}
-                            </Text>
-                            <Text style={styles.dropdownSubText}>Tap to search field officers</Text>
-                          </View>
-                        </View>
-                        <View style={styles.dropdownRightIcons}>
-                          {selectedSellerId ? (
-                            <Pressable
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                setSelectedSellerId('');
-                              }}
-                              hitSlop={HitSlop.sm}
-                              style={styles.dropdownClearBtn}
-                            >
-                              <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                            </Pressable>
-                          ) : null}
-                          <Ionicons name="chevron-down" size={18} color="#64748B" />
-                        </View>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Category */}
-                    <View style={styles.dropdownField}>
-                      <Text style={styles.filterSectionTitle}>Category</Text>
-                      <TouchableOpacity
-                        style={[styles.dropdownTriggerBox, Boolean(selectedCategoryId) && styles.dropdownTriggerBoxActive]}
-                        onPress={() => {
-                          setActivePicker('category');
-                          setPickerSearch('');
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Category: ${selectedCategoryName || 'All categories'}`}
-                      >
-                        <View style={styles.dropdownTriggerLeft}>
-                          <View style={[styles.dropdownIconBox, Boolean(selectedCategoryId) && styles.dropdownIconBoxActive]}>
-                            <Ionicons
-                              name="pricetag-outline"
-                              size={18}
-                              color={selectedCategoryId ? BrandColors.pink.primary : '#64748B'}
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.dropdownValueText, Boolean(selectedCategoryId) && styles.dropdownValueTextActive]}>
-                              {selectedCategoryName || 'All categories'}
-                            </Text>
-                            <Text style={styles.dropdownSubText}>Tap to search retail categories</Text>
-                          </View>
-                        </View>
-                        <View style={styles.dropdownRightIcons}>
-                          {selectedCategoryId ? (
-                            <Pressable
-                              onPress={(e) => {
-                                e.stopPropagation();
-                                setSelectedCategoryId('');
                               }}
                               hitSlop={HitSlop.sm}
                               style={styles.dropdownClearBtn}
@@ -2182,5 +1977,26 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
     marginTop: 1,
+  },
+  pickerEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: Spacing.lg,
+  },
+  pickerEmptyTitle: {
+    ...Typography.body,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  pickerEmptySub: {
+    ...Typography.caption,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

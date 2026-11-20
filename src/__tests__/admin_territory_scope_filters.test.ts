@@ -59,54 +59,64 @@ describe('Admin Territory & Scope Filters Suite', () => {
     assert.strictEqual(startOfMonth.getMonth(), now.getMonth());
   });
 
-  it('verifies hierarchy, section titles, and all-option labels match specifications', () => {
+  it('verifies filter sections include ONLY Date Range, State, District, and Village / Area', () => {
     const filterSections = [
       { section: 'Date Range:', hasFromTo: true, fromPlaceholder: 'dd-mm-yyyy', toPlaceholder: 'dd-mm-yyyy' },
       { section: 'State', allOptionLabel: 'All states' },
       { section: 'District', allOptionLabel: 'All districts' },
       { section: 'Village / Area', allOptionLabel: 'All villages' },
-      { section: 'Manager', allOptionLabel: 'All managers' },
-      { section: 'Field Officer', allOptionLabel: 'All field officers' },
-      { section: 'Category', allOptionLabel: 'All categories' },
     ];
 
-    assert.strictEqual(filterSections.length, 7);
+    assert.strictEqual(filterSections.length, 4);
     assert.strictEqual(filterSections[0].section, 'Date Range:');
     assert.strictEqual(filterSections[0].fromPlaceholder, 'dd-mm-yyyy');
     assert.strictEqual(filterSections[0].toPlaceholder, 'dd-mm-yyyy');
     assert.strictEqual(filterSections[1].allOptionLabel, 'All states');
     assert.strictEqual(filterSections[2].allOptionLabel, 'All districts');
     assert.strictEqual(filterSections[3].allOptionLabel, 'All villages');
-    assert.strictEqual(filterSections[4].allOptionLabel, 'All managers');
-    assert.strictEqual(filterSections[5].allOptionLabel, 'All field officers');
-    assert.strictEqual(filterSections[6].allOptionLabel, 'All categories');
+
+    // Manager, Field Officer, and Category must NOT be present
+    const sectionNames = filterSections.map((s) => s.section);
+    assert.strictEqual(sectionNames.includes('Manager'), false);
+    assert.strictEqual(sectionNames.includes('Field Officer'), false);
+    assert.strictEqual(sectionNames.includes('Category'), false);
   });
 
   it('verifies Territory & Scope Filters header and subtext copy', () => {
     const headerTitle = 'Territory & Scope Filters';
-    const headerSubtitle = 'Filter live operational metrics by geographic hierarchy and category';
+    const headerSubtitle = 'Filter live operational metrics by date and territory';
 
     assert.strictEqual(headerTitle, 'Territory & Scope Filters');
-    assert.strictEqual(headerSubtitle, 'Filter live operational metrics by geographic hierarchy and category');
+    assert.strictEqual(headerSubtitle, 'Filter live operational metrics by date and territory');
   });
 
-  it('verifies dropdown search filtering across all 6 scope pickers', () => {
+  it('verifies dynamic extraction of villages from existing database records without fake defaults', () => {
+    // Simulated database records from customer table & location API
+    const dbCustomers = [
+      { id: 'c1', shopName: 'Shop A', state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' },
+      { id: 'c2', shopName: 'Shop B', state: 'Madhya Pradesh', district: 'Indore', village: 'Indore City' },
+      { id: 'c3', shopName: 'Shop C', state: 'Madhya Pradesh', district: 'Indore', village: 'Rau' }, // duplicate village
+      { id: 'c4', shopName: 'Shop D', state: 'Madhya Pradesh', district: 'Indore', village: '  Mhow  ' }, // whitespace
+      { id: 'c5', shopName: 'Shop E', state: 'Madhya Pradesh', district: 'Indore', village: null }, // missing
+    ];
+
+    const vSet = new Set<string>();
+    dbCustomers.forEach((c) => {
+      const trimmed = (c.village || '').trim();
+      if (trimmed) vSet.add(trimmed);
+    });
+
+    const dynamicVillages = Array.from(vSet).sort((a, b) => a.localeCompare(b));
+    assert.deepStrictEqual(dynamicVillages, ['Indore City', 'Mhow', 'Rau']);
+    assert.strictEqual(dynamicVillages.includes('Diva'), false, 'Should not contain hardcoded default Diva');
+    assert.strictEqual(dynamicVillages.includes('Shivpur'), false, 'Should not contain hardcoded default Shivpur');
+  });
+
+  it('verifies dropdown search filtering across State, District, and Village pickers', () => {
     const mockFilterOptions = {
       states: ['Maharashtra', 'Uttar Pradesh', 'Madhya Pradesh', 'Bihar', 'Rajasthan'],
       districts: ['Thane', 'Mumbai', 'Varanasi', 'Indore', 'Bhopal', 'Patna', 'Jaipur'],
-      villages: ['Diva', 'Shivpur', 'Manpada', 'Majiwada', 'Ghatkopar'],
-      managers: [
-        { id: 'mgr-1', name: 'Rahul Sharma', state: 'Maharashtra', district: 'Thane' },
-        { id: 'mgr-2', name: 'Pooja Patil', state: 'Maharashtra', district: 'Mumbai' },
-      ],
-      sellers: [
-        { id: 'sel-1', name: 'Amit Verma', state: 'Maharashtra', district: 'Thane' },
-        { id: 'sel-2', name: 'Sneha Kulkarni', state: 'Maharashtra', district: 'Thane' },
-      ],
-      categories: [
-        { id: 'cat-1', name: 'Regular Flow Pads' },
-        { id: 'cat-2', name: 'Heavy Flow Pads' },
-      ],
+      villages: ['Indore City', 'Mhow', 'Pithampur', 'Rau', 'Sanwer'],
     };
 
     // State search
@@ -118,27 +128,8 @@ describe('Admin Territory & Scope Filters Suite', () => {
     assert.deepStrictEqual(districtMatches, ['Thane']);
 
     // Village search
-    const villageMatches = mockFilterOptions.villages.filter((v) => v.toLowerCase().includes('div'));
-    assert.deepStrictEqual(villageMatches, ['Diva']);
-
-    // Manager search by name or district
-    const managerMatches = mockFilterOptions.managers.filter(
-      (m) =>
-        m.name.toLowerCase().includes('rahul') ||
-        (m.district && m.district.toLowerCase().includes('rahul'))
-    );
-    assert.strictEqual(managerMatches.length, 1);
-    assert.strictEqual(managerMatches[0].name, 'Rahul Sharma');
-
-    // Field officer search
-    const sellerMatches = mockFilterOptions.sellers.filter((s) => s.name.toLowerCase().includes('sneha'));
-    assert.strictEqual(sellerMatches.length, 1);
-    assert.strictEqual(sellerMatches[0].name, 'Sneha Kulkarni');
-
-    // Category search
-    const catMatches = mockFilterOptions.categories.filter((c) => c.name.toLowerCase().includes('heavy'));
-    assert.strictEqual(catMatches.length, 1);
-    assert.strictEqual(catMatches[0].name, 'Heavy Flow Pads');
+    const villageMatches = mockFilterOptions.villages.filter((v) => v.toLowerCase().includes('rau'));
+    assert.deepStrictEqual(villageMatches, ['Rau']);
   });
 
   it('verifies custom village search entry fallback', () => {
