@@ -36,27 +36,43 @@ export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }
   const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
   const autoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Helper to safely set native status bar hidden state with fade animation
+  // Helper to safely set native status bar and Android system navigation bar with gaming-style immersive mode
   const updateNativeStatusBar = useCallback((hidden: boolean) => {
     try {
       if (Platform.OS !== 'web' && RNStatusBar && typeof RNStatusBar.setHidden === 'function') {
         RNStatusBar.setHidden(hidden, 'fade');
+      }
+      if (Platform.OS === 'android') {
+        try {
+          import('expo-navigation-bar').then((NavigationBar) => {
+            if (hidden) {
+              NavigationBar.setVisibilityAsync('hidden');
+              NavigationBar.setBehaviorAsync('overlay-swipe');
+            } else {
+              NavigationBar.setVisibilityAsync('visible');
+            }
+          }).catch(() => {});
+        } catch {
+          // Graceful fallback when running in testing/mock environments
+        }
       }
     } catch {
       // Ignore if not supported on platform
     }
   }, []);
 
-  const hideNavigation = useCallback(() => {
+  const hideNavigation = useCallback((hideAppTabBar = false) => {
     if (autoHideTimerRef.current) {
       clearTimeout(autoHideTimerRef.current);
       autoHideTimerRef.current = null;
     }
     if (!AUTO_HIDE_NAV_ENABLED) {
-      // Permanently retain navbar and status bar visible as requested
       return;
     }
-    setIsNavVisible(false);
+    // Autohide only system navigation and notification bar, NOT the app bottom navbar
+    if (hideAppTabBar) {
+      setIsNavVisible(false);
+    }
     setIsStatusBarVisible(false);
     updateNativeStatusBar(true);
   }, [updateNativeStatusBar]);
