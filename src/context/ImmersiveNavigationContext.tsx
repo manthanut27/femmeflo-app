@@ -29,6 +29,7 @@ export const useImmersiveNavigation = () => useContext(ImmersiveNavigationContex
 
 export const INITIAL_HIDE_DELAY_MS = 1500;
 export const INACTIVITY_AUTO_HIDE_MS = 4000;
+export const AUTO_HIDE_NAV_ENABLED = false;
 
 export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isNavVisible, setIsNavVisible] = useState(true);
@@ -51,6 +52,10 @@ export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }
       clearTimeout(autoHideTimerRef.current);
       autoHideTimerRef.current = null;
     }
+    if (!AUTO_HIDE_NAV_ENABLED) {
+      // Permanently retain navbar and status bar visible as requested
+      return;
+    }
     setIsNavVisible(false);
     setIsStatusBarVisible(false);
     updateNativeStatusBar(true);
@@ -59,18 +64,24 @@ export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }
   const showNavigation = useCallback(() => {
     if (autoHideTimerRef.current) {
       clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
     }
     setIsNavVisible(true);
     setIsStatusBarVisible(true);
     updateNativeStatusBar(false);
 
-    // Auto-hide after inactivity (4 seconds) to restore the immersive full-screen view
-    autoHideTimerRef.current = setTimeout(() => {
-      hideNavigation();
-    }, INACTIVITY_AUTO_HIDE_MS);
+    if (AUTO_HIDE_NAV_ENABLED) {
+      // Auto-hide after inactivity (4 seconds) to restore the immersive full-screen view
+      autoHideTimerRef.current = setTimeout(() => {
+        hideNavigation();
+      }, INACTIVITY_AUTO_HIDE_MS);
+    }
   }, [hideNavigation, updateNativeStatusBar]);
 
   const toggleNavigation = useCallback(() => {
+    if (!AUTO_HIDE_NAV_ENABLED) {
+      return;
+    }
     if (isNavVisible) {
       hideNavigation();
     } else {
@@ -81,16 +92,22 @@ export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }
   const revealStatusBar = useCallback(() => {
     if (autoHideTimerRef.current) {
       clearTimeout(autoHideTimerRef.current);
+      autoHideTimerRef.current = null;
     }
     setIsStatusBarVisible(true);
     updateNativeStatusBar(false);
 
-    autoHideTimerRef.current = setTimeout(() => {
-      hideNavigation();
-    }, INACTIVITY_AUTO_HIDE_MS);
+    if (AUTO_HIDE_NAV_ENABLED) {
+      autoHideTimerRef.current = setTimeout(() => {
+        hideNavigation();
+      }, INACTIVITY_AUTO_HIDE_MS);
+    }
   }, [hideNavigation, updateNativeStatusBar]);
 
   const hideStatusBar = useCallback(() => {
+    if (!AUTO_HIDE_NAV_ENABLED) {
+      return;
+    }
     setIsStatusBarVisible(false);
     updateNativeStatusBar(true);
   }, [updateNativeStatusBar]);
@@ -100,7 +117,7 @@ export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }
       clearTimeout(autoHideTimerRef.current);
       autoHideTimerRef.current = null;
     }
-    if (isNavVisible) {
+    if (AUTO_HIDE_NAV_ENABLED && isNavVisible) {
       autoHideTimerRef.current = setTimeout(() => {
         hideNavigation();
       }, INACTIVITY_AUTO_HIDE_MS);
