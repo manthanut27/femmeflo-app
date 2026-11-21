@@ -17,6 +17,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { adminApi } from '@/api/admin';
 import type { PublicUser } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -81,6 +82,7 @@ const SIMPLE_MANAGER_PERMISSION_INFO: Record<string, { title: string; subtitle: 
 };
 
 export default function AdminUsersScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
@@ -866,7 +868,10 @@ export default function AdminUsersScreen() {
             data={users}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: Math.max(insets.bottom + 95, 125) },
+            ]}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

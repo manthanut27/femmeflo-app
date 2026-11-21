@@ -11,8 +11,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
 import type { CustomerItem, PaymentMode, ProductItem, ProductStockItem } from '@/api/types';
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
@@ -57,6 +59,7 @@ interface CartLineItem {
 }
 
 export default function NewSaleScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ customerId?: string; customerName?: string }>();
   const router = useRouter();
   const { user } = useAuth();
@@ -71,6 +74,7 @@ export default function NewSaleScreen() {
   // Form State
   const [selectedCustomerId, setSelectedCustomerId] = useState(params.customerId || '');
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [activeProductPickerItemKey, setActiveProductPickerItemKey] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartLineItem[]>([
     { key: 'line_1', productId: '', quantity: 10, unitPriceRupees: 35 },
   ]);
@@ -481,6 +485,22 @@ export default function NewSaleScreen() {
     }));
   }, [customers]);
 
+  const productDropdownOptions = useMemo<DropdownOption[]>(() => {
+    return products.map((p) => {
+      const stock = stockMap[p.id] ?? 0;
+      const priceRupees = (p.basePricePaise || 0) / 100;
+      return {
+        id: p.id,
+        title: p.name,
+        subtitle: `SKU: ${p.sku || p.id} • Van Stock: ${stock} pkts • Price: ₹${priceRupees.toFixed(2)}`,
+        badge: stock > 0 ? `${stock} in stock` : '0 in stock',
+        badgeVariant: stock > 0 ? 'success' : 'neutral',
+        icon: 'cube-outline',
+        metadata: `${p.name} ${p.sku || ''}`,
+      };
+    });
+  }, [products, stockMap]);
+
   if (loading) {
     return <LoadingState message="Loading POS catalog & inventory..." />;
   }
@@ -497,8 +517,12 @@ export default function NewSaleScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 95, 130) },
+        ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrapper}>
           {/* Sale Flow Mode Indicator (On-Duty vs Direct Sale) */}
@@ -682,32 +706,42 @@ export default function NewSaleScreen() {
                     )}
                   </View>
 
-                  {/* SKU Selector Chips */}
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.skuScroll}
-                  >
-                    {products.map((p) => {
-                      const isSelected = p.id === item.productId;
-                      return (
-                        <Pressable
-                          key={p.id}
-                          onPress={() => handleUpdateProduct(item.key, p.id)}
-                          style={[styles.skuChip, isSelected && styles.skuChipActive]}
-                        >
-                          <Text
-                            style={[
-                              styles.skuChipText,
-                              isSelected && styles.skuChipTextActive,
-                            ]}
-                          >
-                            {p.name}
+                  {/* SKU Selector Dropdown Trigger */}
+                  <View style={styles.productPickerSection}>
+                    <Text style={styles.inputLabelSmall}>Product / SKU</Text>
+                    <TouchableOpacity
+                      style={styles.productDropdownTrigger}
+                      onPress={() => setActiveProductPickerItemKey(item.key)}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Select Product SKU"
+                    >
+                      <View style={styles.productDropdownLeft}>
+                        <View style={styles.productDropdownIconBox}>
+                          <Ionicons name="cube" size={18} color={BrandColors.pink.primary} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.productDropdownTitle} numberOfLines={1}>
+                            {prod ? prod.name : 'Select product from catalog...'}
                           </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                          <Text style={styles.productDropdownSku} numberOfLines={1}>
+                            {prod
+                              ? `SKU: ${prod.sku || prod.id} • Base: ₹${((prod.basePricePaise || 3500) / 100).toFixed(2)}`
+                              : 'Tap to choose product'}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.productDropdownRight}>
+                        <View style={styles.selectPill}>
+                          <Text style={styles.selectPillText}>Select</Text>
+                          <Ionicons name="chevron-down" size={13} color={BrandColors.pink.primary} />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                    {errors[`line_${index}_product`] && (
+                      <Text style={styles.errorSubText}>{errors[`line_${index}_product`]}</Text>
+                    )}
+                  </View>
 
                   {/* Product Metadata & Van Stock */}
                   <View style={styles.productMetaRow}>
@@ -907,6 +941,27 @@ export default function NewSaleScreen() {
         onClose={() => setCustomerPickerOpen(false)}
         emptyMessage="No retail customers matching your query"
       />
+
+      {/* Searchable Product SKU Dropdown Modal */}
+      <SearchableDropdownModal
+        visible={Boolean(activeProductPickerItemKey)}
+        title="Select Product / SKU"
+        searchPlaceholder="Search product by name or SKU..."
+        options={productDropdownOptions}
+        selectedId={
+          activeProductPickerItemKey
+            ? cartItems.find((i) => i.key === activeProductPickerItemKey)?.productId
+            : undefined
+        }
+        onSelect={(opt) => {
+          if (activeProductPickerItemKey) {
+            handleUpdateProduct(activeProductPickerItemKey, opt.id);
+            setActiveProductPickerItemKey(null);
+          }
+        }}
+        onClose={() => setActiveProductPickerItemKey(null)}
+        emptyMessage="No matching products found in catalog"
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1094,6 +1149,76 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: '700',
     color: Colors.light.danger,
+  },
+  productPickerSection: {
+    marginVertical: Spacing.xs + 2,
+  },
+  inputLabelSmall: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 5,
+  },
+  productDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#FCE7F3',
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 52,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  productDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  productDropdownIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FFF1F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  productDropdownTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  productDropdownSku: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  productDropdownRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF1F4',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    gap: 4,
+  },
+  selectPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
   },
   skuScroll: {
     marginVertical: Spacing.xs,

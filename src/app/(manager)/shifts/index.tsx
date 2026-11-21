@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
 import type { Shift, ShiftStatus } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -51,6 +52,7 @@ function formatMinutes(mins: number | null | undefined): string {
 type PeriodFilter = 'all' | 'today' | 'month';
 
 export default function ManagerShiftsScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -145,7 +147,11 @@ export default function ManagerShiftsScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 95, 125) },
+        ]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

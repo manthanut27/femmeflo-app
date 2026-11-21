@@ -1,7 +1,9 @@
+import { canOnboardCustomers } from '@/utils/permissions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
@@ -45,13 +47,14 @@ const PHOTO_REASONS = [
 
 export default function AddCustomerScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  // 1. Shop Information Fields
-  const [shopName, setShopName] = useState('Reliance Smart');
-  const [ownerName, setOwnerName] = useState('Store Manager');
-  const [phone, setPhone] = useState('9820012345');
-  const [email, setEmail] = useState('store@reliancesmart.com');
+  // 1. Shop Information Fields (start completely empty, no mock seed data)
+  const [shopName, setShopName] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
 
   // 2. Account Assignment & Trade Category
   const [managers, setManagers] = useState<PublicUser[]>([]);
@@ -64,24 +67,24 @@ export default function AddCustomerScreen() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [categoryLoading, setCategoryLoading] = useState(false);
 
-  // 3. Address Details Fields
-  const [pincode, setPincode] = useState('400601');
-  const [address, setAddress] = useState('Shop No. 12, GB Road');
-  const [village, setVillage] = useState('Thane West');
-  const [district, setDistrict] = useState('Thane');
-  const [stateName, setStateName] = useState('Maharashtra');
+  // 3. Address Details Fields (empty by default, territory defaulted to user profile)
+  const [pincode, setPincode] = useState('');
+  const [address, setAddress] = useState('');
+  const [village, setVillage] = useState('');
+  const [district, setDistrict] = useState(user?.district || '');
+  const [stateName, setStateName] = useState(user?.state || 'Maharashtra');
   const [pincodeLoading, setPincodeLoading] = useState(false);
 
   // 4. Photo & Exemption Reason State
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [noPhotoReason, setNoPhotoReason] = useState('Poor network connectivity');
+  const [noPhotoReason, setNoPhotoReason] = useState('');
   const [isReasonDropdownOpen, setIsReasonDropdownOpen] = useState(false);
 
   // 5. GPS Location State
-  const [latitude, setLatitude] = useState<number | null>(19.2183);
-  const [longitude, setLongitude] = useState<number | null>(72.9781);
-  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(15);
-  const [gpsStatus, setGpsStatus] = useState<GpsAcquisitionStatus>('acquired');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<GpsAcquisitionStatus>('idle');
 
   // 6. Submission & Feedback States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -446,7 +449,7 @@ export default function AddCustomerScreen() {
       district.trim(),
       stateName.trim() && pincode.trim() ? `${stateName.trim()} – ${pincode.trim()}` : (stateName.trim() || pincode.trim()),
     ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'Shop No. 12, GB Road, Thane West, Maharashtra – 400601';
+    return parts.length > 0 ? parts.join(', ') : '';
   }, [address, village, district, stateName, pincode]);
 
   // Post-submission Success Screen
@@ -509,7 +512,14 @@ export default function AddCustomerScreen() {
       style={styles.container}
     >
       {/* Top Header */}
-      <View style={styles.headerRow}>
+      <View
+        style={[
+          styles.headerRow,
+          {
+            paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) + 4,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => router.back()}
@@ -538,7 +548,10 @@ export default function AddCustomerScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 95, 125) },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -783,6 +796,8 @@ export default function AddCustomerScreen() {
                     setShopName(text);
                     if (errors.shopName) setErrors((prev) => ({ ...prev, shopName: '' }));
                   }}
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="e.g. Reliance Smart / Apollo Pharmacy"
                   placeholderTextColor="#94A3B8"
                 />
@@ -804,6 +819,8 @@ export default function AddCustomerScreen() {
                     setOwnerName(text);
                     if (errors.ownerName) setErrors((prev) => ({ ...prev, ownerName: '' }));
                   }}
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="e.g. Rajesh Sharma / Store Manager"
                   placeholderTextColor="#94A3B8"
                 />
@@ -828,6 +845,8 @@ export default function AddCustomerScreen() {
                   }}
                   keyboardType="phone-pad"
                   maxLength={10}
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="10-digit mobile number"
                   placeholderTextColor="#94A3B8"
                 />
@@ -852,6 +871,8 @@ export default function AddCustomerScreen() {
                   }}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="e.g. store@reliancesmart.com"
                   placeholderTextColor="#94A3B8"
                 />
@@ -980,6 +1001,8 @@ export default function AddCustomerScreen() {
                   onChangeText={handlePincodeChange}
                   keyboardType="numeric"
                   maxLength={6}
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="e.g. 400601"
                   placeholderTextColor="#94A3B8"
                 />
@@ -1001,6 +1024,8 @@ export default function AddCustomerScreen() {
                     setAddress(text);
                     if (errors.address) setErrors((prev) => ({ ...prev, address: '' }));
                   }}
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="e.g. Shop No. 12, GB Road, Near Station"
                   placeholderTextColor="#94A3B8"
                 />
@@ -1017,6 +1042,8 @@ export default function AddCustomerScreen() {
                   style={styles.textInputField}
                   value={village}
                   onChangeText={setVillage}
+                  autoComplete="off"
+                  importantForAutofill="no"
                   placeholder="e.g. Thane West / Naupada"
                   placeholderTextColor="#94A3B8"
                 />
@@ -1037,6 +1064,8 @@ export default function AddCustomerScreen() {
                       setDistrict(text);
                       if (errors.district) setErrors((prev) => ({ ...prev, district: '' }));
                     }}
+                    autoComplete="off"
+                    importantForAutofill="no"
                     placeholder="e.g. Thane"
                     placeholderTextColor="#94A3B8"
                   />
@@ -1056,6 +1085,8 @@ export default function AddCustomerScreen() {
                       setStateName(text);
                       if (errors.stateName) setErrors((prev) => ({ ...prev, stateName: '' }));
                     }}
+                    autoComplete="off"
+                    importantForAutofill="no"
                     placeholder="e.g. Maharashtra"
                     placeholderTextColor="#94A3B8"
                   />
@@ -1072,15 +1103,17 @@ export default function AddCustomerScreen() {
                 <View style={styles.mapRoadV1} />
                 <View style={styles.mapRoadDiag} />
                 <View style={styles.mapPinContainer}>
-                  <Ionicons name="location-sharp" size={22} color="#E11D48" />
+                  <Ionicons name="location-sharp" size={22} color={formattedAddress ? '#E11D48' : '#94A3B8'} />
                   <View style={styles.mapPinShadow} />
                 </View>
               </View>
 
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.addressSummaryBadge}>Verified Address</Text>
-                <Text style={styles.addressSummaryText} numberOfLines={2}>
-                  {formattedAddress}
+                <Text style={[styles.addressSummaryBadge, !formattedAddress && { color: '#64748B' }]}>
+                  {formattedAddress ? 'Verified Address' : 'Address Preview'}
+                </Text>
+                <Text style={[styles.addressSummaryText, !formattedAddress && { color: '#94A3B8', fontStyle: 'italic' }]} numberOfLines={2}>
+                  {formattedAddress || 'Enter street address & PIN code above to view preview'}
                 </Text>
               </View>
             </View>

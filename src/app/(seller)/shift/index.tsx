@@ -691,7 +691,7 @@ export default function ShiftScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.huge }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 95, 125) }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BrandColors.pink.primary]} />}
       >
         <View style={styles.contentWrapper}>

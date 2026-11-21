@@ -1626,7 +1626,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   quickLaunchCard: {
-    width: '48.5%',
+    width: '48%',
     backgroundColor: '#FFFFFF',
     borderRadius: BorderRadius.md,
     borderWidth: 1,

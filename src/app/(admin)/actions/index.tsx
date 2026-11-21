@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   actionCard: {
-    width: '48.5%',
+    width: '48%',
     minHeight: 128,
     justifyContent: 'space-between',
     padding: Spacing.md,

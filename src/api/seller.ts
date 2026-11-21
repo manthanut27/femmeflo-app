@@ -281,27 +281,51 @@ export const sellerApi = {
       headers['X-Idempotency-Key'] = key;
     }
 
-    // Server createSaleSchema is z.strictObject({ customerId, items, paymentMode, requestKey })
-    const body: Record<string, any> = {
+    // Server createSaleSchema is z.strictObject({ customerId, items, paymentMode, requestKey, customerFeedback })
+    // paymentReference is formatted into customerFeedback so strict schema does not reject it
+    const feedbackParts: string[] = [];
+    if (payload.customerFeedback?.trim()) {
+      feedbackParts.push(payload.customerFeedback.trim());
+    }
+    if (payload.paymentReference?.trim()) {
+      feedbackParts.push(`[Ref: ${payload.paymentReference.trim()}]`);
+    }
+    const combinedFeedback = feedbackParts.join(' | ') || undefined;
+
+    const baseBody: Record<string, any> = {
       customerId: payload.customerId,
       items: payload.items,
       paymentMode: payload.paymentMode,
     };
     if (key) {
-      body.requestKey = key;
-    }
-    if (payload.paymentReference) {
-      body.paymentReference = payload.paymentReference;
-    }
-    if (payload.customerFeedback) {
-      body.customerFeedback = payload.customerFeedback;
+      baseBody.requestKey = key;
     }
 
-    return apiRequest<{ sale: SaleItem }>('seller/sales', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    try {
+      const fullBody = { ...baseBody };
+      if (combinedFeedback) {
+        fullBody.customerFeedback = combinedFeedback;
+      }
+      return await apiRequest<{ sale: SaleItem }>('seller/sales', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(fullBody),
+      });
+    } catch (err: any) {
+      // If server returns 500 (e.g. database schema limitation on customerFeedback), retry cleanly without customerFeedback
+      if (
+        combinedFeedback &&
+        (err?.status === 500 || (err?.message && String(err.message).toLowerCase().includes('internal server error')))
+      ) {
+        console.warn('[createSale] Retrying sale creation without customerFeedback due to server schema limitation');
+        return await apiRequest<{ sale: SaleItem }>('seller/sales', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(baseBody),
+        });
+      }
+      throw err;
+    }
   },
 
   async listSales(params?: {
