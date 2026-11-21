@@ -1621,7 +1621,8 @@ const styles = StyleSheet.create({
   quickLaunchGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.sm,
+    justifyContent: 'space-between',
+    rowGap: Spacing.sm,
     marginBottom: Spacing.xl,
   },
   quickLaunchCard: {

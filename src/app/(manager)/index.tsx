@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
 import type { ManagerDashboardData } from '@/api/types';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
@@ -17,6 +18,7 @@ import { useAuth } from '@/context/AuthContext';
 import { acquireGpsCoordinates } from '@/utils/locationUtils';
 
 export default function ManagerDashboardScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -25,6 +27,7 @@ export default function ManagerDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentLocation, setCurrentLocation] = useState('Thane, Maharashtra');
+  const [isLocating, setIsLocating] = useState(false);
 
   const handleNewSale = () => {
     router.push('/(seller)/sales/new' as any);
@@ -61,9 +64,14 @@ export default function ManagerDashboardScreen() {
   }, [loadData]);
 
   const handleChangeLocation = async () => {
-    const res = await acquireGpsCoordinates({ highAccuracyTimeoutMs: 5000 });
-    if (res.status === 'acquired') {
-      setCurrentLocation(`${user?.district || 'Thane'}, ${user?.state || 'Maharashtra'}`);
+    setIsLocating(true);
+    try {
+      const res = await acquireGpsCoordinates({ highAccuracyTimeoutMs: 5000 });
+      if (res.status === 'acquired') {
+        setCurrentLocation(`${user?.district || 'Thane'}, ${user?.state || 'Maharashtra'}`);
+      }
+    } finally {
+      setIsLocating(false);
     }
   };
 
@@ -76,12 +84,20 @@ export default function ManagerDashboardScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header matching reference image */}
-      <View style={styles.topHeader}>
+      {/* Top Header with safe area insets */}
+      <View
+        style={[
+          styles.topHeader,
+          {
+            paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 12 : 16) + 4,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.menuBtn}
           onPress={() => setMenuOpen(true)}
           activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel="Open navigation menu"
         >
@@ -89,10 +105,10 @@ export default function ManagerDashboardScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
             Territory: {user?.district || 'Thane'}
           </Text>
-          <Text style={styles.headerSubtitle}>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
             Manager: {user?.name || (user as any)?.username || 'test45'}
           </Text>
         </View>
@@ -104,13 +120,16 @@ export default function ManagerDashboardScreen() {
           accessibilityRole="button"
           accessibilityLabel="Notifications"
         >
-          <Ionicons name="notifications-outline" size={24} color="#0F172A" />
+          <Ionicons name="notifications-outline" size={22} color="#0F172A" />
           <View style={styles.notifBadgeDot} />
         </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 85, 110) },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -121,37 +140,58 @@ export default function ManagerDashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrapper}>
-          {/* 1. Location / Current Location Card */}
-          <View style={styles.locationCard}>
-            <View style={styles.locationLeft}>
-              <View style={styles.locationIconCircle}>
-                <Ionicons name="location-sharp" size={18} color="#FFFFFF" />
+          {/* 1. Unified Territory & Location Card */}
+          <View style={styles.territoryCard}>
+            <View style={styles.territoryLeft}>
+              <View style={styles.territoryIconCircle}>
+                <Ionicons name="location-sharp" size={17} color="#FFFFFF" />
               </View>
-              <View>
-                <Text style={styles.locationCityText}>{currentLocation}</Text>
-                <View style={styles.currentLocRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.territoryCityText} numberOfLines={1}>
+                  {currentLocation}
+                </Text>
+                <View style={styles.territoryStatusRow}>
                   <View style={styles.greenDot} />
-                  <Text style={styles.currentLocLabel}>Current Location</Text>
+                  <Text style={styles.territoryStatusLabel}>Active Territory • GPS Verified</Text>
                 </View>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.changeLocBtn}
-              onPress={handleChangeLocation}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Change location"
-            >
-              <Ionicons name="sync-outline" size={14} color="#881337" style={{ marginRight: 4 }} />
-              <Text style={styles.changeLocText}>Change</Text>
-            </TouchableOpacity>
+            <View style={styles.territoryRight}>
+              <TouchableOpacity
+                style={styles.syncGpsBtn}
+                onPress={handleChangeLocation}
+                activeOpacity={0.75}
+                disabled={isLocating}
+                accessibilityRole="button"
+                accessibilityLabel="Sync GPS location"
+              >
+                <Ionicons
+                  name={isLocating ? 'hourglass-outline' : 'sync-outline'}
+                  size={13}
+                  color="#881337"
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={styles.syncGpsText}>{isLocating ? 'Syncing...' : 'Sync'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.viewShopsPill}
+                onPress={() => router.push('/(manager)/customers' as any)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="View Shops"
+              >
+                <Text style={styles.viewShopsPillText}>Shops</Text>
+                <Ionicons name="chevron-forward" size={12} color="#16A34A" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* 2. Hero Card: My Field Sales (Maroon Gradient with trend watermark) */}
           <View style={styles.heroCard}>
             {/* Background Ascending Graph Watermark */}
-            <View style={styles.heroWatermarkGraph}>
+            <View style={styles.heroWatermarkGraph} pointerEvents="none">
               <View style={[styles.graphBar, { height: 16 }]} />
               <View style={[styles.graphBar, { height: 26 }]} />
               <View style={[styles.graphBar, { height: 38 }]} />
@@ -196,39 +236,10 @@ export default function ManagerDashboardScreen() {
             </View>
           </View>
 
-          {/* 3. My Area Status Card */}
-          <TouchableOpacity
-            style={styles.myAreaCard}
-            onPress={() => router.push('/(manager)/customers' as any)}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="My Area details"
-          >
-            <View style={styles.myAreaLeft}>
-              <View style={styles.myAreaIconCircle}>
-                <Ionicons name="location-sharp" size={18} color="#16A34A" />
-              </View>
-              <View style={{ marginLeft: 10 }}>
-                <Text style={styles.myAreaTitle}>My Area</Text>
-                <Text style={styles.myAreaSubtitle}>
-                  Area: {user?.district || 'Thane'}, {user?.state || 'Maharashtra'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.myAreaRight}>
-              <View style={styles.managerRoleBadge}>
-                <Ionicons name="person-outline" size={12} color="#16A34A" style={{ marginRight: 4 }} />
-                <Text style={styles.managerRoleBadgeText}>Manager</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="#16A34A" style={{ marginLeft: 6 }} />
-            </View>
-          </TouchableOpacity>
-
-          {/* 4. Team Performance Section */}
+          {/* 3. Team Performance Section */}
           <View style={styles.sectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="stats-chart" size={18} color="#881337" style={{ marginRight: 6 }} />
+              <Ionicons name="bar-chart-outline" size={18} color="#881337" style={{ marginRight: 6 }} />
               <Text style={styles.sectionTitle}>Team Performance</Text>
             </View>
             <TouchableOpacity
@@ -241,191 +252,225 @@ export default function ManagerDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 2x2 Performance Grid */}
+          {/* 2x2 Performance Grid (Side-by-Side Flex Rows) */}
           <View style={styles.perfGrid}>
-            {/* Metric 1: Monthly Revenue */}
-            <TouchableOpacity
-              style={styles.metricCard}
-              onPress={() => router.push('/(manager)/sales' as any)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.metricTopRow}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#FFF1F4' }]}>
-                  <Ionicons name="wallet-outline" size={16} color="#881337" />
+            {/* Row 1: Monthly Revenue & Packets Sold */}
+            <View style={styles.perfRow}>
+              {/* Metric 1: Monthly Revenue */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => router.push('/(manager)/sales' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Monthly Revenue"
+              >
+                <View style={styles.metricTopRow}>
+                  <View style={[styles.metricIconBadge, { backgroundColor: '#FFF1F4' }]}>
+                    <Ionicons name="wallet-outline" size={17} color="#881337" />
+                  </View>
+                  <View style={[styles.metricTrendCircle, { backgroundColor: '#F0FDF4' }]}>
+                    <Ionicons name="arrow-up-outline" size={13} color="#16A34A" />
+                  </View>
                 </View>
-                <View style={[styles.metricTrendCircle, { backgroundColor: '#F0FDF4' }]}>
-                  <Ionicons name="arrow-up-outline" size={13} color="#16A34A" />
-                </View>
-              </View>
-              <Text style={styles.metricLabel}>Monthly Revenue</Text>
-              <Text style={styles.metricValue}>
-                {loading ? '₹0.00' : formatRupees(dashboard?.monthlyRevenuePaise || 0)}
-              </Text>
-              <Text style={styles.metricFooter}>Total sales</Text>
-              {/* Subtle green ambient accent glow */}
-              <View style={[styles.metricGlowAccent, { backgroundColor: '#22C55E' }]} />
-            </TouchableOpacity>
+                <Text style={styles.metricLabel}>Monthly Revenue</Text>
+                <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {loading ? '₹0.00' : formatRupees(dashboard?.monthlyRevenuePaise || 0)}
+                </Text>
+                <Text style={styles.metricFooter}>Total sales</Text>
+                <View style={[styles.metricGlowAccent, { backgroundColor: '#22C55E' }]} />
+              </TouchableOpacity>
 
-            {/* Metric 2: Packets Sold */}
-            <TouchableOpacity
-              style={styles.metricCard}
-              onPress={() => router.push('/(manager)/inventory' as any)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.metricTopRow}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#F0F9FF' }]}>
-                  <Ionicons name="cube-outline" size={16} color="#0284C7" />
+              {/* Metric 2: Packets Sold */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => router.push('/(manager)/inventory' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Packets Sold"
+              >
+                <View style={styles.metricTopRow}>
+                  <View style={[styles.metricIconBadge, { backgroundColor: '#F0F9FF' }]}>
+                    <Ionicons name="cube-outline" size={17} color="#0284C7" />
+                  </View>
+                  <View style={[styles.metricTrendCircle, { backgroundColor: '#F0F9FF' }]}>
+                    <Ionicons name="arrow-up-outline" size={13} color="#0284C7" />
+                  </View>
                 </View>
-                <View style={[styles.metricTrendCircle, { backgroundColor: '#F0F9FF' }]}>
-                  <Ionicons name="arrow-up-outline" size={13} color="#0284C7" />
-                </View>
-              </View>
-              <Text style={styles.metricLabel}>Packets Sold</Text>
-              <Text style={styles.metricValue}>
-                {loading ? '0' : (dashboard?.monthlyPacketsSold || 0).toLocaleString()}
-              </Text>
-              <Text style={styles.metricFooter}>Total packets sold</Text>
-              {/* Subtle blue ambient accent glow */}
-              <View style={[styles.metricGlowAccent, { backgroundColor: '#38BDF8' }]} />
-            </TouchableOpacity>
+                <Text style={styles.metricLabel}>Packets Sold</Text>
+                <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {loading ? '0' : (dashboard?.monthlyPacketsSold || 0).toLocaleString()}
+                </Text>
+                <Text style={styles.metricFooter}>Total packets sold</Text>
+                <View style={[styles.metricGlowAccent, { backgroundColor: '#38BDF8' }]} />
+              </TouchableOpacity>
+            </View>
 
-            {/* Metric 3: Active Sellers */}
-            <TouchableOpacity
-              style={styles.metricCard}
-              onPress={() => router.push('/(manager)/sellers' as any)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.metricTopRow}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#F0FDF4' }]}>
-                  <Ionicons name="people-outline" size={16} color="#16A34A" />
+            {/* Row 2: Active Sellers & Shops */}
+            <View style={styles.perfRow}>
+              {/* Metric 3: Active Sellers */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => router.push('/(manager)/sellers' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Active Sellers"
+              >
+                <View style={styles.metricTopRow}>
+                  <View style={[styles.metricIconBadge, { backgroundColor: '#F0FDF4' }]}>
+                    <Ionicons name="people-outline" size={17} color="#16A34A" />
+                  </View>
+                  <View style={[styles.metricTrendCircle, { backgroundColor: '#F0FDF4' }]}>
+                    <Ionicons name="sync-outline" size={13} color="#16A34A" />
+                  </View>
                 </View>
-                <View style={[styles.metricTrendCircle, { backgroundColor: '#F0FDF4' }]}>
-                  <Ionicons name="sync-outline" size={13} color="#16A34A" />
-                </View>
-              </View>
-              <Text style={styles.metricLabel}>Active Sellers</Text>
-              <Text style={styles.metricValue}>
-                {loading
-                  ? '0 / 0'
-                  : `${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}`}
-              </Text>
-              <Text style={styles.metricFooter}>Sellers working today</Text>
-              {/* Subtle green ambient accent glow */}
-              <View style={[styles.metricGlowAccent, { backgroundColor: '#4ADE80' }]} />
-            </TouchableOpacity>
+                <Text style={styles.metricLabel}>Active Sellers</Text>
+                <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {loading
+                    ? '0 / 0'
+                    : `${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}`}
+                </Text>
+                <Text style={styles.metricFooter}>Sellers working today</Text>
+                <View style={[styles.metricGlowAccent, { backgroundColor: '#4ADE80' }]} />
+              </TouchableOpacity>
 
-            {/* Metric 4: Shops */}
-            <TouchableOpacity
-              style={styles.metricCard}
-              onPress={() => router.push('/(manager)/customers' as any)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.metricTopRow}>
-                <View style={[styles.metricIconBadge, { backgroundColor: '#FFF1F2' }]}>
-                  <Ionicons name="storefront-outline" size={16} color="#E11D48" />
+              {/* Metric 4: Shops */}
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => router.push('/(manager)/customers' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Shops"
+              >
+                <View style={styles.metricTopRow}>
+                  <View style={[styles.metricIconBadge, { backgroundColor: '#FFF1F2' }]}>
+                    <Ionicons name="storefront-outline" size={17} color="#E11D48" />
+                  </View>
+                  <View style={[styles.metricTrendCircle, { backgroundColor: '#FFF1F2' }]}>
+                    <Ionicons name="storefront" size={12} color="#E11D48" />
+                  </View>
                 </View>
-                <View style={[styles.metricTrendCircle, { backgroundColor: '#FFF1F2' }]}>
-                  <Ionicons name="storefront" size={12} color="#E11D48" />
-                </View>
+                <Text style={styles.metricLabel}>Shops</Text>
+                <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+                  {loading ? '0' : (dashboard?.totalCustomers || 0).toLocaleString()}
+                </Text>
+                <Text style={styles.metricFooter}>Total shops</Text>
+                <View style={[styles.metricGlowAccent, { backgroundColor: '#FB7185' }]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* 4. Quick Actions Section */}
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="flash-outline" size={18} color="#881337" style={{ marginRight: 6 }} />
+                <Text style={styles.sectionTitle}>Quick Actions</Text>
               </View>
-              <Text style={styles.metricLabel}>Shops</Text>
-              <Text style={styles.metricValue}>
-                {loading ? '0' : (dashboard?.totalCustomers || 0).toLocaleString()}
-              </Text>
-              <Text style={styles.metricFooter}>Total shops</Text>
-              {/* Subtle pink ambient accent glow */}
-              <View style={[styles.metricGlowAccent, { backgroundColor: '#FB7185' }]} />
+              <Text style={styles.quickActionsSub}>Shortcuts to your daily tasks</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/(manager)/quick-actions' as any)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="View all Quick Actions"
+            >
+              <Text style={styles.viewAllLink}>View All →</Text>
             </TouchableOpacity>
           </View>
 
-          {/* 5. Quick Actions Section */}
-          <TouchableOpacity
-            style={styles.quickActionsSectionHeader}
-            onPress={() => router.push('/(manager)/quick-actions' as any)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Open all Quick Actions"
-          >
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="flash" size={17} color="#881337" style={{ marginRight: 6 }} />
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
-              </View>
-              <Text style={styles.quickActionsSub}>Shortcuts to your tasks</Text>
+          {/* 2x2 Quick Action Cards Grid */}
+          <View style={styles.actionsGrid}>
+            <View style={styles.actionsRow}>
+              {/* 1. Add New Shop */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => router.push('/(manager)/customers/new' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Add New Shop"
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: '#FFF1F4' }]}>
+                  <Ionicons name="storefront-outline" size={20} color="#881337" />
+                </View>
+                <View style={styles.actionCardTextWrap}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    Add New Shop
+                  </Text>
+                  <Text style={styles.actionCardDesc} numberOfLines={1}>
+                    Register retail store
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              {/* 2. Check Stock */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => router.push('/(manager)/inventory' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Check Stock"
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: '#F0F9FF' }]}>
+                  <Ionicons name="cube-outline" size={20} color="#0284C7" />
+                </View>
+                <View style={styles.actionCardTextWrap}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    Check Stock
+                  </Text>
+                  <Text style={styles.actionCardDesc} numberOfLines={1}>
+                    Warehouse & vans
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#881337" />
-          </TouchableOpacity>
 
-          {/* Top Highlight Action Banner: New Sale */}
-          <TouchableOpacity
-            style={styles.quickSaleBanner}
-            onPress={handleNewSale}
-            activeOpacity={0.88}
-            accessibilityRole="button"
-            accessibilityLabel="New Sale shortcut"
-          >
-            <Ionicons name="cart" size={20} color="#FFFFFF" style={{ marginRight: 10 }} />
-            <Text style={styles.quickSaleBannerText}>New Sale</Text>
-            <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 'auto' }} />
-          </TouchableOpacity>
+            <View style={styles.actionsRow}>
+              {/* 3. Manage Team */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => router.push('/(manager)/sellers' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Manage Team"
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="people-outline" size={20} color="#16A34A" />
+                </View>
+                <View style={styles.actionCardTextWrap}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    Manage Team
+                  </Text>
+                  <Text style={styles.actionCardDesc} numberOfLines={1}>
+                    Sales officers duty
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
 
-          {/* 4 Icon Action Shortcuts Grid */}
-          <View style={styles.quickShortcutsRow}>
-            {/* 1. Daily Shift (Punch-In) */}
-            <TouchableOpacity
-              style={styles.shortcutBtn}
-              onPress={() => router.push('/(seller)/shift' as any)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Daily Shift Punch-In"
-            >
-              <View style={[styles.shortcutIconCircle, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="time-outline" size={22} color="#16A34A" />
-              </View>
-              <Text style={styles.shortcutLabel}>Daily Shift{'\n'}(Punch-In)</Text>
-            </TouchableOpacity>
-
-            {/* 2. Check Van Stock */}
-            <TouchableOpacity
-              style={styles.shortcutBtn}
-              onPress={() => router.push('/(manager)/inventory' as any)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Check Van Stock"
-            >
-              <View style={[styles.shortcutIconCircle, { backgroundColor: '#FFF1F4' }]}>
-                <Ionicons name="storefront-outline" size={20} color="#881337" />
-              </View>
-              <Text style={styles.shortcutLabel}>Check{'\n'}Van Stock</Text>
-            </TouchableOpacity>
-
-            {/* 3. Add New Shop */}
-            <TouchableOpacity
-              style={styles.shortcutBtn}
-              onPress={() => router.push('/(manager)/customers/new' as any)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Add New Shop"
-            >
-              <View style={[styles.shortcutIconCircle, { backgroundColor: '#FFF1F4' }]}>
-                <Ionicons name="gift-outline" size={20} color="#881337" />
-              </View>
-              <Text style={styles.shortcutLabel}>Add{'\n'}New Shop</Text>
-            </TouchableOpacity>
-
-            {/* 4. Manage Sellers */}
-            <TouchableOpacity
-              style={styles.shortcutBtn}
-              onPress={() => router.push('/(manager)/sellers' as any)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Manage Sellers"
-            >
-              <View style={[styles.shortcutIconCircle, { backgroundColor: '#FFF1F4' }]}>
-                <Ionicons name="people-outline" size={20} color="#881337" />
-              </View>
-              <Text style={styles.shortcutLabel}>Manage{'\n'}Sellers</Text>
-            </TouchableOpacity>
+              {/* 4. Shift Logs */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => router.push('/(manager)/shifts' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Shift Logs"
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: '#FFFBEB' }]}>
+                  <Ionicons name="time-outline" size={20} color="#D97706" />
+                </View>
+                <View style={styles.actionCardTextWrap}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    Shift Logs
+                  </Text>
+                  <Text style={styles.actionCardDesc} numberOfLines={1}>
+                    Attendance & visits
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -442,19 +487,21 @@ export default function ManagerDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FBF9FA',
+    backgroundColor: '#F8FAFC',
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 12 : 16,
     paddingBottom: 12,
-    backgroundColor: '#FBF9FA',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   menuBtn: {
-    padding: 4,
+    padding: 6,
     marginRight: 10,
+    borderRadius: 8,
   },
   headerTitleWrap: {
     flex: 1,
@@ -463,7 +510,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
   headerSubtitle: {
     fontSize: 13,
@@ -474,17 +521,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: '#E2E8F0',
   },
   notifBadgeDot: {
     width: 8,
@@ -492,25 +534,24 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#E11D48',
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 7,
+    right: 7,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingTop: 12,
   },
   contentWrapper: {
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 520,
     alignSelf: 'center',
     paddingHorizontal: 16,
-    paddingTop: 4,
   },
-  locationCard: {
-    backgroundColor: '#FFF1F4',
+  territoryCard: {
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#FCE7F3',
+    borderColor: '#E2E8F0',
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -518,13 +559,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  locationLeft: {
+  territoryLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 8,
   },
-  locationIconCircle: {
+  territoryIconCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -533,12 +580,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  locationCityText: {
+  territoryCityText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
   },
-  currentLocRow: {
+  territoryStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 2,
@@ -550,38 +597,59 @@ const styles = StyleSheet.create({
     backgroundColor: '#16A34A',
     marginRight: 5,
   },
-  currentLocLabel: {
-    fontSize: 12,
+  territoryStatusLabel: {
+    fontSize: 11,
     fontWeight: '600',
     color: '#16A34A',
   },
-  changeLocBtn: {
+  territoryRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    gap: 8,
+  },
+  syncGpsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF1F4',
     borderWidth: 1,
     borderColor: '#FCE7F3',
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 12,
   },
-  changeLocText: {
-    fontSize: 12,
+  syncGpsText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#881337',
   },
+  viewShopsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  viewShopsPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#16A34A',
+    marginRight: 2,
+  },
   heroCard: {
     backgroundColor: '#881337',
-    borderRadius: 22,
+    borderRadius: 20,
     padding: 18,
-    marginBottom: 14,
+    marginBottom: 16,
     position: 'relative',
     overflow: 'hidden',
     shadowColor: '#881337',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
   heroWatermarkGraph: {
     position: 'absolute',
@@ -632,8 +700,8 @@ const styles = StyleSheet.create({
   heroNewSaleBtn: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingVertical: 10,
-    borderRadius: 22,
+    paddingVertical: 11,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -652,9 +720,9 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.55)',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingVertical: 10,
-    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    paddingVertical: 11,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -664,63 +732,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  myAreaCard: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  myAreaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  myAreaIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  myAreaTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  myAreaSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  myAreaRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  managerRoleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  managerRoleBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#16A34A',
-  },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
     marginTop: 4,
   },
   sectionTitle: {
@@ -733,32 +749,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#881337',
   },
+  quickActionsSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
   perfGrid: {
+    marginBottom: 16,
+  },
+  perfRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 18,
+    gap: 12,
+    marginBottom: 12,
   },
   metricCard: {
-    width: '48.5%',
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
     position: 'relative',
     overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 2,
+    minHeight: 114,
+    justifyContent: 'space-between',
   },
   metricTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   metricIconBadge: {
     width: 32,
@@ -777,13 +802,13 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 12,
     color: '#64748B',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   metricValue: {
     fontSize: 18,
     fontWeight: '700',
     color: '#0F172A',
-    marginTop: 4,
+    marginTop: 3,
     marginBottom: 2,
   },
   metricFooter: {
@@ -797,75 +822,51 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    opacity: 0.18,
+    opacity: 0.16,
   },
-  quickActionsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    marginTop: 2,
-  },
-  quickActionsSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 1,
-    paddingLeft: 23,
-  },
-  quickSaleBanner: {
-    backgroundColor: '#881337',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#881337',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  quickSaleBannerText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  quickShortcutsRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
+  actionsGrid: {
     marginBottom: 16,
   },
-  shortcutBtn: {
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  actionCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 2,
   },
-  shortcutIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  actionIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginRight: 10,
   },
-  shortcutLabel: {
+  actionCardTextWrap: {
+    flex: 1,
+    marginRight: 4,
+  },
+  actionCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  actionCardDesc: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'center',
-    lineHeight: 14,
+    color: '#64748B',
+    marginTop: 2,
   },
 });
