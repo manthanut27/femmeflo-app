@@ -6,11 +6,13 @@ import {
   FlatList,
   Modal,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -27,6 +29,11 @@ import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { DropdownTrigger } from '@/components/ui/SearchableDropdownModal';
+import {
+  MANAGER_PERMISSIONS,
+  PERMISSION_METADATA,
+  sanitizeBackendPermissions,
+} from '@/utils/permissions';
 import {
   BorderRadius,
   BrandColors,
@@ -100,6 +107,35 @@ export default function AdminUsersScreen() {
   const [formVillage, setFormVillage] = useState('');
   const [formDailyTarget, setFormDailyTarget] = useState('30');
   const [formIsSeller, setFormIsSeller] = useState(false);
+  // User Management Detail & Permissions Modal State
+  const [selectedUser, setSelectedUser] = useState<PublicUser | null>(null);
+  const [modalTab, setModalTab] = useState<'DETAILS' | 'PERMISSIONS'>('DETAILS');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [userModalError, setUserModalError] = useState<string | null>(null);
+  const [userModalSuccess, setUserModalSuccess] = useState<string | null>(null);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+
+  // Form states for selected user:
+  const [userName, setUserName] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [userAlternatePhone, setUserAlternatePhone] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userState, setUserState] = useState('');
+  const [userDistrict, setUserDistrict] = useState('');
+  const [userVillage, setUserVillage] = useState('');
+  const [userAddress, setUserAddress] = useState('');
+  const [userDailyTarget, setUserDailyTarget] = useState('30');
+  const [userActive, setUserActive] = useState(true);
+  const [userAssignedManagerId, setUserAssignedManagerId] = useState('');
+  const [userIsSeller, setUserIsSeller] = useState(false);
+  const [managerPermissions, setManagerPermissions] = useState<string[]>([]);
+
+  // Field Officer permissions flags:
+  const [sellerSalesActive, setSellerSalesActive] = useState(true);
+  const [sellerOnboardingActive, setSellerOnboardingActive] = useState(true);
+  const [sellerVanStockActive, setSellerVanStockActive] = useState(true);
+  const [sellerPriceOverrideActive, setSellerPriceOverrideActive] = useState(false);
+
   // Edit Manager Persona Modal State
   const [editingManager, setEditingManager] = useState<PublicUser | null>(null);
   const [editIsSeller, setEditIsSeller] = useState(false);
@@ -236,132 +272,237 @@ export default function AdminUsersScreen() {
     setModalError(null);
   }
 
+  function handleOpenUserModal(user: PublicUser) {
+    setSelectedUser(user);
+    setModalTab('DETAILS');
+    setIsEditMode(false);
+    setUserModalError(null);
+    setUserModalSuccess(null);
+
+    setUserName(user.name || '');
+    setUserPhone((user.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
+    setUserAlternatePhone(user.alternatePhone || '');
+    setUserEmail(user.email || '');
+    setUserState(user.state || '');
+    setUserDistrict(user.district || '');
+    setUserVillage(user.village || '');
+    setUserAddress(user.address || '');
+    setUserDailyTarget(String((user as any).dailyTarget || 30));
+    setUserActive(user.active !== false);
+    setUserAssignedManagerId((user as any).managerId || (user as any).manager?.id || '');
+
+    setUserIsSeller(Boolean(user.isSeller));
+    const perms = user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0
+      ? Array.from(user.permissions)
+      : ['onboard_customers', 'view_customers', 'manage_sellers', 'view_inventory'];
+    setManagerPermissions(perms);
+
+    setSellerSalesActive(user.active !== false);
+    setSellerOnboardingActive(true);
+    setSellerVanStockActive(true);
+    setSellerPriceOverrideActive(Boolean((user as any).allowPriceOverride));
+
+    // Compatibility states
+    if (user.role === 'MANAGER') {
+      setEditingManager(user);
+      setEditIsSeller(Boolean(user.isSeller));
+      setEditMgrName(user.name || '');
+      setEditMgrPhone((user.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
+      setEditMgrAlternatePhone(user.alternatePhone || '');
+      setEditMgrState(user.state || '');
+      setEditMgrDistrict(user.district || '');
+      setEditMgrAddress(user.address || '');
+      setEditMgrActive(user.active !== false);
+      setEditPersonaError(null);
+    } else {
+      setEditingSeller(user);
+      setEditSellerName(user.name || '');
+      setEditSellerPhone((user.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
+      setEditSellerAlternatePhone(user.alternatePhone || '');
+      setEditSellerVillage(user.village || '');
+      setEditSellerState(user.state || '');
+      setEditSellerDistrict(user.district || '');
+      setEditDailyTarget(String((user as any).dailyTarget || 30));
+      setEditSellerAddress(user.address || '');
+      setEditSellerActive(user.active !== false);
+      setEditSellerError(null);
+    }
+  }
+
+  function handleCloseUserModal() {
+    if (isSavingUser || isUpdatingPersona || isUpdatingSeller) return;
+    setSelectedUser(null);
+    setEditingManager(null);
+    setEditingSeller(null);
+    setUserModalError(null);
+    setUserModalSuccess(null);
+    setIsEditMode(false);
+  }
+
   function handleOpenEditModal(manager: PublicUser) {
-    setEditingManager(manager);
-    setEditIsSeller(Boolean(manager.isSeller));
-    setEditMgrName(manager.name || '');
-    setEditMgrPhone((manager.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
-    setEditMgrAlternatePhone(manager.alternatePhone || '');
-    setEditMgrState(manager.state || '');
-    setEditMgrDistrict(manager.district || '');
-    setEditMgrAddress(manager.address || '');
-    setEditMgrActive(manager.active !== false);
-    setEditPersonaError(null);
+    handleOpenUserModal(manager);
   }
 
   function handleCloseEditModal() {
-    if (isUpdatingPersona) return;
-    setEditingManager(null);
-    setEditPersonaError(null);
-  }
-
-  async function handleSavePersona() {
-    if (!editingManager || isUpdatingPersona) return;
-    if (!editMgrName.trim()) {
-      setEditPersonaError('Manager name is required.');
-      return;
-    }
-    const cleanPhone = editMgrPhone.replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length < 10) {
-      setEditPersonaError('Valid 10-digit mobile phone is required.');
-      return;
-    }
-
-    setIsUpdatingPersona(true);
-    setEditPersonaError(null);
-    try {
-      const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
-        ? `+${cleanPhone}`
-        : `+91${cleanPhone.slice(-10)}`;
-
-      await adminApi.updateManager(editingManager.id, {
-        name: editMgrName.trim(),
-        phone: formattedPhone,
-        alternatePhone: editMgrAlternatePhone.trim() || undefined,
-        state: editMgrState.trim() || undefined,
-        district: editMgrDistrict.trim() || undefined,
-        address: editMgrAddress.trim() || undefined,
-        isSeller: editIsSeller,
-        active: editMgrActive,
-      });
-
-      setScreenFeedback({
-        type: 'success',
-        message: `Manager ${editMgrName.trim()} saved.`,
-      });
-      setEditingManager(null);
-      loadUsers(false);
-      loadManagersList();
-    } catch (err: any) {
-      setEditPersonaError(err.message || 'Failed to update manager details.');
-    } finally {
-      setIsUpdatingPersona(false);
-    }
+    handleCloseUserModal();
   }
 
   function handleOpenEditSellerModal(seller: PublicUser) {
-    setEditingSeller(seller);
-    setEditSellerName(seller.name || '');
-    setEditSellerPhone((seller.phone || '').replace(/^\+91\s*/, '').replace(/\D/g, ''));
-    setEditSellerAlternatePhone(seller.alternatePhone || '');
-    setEditSellerVillage(seller.village || '');
-    setEditSellerState(seller.state || '');
-    setEditSellerDistrict(seller.district || '');
-    setEditDailyTarget(String((seller as any).dailyTarget || 30));
-    setEditSellerAddress(seller.address || '');
-    setEditSellerActive(seller.active !== false);
-    setEditSellerError(null);
+    handleOpenUserModal(seller);
   }
 
   function handleCloseEditSellerModal() {
-    if (isUpdatingSeller) return;
-    setEditingSeller(null);
-    setEditSellerError(null);
+    handleCloseUserModal();
+  }
+
+  async function handleSaveUserDetails() {
+    if (!selectedUser || isSavingUser) return;
+    if (!userName.trim()) {
+      setUserModalError('Full name is required.');
+      return;
+    }
+    const cleanPhone = userPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setUserModalError('Valid 10-digit mobile phone is required.');
+      return;
+    }
+
+    const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
+      ? `+${cleanPhone}`
+      : `+91${cleanPhone.slice(-10)}`;
+
+    setIsSavingUser(true);
+    setUserModalError(null);
+    setUserModalSuccess(null);
+
+    try {
+      if (selectedUser.role === 'MANAGER') {
+        const res = await adminApi.updateManager(selectedUser.id, {
+          name: userName.trim(),
+          phone: formattedPhone,
+          alternatePhone: userAlternatePhone.trim() || undefined,
+          email: userEmail.trim() || undefined,
+          state: userState.trim() || undefined,
+          district: userDistrict.trim() || undefined,
+          address: userAddress.trim() || undefined,
+          active: userActive,
+        });
+        const updated = {
+          ...selectedUser,
+          ...(res?.manager || {}),
+          name: userName.trim(),
+          phone: formattedPhone,
+          email: userEmail.trim() || selectedUser.email,
+          state: userState.trim() || selectedUser.state,
+          district: userDistrict.trim() || selectedUser.district,
+          address: userAddress.trim() || selectedUser.address,
+          active: userActive,
+        };
+        setSelectedUser(updated);
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+        setUserModalSuccess(`Manager ${updated.name} updated successfully.`);
+        setIsEditMode(false);
+        setScreenFeedback({ type: 'success', message: `Manager ${updated.name} saved.` });
+      } else {
+        const targetNum = parseInt(userDailyTarget, 10);
+        const res = await adminApi.updateSeller(selectedUser.id, {
+          name: userName.trim(),
+          phone: formattedPhone,
+          alternatePhone: userAlternatePhone.trim() || undefined,
+          email: userEmail.trim() || undefined,
+          village: userVillage.trim() || undefined,
+          state: userState.trim() || undefined,
+          district: userDistrict.trim() || undefined,
+          address: userAddress.trim() || undefined,
+          dailyTarget: isNaN(targetNum) ? 30 : targetNum,
+          active: userActive,
+          managerId: userAssignedManagerId || undefined,
+        });
+        const updated = {
+          ...selectedUser,
+          ...(res?.seller || {}),
+          name: userName.trim(),
+          phone: formattedPhone,
+          email: userEmail.trim() || selectedUser.email,
+          village: userVillage.trim() || selectedUser.village,
+          state: userState.trim() || selectedUser.state,
+          district: userDistrict.trim() || selectedUser.district,
+          address: userAddress.trim() || selectedUser.address,
+          dailyTarget: isNaN(targetNum) ? 30 : targetNum,
+          active: userActive,
+        };
+        setSelectedUser(updated);
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+        setUserModalSuccess(`Field Officer ${updated.name} updated successfully.`);
+        setIsEditMode(false);
+        setScreenFeedback({ type: 'success', message: `Seller ${updated.name} saved.` });
+      }
+      loadUsers(false);
+      loadManagersList();
+    } catch (err: any) {
+      setUserModalError(err.message || 'Failed to update user details.');
+    } finally {
+      setIsSavingUser(false);
+    }
+  }
+
+  async function handleSaveUserPermissions() {
+    if (!selectedUser || isSavingUser) return;
+    setIsSavingUser(true);
+    setUserModalError(null);
+    setUserModalSuccess(null);
+
+    try {
+      if (selectedUser.role === 'MANAGER') {
+        const sanitized = sanitizeBackendPermissions(managerPermissions);
+        await Promise.all([
+          adminApi.updateManager(selectedUser.id, {
+            isSeller: userIsSeller,
+            permissions: sanitized,
+          }),
+          adminApi.updateManagerPermissions(selectedUser.id, sanitized).catch(() => {}),
+        ]);
+        const updated = {
+          ...selectedUser,
+          isSeller: userIsSeller,
+          permissions: sanitized,
+        };
+        setSelectedUser(updated);
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+        setUserModalSuccess(`Permissions & persona saved for Manager ${selectedUser.name}.`);
+        setScreenFeedback({ type: 'success', message: `Permissions saved for Manager ${selectedUser.name}.` });
+      } else {
+        const targetNum = parseInt(userDailyTarget, 10);
+        await adminApi.updateSeller(selectedUser.id, {
+          active: sellerSalesActive,
+          dailyTarget: isNaN(targetNum) ? 30 : targetNum,
+          managerId: userAssignedManagerId || undefined,
+          allowPriceOverride: sellerPriceOverrideActive,
+        } as any);
+        const updated = {
+          ...selectedUser,
+          active: sellerSalesActive,
+          allowPriceOverride: sellerPriceOverrideActive,
+        };
+        setSelectedUser(updated);
+        setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+        setUserModalSuccess(`Operational permissions saved for ${selectedUser.name}.`);
+        setScreenFeedback({ type: 'success', message: `Seller ${selectedUser.name} permissions saved.` });
+      }
+      loadUsers(false);
+    } catch (err: any) {
+      setUserModalError(err.message || 'Failed to update permissions.');
+    } finally {
+      setIsSavingUser(false);
+    }
+  }
+
+  async function handleSavePersona() {
+    return handleSaveUserPermissions();
   }
 
   async function handleSaveSeller() {
-    if (!editingSeller || isUpdatingSeller) return;
-    if (!editSellerName.trim()) {
-      setEditSellerError('Seller name is required.');
-      return;
-    }
-    const cleanPhone = editSellerPhone.replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length < 10) {
-      setEditSellerError('Valid 10-digit phone number is required.');
-      return;
-    }
-    const targetNum = parseInt(editSellerDailyTarget, 10);
-
-    setIsUpdatingSeller(true);
-    setEditSellerError(null);
-    try {
-      const formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
-        ? `+${cleanPhone}`
-        : `+91${cleanPhone.slice(-10)}`;
-
-      await adminApi.updateSeller(editingSeller.id, {
-        name: editSellerName.trim(),
-        phone: formattedPhone,
-        alternatePhone: editSellerAlternatePhone.trim() || undefined,
-        village: editSellerVillage.trim() || undefined,
-        state: editSellerState.trim() || undefined,
-        district: editSellerDistrict.trim() || undefined,
-        address: editSellerAddress.trim() || undefined,
-        dailyTarget: isNaN(targetNum) ? 30 : targetNum,
-        active: editSellerActive,
-      });
-
-      setScreenFeedback({
-        type: 'success',
-        message: `Seller ${editSellerName.trim()} saved.`,
-      });
-      setEditingSeller(null);
-      loadUsers(false);
-    } catch (err: any) {
-      setEditSellerError(err.message || 'Failed to update seller.');
-    } finally {
-      setIsUpdatingSeller(false);
-    }
+    return handleSaveUserDetails();
   }
 
   function validateForm(): boolean {
@@ -452,8 +593,10 @@ export default function AdminUsersScreen() {
     return (
       <Card
         style={styles.card}
-        accessibilityRole="summary"
+        onPress={() => handleOpenUserModal(item)}
+        accessibilityRole="button"
         accessibilityLabel={`User ${item.name}, ${item.email || item.phone}, role ${tab === 'MANAGERS' ? 'Manager' : 'Seller'}, status ${item.active ? 'Active' : 'Inactive'}${isDualRole ? ', Can Also Sell' : ''}`}
+        accessibilityHint="Tap to view and edit user details and permissions"
       >
         <View style={styles.header}>
           <View style={styles.avatarRow}>
@@ -485,20 +628,23 @@ export default function AdminUsersScreen() {
               <Text style={styles.email}>{item.email || 'No email registered'}</Text>
             </View>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Badge
-              label={item.active ? 'ACTIVE' : 'INACTIVE'}
-              variant={item.active ? 'ACTIVE' : 'INACTIVE'}
-              size="sm"
-            />
-            {isDualRole && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ alignItems: 'flex-end', gap: 4 }}>
               <Badge
-                label="CAN ALSO SELL"
-                variant="ACTIVE"
+                label={item.active ? 'ACTIVE' : 'INACTIVE'}
+                variant={item.active ? 'ACTIVE' : 'INACTIVE'}
                 size="sm"
-                pulse={true}
               />
-            )}
+              {isDualRole && (
+                <Badge
+                  label="CAN ALSO SELL"
+                  variant="ACTIVE"
+                  size="sm"
+                  pulse={true}
+                />
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </View>
         </View>
 
@@ -1129,31 +1275,34 @@ export default function AdminUsersScreen() {
       </Modal>
 
       {/* ======================================================= */}
-      {/* EDIT MANAGER PERSONA & DUAL-ROLE CONFIGURATION MODAL   */}
+      {/* USER DETAILS & PERMISSIONS COMPREHENSIVE MODAL          */}
       {/* ======================================================= */}
       <Modal
-        visible={Boolean(editingManager)}
+        visible={Boolean(selectedUser)}
         animationType="slide"
         transparent
         statusBarTranslucent
-        onRequestClose={handleCloseEditModal}
+        onRequestClose={handleCloseUserModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
-          <Pressable style={styles.backdropDismiss} onPress={handleCloseEditModal} />
+          <Pressable style={styles.backdropDismiss} onPress={handleCloseUserModal} />
 
           <View style={styles.modalSheetCard}>
+            {/* Modal Header */}
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalHeading}>Configure Manager Persona</Text>
+                <Text style={styles.modalHeading}>
+                  {selectedUser?.role === 'MANAGER' ? 'Manager Profile & Permissions' : 'Field Officer Profile & Permissions'}
+                </Text>
                 <Text style={styles.modalSubheading}>
-                  Territory supervision & dual operational field roles
+                  {isEditMode ? 'Editing user profile and territory details' : 'View complete record, territory scope & system access'}
                 </Text>
               </View>
               <Pressable
-                onPress={handleCloseEditModal}
+                onPress={handleCloseUserModal}
                 hitSlop={HitSlop.md}
                 style={styles.modalCloseBtn}
                 accessibilityRole="button"
@@ -1163,225 +1312,636 @@ export default function AdminUsersScreen() {
               </Pressable>
             </View>
 
+            {/* User Profile Header Card */}
+            {selectedUser && (
+              <View style={styles.editManagerHeaderBox}>
+                <View
+                  style={[
+                    styles.editManagerAvatarCircle,
+                    {
+                      backgroundColor:
+                        selectedUser.role === 'MANAGER' ? BrandColors.green.subtle : BrandColors.pink.subtle,
+                      borderColor:
+                        selectedUser.role === 'MANAGER' ? BrandColors.green.tint : BrandColors.pink.tint,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.editManagerAvatarText,
+                      {
+                        color:
+                          selectedUser.role === 'MANAGER' ? BrandColors.green.primary : BrandColors.pink.dark,
+                      },
+                    ]}
+                  >
+                    {selectedUser.name?.slice(0, 2).toUpperCase() || 'U'}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, marginRight: Spacing.xs }}>
+                  <Text style={styles.editManagerName}>{selectedUser.name}</Text>
+                  <Text style={styles.editManagerSub}>
+                    {[selectedUser.district, selectedUser.state].filter(Boolean).join(', ') || 'All Regions'} • {selectedUser.phone || selectedUser.email}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Badge
+                    label={selectedUser.role === 'MANAGER' ? 'MANAGER' : 'OFFICER'}
+                    variant={selectedUser.role === 'MANAGER' ? 'ACTIVE' : 'info'}
+                    size="sm"
+                  />
+                  <Badge
+                    label={userActive ? 'ACTIVE' : 'INACTIVE'}
+                    variant={userActive ? 'ACTIVE' : 'INACTIVE'}
+                    size="sm"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Segmented Sub-Tabs: [Details] vs [Permissions] */}
+            <View style={styles.modalTabsRow}>
+              <Pressable
+                style={[styles.modalSubTab, modalTab === 'DETAILS' && styles.modalSubTabActive]}
+                onPress={() => {
+                  setModalTab('DETAILS');
+                  setUserModalError(null);
+                }}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: modalTab === 'DETAILS' }}
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={15}
+                  color={modalTab === 'DETAILS' ? BrandColors.pink.dark : Colors.light.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.modalSubTabText,
+                    modalTab === 'DETAILS' && styles.modalSubTabTextActive,
+                  ]}
+                >
+                  User Details
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modalSubTab, modalTab === 'PERMISSIONS' && styles.modalSubTabActive]}
+                onPress={() => {
+                  setModalTab('PERMISSIONS');
+                  setIsEditMode(false);
+                  setUserModalError(null);
+                }}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: modalTab === 'PERMISSIONS' }}
+              >
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={15}
+                  color={modalTab === 'PERMISSIONS' ? BrandColors.pink.dark : Colors.light.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.modalSubTabText,
+                    modalTab === 'PERMISSIONS' && styles.modalSubTabTextActive,
+                  ]}
+                >
+                  Permissions & Persona
+                </Text>
+              </Pressable>
+            </View>
+
             <ScrollView
               style={styles.modalFormScroll}
               contentContainerStyle={styles.modalFormScrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {editPersonaError && (
+              {userModalError && (
                 <FeedbackBanner
                   type="error"
-                  message={editPersonaError}
-                  onDismiss={() => setEditPersonaError(null)}
+                  message={userModalError}
+                  onDismiss={() => setUserModalError(null)}
                   style={{ marginBottom: Spacing.sm }}
                 />
               )}
 
-              {/* Manager Card Summary */}
-              {editingManager && (
-                <View style={styles.editManagerHeaderBox}>
-                  <View style={styles.editManagerAvatarCircle}>
-                    <Text style={styles.editManagerAvatarText}>
-                      {editingManager.name?.slice(0, 2).toUpperCase() || 'TM'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.editManagerName}>{editingManager.name}</Text>
-                    <Text style={styles.editManagerSub}>
-                      {[editingManager.district, editingManager.state].filter(Boolean).join(', ') || 'All Regions'} • {editingManager.phone || editingManager.email}
-                    </Text>
-                  </View>
-                  <Badge label="MANAGER" variant="ACTIVE" size="sm" />
-                </View>
+              {userModalSuccess && (
+                <FeedbackBanner
+                  type="success"
+                  message={userModalSuccess}
+                  onDismiss={() => setUserModalSuccess(null)}
+                  style={{ marginBottom: Spacing.sm }}
+                />
               )}
 
-                            {/* Editable Manager Details */}
-              <Input
-                label="Manager Full Name *"
-                value={editMgrName}
-                onChangeText={setEditMgrName}
-                placeholder="Full legal name"
-                autoCapitalize="words"
-                leftIcon={<Ionicons name="person-outline" size={18} color={Colors.light.textTertiary} />}
-              />
+              {/* TAB 1: DETAILS TAB */}
+              {modalTab === 'DETAILS' && (
+                <>
+                  {!isEditMode ? (
+                    // VIEW DETAILS MODE
+                    <View style={styles.viewModeContainer}>
+                      <View style={styles.quickContactRow}>
+                        {selectedUser?.phone ? (
+                          <Pressable
+                            style={styles.quickActionPill}
+                            onPress={() => Linking.openURL(`tel:${selectedUser.phone}`).catch(() => {})}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Call ${selectedUser.phone}`}
+                          >
+                            <Ionicons name="call" size={14} color="#FFFFFF" />
+                            <Text style={styles.quickActionPillText}>Call</Text>
+                          </Pressable>
+                        ) : null}
 
-              <View style={styles.formRow}>
-                <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                  <Input
-                    label="Primary Mobile *"
-                    value={editMgrPhone}
-                    onChangeText={setEditMgrPhone}
-                    placeholder="10-digit phone"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
-                  />
-                </View>
-                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Input
-                    label="Alternate Phone"
-                    value={editMgrAlternatePhone}
-                    onChangeText={setEditMgrAlternatePhone}
-                    placeholder="Secondary contact"
-                    keyboardType="phone-pad"
-                    maxLength={15}
-                  />
-                </View>
-              </View>
+                        {selectedUser?.email ? (
+                          <Pressable
+                            style={[styles.quickActionPill, styles.quickEmailPill]}
+                            onPress={() => Linking.openURL(`mailto:${selectedUser.email}`).catch(() => {})}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Email ${selectedUser.email}`}
+                          >
+                            <Ionicons name="mail" size={14} color="#FFFFFF" />
+                            <Text style={styles.quickActionPillText}>Email</Text>
+                          </Pressable>
+                        ) : null}
 
-              <View style={styles.formRow}>
-                <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                  <Input
-                    label="Assigned State"
-                    value={editMgrState}
-                    onChangeText={setEditMgrState}
-                    placeholder="e.g. Maharashtra"
-                    autoCapitalize="words"
-                  />
-                </View>
-                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Input
-                    label="Assigned District"
-                    value={editMgrDistrict}
-                    onChangeText={setEditMgrDistrict}
-                    placeholder="e.g. Thane"
-                    autoCapitalize="words"
-                  />
-                </View>
-              </View>
+                        <Pressable
+                          style={[styles.quickActionPill, styles.editActionPill]}
+                          onPress={() => setIsEditMode(true)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit user details"
+                        >
+                          <Ionicons name="pencil" size={14} color="#FFFFFF" />
+                          <Text style={styles.quickActionPillText}>Edit Details</Text>
+                        </Pressable>
+                      </View>
 
-              <Input
-                label="Office / Address"
-                value={editMgrAddress}
-                onChangeText={setEditMgrAddress}
-                placeholder="Regional headquarters or office"
-                multiline
-                numberOfLines={2}
-                leftIcon={<Ionicons name="business-outline" size={18} color={Colors.light.textTertiary} />}
-              />
+                      {/* Details Grid */}
+                      <View style={styles.infoSectionCard}>
+                        <Text style={styles.infoSectionHeader}>Personal & Contact Details</Text>
+                        <View style={styles.infoGridRow}>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>Full Name</Text>
+                            <Text style={styles.infoValueBold}>{selectedUser?.name || '—'}</Text>
+                          </View>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>Primary Mobile</Text>
+                            <Text style={styles.infoValue}>{selectedUser?.phone || 'Not registered'}</Text>
+                          </View>
+                        </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F8FAFC', borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.light.border, marginBottom: Spacing.md }}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ ...Typography.bodyMedium, fontWeight: '700', color: Colors.light.heading }}>Account Status</Text>
-                  <Text style={{ ...Typography.caption, color: Colors.light.textSecondary }}>{editMgrActive ? 'Manager is Active' : 'Manager is Disabled'}</Text>
-                </View>
-                <Pressable
-                  style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: BorderRadius.full, backgroundColor: editMgrActive ? '#DCFCE7' : '#FEE2E2', borderWidth: 1, borderColor: editMgrActive ? '#86EFAC' : '#FCA5A5' }}
-                  onPress={() => setEditMgrActive(!editMgrActive)}
-                  accessibilityRole="button"
-                >
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: editMgrActive ? '#15803D' : '#B91C1C' }}>{editMgrActive ? 'ACTIVE' : 'INACTIVE'}</Text>
-                </Pressable>
-              </View>
+                        <View style={styles.infoGridRow}>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>Email Address</Text>
+                            <Text style={styles.infoValue}>{selectedUser?.email || 'No email'}</Text>
+                          </View>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>Alternate Phone</Text>
+                            <Text style={styles.infoValue}>{selectedUser?.alternatePhone || 'None'}</Text>
+                          </View>
+                        </View>
+                      </View>
 
-              {/* Dual-Role Setting Toggle Card */}
-              <Pressable
-                style={[
-                  styles.dualRoleToggleCard,
-                  editIsSeller && styles.dualRoleToggleCardActive,
-                ]}
-                onPress={() => setEditIsSeller(!editIsSeller)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: editIsSeller }}
-                accessibilityLabel="Manager can also sell in field and hold van stock"
-              >
-                <View style={styles.dualRoleToggleLeft}>
-                  <View style={[styles.dualRoleToggleIconCircle, editIsSeller && styles.dualRoleToggleIconCircleActive]}>
-                    <Ionicons
-                      name="swap-horizontal"
-                      size={20}
-                      color={editIsSeller ? '#FFFFFF' : BrandColors.green.primary}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.dualRoleToggleTitle}>Manager Can Also Sell</Text>
-                      <Badge
-                        label={editIsSeller ? 'CAN SELL & STOCK' : 'OFF'}
-                        variant={editIsSeller ? 'ACTIVE' : 'neutral'}
-                        size="sm"
-                      />
+                      <View style={styles.infoSectionCard}>
+                        <Text style={styles.infoSectionHeader}>Territory & Geography</Text>
+                        <View style={styles.infoGridRow}>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>State</Text>
+                            <Text style={styles.infoValueBold}>{selectedUser?.state || 'Not assigned'}</Text>
+                          </View>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>District</Text>
+                            <Text style={styles.infoValueBold}>{selectedUser?.district || 'Not assigned'}</Text>
+                          </View>
+                        </View>
+
+                        {selectedUser?.village ? (
+                          <View style={styles.infoGridRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.infoLabel}>Village / Beat Area</Text>
+                              <Text style={styles.infoValue}>{selectedUser.village}</Text>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {selectedUser?.address ? (
+                          <View style={styles.infoGridRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.infoLabel}>Full Address / Office</Text>
+                              <Text style={styles.infoValue}>{selectedUser.address}</Text>
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.infoSectionCard}>
+                        <Text style={styles.infoSectionHeader}>Organization & Status</Text>
+                        <View style={styles.infoGridRow}>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>System Role</Text>
+                            <Text style={styles.infoValueBold}>
+                              {selectedUser?.role === 'MANAGER' ? 'Territory Manager' : 'Field Sales Officer'}
+                            </Text>
+                          </View>
+                          <View style={styles.infoGridCol}>
+                            <Text style={styles.infoLabel}>Account Status</Text>
+                            <Text style={[styles.infoValueBold, { color: userActive ? '#15803D' : '#B91C1C' }]}>
+                              {userActive ? 'Active' : 'Disabled'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {selectedUser?.role === 'SELLER' && (
+                          <View style={styles.infoGridRow}>
+                            <View style={styles.infoGridCol}>
+                              <Text style={styles.infoLabel}>Supervising Manager</Text>
+                              <Text style={styles.infoValueBold}>
+                                {availableManagers.find((m) => m.id === userAssignedManagerId)?.name || (selectedUser as any).manager?.name || 'Assigned Manager'}
+                              </Text>
+                            </View>
+                            <View style={styles.infoGridCol}>
+                              <Text style={styles.infoLabel}>Daily Visit Target</Text>
+                              <Text style={styles.infoValueBold}>{userDailyTarget} outlets / day</Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {selectedUser?.role === 'MANAGER' && (
+                          <View style={styles.infoGridRow}>
+                            <View style={styles.infoGridCol}>
+                              <Text style={styles.infoLabel}>Dual Persona</Text>
+                              <Text style={styles.infoValueBold}>
+                                {userIsSeller ? 'Can Also Sell & Hold Van Stock' : 'Management Only'}
+                              </Text>
+                            </View>
+                            <View style={styles.infoGridCol}>
+                              <Text style={styles.infoLabel}>Supervised Officers</Text>
+                              <Text style={styles.infoValueBold}>Territory Team Lead</Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={{ marginTop: Spacing.sm }}>
+                        <Button
+                          title="Edit User Details"
+                          variant="outline"
+                          size="md"
+                          onPress={() => setIsEditMode(true)}
+                        />
+                      </View>
                     </View>
-                    <Text style={styles.dualRoleToggleDesc}>
-                      {editIsSeller
-                        ? 'Manager can take customer orders, do shop visits, and hold van stock.'
-                        : 'Manager can only manage the team and cannot take shop orders.'}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.switchTrack, editIsSeller && styles.switchTrackActive]}>
-                  <View style={[styles.switchThumb, editIsSeller && styles.switchThumbActive]} />
-                </View>
-              </Pressable>
+                  ) : (
+                    // EDIT DETAILS MODE
+                    <View style={styles.editModeContainer}>
+                      <Input
+                        label="Full Name *"
+                        value={userName}
+                        onChangeText={setUserName}
+                        placeholder="Full legal name"
+                        autoCapitalize="words"
+                        leftIcon={<Ionicons name="person-outline" size={18} color={Colors.light.textTertiary} />}
+                      />
 
-              {/* Architectural Feature Explanation Box */}
-              <View style={styles.architectureBox}>
-                <View style={styles.archTitleRow}>
-                  <Ionicons name="information-circle-outline" size={18} color={BrandColors.pink.primary} />
-                  <Text style={styles.archTitle}>What This Means</Text>
-                </View>
+                      <View style={styles.formRow}>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Input
+                            label="Primary Mobile *"
+                            value={userPhone}
+                            onChangeText={setUserPhone}
+                            placeholder="10-digit number"
+                            keyboardType="phone-pad"
+                            maxLength={10}
+                            leftIcon={<Ionicons name="call-outline" size={18} color={Colors.light.textTertiary} />}
+                          />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                          <Input
+                            label="Alternate Phone"
+                            value={userAlternatePhone}
+                            onChangeText={setUserAlternatePhone}
+                            placeholder="Secondary contact"
+                            keyboardType="phone-pad"
+                            maxLength={15}
+                          />
+                        </View>
+                      </View>
 
-                <View style={styles.archItem}>
-                  <Ionicons name="swap-horizontal-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Can Use Manager & Seller Screens</Text>
-                    <Text style={styles.archItemDesc}>
-                      Can manage the team and also take orders, start daily duty, and visit shops.
-                    </Text>
-                  </View>
-                </View>
+                      <Input
+                        label="Email Address"
+                        value={userEmail}
+                        onChangeText={setUserEmail}
+                        placeholder="email@example.com (optional)"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.light.textTertiary} />}
+                      />
 
-                <View style={styles.archItem}>
-                  <Ionicons name="car-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Can Hold Van Stock</Text>
-                    <Text style={styles.archItemDesc}>
-                      Stock can be transferred directly to this manager's van to sell to shops.
-                    </Text>
-                  </View>
-                </View>
+                      <View style={styles.formRow}>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Input
+                            label="State"
+                            value={userState}
+                            onChangeText={setUserState}
+                            placeholder="e.g. Maharashtra"
+                            autoCapitalize="words"
+                          />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                          <Input
+                            label="District"
+                            value={userDistrict}
+                            onChangeText={setUserDistrict}
+                            placeholder="e.g. Thane"
+                            autoCapitalize="words"
+                          />
+                        </View>
+                      </View>
 
-                <View style={styles.archItem}>
-                  <Ionicons name="storefront-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>Can Add Shops</Text>
-                    <Text style={styles.archItemDesc}>
-                      Can register and visit new shops in their area directly on the phone.
-                    </Text>
-                  </View>
-                </View>
+                      {selectedUser?.role === 'SELLER' && (
+                        <View style={styles.formRow}>
+                          <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                            <Input
+                              label="Village / Beat Area"
+                              value={userVillage}
+                              onChangeText={setUserVillage}
+                              placeholder="e.g. Rural Beat 1"
+                              autoCapitalize="words"
+                            />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                            <Input
+                              label="Daily Visit Target"
+                              value={userDailyTarget}
+                              onChangeText={setUserDailyTarget}
+                              placeholder="e.g. 30"
+                              keyboardType="numeric"
+                            />
+                          </View>
+                        </View>
+                      )}
 
-                <View style={styles.archItem}>
-                  <Ionicons name="key-outline" size={15} color={BrandColors.green.primary} style={styles.archIcon} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.archItemHeading}>One Login For Everything</Text>
-                    <Text style={styles.archItemDesc}>
-                      One phone number and password works for both managing the team and selling.
-                    </Text>
-                  </View>
+                      <Input
+                        label="Address / Office"
+                        value={userAddress}
+                        onChangeText={setUserAddress}
+                        placeholder="Street or office location"
+                        multiline
+                        numberOfLines={2}
+                        leftIcon={<Ionicons name="business-outline" size={18} color={Colors.light.textTertiary} />}
+                      />
+
+                      {/* Active Account Status Switch */}
+                      <View style={styles.statusToggleContainer}>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Text style={styles.statusToggleTitle}>Account Active Status</Text>
+                          <Text style={styles.statusToggleSubtitle}>
+                            {userActive ? 'User can log in and perform duties' : 'User account is disabled from logging in'}
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={[
+                            styles.statusToggleBtn,
+                            {
+                              backgroundColor: userActive ? '#DCFCE7' : '#FEE2E2',
+                              borderColor: userActive ? '#86EFAC' : '#FCA5A5',
+                            },
+                          ]}
+                          onPress={() => setUserActive(!userActive)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Toggle account active status"
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: userActive ? '#15803D' : '#B91C1C' }}>
+                            {userActive ? 'ACTIVE' : 'INACTIVE'}
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      {/* Edit Actions */}
+                      <View style={styles.modalActionRow}>
+                        <Button
+                          title="Cancel"
+                          variant="outline"
+                          size="md"
+                          style={{ flex: 1, marginRight: Spacing.sm }}
+                          onPress={() => setIsEditMode(false)}
+                          disabled={isSavingUser}
+                        />
+                        <Button
+                          title={isSavingUser ? 'Saving...' : 'Save User Details'}
+                          variant="admin"
+                          size="md"
+                          style={{ flex: 1.5 }}
+                          loading={isSavingUser}
+                          onPress={handleSaveUserDetails}
+                        />
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* TAB 2: PERMISSIONS & PERSONA TAB */}
+              {modalTab === 'PERMISSIONS' && (
+                <View style={styles.permissionsTabContainer}>
+                  {selectedUser?.role === 'MANAGER' ? (
+                    <>
+                      {/* Dual-Role Setting Toggle Card */}
+                      <Pressable
+                        style={[
+                          styles.dualRoleToggleCard,
+                          userIsSeller && styles.dualRoleToggleCardActive,
+                        ]}
+                        onPress={() => setUserIsSeller(!userIsSeller)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: userIsSeller }}
+                        accessibilityLabel="Manager can also sell in field and hold van stock"
+                      >
+                        <View style={styles.dualRoleToggleLeft}>
+                          <View style={[styles.dualRoleToggleIconCircle, userIsSeller && styles.dualRoleToggleIconCircleActive]}>
+                            <Ionicons
+                              name="swap-horizontal"
+                              size={20}
+                              color={userIsSeller ? '#FFFFFF' : BrandColors.green.primary}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.dualRoleToggleTitle}>Manager Can Also Sell</Text>
+                              <Badge
+                                label={userIsSeller ? 'CAN SELL & STOCK' : 'OFF'}
+                                variant={userIsSeller ? 'ACTIVE' : 'neutral'}
+                                size="sm"
+                              />
+                            </View>
+                            <Text style={styles.dualRoleToggleDesc}>
+                              {userIsSeller
+                                ? 'Dual-Role Enabled: Manager can take customer orders, do shop visits, and hold van stock on mobile.'
+                                : 'Manager can supervise team only; field selling screens remain hidden.'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={[styles.switchTrack, userIsSeller && styles.switchTrackActive]}>
+                          <View style={[styles.switchThumb, userIsSeller && styles.switchThumbActive]} />
+                        </View>
+                      </Pressable>
+
+                      {/* Manager Operational Permissions Matrix */}
+                      <Text style={styles.permissionsSectionHeader}>Managerial Access Rights</Text>
+                      <Text style={styles.permissionsSectionSub}>
+                        Configure territory operational privileges for this manager.
+                      </Text>
+
+                      {MANAGER_PERMISSIONS.map((permKey) => {
+                        const meta = PERMISSION_METADATA[permKey];
+                        const isGranted = managerPermissions.includes(permKey);
+                        return (
+                          <View key={permKey} style={styles.permissionItemRow}>
+                            <View style={styles.permissionItemIconCircle}>
+                              <Ionicons
+                                name={
+                                  permKey.includes('customers')
+                                    ? 'storefront-outline'
+                                    : permKey.includes('sellers')
+                                    ? 'people-outline'
+                                    : permKey.includes('inventory')
+                                    ? 'cube-outline'
+                                    : permKey.includes('approve')
+                                    ? 'checkmark-done-circle-outline'
+                                    : 'analytics-outline'
+                                }
+                                size={18}
+                                color={isGranted ? BrandColors.green.primary : '#94A3B8'}
+                              />
+                            </View>
+                            <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                              <Text style={styles.permissionItemTitle}>{meta?.label || permKey}</Text>
+                              <Text style={styles.permissionItemDesc}>{meta?.description || ''}</Text>
+                            </View>
+                            <Switch
+                              value={isGranted}
+                              onValueChange={() => {
+                                setManagerPermissions((prev) =>
+                                  prev.includes(permKey)
+                                    ? prev.filter((p) => p !== permKey)
+                                    : [...prev, permKey]
+                                );
+                              }}
+                              trackColor={{ false: '#CBD5E1', true: BrandColors.green.tint }}
+                              thumbColor={isGranted ? BrandColors.green.primary : '#94A3B8'}
+                            />
+                          </View>
+                        );
+                      })}
+
+                      <View style={{ marginTop: Spacing.lg }}>
+                        <Button
+                          title={isSavingUser ? 'Saving Permissions...' : 'Save Permissions & Persona'}
+                          variant="admin"
+                          size="md"
+                          loading={isSavingUser}
+                          onPress={handleSaveUserPermissions}
+                        />
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      {/* Seller Operational Permissions */}
+                      <Text style={styles.permissionsSectionHeader}>Field Officer Operational Access</Text>
+                      <Text style={styles.permissionsSectionSub}>
+                        Configure active selling authorities and capabilities for this field officer.
+                      </Text>
+
+                      <View style={styles.permissionItemRow}>
+                        <View style={styles.permissionItemIconCircle}>
+                          <Ionicons name="cart-outline" size={18} color={sellerSalesActive ? BrandColors.pink.dark : '#94A3B8'} />
+                        </View>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Text style={styles.permissionItemTitle}>Active Field Sales Duty</Text>
+                          <Text style={styles.permissionItemDesc}>
+                            Allow starting daily shifts, logging store visits, and taking orders.
+                          </Text>
+                        </View>
+                        <Switch
+                          value={sellerSalesActive}
+                          onValueChange={setSellerSalesActive}
+                          trackColor={{ false: '#CBD5E1', true: BrandColors.pink.tint }}
+                          thumbColor={sellerSalesActive ? BrandColors.pink.dark : '#94A3B8'}
+                        />
+                      </View>
+
+                      <View style={styles.permissionItemRow}>
+                        <View style={styles.permissionItemIconCircle}>
+                          <Ionicons name="storefront-outline" size={18} color={sellerOnboardingActive ? BrandColors.pink.dark : '#94A3B8'} />
+                        </View>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Text style={styles.permissionItemTitle}>Retailer / Shop Onboarding</Text>
+                          <Text style={styles.permissionItemDesc}>
+                            Authorized to register new retail shops with GPS location and photo.
+                          </Text>
+                        </View>
+                        <Switch
+                          value={sellerOnboardingActive}
+                          onValueChange={setSellerOnboardingActive}
+                          trackColor={{ false: '#CBD5E1', true: BrandColors.pink.tint }}
+                          thumbColor={sellerOnboardingActive ? BrandColors.pink.dark : '#94A3B8'}
+                        />
+                      </View>
+
+                      <View style={styles.permissionItemRow}>
+                        <View style={styles.permissionItemIconCircle}>
+                          <Ionicons name="bus-outline" size={18} color={sellerVanStockActive ? BrandColors.pink.dark : '#94A3B8'} />
+                        </View>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Text style={styles.permissionItemTitle}>Van Stock Possession</Text>
+                          <Text style={styles.permissionItemDesc}>
+                            Authorized to hold mobile van inventory and deliver on the spot.
+                          </Text>
+                        </View>
+                        <Switch
+                          value={sellerVanStockActive}
+                          onValueChange={setSellerVanStockActive}
+                          trackColor={{ false: '#CBD5E1', true: BrandColors.pink.tint }}
+                          thumbColor={sellerVanStockActive ? BrandColors.pink.dark : '#94A3B8'}
+                        />
+                      </View>
+
+                      <View style={styles.permissionItemRow}>
+                        <View style={styles.permissionItemIconCircle}>
+                          <Ionicons name="pricetag-outline" size={18} color={sellerPriceOverrideActive ? BrandColors.pink.dark : '#94A3B8'} />
+                        </View>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Text style={styles.permissionItemTitle}>Price & Discount Overrides</Text>
+                          <Text style={styles.permissionItemDesc}>
+                            Authorized to apply promotional discounts subject to manager approval.
+                          </Text>
+                        </View>
+                        <Switch
+                          value={sellerPriceOverrideActive}
+                          onValueChange={setSellerPriceOverrideActive}
+                          trackColor={{ false: '#CBD5E1', true: BrandColors.pink.tint }}
+                          thumbColor={sellerPriceOverrideActive ? BrandColors.pink.dark : '#94A3B8'}
+                        />
+                      </View>
+
+                      <View style={{ marginTop: Spacing.lg }}>
+                        <Button
+                          title={isSavingUser ? 'Saving Permissions...' : 'Save Officer Permissions'}
+                          variant="admin"
+                          size="md"
+                          loading={isSavingUser}
+                          onPress={handleSaveUserPermissions}
+                        />
+                      </View>
+                    </>
+                  )}
                 </View>
-              </View>
+              )}
             </ScrollView>
-
-            <View style={styles.modalActionRow}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                size="md"
-                style={{ flex: 1, marginRight: Spacing.sm }}
-                onPress={handleCloseEditModal}
-                disabled={isUpdatingPersona}
-              />
-              <Button
-                title={isUpdatingPersona ? 'Saving...' : 'Save Persona Settings'}
-                variant="admin"
-                size="md"
-                style={{ flex: 1.5 }}
-                loading={isUpdatingPersona}
-                onPress={handleSavePersona}
-              />
-            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1921,5 +2481,184 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     fontSize: 11,
     lineHeight: 15,
+  },
+
+  // Comprehensive User Management Modal Styles
+  modalTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.md,
+    padding: 3,
+    marginBottom: Spacing.md,
+    gap: 4,
+  },
+  modalSubTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: BorderRadius.sm,
+    gap: 6,
+  },
+  modalSubTabActive: {
+    backgroundColor: '#FFFFFF',
+    ...Elevation.low,
+  },
+  modalSubTabText: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+  },
+  modalSubTabTextActive: {
+    color: BrandColors.pink.dark,
+  },
+  viewModeContainer: {
+    gap: Spacing.sm,
+  },
+  editModeContainer: {
+    gap: Spacing.xs,
+  },
+  quickContactRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
+  },
+  quickActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BrandColors.green.primary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+  },
+  quickEmailPill: {
+    backgroundColor: '#0284C7',
+  },
+  editActionPill: {
+    backgroundColor: BrandColors.pink.dark,
+    marginLeft: 'auto',
+  },
+  quickActionPillText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  infoSectionCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    padding: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  infoSectionHeader: {
+    ...Typography.caption,
+    fontWeight: '800',
+    color: BrandColors.pink.dark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Spacing.sm,
+  },
+  infoGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  infoGridCol: {
+    flex: 1,
+  },
+  infoLabel: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  infoValue: {
+    ...Typography.bodySmall,
+    color: Colors.light.textPrimary,
+  },
+  infoValueBold: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  statusToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginBottom: Spacing.md,
+    marginTop: Spacing.xs,
+  },
+  statusToggleTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.heading,
+  },
+  statusToggleSubtitle: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  statusToggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  permissionsTabContainer: {
+    paddingBottom: Spacing.md,
+  },
+  permissionsSectionHeader: {
+    ...Typography.bodyLarge,
+    fontWeight: '800',
+    color: Colors.light.heading,
+    marginTop: Spacing.sm,
+  },
+  permissionsSectionSub: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.md,
+    marginTop: 2,
+  },
+  permissionItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    ...Elevation.low,
+  },
+  permissionItemIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  },
+  permissionItemTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.textPrimary,
+  },
+  permissionItemDesc: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
   },
 });

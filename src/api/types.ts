@@ -134,6 +134,7 @@ export interface UpdateCustomerPayload {
   sellerId?: string;
   photoUrl?: string;
   noPhotoReason?: string;
+  active?: boolean;
 }
 
 export interface BulkCustomerRow {

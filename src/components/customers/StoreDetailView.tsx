@@ -62,6 +62,7 @@ interface CustomerFormData {
   state: string;
   pincode: string;
   categoryId: string;
+  active: boolean;
 }
 
 export function StoreDetailView({
@@ -121,6 +122,7 @@ export function StoreDetailView({
       state: cust.state || '',
       pincode: cust.pincode || '',
       categoryId: cust.categoryId || cust.category?.id || '',
+      active: cust.active !== false,
     });
     setFormErrors({});
   }, []);
@@ -267,6 +269,7 @@ export function StoreDetailView({
         state: formData.state.trim(),
         pincode: formData.pincode.trim(),
         categoryId: formData.categoryId || undefined,
+        active: formData.active,
       };
 
       const res = await updateCustomer(customerId, payload);
@@ -285,6 +288,7 @@ export function StoreDetailView({
         pincode: payload.pincode || customer.pincode,
         categoryId: payload.categoryId || customer.categoryId,
         category: selectedCategory || (res?.customer?.category ?? customer.category),
+        active: formData.active,
       };
 
       setCustomer(updatedCustomer);
@@ -687,6 +691,31 @@ export function StoreDetailView({
                   error={formErrors.email}
                   leftIcon={<Ionicons name="mail-outline" size={18} color="#64748B" />}
                 />
+
+                <View style={styles.statusToggleContainer}>
+                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                    <Text style={styles.statusToggleTitle}>Store Status</Text>
+                    <Text style={styles.statusToggleSubtitle}>
+                      {formData.active ? 'Store is active and open for taking orders' : 'Store is marked inactive / closed'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={[
+                      styles.statusToggleBtn,
+                      {
+                        backgroundColor: formData.active ? '#DCFCE7' : '#FEE2E2',
+                        borderColor: formData.active ? '#86EFAC' : '#FCA5A5',
+                      },
+                    ]}
+                    onPress={() => setFormData((prev) => ({ ...prev, active: !prev.active }))}
+                    accessibilityRole="button"
+                    accessibilityLabel="Toggle store active status"
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: formData.active ? '#15803D' : '#B91C1C' }}>
+                      {formData.active ? 'ACTIVE' : 'INACTIVE'}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             ) : (
               <View style={styles.viewDetailsGrid}>
@@ -708,6 +737,17 @@ export function StoreDetailView({
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Email Address</Text>
                   <Text style={styles.detailValue}>{customer.email || 'Not provided'}</Text>
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Store Status</Text>
+                  <View style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+                    <Badge
+                      label={customer.active !== false ? 'ACTIVE' : 'INACTIVE'}
+                      variant={customer.active !== false ? 'ACTIVE' : 'INACTIVE'}
+                      size="sm"
+                    />
+                  </View>
                 </View>
               </View>
             )}
@@ -1512,6 +1552,35 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     fontWeight: '800',
     color: BrandColors.pink.primary,
+  },
+  statusToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  statusToggleTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.heading,
+  },
+  statusToggleSubtitle: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  statusToggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   modalBackdrop: {
     flex: 1,
