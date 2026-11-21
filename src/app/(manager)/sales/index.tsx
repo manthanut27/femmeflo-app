@@ -1,5 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,6 +9,7 @@ import {
   DeviceEventEmitter,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -269,12 +272,95 @@ export default function ManagerSalesScreen() {
     return result;
   }, [sales, statusFilter, searchQuery]);
 
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+
   const filterTabs = [
     { key: 'ALL' as const, label: 'All', badge: sales.length },
     { key: 'CONFIRMED' as const, label: 'Confirmed', badge: sales.filter((s) => s.status === 'CONFIRMED').length },
     { key: 'PENDING' as const, label: 'Pending', badge: sales.filter((s) => s.status === 'PENDING' || s.status === 'PENDING_APPROVAL').length },
     { key: 'REJECTED' as const, label: 'Rejected', badge: sales.filter((s) => s.status === 'REJECTED').length },
   ];
+
+  async function handleViewInvoice(sale: SaleItem) {
+    const invoiceId = sale.invoice?.id || sale.id;
+    const pdfUrl = managerApi.getInvoicePdfUrl(invoiceId, false);
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.open(pdfUrl, '_blank');
+      }
+      return;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(pdfUrl);
+      if (canOpen) {
+        await Linking.openURL(pdfUrl);
+      } else {
+        await handleShareInvoicePdf(sale);
+      }
+    } catch {
+      await handleShareInvoicePdf(sale);
+    }
+  }
+
+  async function handleShareInvoicePdf(sale: SaleItem) {
+    const invoiceId = sale.invoice?.id || sale.id;
+    if (downloadingInvoiceId) return;
+    setDownloadingInvoiceId(sale.id);
+
+    try {
+      const pdfUrl = managerApi.getInvoicePdfUrl(invoiceId, true);
+
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.open(pdfUrl, '_blank');
+        }
+        return;
+      }
+
+      const filename = `Invoice_${sale.saleNumber || invoiceId}.pdf`;
+      const localUri = `${FileSystem.cacheDirectory}${filename}`;
+
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+
+      if (downloadRes.status === 200) {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(downloadRes.uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Share Invoice ${sale.saleNumber || ''}`,
+            UTI: 'com.adobe.pdf',
+          });
+        } else {
+          Alert.alert('Invoice Saved', `Downloaded to: ${downloadRes.uri}`);
+        }
+      } else {
+        Alert.alert('Download Error', 'Could not retrieve invoice PDF from server.');
+      }
+    } catch (err: any) {
+      Alert.alert('Share Failed', err.message || 'Unable to download invoice PDF.');
+    } finally {
+      setDownloadingInvoiceId(null);
+    }
+  }
+
+  function handleShareWhatsAppInvoice(sale: SaleItem) {
+    const shopName = sale.customer?.shopName || 'Retailer';
+    const amountStr = formatCurrencyINR(sale.totalAmountPaise || sale.totalPaise || 0);
+    const invoiceNum = sale.invoice?.number || sale.saleNumber || `#${sale.id.slice(0, 8)}`;
+    const text = encodeURIComponent(
+      `*FemmeFlo Official Tax Invoice*\n\nDear ${shopName},\nYour invoice *${invoiceNum}* for *${amountStr}* has been issued.\n\nThank you for partnering with FemmeFlo for healthy hygiene solutions!`
+    );
+    const rawPhone = sale.customer?.phone || (sale.customer as any)?.mobile || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+    const waUrl = cleanPhone
+      ? `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${text}`
+      : `https://api.whatsapp.com/send?text=${text}`;
+    Linking.openURL(waUrl).catch(() => {
+      Alert.alert('WhatsApp Error', 'Could not launch WhatsApp on this device.');
+    });
+  }
 
   const renderTransactionItem = ({ item }: { item: SaleItem }) => {
     const totalAmount = item.totalAmountPaise ?? item.totalPaise ?? 0;
@@ -342,6 +428,48 @@ export default function ManagerSalesScreen() {
           </View>
           <Text style={styles.amount}>{formatCurrencyINR(totalAmount)}</Text>
         </View>
+
+        {/* Confirmed Tax Invoice Actions */}
+        {item.status === 'CONFIRMED' && (
+          <View style={styles.managerInvoiceRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`View Invoice for ${item.saleNumber || item.id}`}
+              style={({ pressed }) => [styles.managerPdfBtn, pressed && styles.btnPressed]}
+              onPress={() => handleViewInvoice(item)}
+            >
+              <Ionicons name="document-text-outline" size={13} color={BrandColors.green.primary} />
+              <Text style={styles.managerPdfBtnText}>Tax Invoice</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Share Invoice on WhatsApp for ${item.saleNumber || item.id}`}
+              style={({ pressed }) => [styles.managerWaBtn, pressed && styles.btnPressed]}
+              onPress={() => handleShareWhatsAppInvoice(item)}
+            >
+              <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" />
+              <Text style={styles.managerWaBtnText}>WhatsApp</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Share Invoice PDF for ${item.saleNumber || item.id}`}
+              style={({ pressed }) => [styles.managerShareBtn, pressed && styles.btnPressed]}
+              onPress={() => handleShareInvoicePdf(item)}
+              disabled={downloadingInvoiceId === item.id}
+            >
+              {downloadingInvoiceId === item.id ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="share-social-outline" size={13} color="#FFFFFF" />
+                  <Text style={styles.managerShareBtnText}>Share</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        )}
       </Card>
     );
   };
@@ -571,6 +699,48 @@ export default function ManagerSalesScreen() {
                                     icon={<Ionicons name="pricetag-outline" size={14} color={BrandColors.pink.primary} />}
                                     onPress={() => handleOpenManagerPriceModal(item)}
                                   />
+                                </View>
+                              )}
+
+                              {/* Confirmed Tax Invoice Actions */}
+                              {item.status === 'CONFIRMED' && (
+                                <View style={styles.managerInvoiceRow}>
+                                  <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`View Invoice for ${item.saleNumber || item.id}`}
+                                    style={({ pressed }) => [styles.managerPdfBtn, pressed && styles.btnPressed]}
+                                    onPress={() => handleViewInvoice(item)}
+                                  >
+                                    <Ionicons name="document-text-outline" size={13} color={BrandColors.green.primary} />
+                                    <Text style={styles.managerPdfBtnText}>Tax Invoice</Text>
+                                  </Pressable>
+
+                                  <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Share Invoice on WhatsApp for ${item.saleNumber || item.id}`}
+                                    style={({ pressed }) => [styles.managerWaBtn, pressed && styles.btnPressed]}
+                                    onPress={() => handleShareWhatsAppInvoice(item)}
+                                  >
+                                    <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" />
+                                    <Text style={styles.managerWaBtnText}>WhatsApp</Text>
+                                  </Pressable>
+
+                                  <Pressable
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Share Invoice PDF for ${item.saleNumber || item.id}`}
+                                    style={({ pressed }) => [styles.managerShareBtn, pressed && styles.btnPressed]}
+                                    onPress={() => handleShareInvoicePdf(item)}
+                                    disabled={downloadingInvoiceId === item.id}
+                                  >
+                                    {downloadingInvoiceId === item.id ? (
+                                      <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                      <>
+                                        <Ionicons name="share-social-outline" size={13} color="#FFFFFF" />
+                                        <Text style={styles.managerShareBtnText}>Share</Text>
+                                      </>
+                                    )}
+                                  </Pressable>
                                 </View>
                               )}
                             </Card>
@@ -1252,5 +1422,59 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     fontWeight: '800',
     color: '#15803D',
+  },
+  managerInvoiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderSubtle,
+    flexWrap: 'wrap',
+  },
+  managerPdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.green.border,
+    backgroundColor: BrandColors.green.subtle,
+    gap: 4,
+  },
+  managerPdfBtnText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: BrandColors.green.primary,
+  },
+  managerWaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: Radius.sm,
+    backgroundColor: '#25D366',
+    gap: 4,
+  },
+  managerWaBtnText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  managerShareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: Radius.sm,
+    backgroundColor: BrandColors.green.primary,
+    gap: 4,
+  },
+  managerShareBtnText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

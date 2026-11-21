@@ -35,6 +35,15 @@ import {
 } from '@/constants/theme';
 import { formatCurrencyINR } from '@/utils/dateUtils';
 
+function escapeCsvCell(val: any): string {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 type PaymentFilter = 'ALL' | 'PAID' | 'PENDING';
 
 export default function AdminInvoicesScreen() {
@@ -69,6 +78,7 @@ export default function AdminInvoicesScreen() {
   const [search, setSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('ALL');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -180,6 +190,109 @@ export default function AdminInvoicesScreen() {
     }
   }
 
+  function handleShareWhatsApp(invoice: InvoiceItem) {
+    const sale = invoice.sale;
+    const shopName = sale?.customer?.shopName || 'Valued Retailer';
+    const amountStr = formatCurrencyINR(sale?.totalAmountPaise || sale?.totalPaise || 0);
+    const invoiceNum = invoice.number || 'Tax Invoice';
+    const text = encodeURIComponent(
+      `*FemmeFlo Official Tax Invoice*\n\nDear ${shopName},\nYour invoice *${invoiceNum}* for *${amountStr}* has been issued.\n\nThank you for partnering with FemmeFlo for healthy hygiene solutions!`
+    );
+    const rawPhone = sale?.customer?.phone || (sale?.customer as any)?.mobile || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+    const waUrl = cleanPhone
+      ? `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${text}`
+      : `https://api.whatsapp.com/send?text=${text}`;
+    Linking.openURL(waUrl).catch(() => {
+      Alert.alert('WhatsApp Error', 'Could not launch WhatsApp on this device.');
+    });
+  }
+
+  function handleShareEmail(invoice: InvoiceItem) {
+    const sale = invoice.sale;
+    const email = (sale?.customer as any)?.email || '';
+    const shopName = sale?.customer?.shopName || 'Valued Retailer';
+    const amountStr = formatCurrencyINR(sale?.totalAmountPaise || sale?.totalPaise || 0);
+    const invoiceNum = invoice.number || 'Tax Invoice';
+    const subject = encodeURIComponent(`FemmeFlo Tax Invoice - ${invoiceNum}`);
+    const body = encodeURIComponent(
+      `Dear ${shopName},\n\nPlease find details for your tax invoice ${invoiceNum} totaling ${amountStr}.\n\nThank you for choosing FemmeFlo.\n\nWarm regards,\nFemmeFlo Distribution Team`
+    );
+    const mailUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+    Linking.openURL(mailUrl).catch(() => {
+      Alert.alert('Email Error', 'Could not launch email app on this device.');
+    });
+  }
+
+  async function handleExportCsv() {
+    if (isExportingCsv || invoices.length === 0) return;
+    setIsExportingCsv(true);
+    try {
+      const headers = [
+        'Invoice Number',
+        'Date',
+        'Customer Shop',
+        'Contact Phone',
+        'Seller',
+        'Sale Reference',
+        'Amount (INR)',
+        'Payment Status',
+        'Delivery Channels',
+      ];
+      const rows = filteredInvoices.map((inv) => [
+        inv.number,
+        inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN') : '',
+        inv.sale?.customer?.shopName || 'Customer',
+        inv.sale?.customer?.phone || '',
+        inv.sale?.seller?.name || '',
+        inv.sale?.saleNumber || inv.saleId || '',
+        ((inv.sale?.totalAmountPaise || inv.sale?.totalPaise || 0) / 100).toFixed(2),
+        inv.sale?.paymentMode === 'PENDING' || inv.sale?.paymentMode === 'CREDIT' ? 'PENDING' : 'PAID',
+        inv.deliveries?.map((d) => d.channel).join('; ') || 'Tax Invoice',
+      ]);
+
+      const csvContent = [
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((r) => r.map(escapeCsvCell).join(',')),
+      ].join('\r\n');
+
+      const filename = `femmeflo-invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      const localUri = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(localUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(localUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Invoices CSV',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        Alert.alert('CSV Exported', `Saved to ${localUri}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Export Error', err.message || 'Could not export invoices CSV.');
+    } finally {
+      setIsExportingCsv(false);
+    }
+  }
+
   function renderInvoiceItem({ item }: { item: InvoiceItem }) {
     const sale = item.sale;
     const isPendingPayment = sale?.paymentMode === 'PENDING' || sale?.paymentMode === 'CREDIT';
@@ -250,7 +363,7 @@ export default function AdminInvoicesScreen() {
 
         {/* Footer row: Total amount & Actions */}
         <View style={styles.cardFooter}>
-          <View>
+          <View style={{ marginRight: Spacing.sm }}>
             <Text style={styles.amountLabel}>Total Amount</Text>
             <Text style={styles.amountValue}>{formatCurrencyINR(amountPaise)}</Text>
           </View>
@@ -262,8 +375,18 @@ export default function AdminInvoicesScreen() {
               style={({ pressed }) => [styles.pdfBtn, pressed && styles.btnPressed]}
               onPress={() => handleViewPdf(item)}
             >
-              <Ionicons name="eye-outline" size={16} color={BrandColors.pink.dark} />
+              <Ionicons name="eye-outline" size={15} color={BrandColors.pink.dark} />
               <Text style={styles.pdfBtnText}>View</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Share on WhatsApp for ${item.number}`}
+              style={({ pressed }) => [styles.whatsappBtn, pressed && styles.btnPressed]}
+              onPress={() => handleShareWhatsApp(item)}
+            >
+              <Ionicons name="logo-whatsapp" size={15} color="#FFFFFF" />
+              <Text style={styles.whatsappBtnText}>WhatsApp</Text>
             </Pressable>
 
             <Pressable
@@ -277,7 +400,7 @@ export default function AdminInvoicesScreen() {
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Ionicons name="share-social-outline" size={16} color="#FFFFFF" />
+                  <Ionicons name="share-social-outline" size={15} color="#FFFFFF" />
                   <Text style={styles.shareBtnText}>Share</Text>
                 </>
               )}
@@ -301,6 +424,24 @@ export default function AdminInvoicesScreen() {
             style={styles.backBtn}
           >
             <Ionicons name="arrow-back" size={24} color={Colors.light.text} />
+          </Pressable>
+        }
+        rightAction={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Export all filtered invoices to CSV"
+            style={({ pressed }) => [styles.exportBtn, pressed && styles.btnPressed]}
+            onPress={handleExportCsv}
+            disabled={isExportingCsv || invoices.length === 0}
+          >
+            {isExportingCsv ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={15} color="#FFFFFF" />
+                <Text style={styles.exportBtnText}>Export CSV</Text>
+              </>
+            )}
           </Pressable>
         }
       />
@@ -527,6 +668,34 @@ const styles = StyleSheet.create({
   },
   shareBtnText: {
     ...Typography.bodySmall,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  whatsappBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.md,
+    backgroundColor: '#25D366',
+    gap: 4,
+  },
+  whatsappBtnText: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.pink.primary,
+    gap: 5,
+  },
+  exportBtnText: {
+    ...Typography.caption,
     fontWeight: '700',
     color: '#FFFFFF',
   },

@@ -1,9 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   BackHandler,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -27,6 +32,15 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+
+function escapeCsvCell(val: any): string {
+  if (val === null || val === undefined) return '';
+  const str = String(val);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
 
 function formatISTDate(dateStr?: string | null): string {
   if (!dateStr) return '—';
@@ -80,6 +94,82 @@ export default function AdminCustomersScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+
+  async function handleExportCsv() {
+    if (isExportingCsv || customers.length === 0) return;
+    setIsExportingCsv(true);
+    try {
+      const headers = [
+        'Shop Name',
+        'Owner / Contact',
+        'Phone',
+        'Email',
+        'Category',
+        'State',
+        'District',
+        'Village / Area',
+        'Address',
+        'Pincode',
+        'Active Status',
+        'Onboarded Date',
+      ];
+      const rows = customers.map((c) => [
+        c.shopName || '',
+        c.contactName || c.ownerName || '',
+        c.phone || '',
+        c.email || '',
+        c.category?.name || c.categoryName || '',
+        c.state || '',
+        c.district || '',
+        c.village || '',
+        c.address || '',
+        c.pincode || '',
+        c.active !== false ? 'ACTIVE' : 'INACTIVE',
+        c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN') : '',
+      ]);
+
+      const csvContent = [
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((r) => r.map(escapeCsvCell).join(',')),
+      ].join('\r\n');
+
+      const filename = `femmeflo-customers-${new Date().toISOString().slice(0, 10)}.csv`;
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      const localUri = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.writeAsStringAsync(localUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(localUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Customers CSV',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        Alert.alert('CSV Exported', `Saved to ${localUri}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Export Error', err.message || 'Could not export customers CSV.');
+    } finally {
+      setIsExportingCsv(false);
+    }
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -210,6 +300,22 @@ export default function AdminCustomersScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Export customer directory to CSV"
+              style={({ pressed }) => [styles.exportBtn, pressed && styles.btnPressed]}
+              onPress={handleExportCsv}
+              disabled={isExportingCsv || customers.length === 0}
+            >
+              {isExportingCsv ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={15} color="#FFFFFF" />
+                  <Text style={styles.exportBtnText}>CSV</Text>
+                </>
+              )}
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Batch onboard customers"
               style={styles.batchBtn}
               onPress={() => router.push('/(admin)/customers/bulk' as any)}
@@ -305,6 +411,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.light.surfaceSecondary,
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.full,
+    backgroundColor: BrandColors.pink.primary,
+    gap: 4,
+  },
+  exportBtnText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 11,
+  },
+  btnPressed: {
+    opacity: 0.75,
   },
   batchBtn: {
     backgroundColor: '#0F172A',

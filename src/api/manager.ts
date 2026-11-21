@@ -1,4 +1,4 @@
-import { apiRequest, uploadFileMultipart } from './client';
+import { apiRequest, uploadFileMultipart, API_BASE_URL } from './client';
 import { handleMockRequest } from './mockService';
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
@@ -419,6 +419,19 @@ export const managerApi = {
 
   async listProducts(): Promise<{ items: ProductItem[] }> {
     return apiRequest<{ items: ProductItem[] }>('manager/products', {
+      method: 'GET',
+    });
+  },
+
+  // ----------------------------------------------------
+  // Tax Invoices in Territory
+  // ----------------------------------------------------
+  getInvoicePdfUrl(id: string, download = true): string {
+    return `${API_BASE_URL}/invoices/${id}/pdf?download=${download ? 'true' : 'false'}`;
+  },
+
+  async downloadInvoicePdf(id: string, download = false): Promise<Blob> {
+    return apiRequest<Blob>(`invoices/${id}/pdf?download=${download ? 'true' : 'false'}`, {
       method: 'GET',
     });
   },
