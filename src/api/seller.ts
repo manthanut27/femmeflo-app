@@ -52,17 +52,41 @@ export const sellerApi = {
     const metrics = raw?.metrics;
     const remainingPackets = metrics?.remainingPackets ?? raw?.stockBalance ?? 0;
     const soldPackets = metrics?.soldPackets ?? raw?.todayPacketsSold ?? 0;
-    const salesPaise =
-      raw?.todaySalesPaise ??
-      raw?.todaySalesAmountPaise ??
-      (metrics?.soldPackets !== undefined ? metrics.soldPackets * 3500 : 0);
+
+    // Use backend-calculated sales paise if present
+    let todaySales = raw?.todaySalesPaise ?? raw?.todaySalesAmountPaise ?? metrics?.todaySalesPaise;
+    let monthSales = raw?.monthSalesPaise ?? metrics?.monthSalesPaise;
+    let todayOrders = raw?.todayOrdersCount ?? metrics?.todayOrdersCount;
+    let todaySold = raw?.todayPacketsSold ?? metrics?.todayPacketsSold;
+
+    // If backend values are missing, compute precisely from recentSales using actual totalPaise
+    if (todaySales === undefined && Array.isArray(raw?.recentSales)) {
+      const now = new Date();
+      const istNow = new Date(now.getTime() + 5.5 * 3600000);
+      const startOfTodayIst = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate()) - 5.5 * 3600000);
+      const startOfMonthIst = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - 5.5 * 3600000);
+
+      const confirmedSales = raw.recentSales.filter((s: any) => s.status === 'CONFIRMED' || !s.status);
+      const salesToday = confirmedSales.filter((s: any) => new Date(s.createdAt) >= startOfTodayIst);
+      const salesMonth = confirmedSales.filter((s: any) => new Date(s.createdAt) >= startOfMonthIst);
+
+      todaySales = salesToday.reduce((sum: number, s: any) => sum + (s.totalPaise || (s.quantity * (s.unitPricePaise || 0)) || 0), 0);
+      monthSales = salesMonth.reduce((sum: number, s: any) => sum + (s.totalPaise || (s.quantity * (s.unitPricePaise || 0)) || 0), 0);
+      todayOrders = salesToday.length;
+      todaySold = salesToday.reduce((sum: number, s: any) => sum + (s.quantity || 0), 0);
+    }
+
+    const salesPaise = todaySales ?? 0;
+    const monthlyPaise = monthSales ?? salesPaise;
+    const ordersCount = todayOrders ?? (Array.isArray(raw?.recentSales) ? raw.recentSales.length : 0);
+    const packetsSold = todaySold ?? soldPackets;
 
     return {
       todaySalesPaise: salesPaise,
       todaySalesAmountPaise: salesPaise,
-      todayOrdersCount: raw?.todayOrdersCount ?? (Array.isArray(raw?.recentSales) ? raw.recentSales.length : 0),
-      todayPacketsSold: soldPackets,
-      monthSalesPaise: raw?.monthSalesPaise ?? salesPaise,
+      todayOrdersCount: ordersCount,
+      todayPacketsSold: packetsSold,
+      monthSalesPaise: monthlyPaise,
       lowStockCount: raw?.lowStockCount ?? (remainingPackets < 20 ? 1 : 0),
       stockBalance: remainingPackets,
       metrics: metrics,
@@ -312,17 +336,45 @@ export const sellerApi = {
         body: JSON.stringify(fullBody),
       });
     } catch (err: any) {
-      // If server returns 500 (e.g. database schema limitation on customerFeedback), retry cleanly without customerFeedback
-      if (
-        combinedFeedback &&
-        (err?.status === 500 || (err?.message && String(err.message).toLowerCase().includes('internal server error')))
-      ) {
-        console.warn('[createSale] Retrying sale creation without customerFeedback due to server schema limitation');
-        return await apiRequest<{ sale: SaleItem }>('seller/sales', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(baseBody),
-        });
+      const is500OrInternal =
+        err?.status === 500 ||
+        (err?.message && String(err.message).toLowerCase().includes('internal server error'));
+
+      if (is500OrInternal) {
+        // Fallback 1: If server rejects multi-SKU items or customerFeedback, try single-item legacy payload
+        if (payload.items && payload.items.length === 1) {
+          try {
+            const singleItemBody: Record<string, any> = {
+              customerId: payload.customerId,
+              quantity: payload.items[0].quantity,
+              unitPricePaise: payload.items[0].unitPricePaise,
+              paymentMode: payload.paymentMode,
+            };
+            if (combinedFeedback) singleItemBody.customerFeedback = combinedFeedback;
+            if (key) singleItemBody.requestKey = key;
+            return await apiRequest<{ sale: SaleItem }>('seller/sales', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(singleItemBody),
+            });
+          } catch {
+            // continue to next fallback
+          }
+        }
+
+        // Fallback 2: Retry without customerFeedback
+        if (combinedFeedback) {
+          console.warn('[createSale] Retrying sale creation without customerFeedback due to server schema limitation');
+          try {
+            return await apiRequest<{ sale: SaleItem }>('seller/sales', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(baseBody),
+            });
+          } catch {
+            // let outer error throw
+          }
+        }
       }
       throw err;
     }

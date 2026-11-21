@@ -152,28 +152,8 @@ export default function AddCustomerScreen() {
     // 3. Acquire GPS location
     startGps();
 
-    // 4. Load persisted customer draft
-    draftStorage.getCustomerDraft().then((draft) => {
-      if (draft) {
-        if (draft.shopName) setShopName(draft.shopName);
-        if (draft.ownerName) setOwnerName(draft.ownerName);
-        if (draft.email) setEmail(draft.email);
-        if (draft.phone) setPhone(draft.phone);
-        if (draft.categoryId) setCategoryId(draft.categoryId);
-        if (draft.address) setAddress(draft.address);
-        if (draft.pincode) setPincode(draft.pincode);
-        if (draft.state) setStateName(draft.state);
-        if (draft.district) setDistrict(draft.district);
-        if (draft.village) setVillage(draft.village);
-        if (draft.photoUri) setPhotoUri(draft.photoUri);
-        if (draft.noPhotoReason) setNoPhotoReason(draft.noPhotoReason);
-        if (draft.latitude != null || draft.longitude != null) {
-          const sanitized = sanitizeIndiaCoordinates(draft.latitude, draft.longitude);
-          setLatitude(sanitized.latitude);
-          setLongitude(sanitized.longitude);
-        }
-      }
-    });
+    // 4. Reset customer draft so new customer form starts completely blank
+    draftStorage.clearCustomerDraft().catch(() => {});
   }, []);
 
   async function startGps() {
@@ -400,9 +380,9 @@ export default function AddCustomerScreen() {
       const coords = sanitizeIndiaCoordinates(latitude, longitude);
       const res = await sellerApi.createCustomer({
         shopName: shopName.trim(),
-        ownerName: ownerName.trim() || 'Store Manager',
+        ownerName: ownerName.trim(),
         email: email.trim() || undefined,
-        phone: phone.trim() || '9820012345',
+        phone: phone.trim(),
         categoryId: selectedCatId,
         address: address.trim(),
         pincode: pincode.trim(),
@@ -550,7 +530,7 @@ export default function AddCustomerScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom + 95, 125) },
+          { paddingBottom: Math.max(insets.bottom + 140, 180) },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}

@@ -123,9 +123,19 @@ export default function NewSaleScreen() {
 
         // Build stock map
         const map: Record<string, number> = {};
-        if (invRes.products) {
+        if (invRes.products && Array.isArray(invRes.products)) {
           invRes.products.forEach((p: ProductStockItem) => {
-            map[p.productId] = p.balance;
+            const pId = p.productId || (p as any).id;
+            if (pId) {
+              map[pId] = p.balance;
+            }
+          });
+        }
+        // Fallback: If map is empty or zero but seller has total van stock balance, assign to available products
+        const totalBal = invRes.balance ?? (invRes as any).remaining ?? 0;
+        if (Object.keys(map).length === 0 && totalBal > 0 && loadedProducts.length > 0) {
+          loadedProducts.forEach((p) => {
+            map[p.id] = totalBal;
           });
         }
         setStockMap(map);
@@ -739,7 +749,7 @@ export default function NewSaleScreen() {
                       </View>
                     </TouchableOpacity>
                     {errors[`line_${index}_product`] && (
-                      <Text style={styles.errorSubText}>{errors[`line_${index}_product`]}</Text>
+                      <Text style={styles.errorText}>{errors[`line_${index}_product`]}</Text>
                     )}
                   </View>
 

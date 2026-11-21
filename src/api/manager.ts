@@ -44,11 +44,11 @@ export const managerApi = {
     });
     if (raw && raw.metrics) {
       return {
-        totalSellers: raw.totalSellers ?? raw.metrics.totalSellers ?? 14,
-        activeSellersCount: raw.activeSellersCount ?? raw.metrics.totalSellers ?? 11,
-        monthlyRevenuePaise: raw.monthlyRevenuePaise ?? raw.metrics.totalEarningsPaise ?? 24500000,
-        monthlyPacketsSold: raw.monthlyPacketsSold ?? raw.metrics.totalPacketsSold ?? 6850,
-        totalCustomers: raw.totalCustomers ?? raw.metrics.totalCustomers ?? 184,
+        totalSellers: raw.totalSellers ?? raw.metrics.totalSellers ?? 0,
+        activeSellersCount: raw.activeSellersCount ?? raw.metrics.activeSellersCount ?? raw.metrics.totalSellers ?? 0,
+        monthlyRevenuePaise: raw.monthlyRevenuePaise ?? raw.metrics.totalEarningsPaise ?? 0,
+        monthlyPacketsSold: raw.monthlyPacketsSold ?? raw.metrics.totalPacketsSold ?? 0,
+        totalCustomers: raw.totalCustomers ?? raw.metrics.totalCustomers ?? 0,
         metrics: raw.metrics,
       };
     }

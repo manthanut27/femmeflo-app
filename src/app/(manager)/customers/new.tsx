@@ -543,7 +543,7 @@ export default function ManagerAddCustomerScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom + 95, 125) },
+          { paddingBottom: Math.max(insets.bottom + 140, 180) },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
