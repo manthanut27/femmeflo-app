@@ -49,6 +49,37 @@ import {
 
 type UserTab = 'MANAGERS' | 'SELLERS';
 
+const SIMPLE_MANAGER_PERMISSION_INFO: Record<string, { title: string; subtitle: string }> = {
+  onboard_customers: {
+    title: 'Add New Shops',
+    subtitle: 'Register new retail shops and customers in their area',
+  },
+  view_customers: {
+    title: 'View Shop Directory',
+    subtitle: 'View customer shops, owner details, and phone numbers',
+  },
+  manage_sellers: {
+    title: 'Manage Sales Team',
+    subtitle: 'Add and supervise field sales officers in their area',
+  },
+  view_inventory: {
+    title: 'Check Stock Levels',
+    subtitle: 'View warehouse inventory and van stock balances',
+  },
+  transfer_inventory: {
+    title: 'Transfer Stock',
+    subtitle: 'Send product packets from warehouse to sales officers',
+  },
+  approve_sales: {
+    title: 'Approve Orders & Prices',
+    subtitle: 'Review and approve discounted orders submitted by sellers',
+  },
+  view_reports: {
+    title: 'View Sales Reports',
+    subtitle: 'Check daily sales numbers, revenue, and progress',
+  },
+};
+
 export default function AdminUsersScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -684,7 +715,7 @@ export default function AdminUsersScreen() {
                 color={BrandColors.green.primary}
               />
               <Text style={styles.configurePersonaBtnText}>
-                Edit Details & Persona
+                View & Edit Details
               </Text>
             </Pressable>
           </View>
@@ -716,8 +747,8 @@ export default function AdminUsersScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="User Administration"
-        subtitle="Managers & Field Officers Directory"
+        title="User Management"
+        subtitle="Managers & Field Sales Team"
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
         rightAction={
@@ -735,7 +766,7 @@ export default function AdminUsersScreen() {
             hitSlop={HitSlop.md}
           >
             <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.headerAddBtnText}>Add User</Text>
+            <Text style={styles.headerAddBtnText}>+ Add User</Text>
           </Pressable>
         }
       />
@@ -793,7 +824,7 @@ export default function AdminUsersScreen() {
             <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
             <TextInput
               style={styles.searchInput}
-              placeholder={`Search ${tab.toLowerCase()} by name or email...`}
+              placeholder={tab === 'MANAGERS' ? 'Search managers by name, phone, or district...' : 'Search sales officers by name, phone, or district...'}
               placeholderTextColor={Colors.light.textTertiary}
               value={search}
               onChangeText={setSearch}
@@ -822,9 +853,9 @@ export default function AdminUsersScreen() {
         ) : users.length === 0 ? (
           <EmptyState
             icon="people-circle-outline"
-            title={`No ${tab.toLowerCase()} found`}
-            description="No records found matching your filters. You can add a new team member now."
-            actionTitle={tab === 'MANAGERS' ? '+ Add New Manager' : '+ Add New Seller'}
+            title={tab === 'MANAGERS' ? 'No Managers Found' : 'No Sales Officers Found'}
+            description={search ? 'No team members matched your search. Try searching by name, phone, or district.' : `You haven't added any ${tab === 'MANAGERS' ? 'managers' : 'sales officers'} yet.`}
+            actionTitle={tab === 'MANAGERS' ? '+ Add Manager' : '+ Add Sales Officer'}
             onAction={() => handleOpenAddModal(tab === 'MANAGERS' ? 'MANAGER' : 'SELLER')}
             iconColor={BrandColors.pink.dark}
             iconBgColor={BrandColors.pink.subtle}
@@ -869,17 +900,17 @@ export default function AdminUsersScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalHeading}>
                   {isManagerPickerOpen
-                    ? 'Supervising Manager'
+                    ? 'Select Reporting Manager'
                     : modalRole === 'MANAGER'
-                    ? 'Onboard Territory Manager'
-                    : 'Onboard Field Seller'}
+                    ? 'Add New Manager'
+                    : 'Add New Sales Officer'}
                 </Text>
                 <Text style={styles.modalSubheading}>
                   {isManagerPickerOpen
-                    ? 'Search and assign the supervising territory manager'
+                    ? 'Choose which manager this officer reports to'
                     : modalRole === 'MANAGER'
-                    ? 'Supervises field officers and territory customers'
-                    : 'Field force officer for retail visits & POS orders'}
+                    ? 'Manages team, shops, and stock in their area'
+                    : 'Visits shops, collects orders, and delivers products'}
                 </Text>
               </View>
               <Pressable
@@ -905,7 +936,7 @@ export default function AdminUsersScreen() {
                   <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
                   <TextInput
                     style={styles.pickerSearchInput}
-                    placeholder="Search by name, district, state, phone..."
+                    placeholder="Search by name, district, or phone..."
                     placeholderTextColor={Colors.light.textPlaceholder}
                     value={managerSearchQuery}
                     onChangeText={setManagerSearchQuery}
@@ -999,15 +1030,15 @@ export default function AdminUsersScreen() {
                       icon="search-outline"
                       title={
                         availableManagers.length === 0
-                          ? 'No Territory Managers Found'
+                          ? 'No Managers Available'
                           : 'No matching managers found'
                       }
                       description={
                         availableManagers.length === 0
-                          ? 'Please onboard a Territory Manager first before adding sellers.'
+                          ? 'Please add a Manager first before adding sales officers.'
                           : 'Try searching with a different name, district, or phone number.'
                       }
-                      actionTitle={availableManagers.length === 0 ? '+ Onboard Territory Manager First' : undefined}
+                      actionTitle={availableManagers.length === 0 ? '+ Add Manager First' : undefined}
                       onAction={
                         availableManagers.length === 0
                           ? () => {
@@ -1185,7 +1216,7 @@ export default function AdminUsersScreen() {
                   )}
 
                   <View style={styles.geoFieldsSection}>
-                    <Text style={styles.geoSectionHeading}>Assigned Operational Territory</Text>
+                    <Text style={styles.geoSectionHeading}>Assigned Territory (State & District)</Text>
                     <View style={styles.geoRow}>
                       <View style={{ flex: 1, marginRight: Spacing.sm }}>
                         <Input
@@ -1228,13 +1259,13 @@ export default function AdminUsersScreen() {
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                             <Text style={styles.dualRoleToggleTitle}>Manager Can Also Sell</Text>
                             <Badge
-                              label={formIsSeller ? 'CAN SELL & STOCK' : 'OFF'}
+                              label={formIsSeller ? 'ENABLED' : 'OFF'}
                               variant={formIsSeller ? 'ACTIVE' : 'neutral'}
                               size="sm"
                             />
                           </View>
                           <Text style={styles.dualRoleToggleDesc}>
-                            Manager can take customer orders, do shop visits, and hold van stock.
+                            Allow manager to visit shops, take orders, and carry stock in their vehicle.
                           </Text>
                         </View>
                       </View>
@@ -1258,10 +1289,10 @@ export default function AdminUsersScreen() {
                   <Button
                     title={
                       isSubmitting
-                        ? 'Creating...'
+                        ? 'Adding...'
                         : modalRole === 'MANAGER'
-                        ? 'Create Manager'
-                        : 'Create Seller'
+                        ? 'Add Manager'
+                        : 'Add Sales Officer'
                     }
                     variant="admin"
                     size="md"
@@ -1297,10 +1328,10 @@ export default function AdminUsersScreen() {
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalHeading}>
-                  {selectedUser?.role === 'MANAGER' ? 'Manager Profile & Permissions' : 'Field Officer Profile & Permissions'}
+                  {selectedUser?.role === 'MANAGER' ? 'Manager Details & Permissions' : 'Sales Officer Details & Permissions'}
                 </Text>
                 <Text style={styles.modalSubheading}>
-                  {isEditMode ? 'Editing user profile and territory details' : 'View complete record, territory scope & system access'}
+                  {isEditMode ? 'Edit account information and territory' : 'View contact details, work area & permissions'}
                 </Text>
               </View>
               <Pressable
@@ -1383,7 +1414,7 @@ export default function AdminUsersScreen() {
                     modalTab === 'DETAILS' && styles.modalSubTabTextActive,
                   ]}
                 >
-                  User Details
+                  Profile Details
                 </Text>
               </Pressable>
 
@@ -1408,7 +1439,7 @@ export default function AdminUsersScreen() {
                     modalTab === 'PERMISSIONS' && styles.modalSubTabTextActive,
                   ]}
                 >
-                  Permissions & Persona
+                  App Permissions
                 </Text>
               </Pressable>
             </View>
@@ -1481,14 +1512,14 @@ export default function AdminUsersScreen() {
 
                       {/* Details Grid */}
                       <View style={styles.infoSectionCard}>
-                        <Text style={styles.infoSectionHeader}>Personal & Contact Details</Text>
+                        <Text style={styles.infoSectionHeader}>Contact Information</Text>
                         <View style={styles.infoGridRow}>
                           <View style={styles.infoGridCol}>
                             <Text style={styles.infoLabel}>Full Name</Text>
                             <Text style={styles.infoValueBold}>{selectedUser?.name || '—'}</Text>
                           </View>
                           <View style={styles.infoGridCol}>
-                            <Text style={styles.infoLabel}>Primary Mobile</Text>
+                            <Text style={styles.infoLabel}>Mobile Number</Text>
                             <Text style={styles.infoValue}>{selectedUser?.phone || 'Not registered'}</Text>
                           </View>
                         </View>
@@ -1499,14 +1530,14 @@ export default function AdminUsersScreen() {
                             <Text style={styles.infoValue}>{selectedUser?.email || 'No email'}</Text>
                           </View>
                           <View style={styles.infoGridCol}>
-                            <Text style={styles.infoLabel}>Alternate Phone</Text>
+                            <Text style={styles.infoLabel}>Second Phone</Text>
                             <Text style={styles.infoValue}>{selectedUser?.alternatePhone || 'None'}</Text>
                           </View>
                         </View>
                       </View>
 
                       <View style={styles.infoSectionCard}>
-                        <Text style={styles.infoSectionHeader}>Territory & Geography</Text>
+                        <Text style={styles.infoSectionHeader}>Assigned Territory</Text>
                         <View style={styles.infoGridRow}>
                           <View style={styles.infoGridCol}>
                             <Text style={styles.infoLabel}>State</Text>
@@ -1521,7 +1552,7 @@ export default function AdminUsersScreen() {
                         {selectedUser?.village ? (
                           <View style={styles.infoGridRow}>
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.infoLabel}>Village / Beat Area</Text>
+                              <Text style={styles.infoLabel}>Village / Local Area</Text>
                               <Text style={styles.infoValue}>{selectedUser.village}</Text>
                             </View>
                           </View>
@@ -1530,7 +1561,7 @@ export default function AdminUsersScreen() {
                         {selectedUser?.address ? (
                           <View style={styles.infoGridRow}>
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.infoLabel}>Full Address / Office</Text>
+                              <Text style={styles.infoLabel}>Office Address</Text>
                               <Text style={styles.infoValue}>{selectedUser.address}</Text>
                             </View>
                           </View>
@@ -1538,10 +1569,10 @@ export default function AdminUsersScreen() {
                       </View>
 
                       <View style={styles.infoSectionCard}>
-                        <Text style={styles.infoSectionHeader}>Organization & Status</Text>
+                        <Text style={styles.infoSectionHeader}>Role & Status</Text>
                         <View style={styles.infoGridRow}>
                           <View style={styles.infoGridCol}>
-                            <Text style={styles.infoLabel}>System Role</Text>
+                            <Text style={styles.infoLabel}>Role</Text>
                             <Text style={styles.infoValueBold}>
                               {selectedUser?.role === 'MANAGER' ? 'Territory Manager' : 'Field Sales Officer'}
                             </Text>
@@ -1557,7 +1588,7 @@ export default function AdminUsersScreen() {
                         {selectedUser?.role === 'SELLER' && (
                           <View style={styles.infoGridRow}>
                             <View style={styles.infoGridCol}>
-                              <Text style={styles.infoLabel}>Supervising Manager</Text>
+                              <Text style={styles.infoLabel}>Reporting Manager</Text>
                               <Text style={styles.infoValueBold}>
                                 {availableManagers.find((m) => m.id === userAssignedManagerId)?.name || (selectedUser as any).manager?.name || 'Assigned Manager'}
                               </Text>
@@ -1572,13 +1603,13 @@ export default function AdminUsersScreen() {
                         {selectedUser?.role === 'MANAGER' && (
                           <View style={styles.infoGridRow}>
                             <View style={styles.infoGridCol}>
-                              <Text style={styles.infoLabel}>Dual Persona</Text>
+                              <Text style={styles.infoLabel}>Field Selling Duty</Text>
                               <Text style={styles.infoValueBold}>
-                                {userIsSeller ? 'Can Also Sell & Hold Van Stock' : 'Management Only'}
+                                {userIsSeller ? 'Yes (Can sell & carry stock)' : 'No (Management only)'}
                               </Text>
                             </View>
                             <View style={styles.infoGridCol}>
-                              <Text style={styles.infoLabel}>Supervised Officers</Text>
+                              <Text style={styles.infoLabel}>Team Role</Text>
                               <Text style={styles.infoValueBold}>Territory Team Lead</Text>
                             </View>
                           </View>
@@ -1587,7 +1618,7 @@ export default function AdminUsersScreen() {
 
                       <View style={{ marginTop: Spacing.sm }}>
                         <Button
-                          title="Edit User Details"
+                          title="Edit Information"
                           variant="outline"
                           size="md"
                           onPress={() => setIsEditMode(true)}
@@ -1609,7 +1640,7 @@ export default function AdminUsersScreen() {
                       <View style={styles.formRow}>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
                           <Input
-                            label="Primary Mobile *"
+                            label="Mobile Number *"
                             value={userPhone}
                             onChangeText={setUserPhone}
                             placeholder="10-digit number"
@@ -1620,10 +1651,10 @@ export default function AdminUsersScreen() {
                         </View>
                         <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                           <Input
-                            label="Alternate Phone"
+                            label="Second Phone (Optional)"
                             value={userAlternatePhone}
                             onChangeText={setUserAlternatePhone}
-                            placeholder="Secondary contact"
+                            placeholder="Alternative contact"
                             keyboardType="phone-pad"
                             maxLength={15}
                           />
@@ -1631,10 +1662,10 @@ export default function AdminUsersScreen() {
                       </View>
 
                       <Input
-                        label="Email Address"
+                        label="Email Address (Optional)"
                         value={userEmail}
                         onChangeText={setUserEmail}
-                        placeholder="email@example.com (optional)"
+                        placeholder="name@example.com (optional)"
                         keyboardType="email-address"
                         autoCapitalize="none"
                         leftIcon={<Ionicons name="mail-outline" size={18} color={Colors.light.textTertiary} />}
@@ -1665,16 +1696,16 @@ export default function AdminUsersScreen() {
                         <View style={styles.formRow}>
                           <View style={{ flex: 1, marginRight: Spacing.sm }}>
                             <Input
-                              label="Village / Beat Area"
+                              label="Village / Area (Optional)"
                               value={userVillage}
                               onChangeText={setUserVillage}
-                              placeholder="e.g. Rural Beat 1"
+                              placeholder="e.g. Badlapur"
                               autoCapitalize="words"
                             />
                           </View>
                           <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                             <Input
-                              label="Daily Visit Target"
+                              label="Daily Shop Visit Target"
                               value={userDailyTarget}
                               onChangeText={setUserDailyTarget}
                               placeholder="e.g. 30"
@@ -1685,7 +1716,7 @@ export default function AdminUsersScreen() {
                       )}
 
                       <Input
-                        label="Address / Office"
+                        label="Office / Street Address (Optional)"
                         value={userAddress}
                         onChangeText={setUserAddress}
                         placeholder="Street or office location"
@@ -1697,9 +1728,9 @@ export default function AdminUsersScreen() {
                       {/* Active Account Status Switch */}
                       <View style={styles.statusToggleContainer}>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                          <Text style={styles.statusToggleTitle}>Account Active Status</Text>
+                          <Text style={styles.statusToggleTitle}>Allow App Access</Text>
                           <Text style={styles.statusToggleSubtitle}>
-                            {userActive ? 'User can log in and perform duties' : 'User account is disabled from logging in'}
+                            {userActive ? 'User can log in and use the app' : 'User account is locked from logging in'}
                           </Text>
                         </View>
                         <Pressable
@@ -1731,7 +1762,7 @@ export default function AdminUsersScreen() {
                           disabled={isSavingUser}
                         />
                         <Button
-                          title={isSavingUser ? 'Saving...' : 'Save User Details'}
+                          title={isSavingUser ? 'Saving...' : 'Save Information'}
                           variant="admin"
                           size="md"
                           style={{ flex: 1.5 }}
@@ -1744,7 +1775,7 @@ export default function AdminUsersScreen() {
                 </>
               )}
 
-              {/* TAB 2: PERMISSIONS & PERSONA TAB */}
+              {/* TAB 2: PERMISSIONS & ACCESS TAB */}
               {modalTab === 'PERMISSIONS' && (
                 <View style={styles.permissionsTabContainer}>
                   {selectedUser?.role === 'MANAGER' ? (
@@ -1772,14 +1803,14 @@ export default function AdminUsersScreen() {
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <Text style={styles.dualRoleToggleTitle}>Manager Can Also Sell</Text>
                               <Badge
-                                label={userIsSeller ? 'CAN SELL & STOCK' : 'OFF'}
+                                label={userIsSeller ? 'ENABLED' : 'OFF'}
                                 variant={userIsSeller ? 'ACTIVE' : 'neutral'}
                                 size="sm"
                               />
                             </View>
                             <Text style={styles.dualRoleToggleDesc}>
                               {userIsSeller
-                                ? 'Dual-Role Enabled: Manager can take customer orders, do shop visits, and hold van stock on mobile.'
+                                ? 'Manager can visit shops, take customer orders, and hold vehicle stock on mobile.'
                                 : 'Manager can supervise team only; field selling screens remain hidden.'}
                             </Text>
                           </View>
@@ -1790,13 +1821,16 @@ export default function AdminUsersScreen() {
                       </Pressable>
 
                       {/* Manager Operational Permissions Matrix */}
-                      <Text style={styles.permissionsSectionHeader}>Managerial Access Rights</Text>
+                      <Text style={styles.permissionsSectionHeader}>Manager Permissions</Text>
                       <Text style={styles.permissionsSectionSub}>
-                        Configure territory operational privileges for this manager.
+                        Turn ON or OFF what this manager is allowed to do in the app.
                       </Text>
 
                       {MANAGER_PERMISSIONS.map((permKey) => {
+                        const simpleInfo = SIMPLE_MANAGER_PERMISSION_INFO[permKey];
                         const meta = PERMISSION_METADATA[permKey];
+                        const title = simpleInfo?.title || meta?.label || permKey;
+                        const desc = simpleInfo?.subtitle || meta?.description || '';
                         const isGranted = managerPermissions.includes(permKey);
                         return (
                           <View key={permKey} style={styles.permissionItemRow}>
@@ -1818,8 +1852,8 @@ export default function AdminUsersScreen() {
                               />
                             </View>
                             <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                              <Text style={styles.permissionItemTitle}>{meta?.label || permKey}</Text>
-                              <Text style={styles.permissionItemDesc}>{meta?.description || ''}</Text>
+                              <Text style={styles.permissionItemTitle}>{title}</Text>
+                              <Text style={styles.permissionItemDesc}>{desc}</Text>
                             </View>
                             <Switch
                               value={isGranted}
@@ -1839,7 +1873,7 @@ export default function AdminUsersScreen() {
 
                       <View style={{ marginTop: Spacing.lg }}>
                         <Button
-                          title={isSavingUser ? 'Saving Permissions...' : 'Save Permissions & Persona'}
+                          title={isSavingUser ? 'Saving Permissions...' : 'Save Manager Permissions'}
                           variant="admin"
                           size="md"
                           loading={isSavingUser}
@@ -1850,9 +1884,9 @@ export default function AdminUsersScreen() {
                   ) : (
                     <>
                       {/* Seller Operational Permissions */}
-                      <Text style={styles.permissionsSectionHeader}>Field Officer Operational Access</Text>
+                      <Text style={styles.permissionsSectionHeader}>Sales Officer Permissions</Text>
                       <Text style={styles.permissionsSectionSub}>
-                        Configure active selling authorities and capabilities for this field officer.
+                        Turn ON or OFF what this sales officer is allowed to do in the app.
                       </Text>
 
                       <View style={styles.permissionItemRow}>
@@ -1860,9 +1894,9 @@ export default function AdminUsersScreen() {
                           <Ionicons name="cart-outline" size={18} color={sellerSalesActive ? BrandColors.pink.dark : '#94A3B8'} />
                         </View>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                          <Text style={styles.permissionItemTitle}>Active Field Sales Duty</Text>
+                          <Text style={styles.permissionItemTitle}>Start Daily Shift & Take Orders</Text>
                           <Text style={styles.permissionItemDesc}>
-                            Allow starting daily shifts, logging store visits, and taking orders.
+                            Allows officer to start duty, visit shops, and create customer orders.
                           </Text>
                         </View>
                         <Switch
@@ -1878,9 +1912,9 @@ export default function AdminUsersScreen() {
                           <Ionicons name="storefront-outline" size={18} color={sellerOnboardingActive ? BrandColors.pink.dark : '#94A3B8'} />
                         </View>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                          <Text style={styles.permissionItemTitle}>Retailer / Shop Onboarding</Text>
+                          <Text style={styles.permissionItemTitle}>Add New Retail Shops</Text>
                           <Text style={styles.permissionItemDesc}>
-                            Authorized to register new retail shops with GPS location and photo.
+                            Allows officer to register new retail shops with GPS location and photo.
                           </Text>
                         </View>
                         <Switch
@@ -1896,9 +1930,9 @@ export default function AdminUsersScreen() {
                           <Ionicons name="bus-outline" size={18} color={sellerVanStockActive ? BrandColors.pink.dark : '#94A3B8'} />
                         </View>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                          <Text style={styles.permissionItemTitle}>Van Stock Possession</Text>
+                          <Text style={styles.permissionItemTitle}>Carry Vehicle / Van Stock</Text>
                           <Text style={styles.permissionItemDesc}>
-                            Authorized to hold mobile van inventory and deliver on the spot.
+                            Allows officer to carry product stock in vehicle for on-the-spot delivery.
                           </Text>
                         </View>
                         <Switch
@@ -1914,9 +1948,9 @@ export default function AdminUsersScreen() {
                           <Ionicons name="pricetag-outline" size={18} color={sellerPriceOverrideActive ? BrandColors.pink.dark : '#94A3B8'} />
                         </View>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                          <Text style={styles.permissionItemTitle}>Price & Discount Overrides</Text>
+                          <Text style={styles.permissionItemTitle}>Request Custom Discounts</Text>
                           <Text style={styles.permissionItemDesc}>
-                            Authorized to apply promotional discounts subject to manager approval.
+                            Allows officer to apply custom order discounts (subject to manager approval).
                           </Text>
                         </View>
                         <Switch
