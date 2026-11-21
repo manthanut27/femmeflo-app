@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { managerApi } from '@/api/manager';
 import { sellerApi } from '@/api/seller';
+import { validateOnboardingPassword } from '@/utils/passwordValidation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -142,9 +143,9 @@ export default function ManagerOnboardSellerScreen() {
       errs.email = 'Please provide a valid operational email.';
     }
 
-    const trimmedPassword = password.trim();
-    if (!trimmedPassword || trimmedPassword.length < 8) {
-      errs.password = 'Initial password must be at least 8 characters.';
+    const passVal = validateOnboardingPassword(password);
+    if (!passVal.isValid) {
+      errs.password = passVal.error || 'Initial password must be at least 7 characters with letters, numbers, and symbols.';
     }
 
     // 3. Identification & Qualification
@@ -511,7 +512,7 @@ export default function ManagerOnboardSellerScreen() {
                 isPassword
                 error={errors.password}
                 leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
-                helperText="Temporary password used by officer to log in"
+                helperText="Min. 7 characters with letters, numbers, and symbols"
               />
             </View>
           </Card>

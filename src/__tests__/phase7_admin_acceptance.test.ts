@@ -859,7 +859,7 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       assert.equal(resName[0].id, 'mgr_tha_03');
     });
 
-    test('K2: Field seller onboarding enforces valid name, 10-digit mobile, >=12 char password, and managerId', () => {
+    test('K2: Field seller onboarding enforces valid name, 10-digit mobile, >=7 char password (letter, symbol, number), and managerId', () => {
       function validateSellerForm(form: {
         name: string;
         phone: string;
@@ -870,8 +870,14 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
         if (!form.name.trim()) errs.name = 'Full name is required.';
         const cleanPhone = form.phone.replace(/\D/g, '');
         if (cleanPhone.length < 10) errs.phone = 'Please enter a valid 10-digit mobile number.';
-        if (!form.password || form.password.length < 12) {
-          errs.password = 'Initial password must be at least 12 characters.';
+        if (!form.password || form.password.length < 7) {
+          errs.password = 'Initial password must be at least 7 characters.';
+        } else if (!/[a-zA-Z]/.test(form.password)) {
+          errs.password = 'Password must contain at least one letter.';
+        } else if (!/[0-9]/.test(form.password)) {
+          errs.password = 'Password must contain at least one number.';
+        } else if (!/[^a-zA-Z0-9]/.test(form.password)) {
+          errs.password = 'Password must contain at least one symbol (e.g. @, #, $, !).';
         }
         if (!form.managerId) {
           errs.managerId = 'Please select a supervising Territory Manager.';
@@ -882,7 +888,7 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       const validRes = validateSellerForm({
         name: 'Ramesh Patil',
         phone: '9876543210',
-        password: 'FemmeFlo@2026',
+        password: 'Pass@12',
         managerId: 'mgr_vns_01',
       });
       assert.equal(validRes.valid, true);
@@ -890,7 +896,7 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       const missingMgr = validateSellerForm({
         name: 'Ramesh Patil',
         phone: '9876543210',
-        password: 'FemmeFlo@2026',
+        password: 'Pass@12',
         managerId: '',
       });
       assert.equal(missingMgr.valid, false);
@@ -899,11 +905,20 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       const shortPass = validateSellerForm({
         name: 'Ramesh Patil',
         phone: '9876543210',
-        password: 'pass123',
+        password: 'Pa@1',
         managerId: 'mgr_vns_01',
       });
       assert.equal(shortPass.valid, false);
-      assert.equal(shortPass.errors.password, 'Initial password must be at least 12 characters.');
+      assert.equal(shortPass.errors.password, 'Initial password must be at least 7 characters.');
+
+      const noSymbolPass = validateSellerForm({
+        name: 'Ramesh Patil',
+        phone: '9876543210',
+        password: 'Password12',
+        managerId: 'mgr_vns_01',
+      });
+      assert.equal(noSymbolPass.valid, false);
+      assert.equal(noSymbolPass.errors.password, 'Password must contain at least one symbol (e.g. @, #, $, !).');
     });
 
     test('K3: Selecting supervising manager auto-populates seller operational state & district', () => {

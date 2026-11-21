@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { adminApi } from '@/api/admin';
 import { sanitizeBackendPermissions } from '@/utils/permissions';
+import { validateOnboardingPassword } from '@/utils/passwordValidation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -127,9 +128,9 @@ export default function AdminOnboardManagerScreen() {
       errs.email = 'Please provide a valid login email address.';
     }
 
-    const trimmedPassword = password.trim();
-    if (!trimmedPassword || trimmedPassword.length < 12) {
-      errs.password = 'Initial password must be at least 12 characters.';
+    const passVal = validateOnboardingPassword(password);
+    if (!passVal.isValid) {
+      errs.password = passVal.error || 'Initial password must be at least 7 characters with letters, numbers, and symbols.';
     }
 
     if (!state.trim()) errs.state = 'State is required.';
@@ -376,7 +377,7 @@ export default function AdminOnboardManagerScreen() {
                 isPassword
                 error={errors.password}
                 leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
-                helperText="At least 12 characters"
+                helperText="Min. 7 characters with letters, numbers, and symbols"
               />
             </View>
 

@@ -34,6 +34,7 @@ import {
   PERMISSION_METADATA,
   sanitizeBackendPermissions,
 } from '@/utils/permissions';
+import { validateOnboardingPassword } from '@/utils/passwordValidation';
 import {
   BorderRadius,
   BrandColors,
@@ -517,8 +518,9 @@ export default function AdminUsersScreen() {
     if (formEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formEmail.trim())) {
       errs.email = 'Please enter a valid email address.';
     }
-    if (!formPassword || formPassword.length < 12) {
-      errs.password = 'Initial password must be at least 12 characters.';
+    const passVal = validateOnboardingPassword(formPassword);
+    if (!passVal.isValid) {
+      errs.password = passVal.error || 'Password must be at least 7 characters with letters, numbers, and symbols.';
     }
     if (modalRole === 'SELLER' && !formManagerId) {
       errs.managerId = 'Please select a supervising Territory Manager.';
@@ -1153,7 +1155,7 @@ export default function AdminUsersScreen() {
                       if (formErrors.password) setFormErrors((p) => ({ ...p, password: '' }));
                     }}
                     error={formErrors.password}
-                    helperText="Initial access password (min. 12 characters)"
+                    helperText="Min. 7 characters with letters, numbers, and symbols"
                     isPassword={true}
                     leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
                   />
