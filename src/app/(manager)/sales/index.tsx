@@ -1477,4 +1477,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  btnPressed: {
+    opacity: 0.8,
+  },
 });

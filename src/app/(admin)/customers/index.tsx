@@ -119,7 +119,7 @@ export default function AdminCustomersScreen() {
         c.contactName || c.ownerName || '',
         c.phone || '',
         c.email || '',
-        c.category?.name || c.categoryName || '',
+        c.category?.name || (c as any).categoryName || '',
         c.state || '',
         c.district || '',
         c.village || '',

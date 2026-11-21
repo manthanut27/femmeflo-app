@@ -105,6 +105,7 @@ export function StoreDetailView({
     state: '',
     pincode: '',
     categoryId: '',
+    active: true,
   });
 
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof CustomerFormData, string>>>({});

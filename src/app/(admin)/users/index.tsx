@@ -1942,9 +1942,6 @@ export default function AdminUsersScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
