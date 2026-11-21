@@ -29,7 +29,7 @@ export const useImmersiveNavigation = () => useContext(ImmersiveNavigationContex
 
 export const INITIAL_HIDE_DELAY_MS = 1500;
 export const INACTIVITY_AUTO_HIDE_MS = 4000;
-export const AUTO_HIDE_NAV_ENABLED = false;
+export const AUTO_HIDE_NAV_ENABLED = true;
 
 export const ImmersiveNavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isNavVisible, setIsNavVisible] = useState(true);
