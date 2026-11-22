@@ -142,7 +142,7 @@ export default function ManagerShiftsScreen() {
     <View style={styles.container}>
       <Header
         title="Field Shift Supervision"
-        subtitle={`Territory: ${user?.district || 'Field Operations'} • ${user?.name}`}
+        subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
         showBack
       />
 
@@ -368,7 +368,7 @@ export default function ManagerShiftsScreen() {
           ) : filteredShifts.length === 0 ? (
             <EmptyState
               title="No shift records"
-              description="No shifts match the current filter criteria in your territory."
+              description="No shifts match the current filter criteria in your area."
               icon="calendar-outline"
             />
           ) : (

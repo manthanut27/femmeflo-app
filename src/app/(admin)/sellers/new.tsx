@@ -456,7 +456,7 @@ export default function AdminOnboardSellerScreen() {
                 value={selectedManager?.name}
                 subtitle={
                   selectedManager
-                    ? `${selectedManager.territory || selectedManager.district || selectedManager.state || 'Territory'} · ${selectedManager.phone || '+91 98765 00000'}`
+                    ? `${selectedManager.territory || selectedManager.district || selectedManager.state || 'Area'} · ${selectedManager.phone || '+91 98765 00000'}`
                     : loadingManagers
                     ? 'Loading active managers...'
                     : 'Tap to select supervising manager...'
@@ -484,7 +484,7 @@ export default function AdminOnboardSellerScreen() {
                   </View>
 
                   <Input
-                    placeholder="Search by manager name, territory, phone..."
+                    placeholder="Search by manager name, area, phone..."
                     value={managerSearchQuery}
                     onChangeText={setManagerSearchQuery}
                     leftIcon={<Ionicons name="search" size={16} color="#64748B" />}
@@ -515,7 +515,7 @@ export default function AdminOnboardSellerScreen() {
                               {m.name}
                             </Text>
                             <Text style={styles.managerOptionSub} numberOfLines={1} ellipsizeMode="tail">
-                              ({m.territory || m.district || m.state || 'Territory'}) · {m.phone || '+91 98765 00000'}
+                              ({m.territory || m.district || m.state || 'Area'}) · {m.phone || '+91 98765 00000'}
                             </Text>
                           </View>
                         </Pressable>
@@ -723,9 +723,9 @@ export default function AdminOnboardSellerScreen() {
 
           {/* 4. Complete Address & Territory */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>4. Complete Address &amp; Territory</Text>
+            <Text style={styles.sectionTitle}>4. Complete Address &amp; Area</Text>
             <Text style={styles.sectionSubtitle}>
-              Residential address with PIN code lookup for territory jurisdiction
+              Residential address with PIN code lookup for assigned area
             </Text>
           </View>
 

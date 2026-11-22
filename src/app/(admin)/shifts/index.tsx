@@ -244,7 +244,7 @@ export default function AdminShiftsScreen() {
       <View style={styles.filterSection}>
         <View style={styles.searchInner}>
           <Input
-            placeholder="Search officer, phone or territory..."
+            placeholder="Search officer, phone or area..."
             value={search}
             onChangeText={setSearch}
             leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}

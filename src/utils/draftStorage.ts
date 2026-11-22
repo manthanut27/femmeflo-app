@@ -55,6 +55,20 @@ export interface CustomerDraft {
   updatedAt: string;
 }
 
+export interface FaceRegistrationData {
+  userId: string;
+  facePhoto: string;
+  registeredAt: string;
+  address?: string;
+  street?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface StorageBackend {
   getItem: (key: string) => Promise<string | null>;
   setItem: (key: string, value: string) => Promise<void>;
@@ -118,6 +132,7 @@ export function createDraftStorage(backend: StorageBackend) {
   const getDraftKey = (userId?: string) => `@femmeflo_order_draft_${userId || 'anonymous'}`;
   const getShiftKey = (userId?: string) => `@femmeflo_active_shift_${userId || 'anonymous'}`;
   const getCustomerDraftKey = (userId?: string) => `@femmeflo_customer_draft_${userId || 'anonymous'}`;
+  const getFaceRegistrationKey = (userId?: string) => `@femmeflo_face_reg_${userId || 'anonymous'}`;
   const getCheckoutDraftKey = (userId: string | undefined, visitId: string) =>
     `@femmeflo_checkout_draft_${userId || 'anonymous'}_${visitId}`;
 
@@ -244,6 +259,31 @@ export function createDraftStorage(backend: StorageBackend) {
         await backend.removeItem(getCheckoutDraftKey(userId, visitId));
       } catch (err) {
         console.warn('Failed to clear visit checkout draft', err);
+      }
+    },
+
+    async getFaceRegistration(userId?: string): Promise<FaceRegistrationData | null> {
+      try {
+        const raw = await backend.getItem(getFaceRegistrationKey(userId));
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    },
+
+    async saveFaceRegistration(userId: string | undefined, data: FaceRegistrationData): Promise<void> {
+      try {
+        await backend.setItem(getFaceRegistrationKey(userId), JSON.stringify(data));
+      } catch (err) {
+        console.warn('Failed to save face registration data', err);
+      }
+    },
+
+    async clearFaceRegistration(userId?: string): Promise<void> {
+      try {
+        await backend.removeItem(getFaceRegistrationKey(userId));
+      } catch (err) {
+        console.warn('Failed to clear face registration data', err);
       }
     },
 

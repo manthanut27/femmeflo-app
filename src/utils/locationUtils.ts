@@ -20,6 +20,7 @@ export interface LocationResult {
   longitude: number;
   accuracy?: number | null;
   address?: string | null;
+  street?: string | null;
   state?: string | null;
   district?: string | null;
   village?: string | null;
@@ -208,6 +209,7 @@ export async function getCurrentLocationWithAddress(): Promise<LocationResult | 
     );
     if (geoData) {
       result.address = geoData.formattedAddress;
+      result.street = (geoData as any).street || (geoData.formattedAddress ? geoData.formattedAddress.split(',')[0]?.trim() : null);
       result.state = geoData.state;
       result.district = geoData.district;
       result.village = geoData.sublocality;
@@ -236,6 +238,7 @@ export async function getCurrentLocationWithAddress(): Promise<LocationResult | 
       ].filter(Boolean);
 
       result.address = addressParts.join(', ');
+      result.street = addr.street || addr.name || (result.address ? result.address.split(',')[0]?.trim() : null);
       result.state = addr.region || null;
       result.district = addr.subregion || addr.city || null;
       result.village = addr.district || addr.subregion || null;

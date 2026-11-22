@@ -179,7 +179,7 @@ export default function ManagerCustomersScreen() {
         <EmptyState
           icon="storefront-outline"
           title="No Shops Found"
-          description="No shops added in your territory yet."
+          description="No shops added in your area yet."
           iconColor={BrandColors.green.primary}
           iconBgColor={BrandColors.green.surface}
           iconBorderColor={BrandColors.green.light}

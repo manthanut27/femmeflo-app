@@ -575,7 +575,7 @@ export default function AdminReportsScreen() {
                           ? 'Daily Sales Performance'
                           : groupBy === 'seller'
                           ? 'Field Officer Rankings'
-                          : 'Territory District Performance'}
+                          : 'Area District Performance'}
                       </Text>
                       <Text style={styles.breakdownSubtitle}>
                         {groupBy === 'date'

@@ -120,15 +120,15 @@ export default function ManagerInventoryScreen() {
     return (
       <View style={styles.container}>
         <Header
-          title="Territory Van Stock"
-          subtitle={`Territory: ${user?.district || 'Field Operations'} • ${user?.name}`}
+          title="Area Van Stock"
+          subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
           showBack
         />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
             title="Access Restricted"
-            description="You do not have permission to monitor territory stock. Please contact your administrator to request 'Monitor territory stock' permission."
+            description="You do not have permission to monitor area stock. Please contact your administrator to request 'Monitor area stock' permission."
             iconColor={Colors.light.danger}
             iconBgColor={Colors.light.dangerBg}
             actionTitle="Back to Dashboard"
@@ -143,8 +143,8 @@ export default function ManagerInventoryScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Territory Van Stock"
-        subtitle={`Territory: ${user?.district || 'Field Operations'} • ${user?.name}`}
+        title="Area Van Stock"
+        subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
         showBack
       />
 
@@ -168,7 +168,7 @@ export default function ManagerInventoryScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.bannerTitle}>Field Force Van Stock Supervision</Text>
                 <Text style={styles.bannerSub}>
-                  Assigned territory: {[user?.district, user?.state].filter(Boolean).join(', ') || 'Assigned Zone'}
+                  Assigned area: {[user?.district, user?.state].filter(Boolean).join(', ') || 'Assigned Zone'}
                 </Text>
               </View>
               <Badge label="INVENTORY VIEW" variant="ACTIVE" />
@@ -309,7 +309,7 @@ export default function ManagerInventoryScreen() {
                   description={
                     searchQuery
                       ? 'No field officers match your search criteria.'
-                      : 'No sellers have been assigned inventory in your territory yet.'
+                      : 'No sellers have been assigned inventory in your area yet.'
                   }
                   icon="people-outline"
                 />
@@ -347,7 +347,7 @@ export default function ManagerInventoryScreen() {
                             <Text style={styles.sellerName}>{sellerObj.name}</Text>
                             <Text style={styles.sellerLoc}>
                               {sellerObj.phone ? `${sellerObj.phone} • ` : ''}
-                              {sellerObj.village || sellerObj.district || 'Territory Field Force'}
+                              {sellerObj.village || sellerObj.district || 'Area Field Force'}
                             </Text>
                           </View>
                           <Badge label={statusLabel} variant={statusVariant} />

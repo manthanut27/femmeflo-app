@@ -238,7 +238,7 @@ export default function AdminCustomersScreen() {
           <View style={styles.detailCol}>
             <Ionicons name="location-outline" size={13} color="#64748B" />
             <Text style={styles.detailText}>
-              {[item.village, item.district, item.state].filter(Boolean).join(', ') || 'Territory'}
+              {[item.village, item.district, item.state].filter(Boolean).join(', ') || 'Area'}
             </Text>
           </View>
           <View style={styles.detailCol}>
@@ -359,7 +359,7 @@ export default function AdminCustomersScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.bulkBannerTitle}>Add Multiple Customers (Bulk Mode)</Text>
             <Text style={styles.bulkBannerSub}>
-              Batch onboard up to 100 retailers at once with shared territory defaults
+              Batch onboard up to 100 retailers at once with shared area defaults
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={BrandColors.pink.dark} />

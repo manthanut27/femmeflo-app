@@ -320,7 +320,7 @@ export default function AdminInventoryMainScreen() {
       list.push({
         id,
         title: `${m.name || 'Manager'} (Dual-Role Manager - Van Stock)`,
-        subtitle: `Van Stock • Territory: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
+        subtitle: `Van Stock • Area: ${[m.district, m.state].filter(Boolean).join(', ') || 'Assigned Zone'}`,
         badge: 'VAN STOCK',
         badgeVariant: 'ACTIVE',
         metadata: `${m.phone || ''} ${m.email || ''} ${m.district || ''} dual role van stock manager`,

@@ -416,7 +416,7 @@ export default function AdminDashboardScreen() {
               <View style={{ flex: 1, marginRight: Spacing.sm }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Ionicons name="filter" size={18} color={BrandColors.pink.primary} />
-                  <Text style={styles.filterMainTitle}>Territory & Scope Filters</Text>
+                  <Text style={styles.filterMainTitle}>Area & Scope Filters</Text>
                   {activeFiltersCount > 0 ? (
                     <View style={styles.filterCountBadge}>
                       <Text style={styles.filterCountText}>{activeFiltersCount}</Text>
@@ -424,7 +424,7 @@ export default function AdminDashboardScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.filterMainSub}>
-                  Filter live operational metrics by date and territory
+                  Filter live operational metrics by date and area
                 </Text>
               </View>
 
@@ -439,7 +439,7 @@ export default function AdminDashboardScreen() {
                   style={styles.filterToggleBtn}
                   onPress={() => setFiltersOpen(true)}
                   accessibilityRole="button"
-                  accessibilityLabel="Open Territory & Scope Filters"
+                  accessibilityLabel="Open Area & Scope Filters"
                 >
                   <Ionicons name="options-outline" size={16} color="#0F172A" />
                   <Text style={styles.filterToggleText}>Filters</Text>
@@ -489,7 +489,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.filterEmptyNoticeRow}>
                 <Ionicons name="sparkles-outline" size={13} color={BrandColors.pink.primary} />
                 <Text style={styles.filterEmptyNoticeText}>
-                  Showing all metrics • Tap Filters to scope by date, territory, or village
+                  Showing all metrics • Tap Filters to scope by date, area, or village
                 </Text>
               </View>
             )}
@@ -1078,8 +1078,8 @@ export default function AdminDashboardScreen() {
               <>
                 <View style={styles.modalHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.modalTitle}>Territory & Scope Filters</Text>
-                    <Text style={styles.modalSub}>Filter live operational metrics by date and territory</Text>
+                    <Text style={styles.modalTitle}>Area & Scope Filters</Text>
+                    <Text style={styles.modalSub}>Filter live operational metrics by date and area</Text>
                   </View>
                   <Pressable onPress={() => setFiltersOpen(false)} style={styles.modalCloseBtn}>
                     <Ionicons name="close" size={22} color={Colors.light.text} />

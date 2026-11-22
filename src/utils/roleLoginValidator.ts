@@ -74,7 +74,7 @@ export function validateLoginRoleSection(
       if (role === 'MANAGER' && !isSeller) {
         return {
           isValid: false,
-          error: 'This account is for Territory Manager without seller access. Please switch to the Territory Manager tab above to sign in.',
+          error: 'This account is for Area Manager (Territory Manager) without seller access. Please switch to the Territory Manager tab above to sign in.',
           recommendedSection: 'manager',
         };
       }

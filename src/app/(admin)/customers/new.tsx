@@ -1385,7 +1385,7 @@ export default function AdminAddCustomerScreen() {
             {/* Search */}
             <View style={{ paddingHorizontal: Spacing.md, marginBottom: Spacing.sm }}>
               <TextInput
-                placeholder="Search field seller or territory..."
+                placeholder="Search field seller or area..."
                 value={sellerSearch}
                 onChangeText={setSellerSearch}
                 style={styles.modalSearchInput}

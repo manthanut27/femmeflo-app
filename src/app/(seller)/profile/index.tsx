@@ -192,9 +192,9 @@ export default function SellerProfileScreen() {
             ) : null}
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Territory</Text>
+              <Text style={styles.infoLabel}>Work Area</Text>
               <Text style={styles.infoVal}>
-                {[user?.village, user?.district, user?.state].filter(Boolean).join(', ') || 'Assigned Territory'}
+                {[user?.village, user?.district, user?.state].filter(Boolean).join(', ') || 'Assigned Area'}
               </Text>
             </View>
 
@@ -213,10 +213,10 @@ export default function SellerProfileScreen() {
             <Card style={styles.roleSwitchCard}>
               <View style={styles.roleSwitchHeader}>
                 <Ionicons name="swap-horizontal" size={20} color={BrandColors.green.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.roleSwitchTitle}>Territory Manager Session</Text>
+                <Text style={styles.roleSwitchTitle}>Area Manager Session</Text>
               </View>
               <Text style={styles.roleSwitchDesc}>
-                You are currently in Field Sales Mode. Tap below to return to your primary Territory Manager operational dashboard.
+                You are currently in Field Sales Mode. Tap below to return to your primary Area Manager operational dashboard.
               </Text>
               <Button
                 title="Return to Manager Hub"
@@ -386,7 +386,7 @@ export default function SellerProfileScreen() {
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Edit Profile Details</Text>
-                <Text style={styles.modalSubtitle}>Update your on-field contact and territory information</Text>
+                <Text style={styles.modalSubtitle}>Update your on-field contact and work area information</Text>
               </View>
               <Pressable
                 onPress={handleCloseEditModal}

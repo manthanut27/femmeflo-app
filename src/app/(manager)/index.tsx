@@ -106,7 +106,7 @@ export default function ManagerDashboardScreen() {
 
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            Territory: {user?.district || 'Thane'}
+            Area: {user?.district || 'Thane'}
           </Text>
           <Text style={styles.headerSubtitle} numberOfLines={1}>
             Manager: {user?.name || (user as any)?.username || 'test45'}
@@ -152,7 +152,7 @@ export default function ManagerDashboardScreen() {
                 </Text>
                 <View style={styles.territoryStatusRow}>
                   <View style={styles.greenDot} />
-                  <Text style={styles.territoryStatusLabel}>Active Territory • GPS Verified</Text>
+                  <Text style={styles.territoryStatusLabel}>Active Area • GPS Verified</Text>
                 </View>
               </View>
             </View>

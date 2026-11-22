@@ -54,7 +54,7 @@ import {
 type StatusFilter = 'ALL' | 'CONFIRMED' | 'PENDING' | 'REJECTED';
 
 const PERIOD_FILTERS = [
-  { label: 'All Territory Sales', value: 'all' },
+  { label: 'All Area Sales', value: 'all' },
   { label: 'Today Only', value: 'today' },
   { label: 'This Month', value: 'this_month' },
 ];
@@ -490,8 +490,8 @@ export default function ManagerSalesScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Territory Sales & Reports"
-        subtitle={`Territory Beat Analytics • ${territoryMetrics.activeOfficersCount} field officers`}
+        title="Area Sales & Reports"
+        subtitle={`Area Analytics • ${territoryMetrics.activeOfficersCount} field officers`}
         showMenu={true}
         onMenuPress={() => setMenuOpen(true)}
         rightAction={
@@ -518,7 +518,7 @@ export default function ManagerSalesScreen() {
             style={{ marginRight: 6 }}
           />
           <Text style={[styles.modeTabText, viewMode === 'DAILY_REPORT' && styles.modeTabTextActive]}>
-            Daily Territory Report
+            Daily Area Report
           </Text>
         </Pressable>
 
@@ -539,7 +539,7 @@ export default function ManagerSalesScreen() {
       </View>
 
       {/* ==================================================== */}
-      {/* 1. DAILY TERRITORY REPORT VIEW */}
+      {/* 1. DAILY AREA REPORT VIEW */}
       {/* ==================================================== */}
       {viewMode === 'DAILY_REPORT' ? (
         <ScrollView
@@ -547,10 +547,10 @@ export default function ManagerSalesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BrandColors.green.primary]} />}
         >
           <View style={styles.contentWrapper}>
-            {/* Territory KPI Grid */}
+            {/* Area KPI Grid */}
             <View style={styles.kpiGrid}>
               <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Territory Revenue</Text>
+                <Text style={styles.kpiLabel}>Area Revenue</Text>
                 <Text style={styles.kpiValueGreen}>{formatCurrencyINR(territoryMetrics.revenuePaise)}</Text>
                 <Text style={styles.kpiSub}>{territoryMetrics.confirmedCount} confirmed orders</Text>
               </Card>
@@ -619,7 +619,7 @@ export default function ManagerSalesScreen() {
               <EmptyState
                 icon="calendar-outline"
                 title="No Sales Recorded"
-                description="No sales have been recorded across the territory for the selected filter."
+                description="No sales have been recorded across the area for the selected filter."
               />
             ) : (
               dailyGroups.map((group) => {

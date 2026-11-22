@@ -128,7 +128,7 @@ export default function ManagerProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Manager Profile" subtitle="Territory Administration" />
+      <Header title="Manager Profile" subtitle="Area Management" />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.innerContainer}>
@@ -137,13 +137,13 @@ export default function ManagerProfileScreen() {
               <View style={styles.avatarRow}>
                 <View style={styles.avatarCircle}>
                   <Text style={styles.avatarText}>
-                    {user?.name?.slice(0, 2).toUpperCase() || 'TM'}
+                    {user?.name?.slice(0, 2).toUpperCase() || 'AM'}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{user?.name}</Text>
                   <Text style={styles.userEmail}>{user?.email}</Text>
-                  <Badge label="TERRITORY MANAGER" variant="ACTIVE" style={{ marginTop: 6 }} />
+                  <Badge label="AREA MANAGER" variant="ACTIVE" style={{ marginTop: 6 }} />
                 </View>
               </View>
 
@@ -162,7 +162,7 @@ export default function ManagerProfileScreen() {
             <View style={styles.divider} />
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Assigned Territory</Text>
+              <Text style={styles.infoLabel}>Assigned Area</Text>
               <Text style={styles.infoVal}>
                 {[user?.district, user?.state].filter(Boolean).join(', ') || 'All Regions'}
               </Text>
@@ -198,7 +198,7 @@ export default function ManagerProfileScreen() {
                 <Text style={styles.roleSwitchTitle}>Dual Operational Role</Text>
               </View>
               <Text style={styles.roleSwitchDesc}>
-                You are designated as both Territory Manager and Field Sales Officer. Switch into Field Sales mode to enter mobile POS orders and record on-ground duty shifts.
+                You are designated as both Area Manager and Field Sales Officer. Switch into Field Sales mode to enter mobile POS orders and record on-ground duty shifts.
               </Text>
               <Button
                 title="Switch to Field Sales Mode"
@@ -308,7 +308,7 @@ export default function ManagerProfileScreen() {
             <View style={styles.modalHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Edit Manager Profile</Text>
-                <Text style={styles.modalSubtitle}>Update your territory management contact and regional office info</Text>
+                <Text style={styles.modalSubtitle}>Update your area management contact and regional office info</Text>
               </View>
               <Pressable
                 onPress={handleCloseEditModal}
@@ -333,8 +333,8 @@ export default function ManagerProfileScreen() {
                   <Text style={styles.metaChipVal}>{user?.email || 'N/A'}</Text>
                 </View>
                 <View style={styles.metaChip}>
-                  <Text style={styles.metaChipLabel}>ROLE JURISDICTION</Text>
-                  <Text style={styles.metaChipVal}>Territory Manager</Text>
+                  <Text style={styles.metaChipLabel}>ASSIGNED AREA</Text>
+                  <Text style={styles.metaChipVal}>Area Manager</Text>
                 </View>
               </View>
 

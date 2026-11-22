@@ -47,7 +47,7 @@ const DEFAULT_PERMISSIONS = [
   { id: 'onboard_sellers', label: 'Onboard new field officers' },
   { id: 'view_customers', label: 'View customer directory' },
   { id: 'onboard_customers', label: 'Onboard new customers' },
-  { id: 'monitor_stock', label: 'Monitor territory stock' },
+  { id: 'monitor_stock', label: 'Monitor area stock' },
 ];
 
 function formatAadhaar(raw: string): string {
@@ -253,7 +253,7 @@ export default function AdminOnboardManagerScreen() {
       style={styles.container}
     >
       <Header
-        title="Add Territory Manager"
+        title="Add Area Manager"
         subtitle="Create Manager Account"
         showBack
       />
@@ -294,7 +294,7 @@ export default function AdminOnboardManagerScreen() {
           <View style={styles.sectionHeaderBox}>
             <Text style={styles.sectionTitle}>Manager Details & Area</Text>
             <Text style={styles.sectionSubtitle}>
-              Add a new territory manager
+              Add a new area manager
             </Text>
           </View>
 

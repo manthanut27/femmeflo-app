@@ -422,9 +422,9 @@ export default function ManagerOnboardSellerScreen() {
                   <Ionicons name="shield-checkmark" size={18} color={BrandColors.green.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.reportingManagerName}>{user?.name || 'Territory Manager'}</Text>
+                  <Text style={styles.reportingManagerName}>{user?.name || 'Area Manager'}</Text>
                   <Text style={styles.reportingManagerDetails}>
-                    ({user?.district || user?.state || 'Your Supervised Territory'}) · {user?.phone || user?.email || 'Direct Supervisor'}
+                    ({user?.district || user?.state || 'Your Assigned Area'}) · {user?.phone || user?.email || 'Direct Supervisor'}
                   </Text>
                 </View>
                 <Badge label="YOU" variant="ACTIVE" size="sm" />
@@ -628,9 +628,9 @@ export default function ManagerOnboardSellerScreen() {
 
           {/* 4. Complete Address & Territory */}
           <View style={styles.sectionHeaderBox}>
-            <Text style={styles.sectionTitle}>4. Complete Address &amp; Territory</Text>
+            <Text style={styles.sectionTitle}>4. Complete Address &amp; Area</Text>
             <Text style={styles.sectionSubtitle}>
-              Residential address with PIN code lookup for territory jurisdiction
+              Residential address with PIN code lookup for assigned area
             </Text>
           </View>
 

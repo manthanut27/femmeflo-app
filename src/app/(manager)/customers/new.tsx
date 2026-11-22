@@ -257,7 +257,7 @@ export default function ManagerAddCustomerScreen() {
       opts.push({
         id: user.id,
         title: `${user.name || user.email || 'Current User'} (Myself)`,
-        subtitle: user.email ? `${user.email} • Assigned Territory` : 'Current logged-in manager',
+        subtitle: user.email ? `${user.email} • Assigned Area` : 'Current logged-in manager',
         badge: 'Myself',
         badgeVariant: 'info',
         icon: 'person-circle-outline',
@@ -271,7 +271,7 @@ export default function ManagerAddCustomerScreen() {
         opts.push({
           id: m.id,
           title: m.name || m.email || `Manager (${m.id})`,
-          subtitle: m.email || (m.role ? `Role: ${m.role}` : 'Territory Manager'),
+          subtitle: m.email || (m.role ? `Role: ${m.role}` : 'Area Manager'),
           badge: m.role || 'Manager',
           badgeVariant: 'neutral',
           icon: 'person-outline',
@@ -286,14 +286,14 @@ export default function ManagerAddCustomerScreen() {
     if (selectedManagerId === user?.id && user) {
       return {
         name: `${user.name || user.email || 'Current User'} (Myself)`,
-        subtitle: user.email ? `${user.email} • Logged-in Manager` : 'Territory Manager',
+        subtitle: user.email ? `${user.email} • Logged-in Manager` : 'Area Manager',
       };
     }
     const found = managers.find((m) => m.id === selectedManagerId);
     if (found) {
       return {
         name: found.name || found.email || `Manager (${found.id})`,
-        subtitle: found.email || found.role || 'Territory Manager',
+        subtitle: found.email || found.role || 'Area Manager',
       };
     }
     return {
@@ -969,7 +969,7 @@ export default function ManagerAddCustomerScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardHeaderTitle}>Store Address</Text>
-                <Text style={styles.cardHeaderSubtitle}>PIN code lookup and territory location details</Text>
+                <Text style={styles.cardHeaderSubtitle}>PIN code lookup and area location details</Text>
               </View>
             </View>
 

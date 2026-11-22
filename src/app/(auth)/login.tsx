@@ -53,10 +53,10 @@ const ROLES: Record<LoginRole, RoleConfig> = {
   },
   manager: {
     key: 'manager',
-    label: 'Territory Manager',
-    portalTitle: 'Territory Manager Portal',
+    label: 'Area Manager',
+    portalTitle: 'Area Manager Portal',
     portalSubtitle: 'Regional team oversight, van stock, and field approvals',
-    badgeLabel: 'Territory HQ',
+    badgeLabel: 'Area Office',
     iconName: 'people-outline',
     primaryColor: BrandColors.green.primary,
     subtleBg: BrandColors.green.surface,

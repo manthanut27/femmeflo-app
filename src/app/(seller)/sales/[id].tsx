@@ -392,7 +392,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
         showBack
       />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 140, 180) }]}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 180, 220) }]}>
         <View style={styles.contentWrapper}>
           {/* Status Card */}
           <Card style={styles.statusCard}>
@@ -407,9 +407,19 @@ Generated in FemmeFlo Standalone Test Mode.`;
             {isPendingApproval ? (
               <View style={styles.amberNotice} accessibilityRole="alert">
                 <Ionicons name="time-outline" size={18} color="#D97706" style={{ marginRight: 6 }} />
-                <Text style={styles.amberNoticeText}>
-                  Pending Super Admin Approval. Stock is reserved and invoice will be issued once approved.
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.amberNoticeText}>
+                    Pending Super Admin Approval. Stock is reserved and invoice will be issued once approved.
+                  </Text>
+                  <Button
+                    title="Edit Low Price Request"
+                    variant="outline"
+                    size="sm"
+                    onPress={handleOpenPriceModal}
+                    icon={<Ionicons name="create-outline" size={14} color="#D97706" />}
+                    style={{ marginTop: 8, alignSelf: 'flex-start', borderColor: '#D97706' }}
+                  />
+                </View>
               </View>
             ) : isRejected ? (
               <View style={styles.redNotice} accessibilityRole="alert">

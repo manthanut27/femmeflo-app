@@ -27,7 +27,7 @@ export interface FaceVerificationResult {
 
 export interface FaceVerificationModalProps {
   visible: boolean;
-  mode: 'START' | 'END';
+  mode: 'START' | 'END' | 'REGISTER';
   userName?: string;
   userRole?: string;
   onClose: () => void;
@@ -61,7 +61,7 @@ export function FaceVerificationModal({
   useEffect(() => {
     onVerifiedRef.current = onVerified;
   }, [onVerified]);
-  const isStart = mode === 'START';
+  const isStart = mode === 'START' || mode === 'REGISTER';
 
   const stopScanAnimation = useCallback(() => {
     if (scanLoopRef.current) {
@@ -178,8 +178,8 @@ export function FaceVerificationModal({
             onVerifiedRef.current({
               faceVerified: true,
               facePhoto: photoData,
-              faceConfidence: 0.98,
-              faceMethod: 'FACE_ID_BIOMETRIC',
+              faceConfidence: mode === 'REGISTER' ? 0.99 : 0.98,
+              faceMethod: mode === 'REGISTER' ? 'FACE_ID_ENROLLED' : 'FACE_ID_BIOMETRIC',
             });
           }, 350);
         }
@@ -329,10 +329,16 @@ export function FaceVerificationModal({
             </View>
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.title}>
-                {isStart ? 'Shift Start Attendance' : 'Shift End Checkout'}
+                {mode === 'REGISTER'
+                  ? 'First-Time Face Registration'
+                  : isStart
+                  ? 'Shift Start Attendance'
+                  : 'Shift End Checkout'}
               </Text>
               <Text style={styles.subtitle}>
-                Face Selfie & Verification · {userName} ({userRole})
+                {mode === 'REGISTER'
+                  ? `Enroll Face ID · ${userName} (${userRole})`
+                  : `Face Selfie & Verification · ${userName} (${userRole})`}
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
@@ -403,7 +409,9 @@ export function FaceVerificationModal({
             <View style={styles.statusBox}>
               {step === 'READY' && (
                 <Text style={styles.statusText}>
-                  Capture a front selfie or upload a photo to verify shift attendance.
+                  {mode === 'REGISTER'
+                    ? 'Take a front selfie to register your Face ID. This securely enrolls your identity for automated shift duty.'
+                    : 'Capture a front selfie or upload a photo to verify shift attendance.'}
                 </Text>
               )}
               {step === 'CAPTURING' && (
@@ -415,7 +423,7 @@ export function FaceVerificationModal({
               {step === 'SCANNING' && (
                 <View style={{ alignItems: 'center', width: '100%' }}>
                   <Text style={styles.statusScanningText}>
-                    Verifying Attendance Selfie... {scanProgress}%
+                    {mode === 'REGISTER' ? 'Registering Face ID...' : 'Verifying Attendance Selfie...'} {scanProgress}%
                   </Text>
                   <View style={styles.progressBarBg}>
                     <View style={[styles.progressBarFill, { width: `${scanProgress}%` }]} />
@@ -424,7 +432,9 @@ export function FaceVerificationModal({
               )}
               {step === 'VERIFIED' && (
                 <Text style={styles.statusVerifiedText}>
-                  Attendance Selfie Verified ✓ (Confidence 98%)
+                  {mode === 'REGISTER'
+                    ? 'User Registered Successfully! Face ID Enrolled ✓'
+                    : 'Attendance Selfie Verified ✓ (Confidence 98%)'}
                 </Text>
               )}
               {step === 'ERROR' && (
@@ -449,21 +459,23 @@ export function FaceVerificationModal({
               <View style={{ width: '100%' }}>
                 <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
-                    title="Take Selfie"
+                    title={mode === 'REGISTER' ? 'Enroll Live Face Selfie' : 'Take Selfie'}
                     variant="primary"
                     size="md"
                     icon={<Ionicons name="camera-outline" size={18} color="#FFFFFF" />}
                     onPress={handleLaunchCamera}
-                    style={{ flex: 1.2 }}
+                    style={{ flex: mode === 'REGISTER' ? 1 : 1.2 }}
                   />
-                  <Button
-                    title="Upload Photo"
-                    variant="secondary"
-                    size="md"
-                    icon={<Ionicons name="image-outline" size={18} color="#FFFFFF" />}
-                    onPress={handleChooseFromGallery}
-                    style={{ flex: 1.2 }}
-                  />
+                  {mode !== 'REGISTER' && (
+                    <Button
+                      title="Upload Photo"
+                      variant="secondary"
+                      size="md"
+                      icon={<Ionicons name="image-outline" size={18} color="#FFFFFF" />}
+                      onPress={handleChooseFromGallery}
+                      style={{ flex: 1.2 }}
+                    />
+                  )}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: isStart ? 'center' : 'space-between', alignItems: 'center', marginTop: 2 }}>
                   <Button

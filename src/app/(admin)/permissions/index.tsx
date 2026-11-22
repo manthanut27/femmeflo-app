@@ -84,7 +84,7 @@ export default function AdminPermissionsScreen() {
 
   const managerOptions: DropdownOption[] = useMemo(() => {
     return managers.map((m) => {
-      const territory = [m.district, m.state].filter(Boolean).join(', ') || m.address || 'Territory';
+      const territory = [m.district, m.state].filter(Boolean).join(', ') || m.address || 'Area';
       const contact = m.phone ? ` • +91 ${m.phone}` : '';
       return {
         id: m.id,
@@ -169,7 +169,7 @@ export default function AdminPermissionsScreen() {
     const finalPermissions = sanitizeBackendPermissions(rawList);
 
     const targetTitle = isOverall
-      ? `all ${managers.length} Territory Managers`
+      ? `all ${managers.length} Area Managers`
       : `Manager "${selectedManager?.name || 'Selected'}"`;
 
     Alert.alert(
@@ -280,24 +280,24 @@ export default function AdminPermissionsScreen() {
           {/* Individual Manager Selection */}
           {scopeMode === 'specific' ? (
             <View style={styles.managerSection}>
-              <Text style={styles.sectionHeading}>Select Territory Manager</Text>
+              <Text style={styles.sectionHeading}>Select Area Manager</Text>
               {loading ? (
                 <CardSkeleton />
               ) : managers.length === 0 ? (
-                <Text style={styles.emptyText}>No Territory Managers registered yet.</Text>
+                <Text style={styles.emptyText}>No Area Managers registered yet.</Text>
               ) : (
                 <DropdownTrigger
-                  label="Territory Manager"
+                  label="Area Manager"
                   required
                   value={selectedManager?.name}
                   subtitle={
                     selectedManager
-                      ? `${[selectedManager.district, selectedManager.state].filter(Boolean).join(', ') || 'Territory'}${selectedManager.phone ? ` • +91 ${selectedManager.phone}` : ''}`
+                      ? `${[selectedManager.district, selectedManager.state].filter(Boolean).join(', ') || 'Area'}${selectedManager.phone ? ` • +91 ${selectedManager.phone}` : ''}`
                       : 'Search and select manager...'
                   }
                   badge={selectedManager ? (selectedManager.active ? 'ACTIVE' : 'INACTIVE') : undefined}
                   icon="person"
-                  placeholder="Search and select territory manager..."
+                  placeholder="Search and select area manager..."
                   onPress={() => setManagerPickerVisible(true)}
                 />
               )}
@@ -306,7 +306,7 @@ export default function AdminPermissionsScreen() {
             <Card style={styles.overallNoticeCard}>
               <Ionicons name="information-circle-outline" size={20} color={BrandColors.pink.dark} />
               <Text style={styles.overallNoticeText}>
-                Changes saved in Global mode will be updated across all {managers.length} Territory Managers simultaneously.
+                Changes saved in Global mode will be updated across all {managers.length} Area Managers simultaneously.
               </Text>
             </Card>
           )}
@@ -365,7 +365,7 @@ export default function AdminPermissionsScreen() {
       {/* Searchable Manager Dropdown Modal */}
       <SearchableDropdownModal
         visible={managerPickerVisible}
-        title="Select Territory Manager"
+        title="Select Area Manager"
         searchPlaceholder="Search manager by name, phone, district..."
         options={managerOptions}
         selectedId={selectedManagerId}
@@ -377,7 +377,7 @@ export default function AdminPermissionsScreen() {
           setManagerPickerVisible(false);
         }}
         onClose={() => setManagerPickerVisible(false)}
-        emptyMessage="No territory managers found"
+        emptyMessage="No area managers found"
       />
     </View>
   );

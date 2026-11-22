@@ -38,6 +38,7 @@ export interface ShiftAuthVerificationModalProps {
   userName?: string;
   userRole?: string;
   odometerKm?: number;
+  locationAddress?: string;
   onClose: () => void;
   onVerified: (result: ShiftAuthResult) => void;
 }
@@ -50,6 +51,7 @@ export function ShiftAuthVerificationModal({
   userName,
   userRole,
   odometerKm,
+  locationAddress,
   onClose,
   onVerified,
 }: ShiftAuthVerificationModalProps) {
@@ -335,15 +337,22 @@ export function ShiftAuthVerificationModal({
             </TouchableOpacity>
           </View>
 
-          {/* Odometer KM Pill */}
-          {odometerKm != null && odometerKm >= 0 && (
+          {/* Location / Odometer Pill */}
+          {locationAddress ? (
+            <View style={styles.locationPill}>
+              <Ionicons name="location" size={15} color="#059669" style={{ marginRight: 6 }} />
+              <Text style={styles.locationPillText} numberOfLines={1}>
+                {locationAddress}
+              </Text>
+            </View>
+          ) : odometerKm != null && odometerKm >= 0 ? (
             <View style={styles.odometerPill}>
               <Ionicons name="speedometer-outline" size={15} color="#881337" style={{ marginRight: 6 }} />
               <Text style={styles.odometerText}>
                 {isStart ? 'Starting Odometer' : 'Ending Odometer'}: <Text style={{ fontWeight: '700' }}>{odometerKm} KM</Text>
               </Text>
             </View>
-          )}
+          ) : null}
 
           {/* SUCCESS VIEW */}
           {isSuccess ? (
@@ -660,6 +669,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    alignSelf: 'stretch',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  locationPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#065F46',
+    flex: 1,
   },
   odometerPill: {
     flexDirection: 'row',

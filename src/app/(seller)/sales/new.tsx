@@ -664,7 +664,7 @@ export default function NewSaleScreen() {
                   <Text style={styles.customerName}>{selectedCustomer.shopName}</Text>
                   <Text style={styles.customerSub}>
                     Owner: {selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'} •{' '}
-                    {selectedCustomer.district || selectedCustomer.village || 'Territory'}
+                    {selectedCustomer.district || selectedCustomer.village || 'Area'}
                   </Text>
                   {selectedCustomer.phone ? (
                     <Text style={styles.customerPhone}>📞 {selectedCustomer.phone}</Text>

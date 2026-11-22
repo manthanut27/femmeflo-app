@@ -59,7 +59,7 @@ const DEFAULT_MANAGER_PERMISSIONS = [
   { id: 'onboard_sellers', label: 'Onboard new field officers' },
   { id: 'view_customers', label: 'View customer directory' },
   { id: 'onboard_customers', label: 'Onboard new customers' },
-  { id: 'monitor_stock', label: 'Monitor territory stock' },
+  { id: 'monitor_stock', label: 'Monitor area stock' },
 ];
 
 function formatAadhaar(raw: string): string {
@@ -416,7 +416,7 @@ export default function AdminOnboardUserScreen() {
       style={styles.container}
     >
       <Header
-        title={isMgr ? 'Onboard Territory Manager' : 'Officer information'}
+        title={isMgr ? 'Onboard Area Manager' : 'Officer information'}
         subtitle={
           isMgr
             ? 'Create a new manager account'
@@ -468,7 +468,7 @@ export default function AdminOnboardUserScreen() {
                 style={{ marginRight: 6 }}
               />
               <Text style={isMgr ? styles.roleTabTextActive : styles.roleTabTextInactive}>
-                Territory Manager
+                Area Manager
               </Text>
             </Pressable>
 
@@ -513,7 +513,7 @@ export default function AdminOnboardUserScreen() {
               <View style={styles.sectionHeaderBox}>
                 <Text style={styles.sectionTitle}>Manager Details &amp; Area</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Add a new territory manager
+                  Add a new area manager
                 </Text>
               </View>
 
@@ -968,7 +968,7 @@ export default function AdminOnboardUserScreen() {
                     value={selectedManager?.name}
                     subtitle={
                       selectedManager
-                        ? `${selectedManager.territory || selectedManager.district || selectedManager.state || 'Territory'} · ${selectedManager.phone || '+91 98765 00000'}`
+                        ? `${selectedManager.territory || selectedManager.district || selectedManager.state || 'Area'} · ${selectedManager.phone || '+91 98765 00000'}`
                         : loadingManagers
                         ? 'Loading active managers...'
                         : 'Tap to select supervising manager...'
@@ -996,7 +996,7 @@ export default function AdminOnboardUserScreen() {
                       </View>
 
                       <Input
-                        placeholder="Search by manager name, territory, phone..."
+                        placeholder="Search by manager name, area, phone..."
                         value={managerSearchQuery}
                         onChangeText={setManagerSearchQuery}
                         leftIcon={<Ionicons name="search" size={16} color="#64748B" />}
@@ -1027,7 +1027,7 @@ export default function AdminOnboardUserScreen() {
                                   {m.name}
                                 </Text>
                                 <Text style={styles.managerOptionSub} numberOfLines={1} ellipsizeMode="tail">
-                                  ({m.territory || m.district || m.state || 'Territory'}) · {m.phone || '+91 98765 00000'}
+                                  ({m.territory || m.district || m.state || 'Area'}) · {m.phone || '+91 98765 00000'}
                                 </Text>
                               </View>
                             </Pressable>
@@ -1231,9 +1231,9 @@ export default function AdminOnboardUserScreen() {
 
               {/* 4. Complete Address & Territory */}
               <View style={styles.sectionHeaderBox}>
-                <Text style={styles.sectionTitle}>4. Complete Address &amp; Territory</Text>
+                <Text style={styles.sectionTitle}>4. Complete Address &amp; Area</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Residential address with PIN code lookup for territory jurisdiction
+                  Residential address with PIN code lookup for assigned area
                 </Text>
               </View>
 

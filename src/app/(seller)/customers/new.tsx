@@ -261,7 +261,7 @@ export default function AddCustomerScreen() {
       opts.push({
         id: user.id,
         title: `${user.name || user.email || 'Current User'} (Myself)`,
-        subtitle: user.email ? `${user.email} • Assigned Territory` : 'Current logged-in seller',
+        subtitle: user.email ? `${user.email} • Assigned Area` : 'Current logged-in seller',
         badge: 'Myself',
         badgeVariant: 'info',
         icon: 'person-circle-outline',
@@ -275,7 +275,7 @@ export default function AddCustomerScreen() {
         opts.push({
           id: m.id,
           title: m.name || m.email || `Manager (${m.id})`,
-          subtitle: m.email || (m.role ? `Role: ${m.role}` : 'Territory Manager'),
+          subtitle: m.email || (m.role ? `Role: ${m.role}` : 'Area Manager'),
           icon: 'person-outline',
         });
       }

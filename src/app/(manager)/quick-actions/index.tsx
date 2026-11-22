@@ -26,7 +26,7 @@ export default function ManagerQuickActionsScreen() {
   const handleContactSupport = () => {
     Alert.alert(
       'FemmeFlo Field Support',
-      'Contact our dedicated operational support desk for assistance with inventory, app sync, or territory operations.',
+      'Contact our dedicated operational support desk for assistance with inventory, app sync, or area operations.',
       [
         {
           text: 'Call Helpline',

@@ -732,7 +732,7 @@ export default function AdminIncentivesScreen() {
                 style={styles.modalInput}
                 value={customRateReason}
                 onChangeText={setCustomRateReason}
-                placeholder="e.g. Rural territory promotion incentive"
+                placeholder="e.g. Rural area promotion incentive"
               />
               <View style={styles.modalBtnRow}>
                 <Button

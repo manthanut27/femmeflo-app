@@ -556,7 +556,7 @@ export default function AdminUsersScreen() {
       errs.password = passVal.error || 'Password must be at least 7 characters with letters, numbers, and symbols.';
     }
     if (modalRole === 'SELLER' && !formManagerId) {
-      errs.managerId = 'Please select a supervising Territory Manager.';
+      errs.managerId = 'Please select a supervising Area Manager.';
     }
 
     setFormErrors(errs);
@@ -1196,10 +1196,10 @@ export default function AdminUsersScreen() {
                     leftIcon={<Ionicons name="lock-closed-outline" size={18} color="#94A3B8" />}
                   />
 
-                  {/* If Seller: Supervising Territory Manager Dropdown with Search Option */}
+                  {/* If Seller: Supervising Area Manager Dropdown with Search Option */}
                   {modalRole === 'SELLER' && (
                     <DropdownTrigger
-                      label="Supervising Territory Manager"
+                      label="Supervising Area Manager"
                       required
                       value={selectedManager?.name}
                       subtitle={
@@ -1209,9 +1209,9 @@ export default function AdminUsersScreen() {
                           ? 'No active managers available. Create manager first.'
                           : 'Tap to select supervising manager with search...'
                       }
-                      placeholder="Select supervising territory manager..."
+                      placeholder="Select supervising area manager..."
                       icon="people"
-                      badge={selectedManager ? 'TERRITORY MGR' : undefined}
+                      badge={selectedManager ? 'AREA MGR' : undefined}
                       onPress={() => {
                         setManagerSearchQuery('');
                         setIsManagerPickerOpen(true);
@@ -1221,7 +1221,7 @@ export default function AdminUsersScreen() {
                   )}
 
                   <View style={styles.geoFieldsSection}>
-                    <Text style={styles.geoSectionHeading}>Assigned Territory (State & District)</Text>
+                    <Text style={styles.geoSectionHeading}>Assigned Area (State & District)</Text>
                     <View style={styles.geoRow}>
                       <View style={{ flex: 1, marginRight: Spacing.sm }}>
                         <Input
@@ -1336,7 +1336,7 @@ export default function AdminUsersScreen() {
                   {selectedUser?.role === 'MANAGER' ? 'Manager Details & Permissions' : 'Sales Officer Details & Permissions'}
                 </Text>
                 <Text style={styles.modalSubheading}>
-                  {isEditMode ? 'Edit account information and territory' : 'View contact details, work area & permissions'}
+                  {isEditMode ? 'Edit account information and area' : 'View contact details, work area & permissions'}
                 </Text>
               </View>
               <Pressable
@@ -1542,7 +1542,7 @@ export default function AdminUsersScreen() {
                       </View>
 
                       <View style={styles.infoSectionCard}>
-                        <Text style={styles.infoSectionHeader}>Assigned Territory</Text>
+                        <Text style={styles.infoSectionHeader}>Assigned Area</Text>
                         <View style={styles.infoGridRow}>
                           <View style={styles.infoGridCol}>
                             <Text style={styles.infoLabel}>State</Text>
@@ -1579,7 +1579,7 @@ export default function AdminUsersScreen() {
                           <View style={styles.infoGridCol}>
                             <Text style={styles.infoLabel}>Role</Text>
                             <Text style={styles.infoValueBold}>
-                              {selectedUser?.role === 'MANAGER' ? 'Territory Manager' : 'Field Sales Officer'}
+                              {selectedUser?.role === 'MANAGER' ? 'Area Manager' : 'Field Sales Officer'}
                             </Text>
                           </View>
                           <View style={styles.infoGridCol}>
@@ -1615,7 +1615,7 @@ export default function AdminUsersScreen() {
                             </View>
                             <View style={styles.infoGridCol}>
                               <Text style={styles.infoLabel}>Team Role</Text>
-                              <Text style={styles.infoValueBold}>Territory Team Lead</Text>
+                              <Text style={styles.infoValueBold}>Area Team Lead</Text>
                             </View>
                           </View>
                         )}

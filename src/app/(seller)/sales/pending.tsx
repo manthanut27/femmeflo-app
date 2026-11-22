@@ -212,7 +212,7 @@ export default function PendingSalesScreen() {
               Owner: <Text style={{ fontWeight: '700' }}>{customer?.ownerName || (customer as any)?.contactName || '—'}</Text>
             </Text>
             <Text style={styles.locationText} numberOfLines={1}>
-              {[customer?.village, customer?.district].filter(Boolean).join(', ') || 'Assigned Beat Territory'}
+              {[customer?.village, customer?.district].filter(Boolean).join(', ') || 'Assigned Area / Beat'}
             </Text>
           </View>
           {customer?.phone ? (
