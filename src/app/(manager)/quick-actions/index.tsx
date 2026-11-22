@@ -118,14 +118,14 @@ export default function ManagerQuickActionsScreen() {
             onPress={() => router.push('/(manager)/inventory' as any)}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel="Check Van Stock: View stock in van"
+            accessibilityLabel="Check Inventory: View current stock"
           >
             <View style={styles.actionIconCircle}>
               <Ionicons name="cube-outline" size={22} color="#881337" />
             </View>
             <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
-              <Text style={styles.actionTitle}>Check Van Stock</Text>
-              <Text style={styles.actionSubtitle}>View stock in van</Text>
+              <Text style={styles.actionTitle}>Check Inventory</Text>
+              <Text style={styles.actionSubtitle}>View stock balance & transfers</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>

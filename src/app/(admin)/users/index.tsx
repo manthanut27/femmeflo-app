@@ -65,7 +65,7 @@ const SIMPLE_MANAGER_PERMISSION_INFO: Record<string, { title: string; subtitle: 
   },
   view_inventory: {
     title: 'Check Stock Levels',
-    subtitle: 'View warehouse inventory and van stock balances',
+    subtitle: 'View warehouse inventory and seller stock balances',
   },
   transfer_inventory: {
     title: 'Transfer Stock',
@@ -685,8 +685,8 @@ export default function AdminUsersScreen() {
 
         {isDualRole && (
           <View style={styles.dualRoleBadgeRow}>
-            <Ionicons name="bus-outline" size={13} color={BrandColors.pink.dark} />
-            <Text style={styles.dualRoleBadgeText}>Can take orders & hold van stock</Text>
+            <Ionicons name="cube-outline" size={13} color={BrandColors.pink.dark} />
+            <Text style={styles.dualRoleBadgeText}>Can take orders & carry field stock</Text>
           </View>
         )}
 
@@ -1935,9 +1935,9 @@ export default function AdminUsersScreen() {
                           <Ionicons name="bus-outline" size={18} color={sellerVanStockActive ? BrandColors.pink.dark : '#94A3B8'} />
                         </View>
                         <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                          <Text style={styles.permissionItemTitle}>Carry Vehicle / Van Stock</Text>
+                          <Text style={styles.permissionItemTitle}>Carry Field Stock</Text>
                           <Text style={styles.permissionItemDesc}>
-                            Allows officer to carry product stock in vehicle for on-the-spot delivery.
+                            Allows officer to carry product stock for on-the-spot delivery.
                           </Text>
                         </View>
                         <Switch

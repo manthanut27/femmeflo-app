@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -23,9 +24,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function CustomerListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
@@ -117,7 +120,7 @@ export default function CustomerListScreen() {
     return (
       <Card
         onPress={() => router.push(`/(seller)/customers/${item.id}` as any)}
-        accessibilityLabel={`Store ${item.shopName}, owned by ${item.ownerName}, in ${item.district || 'Territory'}`}
+        accessibilityLabel={`Store ${item.shopName}, owned by ${item.ownerName}, in ${item.district || 'Area'}`}
         accessibilityHint="Tap to view store ledger and contact options"
         style={styles.customerCard}
       >
@@ -155,7 +158,37 @@ export default function CustomerListScreen() {
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.light.textMuted} />
+          <View style={styles.cardActionsRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Call ${item.shopName}`}
+              style={({ pressed }) => [styles.quickContactBtn, pressed && styles.quickBtnPressed]}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (item.phone) Linking.openURL(`tel:${item.phone}`).catch(() => {});
+              }}
+              hitSlop={HitSlop.sm}
+            >
+              <Ionicons name="call" size={14} color={BrandColors.pink.primary} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`WhatsApp message to ${item.shopName}`}
+              style={({ pressed }) => [styles.quickContactBtn, styles.quickWhatsAppBtn, pressed && styles.quickBtnPressed]}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (item.phone) {
+                  const clean = item.phone.replace(/\D/g, '');
+                  const phoneWithCountry = clean.length === 10 ? `91${clean}` : clean;
+                  Linking.openURL(`https://wa.me/${phoneWithCountry}`).catch(() => {});
+                }
+              }}
+              hitSlop={HitSlop.sm}
+            >
+              <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
+            </Pressable>
+            <Ionicons name="chevron-forward" size={18} color={Colors.light.textMuted} />
+          </View>
         </View>
       </Card>
     );
@@ -276,7 +309,10 @@ export default function CustomerListScreen() {
           data={customers}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom + 110, 140) },
+          ]}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
           refreshControl={
@@ -450,5 +486,28 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textMuted,
     marginLeft: Spacing.sm,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickContactBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickWhatsAppBtn: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  quickBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
 });

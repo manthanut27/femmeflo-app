@@ -147,8 +147,8 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
             route: '/(seller)/customers',
           },
           {
-            title: 'My Van Stock',
-            subtitle: 'Packets in possession',
+            title: 'My Stock & Inventory',
+            subtitle: 'Packets & transfer history',
             icon: 'cube-outline',
             route: '/(seller)/inventory',
           },

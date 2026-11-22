@@ -309,7 +309,7 @@ export default function NewSaleScreen() {
       const avail = stockMap[prodId] ?? 0;
       if (reqQty > avail) {
         const prod = products.find((p) => p.id === prodId);
-        errorsMap[prodId] = `Van stock has ${avail} pkts, but ${reqQty} pkts in cart.`;
+        errorsMap[prodId] = `Available stock has ${avail} pkts, but ${reqQty} pkts in cart.`;
       }
     }
     return errorsMap;
@@ -502,7 +502,7 @@ export default function NewSaleScreen() {
       return {
         id: p.id,
         title: p.name,
-        subtitle: `SKU: ${p.sku || p.id} • Van Stock: ${stock} pkts • Price: ₹${priceRupees.toFixed(2)}`,
+        subtitle: `SKU: ${p.sku || p.id} • Stock: ${stock} pkts • Price: ₹${priceRupees.toFixed(2)}`,
         badge: stock > 0 ? `${stock} in stock` : '0 in stock',
         badgeVariant: stock > 0 ? 'success' : 'neutral',
         icon: 'cube-outline',
@@ -767,7 +767,7 @@ export default function NewSaleScreen() {
                           isExceedingStock && { color: Colors.light.danger },
                         ]}
                       >
-                        Van Stock: {availStock} pkts available
+                        Available Stock: {availStock} pkts available
                       </Text>
                     </View>
 

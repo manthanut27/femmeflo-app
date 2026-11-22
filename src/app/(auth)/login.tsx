@@ -55,7 +55,7 @@ const ROLES: Record<LoginRole, RoleConfig> = {
     key: 'manager',
     label: 'Area Manager',
     portalTitle: 'Area Manager Portal',
-    portalSubtitle: 'Regional team oversight, van stock, and field approvals',
+    portalSubtitle: 'Regional team oversight, stock transfers, and field approvals',
     badgeLabel: 'Area Office',
     iconName: 'people-outline',
     primaryColor: BrandColors.green.primary,

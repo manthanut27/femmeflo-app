@@ -56,8 +56,8 @@ export const PERMISSION_METADATA: Record<string, { label: string; description: s
     description: 'Allow manager to register and edit retail shop customers in their territory',
   },
   monitor_stock: {
-    label: 'Monitor Territory Stock',
-    description: 'Allow manager to monitor regional warehouse inventory and van stock levels',
+    label: 'Monitor Area Stock',
+    description: 'Allow manager to monitor regional warehouse inventory and seller stock levels',
   },
   view_inventory: {
     label: 'View Inventory',

@@ -38,6 +38,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export interface StoreDetailViewProps {
   role: 'seller' | 'manager' | 'admin';
@@ -77,6 +78,7 @@ export function StoreDetailView({
   salesRoutePrefix = '/(seller)/sales',
 }: StoreDetailViewProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const searchParams = useLocalSearchParams<{ id?: string }>();
   const customerId = propCustomerId || searchParams.id;
 
@@ -365,6 +367,15 @@ export function StoreDetailView({
     });
   }
 
+  function handleWhatsApp() {
+    if (!customer?.phone) return;
+    const clean = customer.phone.replace(/\D/g, '');
+    const phoneWithCountry = clean.length === 10 ? `91${clean}` : clean;
+    Linking.openURL(`https://wa.me/${phoneWithCountry}`).catch(() => {
+      Alert.alert('Unable to Open WhatsApp', 'WhatsApp application could not be opened on this device.');
+    });
+  }
+
   function handleEmail() {
     if (!customer?.email) return;
     Linking.openURL(`mailto:${customer.email}`).catch(() => {
@@ -469,7 +480,13 @@ export function StoreDetailView({
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 120, 160) },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.contentWrapper}>
           {/* Success Banner */}
           {successBanner ? (
@@ -585,6 +602,17 @@ export function StoreDetailView({
                 >
                   <Ionicons name="call" size={15} color="#FFFFFF" />
                   <Text style={styles.actionPillText}>Call</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`WhatsApp message to ${customer.phone}`}
+                  style={({ pressed }) => [styles.actionPill, styles.whatsappPill, pressed && styles.actionPillPressed]}
+                  onPress={handleWhatsApp}
+                  hitSlop={HitSlop.md}
+                >
+                  <Ionicons name="logo-whatsapp" size={15} color="#FFFFFF" />
+                  <Text style={styles.actionPillText}>WhatsApp</Text>
                 </Pressable>
 
                 {customer.email ? (
@@ -762,7 +790,7 @@ export function StoreDetailView({
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardHeading}>Location & Address</Text>
-                <Text style={styles.cardSubheading}>Physical address, territory, and geo-coordinates</Text>
+                <Text style={styles.cardSubheading}>Physical address, area, and geo-coordinates</Text>
               </View>
               {!isEditing && (
                 <Pressable
@@ -1467,6 +1495,9 @@ const styles = StyleSheet.create({
   },
   emailPill: {
     backgroundColor: Colors.light.info,
+  },
+  whatsappPill: {
+    backgroundColor: '#16A34A',
   },
   mapsPill: {
     backgroundColor: BrandColors.green.primary,

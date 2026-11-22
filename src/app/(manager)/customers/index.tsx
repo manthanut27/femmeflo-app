@@ -3,12 +3,15 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
+  Image,
+  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
 import type { CustomerItem, PaginationMeta } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -17,12 +20,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
-import { BrandColors, Colors, MaxContentWidth, Spacing, Typography } from '@/constants/theme';
+import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { canOnboardCustomers, canViewCustomers } from '@/utils/permissions';
 
 export default function ManagerCustomersScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const allowView = canViewCustomers(user);
   const allowOnboard = canOnboardCustomers(user);
@@ -77,37 +81,98 @@ export default function ManagerCustomersScreen() {
     loadCustomers();
   }, [loadCustomers]);
 
-  const renderItem = ({ item }: { item: CustomerItem }) => (
-    <Card
-      style={styles.card}
-      onPress={() => router.push(`/(manager)/customers/${item.id}` as any)}
-      accessibilityLabel={`Store ${item.shopName}, Owner ${item.ownerName}, Category ${item.category?.name || 'Retail'}`}
-      accessibilityHint="Tap to view and edit store details"
-    >
-      <View style={styles.header}>
-        <View style={{ flex: 1, marginRight: Spacing.sm }}>
-          <Text style={styles.shopName}>{item.shopName}</Text>
-          <Text style={styles.owner}>Owner: {item.ownerName}</Text>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+  const renderItem = ({ item }: { item: CustomerItem }) => {
+    const initials = item.shopName
+      .split(' ')
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+
+    const photoUri = item.photoUrl || (item as any).photoPath;
+
+    return (
+      <Card
+        style={styles.card}
+        onPress={() => router.push(`/(manager)/customers/${item.id}` as any)}
+        accessibilityLabel={`Store ${item.shopName}, Owner ${item.ownerName}, Category ${item.category?.name || 'Retail'}`}
+        accessibilityHint="Tap to view and edit store details"
+      >
+        <View style={styles.header}>
+          <View style={styles.shopAvatar}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.shopAvatarImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.shopAvatarText}>{initials || 'ST'}</Text>
+            )}
+          </View>
+          <View style={{ flex: 1, marginRight: Spacing.sm }}>
+            <Text style={styles.shopName} numberOfLines={1}>
+              {item.shopName}
+            </Text>
+            <Text style={styles.owner} numberOfLines={1}>
+              Owner: {item.ownerName}
+            </Text>
+          </View>
           <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
-          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
         </View>
-      </View>
-      <View style={styles.footer}>
-        <View style={styles.contactRow}>
-          <Ionicons name="call-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
-          <Text style={styles.phone}>{item.phone}</Text>
-        </View>
-        <View style={styles.sellerRow}>
-          <Ionicons name="person-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
-          <Text style={styles.sellerTag}>
-            Seller: {item.seller?.name || 'Assigned'}
+
+        <View style={styles.locationRow}>
+          <Ionicons name="location-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+          <Text style={styles.locationText} numberOfLines={1}>
+            {[item.village, item.district].filter(Boolean).join(', ') || item.address || 'Area'}
           </Text>
         </View>
-      </View>
-    </Card>
-  );
+
+        <View style={styles.footer}>
+          <View style={styles.footerLeft}>
+            <View style={styles.contactRow}>
+              <Ionicons name="call-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+              <Text style={styles.phone}>{item.phone}</Text>
+            </View>
+            <View style={styles.sellerRow}>
+              <Ionicons name="person-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+              <Text style={styles.sellerTag} numberOfLines={1}>
+                Seller: {item.seller?.name || 'Assigned'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardActionsRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Call ${item.shopName}`}
+              style={({ pressed }) => [styles.quickContactBtn, pressed && styles.quickBtnPressed]}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (item.phone) Linking.openURL(`tel:${item.phone}`).catch(() => {});
+              }}
+              hitSlop={HitSlop.sm}
+            >
+              <Ionicons name="call" size={14} color={BrandColors.pink.primary} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`WhatsApp message to ${item.shopName}`}
+              style={({ pressed }) => [styles.quickContactBtn, styles.quickWhatsAppBtn, pressed && styles.quickBtnPressed]}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (item.phone) {
+                  const clean = item.phone.replace(/\D/g, '');
+                  const phoneWithCountry = clean.length === 10 ? `91${clean}` : clean;
+                  Linking.openURL(`https://wa.me/${phoneWithCountry}`).catch(() => {});
+                }
+              }}
+              hitSlop={HitSlop.sm}
+            >
+              <Ionicons name="logo-whatsapp" size={14} color="#16A34A" />
+            </Pressable>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </View>
+        </View>
+      </Card>
+    );
+  };
 
   if (!allowView) {
     return (
@@ -165,6 +230,18 @@ export default function ManagerCustomersScreen() {
             value={search}
             onChangeText={setSearch}
             leftIcon={<Ionicons name="search" size={18} color="#94A3B8" />}
+            rightIcon={
+              search ? (
+                <Pressable
+                  onPress={() => setSearch('')}
+                  hitSlop={HitSlop.sm}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                >
+                  <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                </Pressable>
+              ) : undefined
+            }
             containerStyle={{ marginBottom: 0 }}
           />
         </View>
@@ -189,7 +266,10 @@ export default function ManagerCustomersScreen() {
           data={customers}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom + 110, 140) },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -253,9 +333,29 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: Spacing.xs,
+  },
+  shopAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+    overflow: 'hidden',
+  },
+  shopAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  shopAvatarText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   shopName: {
     ...Typography.bodyMedium,
@@ -266,6 +366,17 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+    paddingLeft: 46,
+  },
+  locationText: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    flex: 1,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -274,6 +385,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.light.borderSubtle,
     marginTop: Spacing.xs,
+  },
+  footerLeft: {
+    flex: 1,
+    gap: 4,
   },
   contactRow: {
     flexDirection: 'row',
@@ -291,6 +406,29 @@ const styles = StyleSheet.create({
   sellerTag: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickContactBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FFE4E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickWhatsAppBtn: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  quickBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
   },
   restrictedContainer: {
     flex: 1,

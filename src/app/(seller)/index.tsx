@@ -404,7 +404,7 @@ export default function SellerDashboardScreen() {
                     <Badge label="MANAGER" variant="ACTIVE" size="sm" pulse={true} />
                   </View>
                   <Text style={styles.managerModeDesc}>
-                    Taking shop orders with your van stock.
+                    Taking shop orders with your available stock.
                   </Text>
                 </View>
               </View>
@@ -542,7 +542,7 @@ export default function SellerDashboardScreen() {
                 value={data?.lowStockCount ? `${data.lowStockCount} Low` : (data?.stockBalance ? `${data.stockBalance} Pkts` : 'Healthy')}
                 icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
                 variant={data?.lowStockCount ? 'pink' : 'default'}
-                changeLabel="Van stock"
+                changeLabel="Current stock"
                 onPress={() => router.push('/(seller)/inventory' as any)}
                 animate={false}
               />
@@ -572,7 +572,7 @@ export default function SellerDashboardScreen() {
               style={styles.actionBtn}
             />
             <Button
-              title="Check Van Stock"
+              title="Check Inventory & Stock"
               onPress={() => router.push('/(seller)/inventory')}
               variant="outline"
               size="lg"

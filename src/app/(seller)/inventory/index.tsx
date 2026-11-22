@@ -29,7 +29,7 @@ export default function SellerInventoryScreen() {
           balance: 0,
           assignedPackets: 0,
           soldPackets: 0,
-          locationName: 'Van Stock',
+          locationName: 'Field Stock',
           products: [],
         })),
         sellerApi.listTransactions({ pageSize: 20 }).catch(() => ({ items: [] })),
@@ -86,7 +86,7 @@ export default function SellerInventoryScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="My Stock" subtitle="Van Stock & History" />
+      <Header title="My Stock" subtitle="Inventory & Transfer History" />
 
       {loading ? (
         <View style={styles.loadingContainer}>

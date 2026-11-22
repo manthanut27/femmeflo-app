@@ -693,12 +693,12 @@ export default function AdminInventoryMainScreen() {
             </View>
 
             <View style={styles.statCardsRow}>
-              {/* Card 3: Field Van Stock */}
+              {/* Card 3: Field Seller Stock */}
               <Card style={[styles.statCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>
                 <View style={styles.statCardHeader}>
-                  <Text style={styles.statCardLabel}>VAN STOCK</Text>
+                  <Text style={styles.statCardLabel}>SELLER STOCK</Text>
                   <View style={[styles.statIconBadge, { backgroundColor: BrandColors.pink.surface }]}>
-                    <Ionicons name="car-sport" size={14} color={BrandColors.pink.primary} />
+                    <Ionicons name="cube" size={14} color={BrandColors.pink.primary} />
                   </View>
                 </View>
                 <Text style={[styles.statCardValue, { color: BrandColors.pink.primary }]}>

@@ -120,7 +120,7 @@ export default function ManagerInventoryScreen() {
     return (
       <View style={styles.container}>
         <Header
-          title="Area Van Stock"
+          title="Area Inventory & Stock"
           subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
           showBack
         />
@@ -143,7 +143,7 @@ export default function ManagerInventoryScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Area Van Stock"
+        title="Area Inventory & Stock"
         subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
         showBack
       />
@@ -166,7 +166,7 @@ export default function ManagerInventoryScreen() {
                 <Ionicons name="cube" size={20} color={BrandColors.green.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>Field Force Van Stock Supervision</Text>
+                <Text style={styles.bannerTitle}>Field Force Stock & Inventory</Text>
                 <Text style={styles.bannerSub}>
                   Assigned area: {[user?.district, user?.state].filter(Boolean).join(', ') || 'Assigned Zone'}
                 </Text>

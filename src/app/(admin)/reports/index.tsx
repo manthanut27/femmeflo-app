@@ -840,10 +840,10 @@ export default function AdminReportsScreen() {
 
                   <View style={styles.kpiCardWrapper}>
                     <StatCard
-                      title="Field Seller Van Stock"
+                      title="Field Seller Stock"
                       value={`${(inventoryReport?.sellerStock || dashboard?.metrics?.sellerStock || 0).toLocaleString('en-IN')} pkts`}
-                      subtitle="In-transit mobile kits"
-                      icon="car-outline"
+                      subtitle="Current seller inventory"
+                      icon="cube-outline"
                       iconColor={BrandColors.green.primary}
                       iconBg={BrandColors.green.subtle}
                     />

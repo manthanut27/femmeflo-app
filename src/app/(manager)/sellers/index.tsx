@@ -470,7 +470,7 @@ export default function ManagerSellersScreen() {
                   <Text style={styles.statusToggleTitle}>Officer Field Status</Text>
                   <Text style={styles.statusToggleSubtitle}>
                     {editActive
-                      ? 'Officer is active and authorized for shifts, POS sales, and van stock.'
+                      ? 'Officer is active and authorized for shifts, POS sales, and stock.'
                       : 'Officer is inactive and blocked from starting new shifts or POS orders.'}
                   </Text>
                 </View>
