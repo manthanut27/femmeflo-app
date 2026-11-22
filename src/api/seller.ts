@@ -460,9 +460,38 @@ export const sellerApi = {
   // Incentives
   // ----------------------------------------------------
   async getIncentives(): Promise<SellerIncentiveData> {
-    return apiRequest<SellerIncentiveData>('seller/incentives', {
+    const raw = await apiRequest<any>('seller/incentives', {
       method: 'GET',
     });
+    const summary = raw?.summary || raw;
+    const currentMonth = summary?.currentMonth;
+    const currentMonthEarnedPaise = currentMonth?.earnedPaise ?? summary?.totalIncentivePaise ?? raw?.currentMonthEarnedPaise ?? 0;
+    const totalPacketsSoldMonth = currentMonth?.confirmedPackets ?? summary?.totalPacketsSold ?? raw?.totalPacketsSoldMonth ?? 0;
+    const pendingPayoutPaise = summary?.outstandingPaise ?? raw?.pendingPayoutPaise ?? 0;
+    const totalPaidPaise = summary?.totalPaidPaise ?? raw?.totalPaidPaise ?? 0;
+    const status = summary?.status ?? (totalPaidPaise > 0 && pendingPayoutPaise === 0 ? 'PAID' : pendingPayoutPaise > 0 ? 'PENDING' : 'UNPAID');
+
+    const history = (raw?.months && Array.isArray(raw.months) && raw.months.length > 0)
+      ? raw.months.map((m: any) => ({
+          month: `${m.month}/${m.year}`,
+          packetsSold: m.confirmedPackets || 0,
+          earnedPaise: m.salesIncentivePaise || m.earnedPaise || 0,
+          ratePerPacketPaise: m.ratePerPacketPaise || (m.confirmedPackets > 0 ? Math.round(m.salesIncentivePaise / m.confirmedPackets) : 500),
+          status: m.outstandingPaise === 0 && (m.salesIncentivePaise || 0) > 0 ? 'PAID' : (m.paidPaise || 0) > 0 ? 'PARTIALLY_PAID' : 'PENDING',
+        }))
+      : (raw?.history || []);
+
+    return {
+      currentMonthEarnedPaise,
+      totalPacketsSoldMonth,
+      ratePerPacketPaise: raw?.ratePerPacketPaise ?? 500,
+      pendingPayoutPaise,
+      totalPaidPaise,
+      status,
+      history,
+      payouts: raw?.payouts || [],
+      ...raw,
+    };
   },
 
   // ----------------------------------------------------

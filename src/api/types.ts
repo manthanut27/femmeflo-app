@@ -510,6 +510,16 @@ export interface SellerIncentiveData {
   totalPacketsSoldMonth: number;
   ratePerPacketPaise: number;
   pendingPayoutPaise: number;
+  totalPaidPaise?: number;
+  status?: string;
+  payouts?: Array<{
+    id?: string;
+    amountPaise: number;
+    paymentDate: string;
+    paymentMethod: string;
+    referenceId?: string | null;
+    remarks?: string | null;
+  }>;
   history?: Array<{
     month: string;
     packetsSold: number;
@@ -517,6 +527,7 @@ export interface SellerIncentiveData {
     ratePerPacketPaise: number;
     status: string;
   }>;
+  [key: string]: any;
 }
 
 // ----------------------------------------------------

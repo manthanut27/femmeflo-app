@@ -70,14 +70,18 @@ export default function SellerIncentivesScreen() {
             {/* Main Earnings Card */}
             <Card style={styles.earningsCard}>
               <View style={styles.earningsHeaderRow}>
-                <Text style={styles.earningsLabel}>Current Month Commission</Text>
-                <View style={styles.iconCircle}>
-                  <Ionicons name="trending-up" size={18} color={BrandColors.pink.primary} />
+                <View>
+                  <Text style={styles.earningsLabel}>Current Month Commission</Text>
+                  <Text style={styles.earningsValue}>
+                    {formatRupees(incentives?.currentMonthEarnedPaise || 0)}
+                  </Text>
                 </View>
+                <Badge
+                  label={incentives?.status || (incentives?.totalPaidPaise ? 'PAID' : 'PENDING')}
+                  variant={incentives?.status === 'PAID' ? 'success' : 'warning'}
+                  size="md"
+                />
               </View>
-              <Text style={styles.earningsValue}>
-                {formatRupees(incentives?.currentMonthEarnedPaise || 0)}
-              </Text>
               <Text style={styles.earningsSub}>Calculated exclusively on confirmed sales</Text>
 
               <View style={styles.divider} />
@@ -91,15 +95,15 @@ export default function SellerIncentivesScreen() {
                 </View>
 
                 <View style={styles.statCol}>
-                  <Text style={styles.statLabel}>Current Rate</Text>
-                  <Text style={[styles.statVal, { color: BrandColors.pink.primary }]}>
-                    ₹{((incentives?.ratePerPacketPaise || 500) / 100).toFixed(2)} <Text style={styles.statUnit}>/ pkt</Text>
+                  <Text style={styles.statLabel}>Total Paid</Text>
+                  <Text style={[styles.statVal, { color: BrandColors.green.primary }]}>
+                    {formatRupees(incentives?.totalPaidPaise || 0)}
                   </Text>
                 </View>
 
                 <View style={styles.statCol}>
                   <Text style={styles.statLabel}>Pending Payout</Text>
-                  <Text style={[styles.statVal, { color: BrandColors.green.primary }]}>
+                  <Text style={[styles.statVal, { color: BrandColors.pink.primary }]}>
                     {formatRupees(incentives?.pendingPayoutPaise || 0)}
                   </Text>
                 </View>
@@ -119,6 +123,38 @@ export default function SellerIncentivesScreen() {
                 </View>
               </View>
             </Card>
+
+            {/* Payouts Disbursed by Office */}
+            {incentives?.payouts && incentives.payouts.length > 0 ? (
+              <>
+                <Text style={styles.sectionHeading}>Office Payout Records</Text>
+                {incentives.payouts.map((p: any, idx: number) => (
+                  <Card key={idx} style={styles.historyCard}>
+                    <View style={styles.historyHeader}>
+                      <View>
+                        <Text style={styles.historyMonth}>
+                          {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : 'Paid'}
+                        </Text>
+                        <Text style={[styles.historyMeta, { marginTop: 2 }]}>
+                          Via {p.paymentMethod || 'Bank Transfer'} {p.referenceId ? `• Ref: ${p.referenceId}` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.historyEarned, { color: BrandColors.green.primary }]}>
+                          {formatRupees(p.amountPaise)}
+                        </Text>
+                        <Badge label="PAID" variant="success" size="sm" />
+                      </View>
+                    </View>
+                    {p.remarks ? (
+                      <Text style={[styles.historyMeta, { fontStyle: 'italic', marginTop: 4 }]}>
+                        "{p.remarks}"
+                      </Text>
+                    ) : null}
+                  </Card>
+                ))}
+              </>
+            ) : null}
 
             {/* Historical Monthly Ledger */}
             <Text style={styles.sectionHeading}>Historical Commission Ledger</Text>

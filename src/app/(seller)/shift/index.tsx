@@ -276,9 +276,10 @@ export default function ShiftScreen() {
   // SHIFT START WITH FINGERPRINT / MOBILE PASSWORD
   // ----------------------------------------------------
   function handleInitiateStartShift() {
-    const km = parseFloat(startOdometer);
-    if (isNaN(km) || km < 0) {
-      Alert.alert('Invalid Reading', 'Please enter a valid starting odometer reading in kilometers (0 or positive).');
+    const raw = startOdometer.trim();
+    const km = raw ? parseFloat(raw) : 0;
+    if (raw && (isNaN(km) || km < 0)) {
+      Alert.alert('Invalid Reading', 'Please enter a valid starting odometer reading in kilometers (0 or positive), or leave blank if on foot.');
       return;
     }
 
@@ -603,12 +604,17 @@ export default function ShiftScreen() {
   // SHIFT END WITH FACE VERIFICATION
   // ----------------------------------------------------
   function handleInitiateEndShift() {
-    const km = parseFloat(endOdometer);
+    const raw = endOdometer.trim();
     const startKmVal = currentShift?.startOdometerKm ?? 0;
-    if (isNaN(km) || km < startKmVal) {
+    const km = raw ? parseFloat(raw) : (startKmVal || 0);
+    if (raw && isNaN(km)) {
+      Alert.alert('Invalid Reading', 'Please enter a valid closing odometer reading, or leave blank.');
+      return;
+    }
+    if (raw && startKmVal > 0 && km < startKmVal) {
       Alert.alert(
         'Invalid Reading',
-        `Closing odometer (${km || 0} km) must be greater than or equal to starting odometer (${startKmVal} km).`
+        `Closing odometer (${km} km) must be greater than or equal to starting odometer (${startKmVal} km).`
       );
       return;
     }
@@ -732,10 +738,12 @@ export default function ShiftScreen() {
                     })()}
                   </Text>
                 </View>
-                <View style={styles.heroDetailRow}>
-                  <Ionicons name="speedometer-outline" size={16} color={Colors.light.textSecondary} style={{ marginRight: 6 }} />
-                  <Text style={styles.heroDetailText}>Starting Odometer: {startKm} km</Text>
-                </View>
+                {startKm > 0 ? (
+                  <View style={styles.heroDetailRow}>
+                    <Ionicons name="speedometer-outline" size={16} color={Colors.light.textSecondary} style={{ marginRight: 6 }} />
+                    <Text style={styles.heroDetailText}>Starting Odometer: {startKm} km</Text>
+                  </View>
+                ) : null}
                 {currentShift.startLatitude ? (
                   <View style={styles.heroDetailRow}>
                     <Ionicons name="location-outline" size={16} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
@@ -979,11 +987,12 @@ export default function ShiftScreen() {
             >
               <Text style={styles.modalTitle}>Start Field Duty Shift</Text>
               <Text style={styles.modalSubtitle}>
-                Confirm starting odometer reading and proceed to fingerprint or mobile password verification.
+                Vehicle meter reading is optional. Enter starting KM if travelling by bike/van, or leave blank if on foot or taking transit.
               </Text>
 
               <Input
-                label="Starting Odometer (km) *"
+                label="Vehicle Odometer (km, Optional)"
+                placeholder="e.g. 14250 or leave empty"
                 value={startOdometer}
                 onChangeText={setStartOdometer}
                 keyboardType="numeric"
@@ -1457,11 +1466,12 @@ export default function ShiftScreen() {
             >
               <Text style={styles.modalTitle}>End Field Duty Shift</Text>
               <Text style={styles.modalSubtitle}>
-                Log final odometer reading and complete shift checkout via Face ID.
+                Vehicle meter reading is optional. Enter closing KM if you logged a vehicle at start, or leave blank to complete duty.
               </Text>
 
               <Input
-                label={`Closing Odometer (km) * (Must be >= ${startKm} km)`}
+                label={startKm > 0 ? `Closing Odometer (km, Optional, >= ${startKm} km)` : 'Closing Odometer (km, Optional)'}
+                placeholder="Leave blank or enter closing KM"
                 value={endOdometer}
                 onChangeText={setEndOdometer}
                 keyboardType="numeric"

@@ -104,6 +104,7 @@ export default function SaleDetailScreen() {
   // Price Reapproval Modal State
   const [priceModalVisible, setPriceModalVisible] = useState(false);
   const [editUnitPrice, setEditUnitPrice] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
   const [editPriceNotes, setEditPriceNotes] = useState('');
   const [isSubmittingReapproval, setIsSubmittingReapproval] = useState(false);
 
@@ -291,6 +292,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
           ? Math.round(sale.totalAmountPaise / qty)
           : 2500);
     setEditUnitPrice(((currentPricePaise || 2500) / 100).toFixed(2));
+    setEditQuantity(String(qty));
     setEditPriceNotes('');
     setPriceModalVisible(true);
   };
@@ -304,13 +306,15 @@ Generated in FemmeFlo Standalone Test Mode.`;
     }
 
     const newUnitPricePaise = Math.round(priceNum * 100);
-    const qty = sale.packetCount || sale.quantity || 1;
-    const newTotalPaise = qty * newUnitPricePaise;
+    const qtyNum = parseInt(editQuantity, 10);
+    const finalQty = (!isNaN(qtyNum) && qtyNum > 0) ? qtyNum : (sale.packetCount || sale.quantity || 1);
+    const newTotalPaise = finalQty * newUnitPricePaise;
 
     setIsSubmittingReapproval(true);
     try {
       const res = await sellerApi.updateSale(id, {
         unitPricePaise: newUnitPricePaise,
+        quantity: finalQty,
         customerFeedback: editPriceNotes.trim()
           ? `[Price Revised: ₹${priceNum.toFixed(2)}] ${editPriceNotes.trim()}`
           : sale.customerFeedback || undefined,
@@ -319,10 +323,12 @@ Generated in FemmeFlo Standalone Test Mode.`;
       const updatedSale = normalizeSale({
         ...sale,
         ...(res.sale || {}),
+        quantity: finalQty,
+        packetCount: finalQty,
         unitPricePaise: newUnitPricePaise,
         totalAmountPaise: newTotalPaise,
         totalPaise: newTotalPaise,
-        status: (res.sale && res.sale.status) ? res.sale.status : 'PENDING_APPROVAL',
+        status: (res.sale && res.sale.status) ? res.sale.status : (newUnitPricePaise >= 2500 ? 'CONFIRMED' : 'PENDING_APPROVAL'),
         rejectionReason: null,
       });
 
@@ -331,9 +337,12 @@ Generated in FemmeFlo Standalone Test Mode.`;
 
       DeviceEventEmitter.emit('APPROVAL_STATUS_CHANGED', { saleId: sale.id, action: 'RESUBMIT' });
 
+      const isNowConfirmed = updatedSale.status === 'CONFIRMED' || updatedSale.status === 'APPROVED';
       Alert.alert(
-        'Price Updated & Resubmitted',
-        `Order #${sale.id.slice(0, 8)} unit price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Sent to office for approval.`
+        isNowConfirmed ? 'Price Updated & Confirmed' : 'Price Request Updated',
+        isNowConfirmed
+          ? `Order #${sale.id.slice(0, 8)} unit price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Meets base price (₹25.00), sale is now CONFIRMED!`
+          : `Order #${sale.id.slice(0, 8)} unit price updated to ₹${priceNum.toFixed(2)}/pkt (Total: ₹${(newTotalPaise / 100).toFixed(2)}). Updated request sent to office for approval.`
       );
     } catch (err: any) {
       Alert.alert('Update Failed', err.message || 'Unable to update price and resubmit for approval.');
@@ -383,7 +392,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
         showBack
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 140, 180) }]}>
         <View style={styles.contentWrapper}>
           {/* Status Card */}
           <Card style={styles.statusCard}>
@@ -442,22 +451,26 @@ Generated in FemmeFlo Standalone Test Mode.`;
             </View>
           </Card>
 
-          {/* Rejected Sale: Edit Price for Reapproval Action Card */}
-          {isRejected ? (
+          {/* Pending Approval / Rejected Sale: Edit Price Action Card */}
+          {isRejected || isPendingApproval ? (
             <Card variant="outlined" style={styles.reapprovalCard}>
               <View style={styles.reapprovalHeader}>
                 <View style={styles.reapprovalIconBox}>
                   <Ionicons name="pricetag" size={20} color={BrandColors.pink.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.reapprovalTitle}>Revise Price for Reapproval</Text>
+                  <Text style={styles.reapprovalTitle}>
+                    {isPendingApproval ? 'Edit Low Price Request' : 'Revise Price for Reapproval'}
+                  </Text>
                   <Text style={styles.reapprovalDesc}>
-                    Update price and send this order back to office for approval.
+                    {isPendingApproval
+                      ? 'Update unit price, quantity, or note before office approval. Changing price to base price (₹25.00+) auto-confirms this sale.'
+                      : 'Update price and send this order back to office for approval.'}
                   </Text>
                 </View>
               </View>
               <Button
-                title="Edit Price & Resubmit"
+                title={isPendingApproval ? 'Edit Price & Update' : 'Edit Price & Resubmit'}
                 variant="primary"
                 size="md"
                 onPress={handleOpenPriceModal}
@@ -719,7 +732,9 @@ Generated in FemmeFlo Standalone Test Mode.`;
           <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: Math.max(insets.bottom, Spacing.xl) }]}>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitle}>Edit Price for Reapproval</Text>
+                <Text style={styles.modalTitle}>
+                  {isPendingApproval ? 'Edit Low Price Request' : 'Edit Price for Reapproval'}
+                </Text>
                 <Pressable
                   onPress={() => setPriceModalVisible(false)}
                   hitSlop={HitSlop.md}
@@ -730,7 +745,9 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 </Pressable>
               </View>
               <Text style={styles.modalSubtitle}>
-                Change price and send back to office for approval
+                {isPendingApproval
+                  ? 'Update unit price or quantity before Super Admin approval'
+                  : 'Change price and send back to office for approval'}
               </Text>
 
               {/* Previous Rejection Alert Box */}
@@ -752,22 +769,22 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 </View>
                 <View style={styles.priceSummaryDivider} />
                 <View style={styles.priceSummaryItem}>
-                  <Text style={styles.priceSummaryLabel}>Previous Price</Text>
+                  <Text style={styles.priceSummaryLabel}>Current Price</Text>
                   <Text style={styles.priceSummaryValue}>
                     ₹{(((sale.unitPricePaise || Math.round(sale.totalAmountPaise / (sale.packetCount || 1))) || 0) / 100).toFixed(2)}
                   </Text>
                 </View>
                 <View style={styles.priceSummaryDivider} />
                 <View style={styles.priceSummaryItem}>
-                  <Text style={styles.priceSummaryLabel}>Min Floor</Text>
+                  <Text style={styles.priceSummaryLabel}>Base Floor</Text>
                   <Text style={[styles.priceSummaryValue, { color: BrandColors.pink.primary }]}>₹25.00</Text>
                 </View>
               </View>
 
               {/* Revised Unit Price Input */}
               <Input
-                label="Revised Unit Price (₹ per packet)"
-                placeholder="e.g. 26.50"
+                label="Unit Price (₹ per packet)"
+                placeholder="e.g. 25.00"
                 value={editUnitPrice}
                 onChangeText={setEditUnitPrice}
                 keyboardType="decimal-pad"
@@ -775,15 +792,40 @@ Generated in FemmeFlo Standalone Test Mode.`;
                 containerStyle={{ marginTop: Spacing.sm }}
               />
 
+              {/* Order Quantity Input */}
+              <Input
+                label="Order Quantity (Packets)"
+                placeholder="e.g. 100"
+                value={editQuantity}
+                onChangeText={setEditQuantity}
+                keyboardType="number-pad"
+                containerStyle={{ marginTop: Spacing.xs }}
+                leftIcon={<Ionicons name="cube-outline" size={18} color="#94A3B8" />}
+              />
+
               {/* Live Calculation Preview */}
               {(() => {
                 const p = parseFloat(editUnitPrice);
-                const isValid = !isNaN(p) && p > 0;
-                const total = isValid ? p * (sale.packetCount || sale.quantity || 1) : 0;
+                const q = parseInt(editQuantity, 10);
+                const validP = !isNaN(p) && p > 0;
+                const validQ = !isNaN(q) && q > 0 ? q : (sale.packetCount || sale.quantity || 1);
+                const total = validP ? p * validQ : 0;
+                const isAutoConfirm = validP && p >= 25;
                 return (
                   <View style={styles.calculationPreview}>
-                    <Text style={styles.calcLabel}>Revised Total Order Value:</Text>
-                    <Text style={styles.calcValue}>₹{total.toFixed(2)}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.calcLabel}>Revised Total Value ({validQ} pkts):</Text>
+                      <Text style={styles.calcValue}>₹{total.toFixed(2)}</Text>
+                    </View>
+                    {isAutoConfirm ? (
+                      <Text style={{ fontSize: 12, color: BrandColors.green.primary, fontWeight: '600', marginTop: 4 }}>
+                        ✓ Meets base price (₹25.00). Will be automatically confirmed immediately!
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: 12, color: '#D97706', fontWeight: '500', marginTop: 4 }}>
+                        ⚠ Price below base price (₹25.00). Will update approval request to Super Admin.
+                      </Text>
+                    )}
                   </View>
                 );
               })()}
@@ -791,7 +833,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
               {/* Reapproval Notes / Justification */}
               <Input
                 label="Note for Office (Optional)"
-                placeholder="e.g. Customer agreed to ₹26.50 rate"
+                placeholder="e.g. Customer agreed to rate change"
                 value={editPriceNotes}
                 onChangeText={setEditPriceNotes}
                 containerStyle={{ marginTop: Spacing.xs }}
@@ -807,7 +849,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title={isSubmittingReapproval ? 'Sending...' : 'Send for Approval'}
+                  title={isSubmittingReapproval ? 'Saving...' : isPendingApproval ? 'Update Request' : 'Send for Approval'}
                   variant="primary"
                   onPress={handleResubmitPrice}
                   loading={isSubmittingReapproval}

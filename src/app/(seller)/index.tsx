@@ -146,9 +146,10 @@ export default function SellerDashboardScreen() {
 
   function handleInitiateStartShift() {
     if (isShiftSubmitting) return;
-    const kmNum = Number(odometerKm);
-    if (!odometerKm.trim() || isNaN(kmNum) || kmNum < 0) {
-      Alert.alert('Invalid Odometer', 'Please enter a valid starting odometer KM reading (0 or positive).');
+    const trimmed = odometerKm.trim();
+    const kmNum = trimmed ? Number(trimmed) : 0;
+    if (trimmed && (isNaN(kmNum) || kmNum < 0)) {
+      Alert.alert('Invalid Odometer', 'Please enter a valid starting odometer KM reading (0 or positive), or leave blank if on foot.');
       return;
     }
 
@@ -217,14 +218,16 @@ export default function SellerDashboardScreen() {
 
   function handleInitiateEndShift() {
     if (isShiftSubmitting) return;
-    const kmNum = Number(odometerKm);
-    if (!odometerKm.trim() || isNaN(kmNum) || kmNum < 0) {
-      Alert.alert('Invalid Odometer', 'Please enter a valid ending odometer KM reading.');
+    const startKmVal = currentShift?.startOdometerKm ?? 0;
+    const trimmed = odometerKm.trim();
+    const kmNum = trimmed ? Number(trimmed) : (startKmVal || 0);
+
+    if (trimmed && (isNaN(kmNum) || kmNum < 0)) {
+      Alert.alert('Invalid Odometer', 'Please enter a valid ending odometer KM reading, or leave blank.');
       return;
     }
 
-    const startKmVal = currentShift?.startOdometerKm ?? 0;
-    if (kmNum < startKmVal) {
+    if (trimmed && startKmVal > 0 && kmNum < startKmVal) {
       Alert.alert(
         'Invalid Reading',
         `End odometer (${kmNum} KM) cannot be less than start odometer (${startKmVal} KM).`
@@ -374,7 +377,7 @@ export default function SellerDashboardScreen() {
                 </View>
                 <Text style={styles.shiftSubtitle}>
                   {currentShift
-                    ? (currentShift.startOdometerKm != null
+                    ? (currentShift.startOdometerKm != null && currentShift.startOdometerKm > 0
                       ? `Shift Active • Started at ${currentShift.startOdometerKm} KM`
                       : 'Shift Active • Working today')
                     : 'No active shift. Start shift to take orders.'}
@@ -549,11 +552,12 @@ export default function SellerDashboardScreen() {
                 </Pressable>
               </View>
               <Text style={styles.modalSubtitle}>
-                Enter your vehicle odometer starting KM before beginning travel or store visits. You will verify attendance next with fingerprint or mobile password.
+                Vehicle meter reading is optional. If you use a bike/van, enter starting KM for fuel reimbursement. You can leave it blank if walking or on transit.
               </Text>
 
               <Input
-                label="Starting Odometer (KM)"
+                label="Vehicle Odometer (KM, Optional)"
+                placeholder="e.g. 14250 or leave empty"
                 keyboardType="numeric"
                 value={odometerKm}
                 onChangeText={setOdometerKm}
@@ -612,11 +616,12 @@ export default function SellerDashboardScreen() {
                 </Pressable>
               </View>
               <Text style={styles.modalSubtitle}>
-                Enter your vehicle odometer ending KM to close daily duty and log travel distance. You will take a selfie next to verify shift completion.
+                Vehicle meter reading is optional. If you used a bike/van, enter ending KM. You can leave it blank if walking or taking transit.
               </Text>
 
               <Input
-                label="Ending Odometer (KM)"
+                label="Ending Odometer (KM, Optional)"
+                placeholder="Leave blank or enter closing KM"
                 keyboardType="numeric"
                 value={odometerKm}
                 onChangeText={setOdometerKm}

@@ -393,16 +393,25 @@ export default function ManagerSalesScreen() {
           </View>
         ) : null}
 
-        {/* Rejected Sale: Reapproval Action Banner */}
-        {item.status === 'REJECTED' && (
+        {/* Rejected or Pending Approval Sale: Reapproval / Edit Action Banner */}
+        {(item.status === 'REJECTED' || item.status === 'PENDING_APPROVAL') && (
           <View style={styles.managerRejectedBanner}>
             <View style={{ flex: 1, marginRight: Spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="close-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
-                <Text style={styles.managerRejectedTitle}>Price Rejected by Admin</Text>
+                <Ionicons
+                  name={item.status === 'REJECTED' ? 'close-circle' : 'time'}
+                  size={14}
+                  color={item.status === 'REJECTED' ? '#B4234D' : '#D97706'}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[styles.managerRejectedTitle, item.status === 'PENDING_APPROVAL' && { color: '#B45309' }]}>
+                  {item.status === 'REJECTED' ? 'Price Rejected by Admin' : 'Low Price Pending Approval'}
+                </Text>
               </View>
               <Text style={styles.managerRejectedReason} numberOfLines={2}>
-                {item.rejectionReason || 'Price below threshold. Edit price to resubmit for reapproval.'}
+                {item.status === 'REJECTED'
+                  ? (item.rejectionReason || 'Price below threshold. Edit price to resubmit for reapproval.')
+                  : 'Sold below base price. You can edit the price request before office approval.'}
               </Text>
             </View>
             <Button
@@ -680,16 +689,25 @@ export default function ManagerSalesScreen() {
                                 </View>
                               ) : null}
 
-                              {/* Rejected Sale Action Banner */}
-                              {item.status === 'REJECTED' && (
+                              {/* Rejected or Pending Approval Sale Action Banner */}
+                              {(item.status === 'REJECTED' || item.status === 'PENDING_APPROVAL') && (
                                 <View style={[styles.managerRejectedBanner, { marginTop: 8 }]}>
                                   <View style={{ flex: 1, marginRight: Spacing.sm }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                      <Ionicons name="close-circle" size={14} color="#B4234D" style={{ marginRight: 4 }} />
-                                      <Text style={styles.managerRejectedTitle}>Price Rejected</Text>
+                                      <Ionicons
+                                        name={item.status === 'REJECTED' ? 'close-circle' : 'time'}
+                                        size={14}
+                                        color={item.status === 'REJECTED' ? '#B4234D' : '#D97706'}
+                                        style={{ marginRight: 4 }}
+                                      />
+                                      <Text style={[styles.managerRejectedTitle, item.status === 'PENDING_APPROVAL' && { color: '#B45309' }]}>
+                                        {item.status === 'REJECTED' ? 'Price Rejected' : 'Low Price Pending Approval'}
+                                      </Text>
                                     </View>
                                     <Text style={styles.managerRejectedReason} numberOfLines={2}>
-                                      {item.rejectionReason || 'Price below minimum floor.'}
+                                      {item.status === 'REJECTED'
+                                        ? (item.rejectionReason || 'Price below minimum floor.')
+                                        : 'Sold below base price. You can edit the price request before office approval.'}
                                     </Text>
                                   </View>
                                   <Button
