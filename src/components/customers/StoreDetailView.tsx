@@ -1112,6 +1112,15 @@ export function StoreDetailView({
                         {formatRupees(sale.totalAmountPaise ?? (sale as any).totalPaise ?? 0)}
                       </Text>
                     </View>
+
+                    {Boolean(sale.customerFeedback || (sale as any).notes || (sale as any).feedback) && (
+                      <View style={styles.saleFeedbackBox}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={13} color="#0284C7" />
+                        <Text style={styles.saleFeedbackText}>
+                          {sale.customerFeedback || (sale as any).notes || (sale as any).feedback}
+                        </Text>
+                      </View>
+                    )}
                   </Card>
                 ))
               )}
@@ -1584,6 +1593,23 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     fontWeight: '800',
     color: BrandColors.pink.primary,
+  },
+  saleFeedbackBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: Spacing.xs,
+    gap: 6,
+  },
+  saleFeedbackText: {
+    ...Typography.caption,
+    color: '#0369A1',
+    flex: 1,
   },
   statusToggleContainer: {
     flexDirection: 'row',

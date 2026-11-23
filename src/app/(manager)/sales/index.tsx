@@ -124,8 +124,22 @@ export default function ManagerSalesScreen() {
     const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
       loadData();
     });
+    const sub2 = DeviceEventEmitter.addListener('SALES_SYNC', () => {
+      loadData();
+    });
+    const sub3 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadData();
+    });
+
+    const liveTicker = setInterval(() => {
+      loadData();
+    }, 7000);
+
     return () => {
       sub.remove();
+      sub2.remove();
+      sub3.remove();
+      clearInterval(liveTicker);
     };
   }, [loadData]);
 

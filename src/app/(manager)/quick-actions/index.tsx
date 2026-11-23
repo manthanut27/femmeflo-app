@@ -184,6 +184,24 @@ export default function ManagerQuickActionsScreen() {
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
 
+          {/* Action Card 6: Team Incentives */}
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push('/(manager)/incentives' as any)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Team Incentives: View team & personal earnings"
+          >
+            <View style={styles.actionIconCircle}>
+              <Ionicons name="wallet-outline" size={22} color="#881337" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
+              <Text style={styles.actionTitle}>Team Incentives</Text>
+              <Text style={styles.actionSubtitle}>Commissions, earnings & payouts</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
           {/* Need Support Section */}
           <View style={styles.supportSection}>
             <View style={styles.supportHeader}>

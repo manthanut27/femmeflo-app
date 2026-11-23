@@ -105,8 +105,23 @@ export default function AdminApprovalsScreen() {
     const sub = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
       loadApprovals();
     });
+    const sub2 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadApprovals();
+    });
+    const sub3 = DeviceEventEmitter.addListener('SALES_SYNC', () => {
+      loadApprovals();
+    });
+
+    // Continuous live ticker while screen is active
+    const liveTicker = setInterval(() => {
+      loadApprovals();
+    }, 6000);
+
     return () => {
       sub.remove();
+      sub2.remove();
+      sub3.remove();
+      clearInterval(liveTicker);
     };
   }, [loadApprovals]);
 

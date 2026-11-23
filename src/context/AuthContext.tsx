@@ -4,6 +4,7 @@ import { setSessionExpiredHandler, tokenStorage } from '../api/client';
 import { syncMockServiceUser } from '../api/mockService';
 import type { AuthRole, PublicUser } from '../api/types';
 import { draftStorage } from '../utils/draftStorage';
+import { mobileRealtimeSync } from '../services/realtimeSync';
 
 export type AuthState =
   | 'INITIALIZING'
@@ -131,6 +132,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     restoreSession();
   }, []);
+
+  useEffect(() => {
+    if (state === 'AUTHENTICATED' && token) {
+      mobileRealtimeSync.start();
+    } else {
+      mobileRealtimeSync.stop();
+    }
+    return () => {
+      mobileRealtimeSync.stop();
+    };
+  }, [state, token]);
 
   async function login(identifier: string, password: string, roleHint?: 'admin' | 'manager' | 'seller') {
     setIsActionLoading(true);

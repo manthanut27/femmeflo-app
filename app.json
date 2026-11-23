@@ -10,9 +10,19 @@
     "ios": {
       "icon": "./assets/expo.icon"
     },
+    "androidNavigationBar": {
+      "visible": "sticky-immersive",
+      "barStyle": "dark-content",
+      "backgroundColor": "#00000000"
+    },
     "android": {
       "package": "com.femmeflo.app",
       "versionCode": 24,
+      "navigationBar": {
+        "visible": "sticky-immersive",
+        "barStyle": "dark-content",
+        "backgroundColor": "#00000000"
+      },
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

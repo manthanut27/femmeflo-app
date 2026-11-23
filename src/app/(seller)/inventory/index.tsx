@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  DeviceEventEmitter,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -47,6 +48,29 @@ export default function SellerInventoryScreen() {
 
   useEffect(() => {
     loadData();
+
+    // Real-time synchronization listeners for stock transfers, receipts, and order confirmations
+    const sub1 = DeviceEventEmitter.addListener('INVENTORY_SYNC', () => {
+      loadData();
+    });
+    const sub2 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadData();
+    });
+    const sub3 = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      loadData();
+    });
+
+    // Continuous background sync interval while screen is open
+    const liveTicker = setInterval(() => {
+      loadData();
+    }, 6000);
+
+    return () => {
+      sub1.remove();
+      sub2.remove();
+      sub3.remove();
+      clearInterval(liveTicker);
+    };
   }, [loadData]);
 
   const onRefresh = useCallback(() => {

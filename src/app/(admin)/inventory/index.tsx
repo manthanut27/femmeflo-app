@@ -236,6 +236,28 @@ export default function AdminInventoryMainScreen() {
     fetchTransactions(historyFilter, 1);
   }, [historyFilter, fetchTransactions]);
 
+  useEffect(() => {
+    const sub1 = DeviceEventEmitter.addListener('INVENTORY_SYNC', () => {
+      fetchMasterData();
+      fetchTransactions(historyFilter, 1);
+    });
+    const sub2 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      fetchMasterData();
+      fetchTransactions(historyFilter, 1);
+    });
+
+    const liveTicker = setInterval(() => {
+      fetchMasterData();
+      fetchTransactions(historyFilter, 1);
+    }, 7000);
+
+    return () => {
+      sub1.remove();
+      sub2.remove();
+      clearInterval(liveTicker);
+    };
+  }, [fetchMasterData, fetchTransactions, historyFilter]);
+
   useFocusEffect(
     useCallback(() => {
       fetchMasterData();

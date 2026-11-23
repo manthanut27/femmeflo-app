@@ -44,6 +44,22 @@ export const AutoHideBottomTabBar: React.FC<AutoHideBottomTabBarProps> = (props)
   const focusedDescriptor = descriptors[focusedRoute?.key];
   const focusedOptions = focusedDescriptor?.options || {};
 
+  const getNestedActiveRouteName = (route: any): string | undefined => {
+    if (!route) return undefined;
+    if (route.state?.routes && typeof route.state.index === 'number') {
+      const child = route.state.routes[route.state.index];
+      return getNestedActiveRouteName(child) || child?.name;
+    }
+    return route.name;
+  };
+
+  const activeNestedName = getNestedActiveRouteName(focusedRoute);
+  const routeState = (focusedRoute as any)?.state;
+  const isNestedSubScreen = Boolean(
+    (routeState && typeof routeState.index === 'number' && routeState.index > 0) ||
+    (activeNestedName && activeNestedName !== 'index' && activeNestedName !== focusedRoute?.name)
+  );
+
   const isHiddenByScreen =
     focusedOptions.tabBarStyle &&
     (focusedOptions.tabBarStyle as any).display === 'none';
@@ -98,6 +114,10 @@ export const AutoHideBottomTabBar: React.FC<AutoHideBottomTabBarProps> = (props)
   }, [isNavVisible, slideAnim, fadeAnim, triggerFadeAnim]);
 
   if (isHiddenByScreen) {
+    return null;
+  }
+
+  if (isNestedSubScreen) {
     return null;
   }
 

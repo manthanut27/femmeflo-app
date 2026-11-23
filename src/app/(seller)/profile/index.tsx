@@ -251,6 +251,23 @@ export default function SellerProfileScreen() {
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="My Incentives & Earnings"
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => router.push('/(seller)/incentives' as any)}
+            >
+              <View style={styles.menuLeft}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="wallet-outline" size={18} color={BrandColors.pink.primary} />
+                </View>
+                <Text style={styles.menuText}>My Incentives & Earnings</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Notifications Center"
               style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
               onPress={() => router.push('/(shared)/notifications' as any)}

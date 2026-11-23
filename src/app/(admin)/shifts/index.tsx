@@ -390,10 +390,17 @@ export default function AdminShiftsScreen() {
                         </View>
                       ) : null}
 
-                      {v.feedback ? (
+                      {(v.customerFeedback || v.notes || (v as any).feedback) ? (
                         <View style={styles.visitFeedbackBox}>
-                          <Ionicons name="chatbubble-ellipses-outline" size={12} color="#64748B" />
-                          <Text style={styles.visitFeedbackText}>{v.feedback}</Text>
+                          <Ionicons name="chatbubble-ellipses-outline" size={14} color="#0284C7" />
+                          <View style={{ flex: 1, marginLeft: 6 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1', marginBottom: 2 }}>
+                              Feedback & Notes
+                            </Text>
+                            <Text style={styles.visitFeedbackText}>
+                              {v.customerFeedback || v.notes || (v as any).feedback}
+                            </Text>
+                          </View>
                         </View>
                       ) : null}
 

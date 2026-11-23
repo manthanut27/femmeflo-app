@@ -913,23 +913,63 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     if (mockDb.currentUser.role === 'MANAGER' && !canMonitorStock(mockDb.currentUser)) {
       throw new ApiError('Forbidden: Your territory manager account does not have permission to monitor territory stock.', 403);
     }
-    const totalAssigned = mockDb.sellers.length * 100;
-    const totalSold = mockDb.sellers.reduce((acc, s) => acc + (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10), 0);
-    const totalRemaining = Math.max(0, totalAssigned - totalSold);
+    const sellersList = [...mockDb.sellers];
+    // If the manager is a dual-role seller or manager themselves
+    if (!sellersList.some((s) => s.id === mockDb.currentUser.id)) {
+      sellersList.unshift({
+        id: mockDb.currentUser.id,
+        name: `${mockDb.currentUser.name} (You / Manager)`,
+        phone: mockDb.currentUser.phone,
+        state: mockDb.currentUser.state,
+        district: mockDb.currentUser.district,
+        village: mockDb.currentUser.village,
+        active: true,
+        isSeller: true,
+        balance: mockDb.inventory.balance,
+        assignedPackets: 250 + Math.max(0, mockDb.inventory.balance - 180),
+      } as any);
+    }
+
+    const sellerItems = sellersList.map((s) => {
+      const isCurrent = s.id === mockDb.currentUser.id;
+      const assigned = isCurrent
+        ? 250 + Math.max(0, mockDb.inventory.balance - 180)
+        : ((s as any).assignedPackets ?? 100);
+      const remaining = isCurrent
+        ? mockDb.inventory.balance
+        : ((s as any).balance ?? Math.max(0, 100 - (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10)));
+      const sold = Math.max(0, assigned - remaining);
+
+      return {
+        seller: s,
+        assigned,
+        sold,
+        remaining,
+      };
+    });
+
+    const totalAssigned = sellerItems.reduce((acc, item) => acc + item.assigned, 0);
+    const totalSold = sellerItems.reduce((acc, item) => acc + item.sold, 0);
+    const totalRemaining = sellerItems.reduce((acc, item) => acc + item.remaining, 0);
+
     return {
       summary: {
-        totalSellers: mockDb.sellers.length,
+        totalSellers: sellersList.length,
         totalAssigned,
         totalSold,
         totalRemaining,
       },
-      sellers: mockDb.sellers.map((s) => ({
-        seller: s,
-        assigned: 100,
-        sold: s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10,
-        remaining: Math.max(0, 100 - (s.totalSalesPaise ? Math.floor(s.totalSalesPaise / 2500) : 10)),
-      })),
+      sellers: sellerItems,
       products: mockDb.products,
+    } as unknown as T;
+  }
+
+  if (cleanEndpoint === 'manager/shifts') {
+    const allShifts = [mockDb.currentShift, ...mockDb.shiftHistory].filter(Boolean) as Shift[];
+    return {
+      items: allShifts,
+      shifts: allShifts,
+      pagination: { page: 1, pageSize: 50, total: allShifts.length, totalPages: 1 },
     } as unknown as T;
   }
 
@@ -1218,6 +1258,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       mockDb.sellers.find((s) => s.id === body?.destinationId) ||
       mockDb.warehouses.find((w) => w.id === body?.destinationId);
 
+    const totalTransferred = items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
     for (const item of items) {
       const prod = mockDb.products.find((p) => p.id === item.productId);
       const newTx: any = {
@@ -1239,7 +1280,42 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       };
       mockDb.transactions.unshift(newTx);
     }
+
+    // Reflect inventory across dual-role seller and manager
+    if (
+      body?.destinationId === mockDb.currentUser.id ||
+      body?.destinationId === 'usr_manager_1' ||
+      body?.destinationId === 'usr_seller_1' ||
+      destLoc?.id === mockDb.currentUser.id ||
+      destLoc?.id === 'usr_manager_1' ||
+      destLoc?.id === 'usr_seller_1'
+    ) {
+      mockDb.inventory.balance = (mockDb.inventory.balance || 0) + totalTransferred;
+    }
+    const matchedSeller = mockDb.sellers.find((s) => s.id === body?.destinationId || s.id === destLoc?.id);
+    if (matchedSeller) {
+      (matchedSeller as any).balance = ((matchedSeller as any).balance || 0) + totalTransferred;
+      (matchedSeller as any).assignedPackets = ((matchedSeller as any).assignedPackets || 100) + totalTransferred;
+    }
+
     return { success: true, message: 'Stock transfer recorded and dispatched.' } as unknown as T;
+  }
+
+  if (cleanEndpoint === 'admin/reports/sales') {
+    const totalQuantity = mockDb.sales.reduce((acc, s) => acc + (s.quantity || s.packetCount || 0), 0);
+    const grossPaise = mockDb.sales.reduce((acc, s) => acc + (s.totalPaise || s.totalAmountPaise || 0), 0);
+    return {
+      summary: {
+        totalSalesCount: mockDb.sales.length,
+        totalQuantitySold: totalQuantity,
+        grossSalesPaise: grossPaise,
+        grossSalesRupees: grossPaise / 100,
+        netSalesPaise: grossPaise,
+        netSalesRupees: grossPaise / 100,
+        averageOrderValueRupees: mockDb.sales.length > 0 ? (grossPaise / 100) / mockDb.sales.length : 0,
+      },
+      items: mockDb.sales,
+    } as unknown as T;
   }
 
   if (cleanEndpoint === 'admin/managers' && method === 'GET') {

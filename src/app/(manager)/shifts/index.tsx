@@ -483,6 +483,14 @@ export default function ManagerShiftsScreen() {
                                   {v.durationMins ? ` • Duration: ${v.durationMins}m` : ''}
                                   {v.saleDone ? ' • 🛒 Sale Made' : ' • No Sale'}
                                 </Text>
+                                {Boolean(v.customerFeedback || v.notes || (v as any).feedback) && (
+                                  <View style={styles.visitFeedbackRow}>
+                                    <Ionicons name="chatbubble-ellipses-outline" size={12} color="#0284C7" />
+                                    <Text style={styles.visitFeedbackText}>
+                                      {v.customerFeedback || v.notes || (v as any).feedback}
+                                    </Text>
+                                  </View>
+                                )}
                               </View>
                             </View>
                           ))
@@ -759,5 +767,23 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontSize: 11,
     color: Colors.light.textTertiary,
+  },
+  visitFeedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    marginTop: 4,
+  },
+  visitFeedbackText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#0369A1',
+    flex: 1,
   },
 });

@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  DeviceEventEmitter,
   FlatList,
   Pressable,
   RefreshControl,
@@ -124,6 +125,28 @@ export default function SalesListScreen() {
 
   useEffect(() => {
     loadSales(1, false);
+
+    // Real-time synchronization for sale approvals, rejections, and new orders
+    const sub1 = DeviceEventEmitter.addListener('SALES_SYNC', () => {
+      loadSales(1, false);
+    });
+    const sub2 = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      loadSales(1, false);
+    });
+    const sub3 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadSales(1, false);
+    });
+
+    const liveTicker = setInterval(() => {
+      loadSales(1, false);
+    }, 7000);
+
+    return () => {
+      sub1.remove();
+      sub2.remove();
+      sub3.remove();
+      clearInterval(liveTicker);
+    };
   }, [loadSales]);
 
   const selectedCustomer = useMemo(

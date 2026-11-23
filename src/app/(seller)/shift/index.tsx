@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -80,6 +81,8 @@ export default function ShiftScreen() {
   // Check-in Visit Form State
   const [checkInModalVisible, setCheckInModalVisible] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [checkInCustomShopName, setCheckInCustomShopName] = useState('');
+  const [activeShopElapsed, setActiveShopElapsed] = useState('0s');
   const [checkInCustomerSearch, setCheckInCustomerSearch] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
   const [isCheckingIn, setIsCheckingIn] = useState(false);
@@ -207,6 +210,20 @@ export default function ShiftScreen() {
         setElapsedTime(
           `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
         );
+
+        const currentVisits = currentShift.visits || [];
+        const activeV = currentVisits.find((v: ShiftVisit) => !v.checkOutTime);
+        if (activeV && activeV.checkInTime) {
+          const checkInMs = new Date(activeV.checkInTime).getTime();
+          const shopDiff = Math.max(0, Math.floor((Date.now() - (isNaN(checkInMs) ? Date.now() : checkInMs)) / 1000));
+          if (shopDiff < 60) {
+            setActiveShopElapsed(`${shopDiff}s`);
+          } else {
+            setActiveShopElapsed(`${Math.floor(shopDiff / 60)}m ${shopDiff % 60}s`);
+          }
+        } else {
+          setActiveShopElapsed('0s');
+        }
       };
 
       updateTicker();
@@ -310,16 +327,18 @@ export default function ShiftScreen() {
   }
 
   // ----------------------------------------------------
-  // SHIFT START WITH FINGERPRINT / MOBILE PASSWORD
+  // SHIFT START WITH LIVE FACE VERIFICATION & GPS
   // ----------------------------------------------------
   function handleInitiateStartShift() {
     setPendingOdometerKm(0);
     setPendingNotes(startNotes.trim());
     setStartModalVisible(false);
-    setShiftAuthModalVisible(true);
+    setFaceModalMode('START');
+    setFaceModalVisible(true);
   }
 
-  async function handleVerifiedShiftStart(authResult: ShiftAuthResult) {
+  async function handleVerifiedShiftStart(authResult: FaceVerificationResult | ShiftAuthResult) {
+    setFaceModalVisible(false);
     setShiftAuthModalVisible(false);
     setIsStartingShift(true);
     setFeedback(null);
@@ -336,9 +355,9 @@ export default function ShiftScreen() {
         longitude: loc.longitude,
         address: loc.address || (pendingNotes ? `Start notes: ${pendingNotes}` : undefined),
         faceVerified: authResult?.faceVerified ?? true,
-        facePhoto: authResult?.facePhoto || (authResult.method === 'FINGERPRINT' ? 'biometric_fingerprint_start' : 'mobile_password_start'),
-        faceConfidence: authResult?.confidence ?? 1.0,
-        faceMethod: authResult?.method === 'FINGERPRINT' ? 'FINGERPRINT_BIOMETRIC' : 'MOBILE_PASSWORD',
+        facePhoto: authResult?.facePhoto || 'verified_selfie_start',
+        faceConfidence: (authResult as any)?.faceConfidence ?? (authResult as any)?.confidence ?? 0.98,
+        faceMethod: (authResult as any)?.faceMethod || 'FACE_ID_BIOMETRIC',
       });
 
       const startedShift = (res as any)?.shift || (res as any)?.data?.shift || (res as any)?.data || res;
@@ -356,13 +375,12 @@ export default function ShiftScreen() {
       setStartOdometer('');
       setStartNotes('');
 
-      const authMethodLabel = authResult.method === 'FINGERPRINT' ? 'fingerprint verification' : 'mobile password';
       setFeedback({
         type: 'success',
-        title: 'Shift Started',
-        message: `Duty shift active with ${authMethodLabel} at ${loc.street || loc.address || 'Starting Location'}.`,
+        title: 'Duty Started',
+        message: `Duty shift active with live face verification at ${loc.street || loc.village || loc.district || loc.address || 'Starting Location'}.`,
       });
-      Alert.alert('Shift Started', `Duty shift active with ${authMethodLabel}.\nLocation: ${loc.street || loc.address || 'Starting Location'}`);
+      Alert.alert('Duty Started', `Duty shift active with live camera face verification.\nLocation: ${loc.street || loc.village || loc.district || loc.address || 'Starting Location'}`);
     } catch (err: any) {
       console.warn('Shift start API error, falling back to local active shift:', err);
       const loc = currentLocation || {
@@ -402,8 +420,8 @@ export default function ShiftScreen() {
   // ----------------------------------------------------
   async function handleCheckInVisit() {
     if (isCheckingIn) return;
-    if (!selectedCustomerId) {
-      Alert.alert('Select Shop', 'Please select a shop for this visit.');
+    if (!selectedCustomerId && !checkInCustomShopName.trim()) {
+      Alert.alert('Select or Enter Shop', 'Please select an existing customer or enter a shop name for this visit.');
       return;
     }
 
@@ -413,10 +431,11 @@ export default function ShiftScreen() {
     try {
       const coords = await acquireCoordinates();
       const customer = customers.find((c) => c.id === selectedCustomerId);
+      const resolvedShopName = customer?.shopName || checkInCustomShopName.trim() || 'Retail Customer Store';
 
       const checkInRes = await sellerApi.checkIn({
-        customerId: selectedCustomerId,
-        shopName: customer?.shopName || 'Retail Customer Store',
+        customerId: selectedCustomerId || undefined,
+        shopName: resolvedShopName,
         latitude: coords.latitude,
         longitude: coords.longitude,
         notes: visitNotes.trim() || undefined,
@@ -442,13 +461,14 @@ export default function ShiftScreen() {
       }
 
       setCheckInModalVisible(false);
+      setCheckInCustomShopName('');
       setVisitNotes('');
       setFeedback({
         type: 'success',
         title: 'Visit Started',
-        message: `Visit started at ${customer?.shopName || 'shop'}.`,
+        message: `Visit started at ${resolvedShopName}.`,
       });
-      Alert.alert('Visit Started', `Visit started at ${customer?.shopName || 'shop'}.`);
+      Alert.alert('Visit Started', `Visit started at ${resolvedShopName}.`);
       await loadShiftData().catch(() => {});
     } catch (err: any) {
       setFeedback({
@@ -633,6 +653,8 @@ export default function ShiftScreen() {
       });
       Alert.alert(successTitle, successMessage);
       loadShiftData();
+      // Immediately refresh live GPS location for next store visit
+      fetchLiveLocation();
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -732,6 +754,7 @@ export default function ShiftScreen() {
   }
 
   const visits = Array.isArray(currentShift?.visits) ? currentShift.visits : [];
+  const activeShopVisit = visits.find((v) => !v.checkOutTime);
   const startKm = currentShift?.startOdometerKm ?? 0;
   const isShiftActive = Boolean(currentShift && currentShift.startTime && !currentShift.endTime);
 
@@ -813,22 +836,66 @@ export default function ShiftScreen() {
                   </View>
                 ) : null}
 
+                {/* Active Shop Check-In Card matching img 7 */}
+                {activeShopVisit ? (
+                  <View style={styles.activeShopBanner}>
+                    <View style={styles.activeShopLeft}>
+                      <View style={styles.activeShopIcon}>
+                        <Ionicons name="storefront" size={20} color="#16A34A" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.activeShopOverline}>
+                          CURRENTLY AT SHOP: Since{' '}
+                          {new Date(activeShopVisit.checkInTime).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                        <Text style={styles.activeShopName}>{activeShopVisit.shopName}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.activeShopRight}>
+                      <Text style={styles.activeShopTimerLabel}>TIME AT SHOP</Text>
+                      <Text style={styles.activeShopTimerValue}>{activeShopElapsed}</Text>
+                      <TouchableOpacity
+                        style={styles.activeShopCheckoutBtn}
+                        onPress={() => handleOpenCheckout(activeShopVisit)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="exit-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.activeShopCheckoutBtnText}>Check Out</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
+
                 {/* Quick Shift Actions */}
                 <View style={styles.heroActionRow}>
-                  <Button
-                    title="Check-in Store Visit"
-                    onPress={() => setCheckInModalVisible(true)}
-                    variant="secondary"
-                    size="md"
-                    icon={<Ionicons name="location" size={18} color="#FFFFFF" />}
-                    style={{ flex: 1, marginRight: Spacing.sm }}
-                  />
+                  {activeShopVisit ? (
+                    <Button
+                      title={`Check Out from ${activeShopVisit.shopName}`}
+                      onPress={() => handleOpenCheckout(activeShopVisit)}
+                      variant="primary"
+                      size="md"
+                      icon={<Ionicons name="exit-outline" size={18} color="#FFFFFF" />}
+                      style={{ flex: 1.4, backgroundColor: '#16A34A', marginRight: Spacing.sm }}
+                    />
+                  ) : (
+                    <Button
+                      title="Check In at Shop"
+                      onPress={() => setCheckInModalVisible(true)}
+                      variant="primary"
+                      size="md"
+                      icon={<Ionicons name="location" size={18} color="#FFFFFF" />}
+                      style={{ flex: 1.4, marginRight: Spacing.sm }}
+                    />
+                  )}
                   <Button
                     title="End Duty Shift"
                     onPress={handleOpenEndShiftModal}
                     variant="outline"
                     size="md"
-                    style={{ flex: 1 }}
+                    style={{ flex: 0.8 }}
                   />
                 </View>
               </View>
@@ -1105,17 +1172,17 @@ export default function ShiftScreen() {
             onPress={() => setCheckInModalVisible(false)}
           />
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Check-in Store Visit</Text>
+            <Text style={styles.modalTitle}>Record Shop Check-In</Text>
             <Text style={styles.modalSubtitle}>
-              Select the retail outlet and lock your current GPS coordinates.
+              Log your arrival at this customer location
             </Text>
 
-            <Text style={styles.modalFieldLabel}>Select Retail Outlet *</Text>
+            <Text style={styles.modalFieldLabel}>Select Existing Customer</Text>
             <View style={styles.checkInSearchRow}>
               <Ionicons name="search" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
               <TextInput
                 style={styles.checkInSearchInput}
-                placeholder="Search shop, owner, phone, district..."
+                placeholder="-- Choose from your customer list --"
                 placeholderTextColor="#94A3B8"
                 value={checkInCustomerSearch}
                 onChangeText={setCheckInCustomerSearch}
@@ -1134,7 +1201,10 @@ export default function ShiftScreen() {
                   <Pressable
                     key={c.id}
                     style={[styles.modalCustomerItem, isSelected && styles.modalCustomerItemActive]}
-                    onPress={() => setSelectedCustomerId(c.id)}
+                    onPress={() => {
+                      setSelectedCustomerId(c.id);
+                      setCheckInCustomShopName('');
+                    }}
                   >
                     <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
                       {c.shopName}
@@ -1147,13 +1217,37 @@ export default function ShiftScreen() {
               })}
             </ScrollView>
 
-            <Input
-              label="Visit Purpose / Notes"
-              value={visitNotes}
-              onChangeText={setVisitNotes}
-              containerStyle={{ marginTop: Spacing.md }}
-              leftIcon={<Ionicons name="document-text-outline" size={18} color="#94A3B8" />}
-            />
+            <View style={{ marginTop: Spacing.sm }}>
+              <Text style={styles.modalFieldLabel}>Or Enter Shop / Store Name</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="e.g. Balaji Medical Store"
+                placeholderTextColor="#94A3B8"
+                value={checkInCustomShopName}
+                onChangeText={(t) => {
+                  setCheckInCustomShopName(t);
+                  if (t.trim()) setSelectedCustomerId('');
+                }}
+              />
+            </View>
+
+            <View style={{ marginTop: Spacing.sm }}>
+              <Text style={styles.modalFieldLabel}>Visit Notes (Optional)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                placeholder="e.g. Order booked, samples provided, shop closed..."
+                placeholderTextColor="#94A3B8"
+                value={visitNotes}
+                onChangeText={setVisitNotes}
+              />
+            </View>
+
+            <View style={styles.checkoutGpsNotice}>
+              <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
+              <Text style={styles.checkoutGpsNoticeText}>
+                Your exact GPS location will be captured at this moment to record your arrival.
+              </Text>
+            </View>
 
             <View style={styles.modalBtnRow}>
               <Button
@@ -1163,8 +1257,9 @@ export default function ShiftScreen() {
                 style={{ flex: 1, marginRight: Spacing.sm }}
               />
               <Button
-                title={isCheckingIn ? 'Checking in...' : 'Lock GPS & Check In'}
+                title={isCheckingIn ? 'Checking in...' : 'Confirm Check-In'}
                 variant="primary"
+                icon={<Ionicons name="location" size={16} color="#FFFFFF" />}
                 onPress={handleCheckInVisit}
                 loading={isCheckingIn}
                 disabled={isCheckingIn}
@@ -1195,20 +1290,54 @@ export default function ShiftScreen() {
           />
           <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>Check-out Store Visit</Text>
-              <Text style={styles.modalSubtitle}>
-                Select outcome, enter quantities or feedback, and lock exit GPS coordinates.
-              </Text>
-
-              {/* Outlet name */}
-              <View style={styles.checkoutOutletBox}>
-                <Ionicons name="storefront" size={18} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.checkoutOutletText}>
-                  {customers.find((c) => c.id === activeCheckoutVisit?.customerId)?.shopName ||
-                    activeCheckoutVisit?.shopName ||
-                    'Retail Outlet Visit'}
-                </Text>
+              <View style={styles.checkoutModalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Shop Visit Check-Out</Text>
+                  <Text style={styles.checkoutShopSubName}>
+                    {customers.find((c) => c.id === activeCheckoutVisit?.customerId)?.shopName ||
+                      activeCheckoutVisit?.shopName ||
+                      'Store Visit'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setCheckOutModalVisible(false)}
+                  hitSlop={HitSlop.md}
+                >
+                  <Ionicons name="close" size={22} color="#94A3B8" />
+                </TouchableOpacity>
               </View>
+
+              {/* Arrived at & Time spent metrics */}
+              <View style={styles.checkoutTimeMetricsRow}>
+                <View style={styles.checkoutTimeMetricBox}>
+                  <Text style={styles.checkoutTimeMetricLabel}>ARRIVED AT</Text>
+                  <Text style={styles.checkoutTimeMetricValue}>
+                    {activeCheckoutVisit?.checkInTime
+                      ? new Date(activeCheckoutVisit.checkInTime).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : '00:00'}
+                  </Text>
+                </View>
+                <View style={styles.checkoutTimeMetricBox}>
+                  <Text style={styles.checkoutTimeMetricLabel}>TIME SPENT</Text>
+                  <Text style={[styles.checkoutTimeMetricValue, { color: '#16A34A' }]}>
+                    {activeCheckoutVisit?.checkInTime
+                      ? (() => {
+                          const ms = new Date(activeCheckoutVisit.checkInTime).getTime();
+                          const s = Math.max(0, Math.floor((Date.now() - (isNaN(ms) ? Date.now() : ms)) / 1000));
+                          return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+                        })()
+                      : '0s'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Question: DID YOU GENERATE A SALE AT THIS SHOP? */}
+              <Text style={styles.checkoutPromptQuestion}>
+                DID YOU GENERATE A SALE AT THIS SHOP?
+              </Text>
 
               {/* BRANCH SELECTOR: NO SALE vs SALE COMPLETED */}
               <View style={styles.branchSelector}>
@@ -1228,7 +1357,7 @@ export default function ShiftScreen() {
                     No Sale Done
                   </Text>
                   <Text style={[styles.branchButtonSub, !checkoutSaleDone && styles.branchButtonSubActive]}>
-                    Follow-up / Inquiry only
+                    Follow-up / inquiry only
                   </Text>
                 </Pressable>
 
@@ -1245,7 +1374,7 @@ export default function ShiftScreen() {
                     color={checkoutSaleDone ? '#FFFFFF' : BrandColors.green.primary}
                   />
                   <Text style={[styles.branchButtonTitle, checkoutSaleDone && styles.branchButtonTextActive]}>
-                    Yes, Sale Done!
+                    Yes, Sale Completed!
                   </Text>
                   <Text style={[styles.branchButtonSub, checkoutSaleDone && styles.branchButtonSubActive]}>
                     Book order & record units
@@ -1466,6 +1595,13 @@ export default function ShiftScreen() {
                 leftIcon={<Ionicons name="document-text-outline" size={18} color="#94A3B8" />}
               />
 
+              <View style={styles.checkoutGpsNotice}>
+                <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
+                <Text style={styles.checkoutGpsNoticeText}>
+                  Live GPS location will be captured to finalize your shop duration and route.
+                </Text>
+              </View>
+
               {/* Action Buttons */}
               <View style={styles.modalBtnRow}>
                 <Button
@@ -1483,15 +1619,27 @@ export default function ShiftScreen() {
                     isCheckingOut
                       ? 'Checking out...'
                       : checkoutSaleDone
-                      ? 'Submit Sale & Checkout'
-                      : 'Complete Checkout'
+                      ? 'Record Sale & Check Out'
+                      : 'Confirm Check-Out (No Sale)'
                   }
                   variant="primary"
                   size="md"
+                  icon={
+                    checkoutSaleDone ? (
+                      <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                    ) : (
+                      <Ionicons name="exit-outline" size={16} color="#FFFFFF" />
+                    )
+                  }
                   onPress={handleConfirmCheckout}
                   loading={isCheckingOut}
                   disabled={isCheckingOut}
-                  style={{ flex: 1.6 }}
+                  style={[
+                    { flex: 1.6 },
+                    !checkoutSaleDone
+                      ? { backgroundColor: '#0F172A' }
+                      : { backgroundColor: '#16A34A' },
+                  ]}
                 />
               </View>
             </ScrollView>
@@ -1594,9 +1742,14 @@ export default function ShiftScreen() {
         mode={faceModalMode}
         userName={user?.name || 'Field Officer'}
         userRole={user?.role || 'SELLER'}
+        autoLaunch={true}
         onClose={() => setFaceModalVisible(false)}
         onVerified={(res) => {
-          handleVerifiedShiftEnd(res);
+          if (faceModalMode === 'START') {
+            handleVerifiedShiftStart(res);
+          } else {
+            handleVerifiedShiftEnd(res);
+          }
         }}
       />
     </View>
@@ -1874,10 +2027,25 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     marginBottom: Spacing.md,
   },
+  checkoutOutletBoxSaleActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
   checkoutOutletText: {
     ...Typography.bodyMedium,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  saleConfirmedTag: {
+    backgroundColor: BrandColors.green.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  saleConfirmedTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   branchSelector: {
     flexDirection: 'row',
@@ -2099,5 +2267,147 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#166534',
     fontWeight: '500',
+  },
+  activeShopBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  activeShopLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  activeShopIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  activeShopOverline: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  activeShopName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#14532D',
+    marginTop: 2,
+  },
+  activeShopRight: {
+    alignItems: 'flex-end',
+  },
+  activeShopTimerLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#15803D',
+    textTransform: 'uppercase',
+  },
+  activeShopTimerValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#15803D',
+    fontVariant: ['tabular-nums'],
+  },
+  activeShopCheckoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+    marginTop: 4,
+  },
+  activeShopCheckoutBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  checkoutModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
+  checkoutShopSubName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  checkoutTimeMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
+  checkoutTimeMetricBox: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  checkoutTimeMetricLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  checkoutTimeMetricValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  checkoutPromptQuestion: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: Spacing.xs,
+  },
+  checkoutGpsNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginVertical: Spacing.sm,
+  },
+  checkoutGpsNoticeText: {
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '500',
+    flex: 1,
+  },
+  modalTextInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0F172A',
   },
 });

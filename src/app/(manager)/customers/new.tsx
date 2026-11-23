@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
 import {
   acquireGpsCoordinates,
+  getCurrentLocationWithAddress,
   isWithinIndiaBounds,
   sanitizeIndiaCoordinates,
   type GpsAcquisitionStatus,
@@ -154,6 +155,47 @@ export default function ManagerAddCustomerScreen() {
 
   async function startGps() {
     setGpsStatus('acquiring_high');
+    try {
+      const locWithAddr = await getCurrentLocationWithAddress();
+      if (locWithAddr && locWithAddr.latitude !== null && locWithAddr.longitude !== null) {
+        setGpsStatus('acquired');
+        let lat = locWithAddr.latitude;
+        let lng = locWithAddr.longitude;
+        if (!isWithinIndiaBounds(lat, lng)) {
+          const sanitized = sanitizeIndiaCoordinates(lat, lng);
+          lat = sanitized.latitude;
+          lng = sanitized.longitude;
+        }
+        setLatitude(lat);
+        setLongitude(lng);
+        setGpsAccuracy(locWithAddr.accuracy || 10);
+
+        if (locWithAddr.address && !address) {
+          setAddress(locWithAddr.address);
+          setErrors((prev) => ({ ...prev, address: '' }));
+        }
+        if (locWithAddr.village && !village) {
+          setVillage(locWithAddr.village);
+          setErrors((prev) => ({ ...prev, village: '' }));
+        }
+        if (locWithAddr.district) {
+          setDistrict(locWithAddr.district);
+          setErrors((prev) => ({ ...prev, district: '' }));
+        }
+        if (locWithAddr.state) {
+          setStateName(locWithAddr.state);
+          setErrors((prev) => ({ ...prev, state: '' }));
+        }
+        if (locWithAddr.pincode && !pincode) {
+          setPincode(locWithAddr.pincode);
+          setErrors((prev) => ({ ...prev, pincode: '' }));
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn('Live location with address failed, falling back to acquireGpsCoordinates', err);
+    }
+
     const res = await acquireGpsCoordinates({
       highAccuracyTimeoutMs: 6000,
       fallbackTimeoutMs: 4000,
@@ -571,7 +613,7 @@ export default function ManagerAddCustomerScreen() {
                   <Ionicons name="checkmark-circle" size={16} color="#16A34A" style={{ marginLeft: 5 }} />
                 </View>
                 <Text style={styles.locationSubtitle}>
-                  {district ? `${district}, ${stateName}` : 'Thane, Maharashtra'}
+                  {district ? `${village ? `${village}, ` : ''}${district}, ${stateName}` : 'Thane, Maharashtra'}
                 </Text>
               </View>
             </View>

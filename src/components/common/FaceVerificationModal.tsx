@@ -27,9 +27,10 @@ export interface FaceVerificationResult {
 
 export interface FaceVerificationModalProps {
   visible: boolean;
-  mode: 'START' | 'END' | 'REGISTER';
+  mode: 'START' | 'END' | 'REGISTER' | 'APP_OPEN';
   userName?: string;
   userRole?: string;
+  autoLaunch?: boolean;
   onClose: () => void;
   onVerified: (result: FaceVerificationResult) => void;
 }
@@ -41,6 +42,7 @@ export function FaceVerificationModal({
   mode,
   userName = 'Field Officer',
   userRole = 'SELLER',
+  autoLaunch = true,
   onClose,
   onVerified,
 }: FaceVerificationModalProps) {
@@ -123,6 +125,18 @@ export function FaceVerificationModal({
   }, [visible, scanAnim, pulseAnim, stopScanAnimation, stopPulseAnimation]);
 
   // Pulse animation for scanner frame
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (visible && autoLaunch) {
+      timer = setTimeout(() => {
+        handleLaunchCamera();
+      }, 250);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [visible, autoLaunch]);
+
   useEffect(() => {
     if (visible && (step === 'READY' || step === 'SCANNING')) {
       const pulseLoop = Animated.loop(
@@ -225,7 +239,7 @@ export function FaceVerificationModal({
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           setStep('ERROR');
-          setErrorMessage(isStart ? 'Camera access was denied. Please grant camera permission in device settings or upload a photo to verify attendance.' : 'Camera access was denied. You can upload a photo or complete duty shift using standard audit.');
+          setErrorMessage('Camera access was denied. Please grant camera permission in device settings to verify attendance.');
           return;
         }
       }
@@ -253,7 +267,7 @@ export function FaceVerificationModal({
       }
     } catch (err: any) {
       setStep('ERROR');
-      setErrorMessage(err?.message || (isStart ? 'Unable to open camera on this device. Please upload a photo to verify attendance.' : 'Unable to open camera on this device. You may upload a photo or use standard shift check-in.'));
+      setErrorMessage(err?.message || 'Unable to open camera on this device. Please grant camera permission in device settings.');
     }
   };
 
@@ -331,6 +345,8 @@ export function FaceVerificationModal({
               <Text style={styles.title}>
                 {mode === 'REGISTER'
                   ? 'First-Time Face Registration'
+                  : mode === 'APP_OPEN'
+                  ? 'App Security Face Verification'
                   : isStart
                   ? 'Shift Start Attendance'
                   : 'Shift End Checkout'}
@@ -338,6 +354,8 @@ export function FaceVerificationModal({
               <Text style={styles.subtitle}>
                 {mode === 'REGISTER'
                   ? `Enroll Face ID · ${userName} (${userRole})`
+                  : mode === 'APP_OPEN'
+                  ? `Verify Face to Unlock App · ${userName}`
                   : `Face Selfie & Verification · ${userName} (${userRole})`}
               </Text>
             </View>
@@ -411,7 +429,9 @@ export function FaceVerificationModal({
                 <Text style={styles.statusText}>
                   {mode === 'REGISTER'
                     ? 'Take a front selfie to register your Face ID. This securely enrolls your identity for automated shift duty.'
-                    : 'Capture a front selfie or upload a photo to verify shift attendance.'}
+                    : mode === 'APP_OPEN'
+                    ? 'Verify your live face using the front camera to unlock the application.'
+                    : 'Capture a front selfie using live camera to verify shift attendance.'}
                 </Text>
               )}
               {step === 'CAPTURING' && (
@@ -459,23 +479,13 @@ export function FaceVerificationModal({
               <View style={{ width: '100%' }}>
                 <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
-                    title={mode === 'REGISTER' ? 'Enroll Live Face Selfie' : 'Take Selfie'}
+                    title={mode === 'REGISTER' ? 'Enroll Live Face (Open Camera)' : 'Open Camera for Face Verification'}
                     variant="primary"
                     size="md"
                     icon={<Ionicons name="camera-outline" size={18} color="#FFFFFF" />}
                     onPress={handleLaunchCamera}
-                    style={{ flex: mode === 'REGISTER' ? 1 : 1.2 }}
+                    style={{ flex: 1 }}
                   />
-                  {mode !== 'REGISTER' && (
-                    <Button
-                      title="Upload Photo"
-                      variant="secondary"
-                      size="md"
-                      icon={<Ionicons name="image-outline" size={18} color="#FFFFFF" />}
-                      onPress={handleChooseFromGallery}
-                      style={{ flex: 1.2 }}
-                    />
-                  )}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: isStart ? 'center' : 'space-between', alignItems: 'center', marginTop: 2 }}>
                   <Button
@@ -505,18 +515,10 @@ export function FaceVerificationModal({
                 <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
                     title="Retry Camera"
-                    variant="outline"
+                    variant="primary"
                     size="md"
-                    icon={<Ionicons name="camera-outline" size={16} color={BrandColors.pink.primary} />}
+                    icon={<Ionicons name="camera-outline" size={16} color="#FFFFFF" />}
                     onPress={handleLaunchCamera}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Upload Photo"
-                    variant="secondary"
-                    size="md"
-                    icon={<Ionicons name="image-outline" size={16} color="#FFFFFF" />}
-                    onPress={handleChooseFromGallery}
                     style={{ flex: 1 }}
                   />
                 </View>
@@ -531,10 +533,10 @@ export function FaceVerificationModal({
                   {!isStart && (
                     <Button
                       title="Skip & Proceed"
-                      variant="primary"
+                      variant="outline"
                       size="sm"
                       onPress={handleUseStandardVerification}
-                      style={{ flex: 1.4 }}
+                      style={{ flex: 1 }}
                     />
                   )}
                 </View>

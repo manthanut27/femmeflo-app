@@ -471,6 +471,52 @@ export default function ManagerDashboardScreen() {
                 <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
               </TouchableOpacity>
             </View>
+
+            <View style={styles.actionsRow}>
+              {/* 5. Team Incentives */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => router.push('/(manager)/incentives' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Team Incentives"
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: '#FDF2F8' }]}>
+                  <Ionicons name="wallet-outline" size={20} color="#BE185D" />
+                </View>
+                <View style={styles.actionCardTextWrap}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    Incentives
+                  </Text>
+                  <Text style={styles.actionCardDesc} numberOfLines={1}>
+                    Team & personal payouts
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+
+              {/* 6. All Sales */}
+              <TouchableOpacity
+                style={styles.actionCard}
+                onPress={() => router.push('/(manager)/sales' as any)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="All Sales"
+              >
+                <View style={[styles.actionIconCircle, { backgroundColor: '#F0FDF4' }]}>
+                  <Ionicons name="receipt-outline" size={20} color="#059669" />
+                </View>
+                <View style={styles.actionCardTextWrap}>
+                  <Text style={styles.actionCardTitle} numberOfLines={1}>
+                    All Sales
+                  </Text>
+                  <Text style={styles.actionCardDesc} numberOfLines={1}>
+                    Territory order ledger
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>

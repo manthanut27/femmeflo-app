@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  DeviceEventEmitter,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { managerApi } from '@/api/manager';
+import { sellerApi } from '@/api/seller';
 import type { ProductItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -77,15 +79,56 @@ export default function ManagerInventoryScreen() {
         managerApi.listProducts().catch(() => ({ items: [] })),
       ]);
 
-      if (invRes?.summary) {
+      let resolvedSellers: SellerInventoryItem[] = (invRes as any)?.data?.sellers ?? (invRes as any)?.sellers ?? [];
+      let resolvedSummary = (invRes as any)?.data?.summary ?? (invRes as any)?.summary;
+
+      // Dual-role fallback: if manager inventory shows 0 remaining/sellers, query sellerApi.getInventory()
+      if ((!resolvedSellers || resolvedSellers.length === 0 || resolvedSummary?.totalRemaining === 0) && (user?.isSeller || user?.role === 'MANAGER')) {
+        try {
+          const sellerInv = await sellerApi.getInventory();
+          const remaining = sellerInv.remaining ?? sellerInv.balance ?? 0;
+          const assigned = sellerInv.assignedPackets ?? (remaining + (sellerInv.soldPackets ?? 0));
+          const sold = sellerInv.soldPackets ?? 0;
+          if (sellerInv && (remaining > 0 || assigned > 0)) {
+            const selfSeller: SellerInventoryItem = {
+              seller: {
+                id: user.id,
+                name: user.name,
+                phone: user.phone,
+                state: user.state,
+                district: user.district,
+                village: user.village,
+              },
+              assigned,
+              sold,
+              remaining,
+            };
+            if (!resolvedSellers || resolvedSellers.length === 0) {
+              resolvedSellers = [selfSeller];
+            } else if (!resolvedSellers.some((s: any) => s.seller?.id === user.id)) {
+              resolvedSellers = [selfSeller, ...resolvedSellers];
+            }
+            resolvedSummary = {
+              totalSellers: resolvedSellers.length,
+              totalAssigned: Math.max(resolvedSummary?.totalAssigned ?? 0, selfSeller.assigned),
+              totalSold: Math.max(resolvedSummary?.totalSold ?? 0, selfSeller.sold),
+              totalRemaining: Math.max(resolvedSummary?.totalRemaining ?? 0, selfSeller.remaining),
+            };
+          }
+        } catch {
+          // Keep existing
+        }
+      }
+
+      if (resolvedSummary) {
         setSummary({
-          totalSellers: (invRes as any).summary.totalSellers ?? (invRes as any).sellers?.length ?? 0,
-          totalAssigned: (invRes as any).summary.totalAssigned ?? 0,
-          totalSold: (invRes as any).summary.totalSold ?? 0,
-          totalRemaining: (invRes as any).summary.totalRemaining ?? 0,
+          totalSellers: resolvedSummary.totalSellers ?? resolvedSellers.length,
+          totalAssigned: resolvedSummary.totalAssigned ?? 0,
+          totalSold: resolvedSummary.totalSold ?? 0,
+          totalRemaining: resolvedSummary.totalRemaining ?? 0,
         });
       }
-      setSellers((invRes as any)?.sellers ?? []);
+      setSellers(resolvedSellers);
       setProducts(prodRes.items || []);
     } catch (err) {
       console.warn('Failed to load manager inventory', err);
@@ -97,6 +140,29 @@ export default function ManagerInventoryScreen() {
 
   useEffect(() => {
     loadData();
+
+    // Real-time synchronization listeners for area stock and allocations
+    const sub1 = DeviceEventEmitter.addListener('INVENTORY_SYNC', () => {
+      loadData();
+    });
+    const sub2 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadData();
+    });
+    const sub3 = DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED', () => {
+      loadData();
+    });
+
+    // Continuous live ticker while on screen
+    const liveTicker = setInterval(() => {
+      loadData();
+    }, 6000);
+
+    return () => {
+      sub1.remove();
+      sub2.remove();
+      sub3.remove();
+      clearInterval(liveTicker);
+    };
   }, [loadData]);
 
   const onRefresh = useCallback(() => {

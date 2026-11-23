@@ -232,6 +232,23 @@ export default function ManagerProfileScreen() {
 
             <TouchableOpacity
               style={styles.menuItem}
+              onPress={() => router.push('/(manager)/incentives' as any)}
+              accessibilityRole="button"
+              accessibilityLabel="Team Incentives & Payouts"
+            >
+              <View style={styles.menuLeft}>
+                <View style={[styles.iconBadge, { backgroundColor: '#FFF1F4' }]}>
+                  <Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />
+                </View>
+                <Text style={styles.menuText}>Team Incentives & Payouts</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
               onPress={() => router.push('/(shared)/notifications' as any)}
               accessibilityRole="button"
               accessibilityLabel="Notifications Center"
