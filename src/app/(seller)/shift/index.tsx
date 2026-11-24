@@ -38,6 +38,7 @@ import { useAuth } from '@/context/AuthContext';
 import { draftStorage } from '@/utils/draftStorage';
 import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 import { getCurrentLocationWithAddress, type LocationResult } from '@/utils/locationUtils';
+import { sanitizeIndiaCoordinates } from '@/utils/geoValidation';
 
 const PREDEFINED_VISIT_REASONS = [
   'Stock already sufficient',
@@ -56,6 +57,9 @@ export default function ShiftScreen() {
   const userId = user?.id || 'anonymous';
 
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  const [todayCompletedVisits, setTodayCompletedVisits] = useState<ShiftVisit[]>([]);
+  const [pastShifts, setPastShifts] = useState<Shift[]>([]);
+  const [selectedAuditShift, setSelectedAuditShift] = useState<Shift | null>(null);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,13 +138,14 @@ export default function ShiftScreen() {
 
   const loadShiftData = useCallback(async () => {
     try {
-      const [shiftRes, custRes, prodRes] = await Promise.all([
+      const [shiftRes, custRes, prodRes, historyRes] = await Promise.all([
         sellerApi.getCurrentShift().catch(async () => {
           const cached = await draftStorage.getActiveShift(userId);
           return { shift: cached };
         }),
         sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
         sellerApi.listProducts().catch(() => ({ items: [] })),
+        sellerApi.getShiftHistory({ page: 1, pageSize: 20 }).catch(() => ({ items: [] })),
       ]);
 
       let active: any = (shiftRes as any)?.shift;
@@ -166,6 +171,9 @@ export default function ShiftScreen() {
         setCurrentShift(null);
         await draftStorage.clearActiveShift(userId).catch(() => {});
       }
+
+      const histList = (historyRes as any)?.items ?? (historyRes as any)?.shifts ?? [];
+      setPastShifts(Array.isArray(histList) ? histList : []);
 
       const custList = Array.isArray(custRes?.items) ? custRes.items : [];
       setCustomers(custList);
@@ -242,35 +250,29 @@ export default function ShiftScreen() {
     loadShiftData();
   }, [loadShiftData]);
 
-  // Helper to acquire GPS coordinates with fast cache check & timeout race
+  // Helper to acquire live GPS coordinates with high accuracy and Google Maps / backend reverse geocoding
   async function acquireCoordinates(): Promise<{ latitude: number; longitude: number }> {
     try {
       if (Platform.OS !== 'web') {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted') {
-          // 1. Check last known position first (instant: 10-50ms)
-          try {
-            const lastLoc = await Location.getLastKnownPositionAsync({ maxAge: 120000 });
-            if (lastLoc && lastLoc.coords) {
-              return {
-                latitude: Number(lastLoc.coords.latitude.toFixed(6)),
-                longitude: Number(lastLoc.coords.longitude.toFixed(6)),
-              };
-            }
-          } catch {
-            // Ignore cache error and proceed to fresh read
-          }
-
-          // 2. Strict 3-second timeout race so GPS lock never delays closing the shift
-          const positionPromise = Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          }).catch(() => null);
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-          const loc = await Promise.race([positionPromise, timeoutPromise]);
+          // Fresh high-accuracy GPS reading without stale cache
+          const posPromise = Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Highest,
+          }).catch(async () => {
+            return await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            }).catch(() => null);
+          });
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+          const loc = await Promise.race([posPromise, timeoutPromise]);
           if (loc && (loc as any).coords) {
+            const rawLat = (loc as any).coords.latitude;
+            const rawLng = (loc as any).coords.longitude;
+            const sanitized = sanitizeIndiaCoordinates(rawLat, rawLng);
             return {
-              latitude: Number((loc as any).coords.latitude.toFixed(6)),
-              longitude: Number((loc as any).coords.longitude.toFixed(6)),
+              latitude: Number(sanitized.latitude.toFixed(6)),
+              longitude: Number(sanitized.longitude.toFixed(6)),
             };
           }
         }
@@ -278,20 +280,21 @@ export default function ShiftScreen() {
         return new Promise((resolve) => {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
+              const sanitized = sanitizeIndiaCoordinates(pos.coords.latitude, pos.coords.longitude);
               resolve({
-                latitude: Number(pos.coords.latitude.toFixed(6)),
-                longitude: Number(pos.coords.longitude.toFixed(6)),
+                latitude: Number(sanitized.latitude.toFixed(6)),
+                longitude: Number(sanitized.longitude.toFixed(6)),
               });
             },
-            () => resolve({ latitude: 22.7196, longitude: 75.8577 }),
-            { timeout: 3000 }
+            () => resolve({ latitude: 19.1864, longitude: 73.0409 }),
+            { timeout: 8000, enableHighAccuracy: true }
           );
         });
       }
     } catch {
       // Fallback
     }
-    return { latitude: 22.7196, longitude: 75.8577 };
+    return { latitude: 19.1864, longitude: 73.0409 };
   }
 
   const fetchLiveLocation = useCallback(async () => {
@@ -308,14 +311,14 @@ export default function ShiftScreen() {
       setIsAcquiringLocation(false);
     }
     const fallback: LocationResult = {
-      latitude: 22.7196,
-      longitude: 75.8577,
-      street: 'MG Road',
-      village: 'New Palasia',
-      district: 'Indore',
-      state: 'Madhya Pradesh',
-      pincode: '452001',
-      address: 'MG Road, New Palasia, Indore, Madhya Pradesh 452001',
+      latitude: 19.1864,
+      longitude: 73.0409,
+      street: '7, Station Road',
+      village: 'Diva',
+      district: 'Thane',
+      state: 'Maharashtra',
+      pincode: '400612',
+      address: '7, Station Road, Diva, Thane, Maharashtra 400612',
     };
     setCurrentLocation(fallback);
     return fallback;
@@ -621,7 +624,7 @@ export default function ShiftScreen() {
 
       // 2. Submit shift checkout
       const finalNotes = checkoutNotes.trim() || (checkoutReason ? `Reason: ${checkoutReason}` : undefined);
-      await sellerApi.checkOut({
+      const checkOutRes = await sellerApi.checkOut({
         visitId: activeCheckoutVisit.id,
         latitude: coords.latitude,
         longitude: coords.longitude,
@@ -629,6 +632,37 @@ export default function ShiftScreen() {
         saleId: generatedSaleId,
         customerFeedback: checkoutFeedback.trim() || undefined,
         notes: finalNotes,
+      });
+
+      const updatedVisit = (checkOutRes as any)?.visit || (checkOutRes as any)?.data?.visit || checkOutRes;
+      const checkoutTimestamp = updatedVisit?.checkOutTime || new Date().toISOString();
+      const checkInMs = new Date(activeCheckoutVisit.checkInTime).getTime();
+      const calcDurationMins = updatedVisit?.durationMins ?? Math.max(1, Math.round((Date.now() - (isNaN(checkInMs) ? Date.now() : checkInMs)) / 60000));
+
+      const completedVisit: ShiftVisit = {
+        ...activeCheckoutVisit,
+        ...(updatedVisit || {}),
+        checkOutTime: checkoutTimestamp,
+        durationMins: calcDurationMins,
+        notes: finalNotes,
+        saleDone: checkoutSaleDone,
+        customerFeedback: checkoutFeedback.trim() || activeCheckoutVisit.customerFeedback,
+        saleId: generatedSaleId || activeCheckoutVisit.saleId,
+      };
+
+      // Immediately update currentShift in state so activeShopVisit is cleared and completed visit is shown with checkout time
+      setCurrentShift((prev) => {
+        if (!prev) return prev;
+        const currentVisits = Array.isArray(prev.visits) ? prev.visits : [];
+        const updatedVisits = currentVisits.map((v) => (v.id === activeCheckoutVisit.id ? completedVisit : v));
+        const updatedShift = { ...prev, visits: updatedVisits };
+        draftStorage.saveActiveShift(userId, updatedShift).catch(() => {});
+        return updatedShift;
+      });
+
+      setTodayCompletedVisits((prev) => {
+        const filtered = prev.filter((v) => v.id !== activeCheckoutVisit.id);
+        return [completedVisit, ...filtered];
       });
 
       // Clear draft on successful checkout
@@ -753,10 +787,62 @@ export default function ShiftScreen() {
     }
   }
 
-  const visits = Array.isArray(currentShift?.visits) ? currentShift.visits : [];
-  const activeShopVisit = visits.find((v) => !v.checkOutTime);
+  const visits = useMemo(() => {
+    const list: ShiftVisit[] = [];
+    const seenIds = new Set<string>();
+
+    // 1. Visits in active shift
+    if (currentShift && Array.isArray(currentShift.visits)) {
+      for (const v of currentShift.visits) {
+        if (v.id) seenIds.add(v.id);
+        list.push(v);
+      }
+    }
+
+    // 2. Visits completed locally
+    for (const v of todayCompletedVisits) {
+      if (v.id && !seenIds.has(v.id)) {
+        seenIds.add(v.id);
+        list.push(v);
+      }
+    }
+
+    // 3. Visits from today's shifts in history
+    const now = new Date();
+    const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    for (const s of pastShifts) {
+      const sDate = new Date(s.startTime);
+      const sYMD = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
+      if (sYMD === todayYMD && Array.isArray(s.visits)) {
+        for (const v of s.visits) {
+          if (v.id && !seenIds.has(v.id)) {
+            seenIds.add(v.id);
+            list.push(v);
+          }
+        }
+      }
+    }
+
+    return list;
+  }, [currentShift, todayCompletedVisits, pastShifts]);
+
+  const activeShopVisit = Array.isArray(currentShift?.visits) ? currentShift.visits.find((v) => !v.checkOutTime) : null;
   const startKm = currentShift?.startOdometerKm ?? 0;
   const isShiftActive = Boolean(currentShift && currentShift.startTime && !currentShift.endTime);
+
+  const totalDistanceTodayKm = useMemo(() => {
+    let km = currentShift?.totalDistanceKm || 0;
+    const now = new Date();
+    const todayYMD = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    for (const s of pastShifts) {
+      const sDate = new Date(s.startTime);
+      const sYMD = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
+      if (sYMD === todayYMD) {
+        km += s.totalDistanceKm || 0;
+      }
+    }
+    return Number(km.toFixed(2));
+  }, [currentShift, pastShifts]);
 
   if (loading) {
     return <LoadingState message="Syncing field duty & GPS shift status..." />;
@@ -929,8 +1015,10 @@ export default function ShiftScreen() {
               <Text style={styles.statLabel}>Completed</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{startKm > 0 ? `${startKm}k` : '0'}</Text>
-              <Text style={styles.statLabel}>Base Odo</Text>
+              <Text style={styles.statValue}>
+                {totalDistanceTodayKm > 0 ? `${totalDistanceTodayKm} km` : startKm > 0 ? `${startKm}k` : '0 km'}
+              </Text>
+              <Text style={styles.statLabel}>Total KM</Text>
             </View>
           </View>
 
@@ -1080,6 +1168,108 @@ export default function ShiftScreen() {
                         />
                       </View>
                     ) : null}
+                  </Card>
+                );
+              })
+            )}
+          </View>
+
+          {/* Shift Attendance History Section matching Web Dashboard */}
+          <View style={styles.historySection}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="time" size={18} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.sectionTitle}>Shift Attendance History</Text>
+              </View>
+              <Badge label={`${pastShifts.length} Shifts`} variant="neutral" />
+            </View>
+            <Text style={styles.historySubtitle}>
+              Day-wise log of official field tours, shop visits, and travel reimbursement road kilometres.
+            </Text>
+
+            {pastShifts.length === 0 ? (
+              <View style={styles.emptyHistoryBox}>
+                <Ionicons name="calendar-outline" size={32} color="#94A3B8" />
+                <Text style={styles.emptyHistoryTitle}>No Shift History Yet</Text>
+                <Text style={styles.emptyHistoryText}>
+                  Your completed duty shifts and route tracking logs will appear here.
+                </Text>
+              </View>
+            ) : (
+              pastShifts.map((s, idx) => {
+                const isActive = s.status === 'ACTIVE';
+                const startTimeStr = s.startTime
+                  ? new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Start';
+                const endTimeStr = s.endTime
+                  ? new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Active Now';
+                const stopsCount = s.visits?.length || 0;
+                const distanceDisplay = s.totalDistanceKm ? `${Number(s.totalDistanceKm).toFixed(2)} km` : '0 km';
+                const startLocStr = s.startAddress
+                  ? s.startAddress.split(',')[0]
+                  : s.startLatitude
+                  ? `GPS: ${Number(s.startLatitude).toFixed(4)}, ${Number(s.startLongitude || 0).toFixed(4)}`
+                  : 'Starting Location';
+
+                const durationStr = (() => {
+                  if (!s.startTime) return '0 min';
+                  const startMs = new Date(s.startTime).getTime();
+                  const endMs = s.endTime ? new Date(s.endTime).getTime() : Date.now();
+                  const diffMins = Math.max(0, Math.floor((endMs - startMs) / 60000));
+                  const h = Math.floor(diffMins / 60);
+                  const m = diffMins % 60;
+                  return h > 0 ? `${h}h ${m}m` : `${m} min`;
+                })();
+
+                return (
+                  <Card key={s.id || idx} style={styles.historyCard}>
+                    <View style={styles.historyCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                          <Ionicons name="time-outline" size={15} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
+                          <Text style={styles.historyTimeRange}>
+                            {startTimeStr} &rarr; {endTimeStr}
+                          </Text>
+                        </View>
+                        <Text style={styles.historyLocation} numberOfLines={1}>
+                          <Ionicons name="location-outline" size={13} color="#64748B" /> {startLocStr}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                        <Badge label="✓ Face ID" variant="success" size="sm" />
+                        <Badge
+                          label={isActive ? 'ACTIVE' : 'COMPLETED'}
+                          variant={isActive ? 'warning' : 'neutral'}
+                          size="sm"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.historyMetricsRow}>
+                      <View style={styles.historyMetricBox}>
+                        <Text style={styles.historyMetricLabel}>DURATION</Text>
+                        <Text style={styles.historyMetricValue}>{durationStr}</Text>
+                      </View>
+                      <View style={styles.historyMetricBox}>
+                        <Text style={styles.historyMetricLabel}>STOPS</Text>
+                        <Text style={styles.historyMetricValue}>{stopsCount} shops</Text>
+                      </View>
+                      <View style={styles.historyMetricBox}>
+                        <Text style={styles.historyMetricLabel}>ROAD DISTANCE</Text>
+                        <Text style={[styles.historyMetricValue, { color: BrandColors.pink.primary }]}>{distanceDisplay}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.historyCardFooter}>
+                      <Pressable
+                        style={styles.viewRouteAuditBtn}
+                        onPress={() => setSelectedAuditShift(s)}
+                      >
+                        <Ionicons name="git-network-outline" size={14} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
+                        <Text style={styles.viewRouteAuditBtnText}>View Shift Route Audit &rarr;</Text>
+                      </Pressable>
+                    </View>
                   </Card>
                 );
               })
@@ -1752,6 +1942,196 @@ export default function ShiftScreen() {
           }
         }}
       />
+
+      {/* ---------------------------------------------------- */}
+      {/* 7. SHIFT ROUTE AUDIT MODAL (PARITY WITH WEB)         */}
+      {/* ---------------------------------------------------- */}
+      <Modal
+        visible={Boolean(selectedAuditShift)}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setSelectedAuditShift(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdropDismiss}
+            onPress={() => setSelectedAuditShift(null)}
+          />
+          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Header */}
+              <View style={styles.auditHeader}>
+                <View style={styles.auditIcon}>
+                  <Ionicons name="git-network" size={22} color={BrandColors.pink.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.modalTitle}>Shift Route Audit</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Officer: {user?.name || 'Field Officer'} · {selectedAuditShift?.totalDistanceKm ?? 0} km
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedAuditShift(null)} hitSlop={HitSlop.md}>
+                  <Ionicons name="close" size={22} color="#94A3B8" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Timing Breakdown Card */}
+              {selectedAuditShift && (() => {
+                const startMs = new Date(selectedAuditShift.startTime).getTime();
+                const endMs = selectedAuditShift.endTime ? new Date(selectedAuditShift.endTime).getTime() : Date.now();
+                const totalMins = Math.max(0, Math.floor((endMs - startMs) / 60000));
+                const auditVisits = selectedAuditShift.visits || [];
+                const timeAtShops = auditVisits.reduce((acc, v) => acc + (v.durationMins || 0), 0);
+                const travelTime = Math.max(0, totalMins - timeAtShops);
+
+                return (
+                  <View style={styles.auditTimingCard}>
+                    <View style={styles.auditTimingHeader}>
+                      <Ionicons name="time" size={13} color="#E11D48" style={{ marginRight: 4 }} />
+                      <Text style={styles.auditTimingTitle}>OFFICER TIMING BREAKDOWN</Text>
+                      <Text style={styles.auditTimingStops}>{auditVisits.length} shops visited</Text>
+                    </View>
+                    <View style={styles.auditTimingGrid}>
+                      <View style={styles.auditTimingCol}>
+                        <Text style={styles.auditTimingLabel}>TOTAL SHIFT</Text>
+                        <Text style={styles.auditTimingVal}>{totalMins > 0 ? `${totalMins} min` : 'In progress'}</Text>
+                      </View>
+                      <View style={styles.auditTimingCol}>
+                        <Text style={styles.auditTimingLabel}>TIME AT SHOPS</Text>
+                        <Text style={[styles.auditTimingVal, { color: '#16A34A' }]}>{timeAtShops} min</Text>
+                      </View>
+                      <View style={styles.auditTimingCol}>
+                        <Text style={styles.auditTimingLabel}>TRAVEL TIME</Text>
+                        <Text style={[styles.auditTimingVal, { color: '#D97706' }]}>{travelTime} min</Text>
+                      </View>
+                      <View style={styles.auditTimingCol}>
+                        <Text style={styles.auditTimingLabel}>SHOPS VISITED</Text>
+                        <Text style={styles.auditTimingVal}>{auditVisits.length}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Step by step timeline */}
+              {selectedAuditShift && (
+                <View style={styles.auditTimeline}>
+                  {/* Start Node */}
+                  <View style={styles.auditTimelineRow}>
+                    <View style={[styles.auditNodeDot, { backgroundColor: '#16A34A' }]}>
+                      <Text style={styles.auditNodeDotText}>S</Text>
+                    </View>
+                    <View style={styles.auditNodeContent}>
+                      <View style={styles.auditNodeHeaderRow}>
+                        <Text style={styles.auditNodeTitle}>Shift Started</Text>
+                        <Text style={styles.auditNodeTime}>
+                          {new Date(selectedAuditShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <Text style={styles.auditNodeGps}>
+                        GPS: {Number(selectedAuditShift.startLatitude).toFixed(4)}, {Number(selectedAuditShift.startLongitude || 0).toFixed(4)}
+                      </Text>
+                      {selectedAuditShift.startAddress ? (
+                        <Text style={styles.auditNodeAddress}>{selectedAuditShift.startAddress}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Visit Nodes */}
+                  {(selectedAuditShift.visits || []).map((v, vIdx) => {
+                    const hasSale = Boolean(v.saleDone || (v as any).sale_done || v.saleId);
+                    const arriveStr = v.checkInTime
+                      ? new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : '00:00';
+                    const leftStr = v.checkOutTime
+                      ? new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : 'In progress';
+                    const durStr = v.durationMins ? `${v.durationMins} min` : '1 min';
+
+                    return (
+                      <View key={v.id || vIdx} style={styles.auditTimelineRow}>
+                        <View style={[styles.auditNodeDot, { backgroundColor: '#E11D48' }]}>
+                          <Text style={styles.auditNodeDotText}>{vIdx + 1}</Text>
+                        </View>
+                        <View style={styles.auditNodeCard}>
+                          <View style={styles.auditNodeHeaderRow}>
+                            <Text style={styles.auditShopName}>{v.shopName || 'Retail Customer'}</Text>
+                            <Badge
+                              label={hasSale ? 'Sale Completed' : 'No Sale Generated'}
+                              variant={hasSale ? 'success' : 'neutral'}
+                              size="sm"
+                            />
+                          </View>
+
+                          <View style={styles.auditShopTimes}>
+                            <Text style={styles.auditShopTimeItem}>ARRIVED: <Text style={{ fontWeight: '700' }}>{arriveStr}</Text></Text>
+                            <Text style={styles.auditShopTimeItem}>LEFT: <Text style={{ fontWeight: '700' }}>{leftStr}</Text></Text>
+                            <Text style={[styles.auditShopTimeItem, { color: '#16A34A' }]}>({durStr})</Text>
+                          </View>
+
+                          {v.customerFeedback ? (
+                            <View style={styles.auditFeedbackBox}>
+                              <Ionicons name="chatbubble-ellipses" size={12} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
+                              <Text style={styles.auditFeedbackText}>&ldquo;{v.customerFeedback}&rdquo;</Text>
+                            </View>
+                          ) : null}
+
+                          {v.latitude ? (
+                            <Text style={styles.auditNodeGps}>
+                              GPS: {Number(v.latitude).toFixed(4)}, {Number(v.longitude || 0).toFixed(4)}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  {/* End Node */}
+                  <View style={styles.auditTimelineRow}>
+                    <View style={[styles.auditNodeDot, { backgroundColor: '#0F172A' }]}>
+                      <Text style={styles.auditNodeDotText}>E</Text>
+                    </View>
+                    <View style={styles.auditNodeContent}>
+                      <View style={styles.auditNodeHeaderRow}>
+                        <Text style={styles.auditNodeTitle}>
+                          {selectedAuditShift.endTime ? 'Shift Ended' : 'Shift Active (In Progress)'}
+                        </Text>
+                        <Text style={styles.auditNodeTime}>
+                          {selectedAuditShift.endTime
+                            ? new Date(selectedAuditShift.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : 'Now'}
+                        </Text>
+                      </View>
+                      {selectedAuditShift.endLatitude ? (
+                        <Text style={styles.auditNodeGps}>
+                          GPS: {Number(selectedAuditShift.endLatitude).toFixed(4)}, {Number(selectedAuditShift.endLongitude || 0).toFixed(4)}
+                        </Text>
+                      ) : null}
+                      {selectedAuditShift.endAddress ? (
+                        <Text style={styles.auditNodeAddress}>{selectedAuditShift.endAddress}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Total Route KM and Close */}
+              <View style={styles.auditBottomBar}>
+                <Text style={styles.auditTotalKm}>
+                  Total Route KM: <Text style={{ fontWeight: '800', color: BrandColors.pink.primary }}>{selectedAuditShift?.totalDistanceKm ?? 0} km</Text>
+                </Text>
+                <Button
+                  title="Close"
+                  variant="outline"
+                  size="sm"
+                  onPress={() => setSelectedAuditShift(null)}
+                />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2409,5 +2789,279 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 13,
     color: '#0F172A',
+  },
+  historySection: {
+    marginTop: Spacing.xl,
+  },
+  historySubtitle: {
+    ...Typography.bodySmall,
+    color: Colors.light.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  emptyHistoryBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  emptyHistoryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 8,
+  },
+  emptyHistoryText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    maxWidth: 260,
+  },
+  historyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  historyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
+  },
+  historyTimeRange: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  historyLocation: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  historyMetricsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: Spacing.xs,
+    marginVertical: Spacing.xs,
+  },
+  historyMetricBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  historyMetricLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  historyMetricValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  historyCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  viewRouteAuditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  viewRouteAuditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
+  },
+  auditHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  auditIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: BrandColors.pink.tint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  auditTimingCard: {
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    borderRadius: Radius.lg,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  auditTimingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE4E6',
+  },
+  auditTimingTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#E11D48',
+    letterSpacing: 0.5,
+  },
+  auditTimingStops: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#9F1239',
+  },
+  auditTimingGrid: {
+    flexDirection: 'row',
+  },
+  auditTimingCol: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  auditTimingLabel: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  auditTimingVal: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  auditTimeline: {
+    paddingLeft: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  auditTimelineRow: {
+    flexDirection: 'row',
+    marginBottom: Spacing.md,
+  },
+  auditNodeDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+  auditNodeDotText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  auditNodeContent: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing.sm,
+  },
+  auditNodeCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing.sm,
+    ...Shadows.sm,
+  },
+  auditNodeHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  auditNodeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  auditNodeTime: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  auditNodeGps: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  auditNodeAddress: {
+    fontSize: 11,
+    color: '#334155',
+    marginTop: 2,
+  },
+  auditShopName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 6,
+  },
+  auditShopTimes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  auditShopTimeItem: {
+    fontSize: 10,
+    color: '#475569',
+  },
+  auditFeedbackBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF1F2',
+    borderRadius: Radius.sm,
+    padding: Spacing.xs,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  auditFeedbackText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: '#9F1239',
+    flex: 1,
+  },
+  auditBottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  auditTotalKm: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
   },
 });

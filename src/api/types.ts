@@ -833,11 +833,13 @@ export interface ReverseGeocodeResult {
   latitude: number;
   longitude: number;
   formattedAddress: string;
+  street?: string | null;
   state: string | null;
   district: string | null;
   sublocality: string | null;
   pincode: string | null;
   locationType?: string;
+  confidence?: 'high' | 'medium' | 'low';
 }
 
 export interface InvoiceCompanyInfo {

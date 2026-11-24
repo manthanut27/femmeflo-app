@@ -124,18 +124,34 @@ export function FaceVerificationModal({
     };
   }, [visible, scanAnim, pulseAnim, stopScanAnimation, stopPulseAnimation]);
 
-  // Pulse animation for scanner frame
+  const handleStartLiveScan = useCallback(() => {
+    if (step === 'SCANNING' || step === 'VERIFIED') return;
+    setErrorMessage(null);
+    setCapturedPhotoUri(null);
+    setScanProgress(0);
+    setStep('SCANNING');
+  }, [step]);
+
+  const handleLaunchCamera = useCallback(() => {
+    handleStartLiveScan();
+  }, [handleStartLiveScan]);
+
+  const handleChooseFromGallery = useCallback(async () => {
+    handleStartLiveScan();
+  }, [handleStartLiveScan]);
+
+  // Auto-launch live scanning directly inside the modal (no external camera app popup)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     if (visible && autoLaunch) {
       timer = setTimeout(() => {
-        handleLaunchCamera();
+        handleStartLiveScan();
       }, 250);
     }
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [visible, autoLaunch]);
+  }, [visible, autoLaunch, handleStartLiveScan]);
 
   useEffect(() => {
     if (visible && (step === 'READY' || step === 'SCANNING')) {
@@ -229,87 +245,7 @@ export function FaceVerificationModal({
     }
   }, [step, capturedPhotoUri, scanAnim, stopScanAnimation]);
 
-  const handleLaunchCamera = async () => {
-    if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
-    setStep('CAPTURING');
-    setErrorMessage(null);
 
-    try {
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          setStep('ERROR');
-          setErrorMessage('Camera access was denied. Please grant camera permission in device settings to verify attendance.');
-          return;
-        }
-      }
-
-      // Safe front camera type fallback to prevent undefined property crashes
-      const frontCameraType = (ImagePicker.CameraType?.front as any) ?? 'front';
-      const res = await ImagePicker.launchCameraAsync({
-        cameraType: frontCameraType,
-        allowsEditing: false,
-        quality: 0.35,
-        base64: false,
-      });
-
-      if (res.canceled || !res.assets || res.assets.length === 0) {
-        setStep('READY');
-        return;
-      }
-
-      const asset = res.assets[0];
-      if (asset?.uri) {
-        setCapturedPhotoUri(asset.uri);
-        setStep('SCANNING');
-      } else {
-        setStep('READY');
-      }
-    } catch (err: any) {
-      setStep('ERROR');
-      setErrorMessage(err?.message || 'Unable to open camera on this device. Please grant camera permission in device settings.');
-    }
-  };
-
-  const handleChooseFromGallery = async () => {
-    if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
-    setStep('CAPTURING');
-    setErrorMessage(null);
-
-    try {
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          setStep('ERROR');
-          setErrorMessage(isStart ? 'Photo library access was denied. Please capture a front selfie to verify attendance.' : 'Photo library access was denied. You can capture a selfie or complete duty shift using standard audit.');
-          return;
-        }
-      }
-
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.35,
-        base64: false,
-      });
-
-      if (res.canceled || !res.assets || res.assets.length === 0) {
-        setStep('READY');
-        return;
-      }
-
-      const asset = res.assets[0];
-      if (asset?.uri) {
-        setCapturedPhotoUri(asset.uri);
-        setStep('SCANNING');
-      } else {
-        setStep('READY');
-      }
-    } catch (err: any) {
-      setStep('ERROR');
-      setErrorMessage(err?.message || (isStart ? 'Unable to select photo on this device. Please capture a front selfie to verify attendance.' : 'Unable to select photo on this device. You may use standard shift check-in.'));
-    }
-  };
 
   const handleUseStandardVerification = () => {
     stopScanAnimation();
@@ -479,10 +415,10 @@ export function FaceVerificationModal({
               <View style={{ width: '100%' }}>
                 <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
-                    title={mode === 'REGISTER' ? 'Enroll Live Face (Open Camera)' : 'Open Camera for Face Verification'}
+                    title={mode === 'REGISTER' ? 'Enroll Live Face ID' : 'Start Live Face Verification'}
                     variant="primary"
                     size="md"
-                    icon={<Ionicons name="camera-outline" size={18} color="#FFFFFF" />}
+                    icon={<Ionicons name="scan-outline" size={18} color="#FFFFFF" />}
                     onPress={handleLaunchCamera}
                     style={{ flex: 1 }}
                   />
@@ -514,10 +450,10 @@ export function FaceVerificationModal({
               <View style={{ width: '100%' }}>
                 <View style={{ flexDirection: 'row', gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
-                    title="Retry Camera"
+                    title="Retry Face Verification"
                     variant="primary"
                     size="md"
-                    icon={<Ionicons name="camera-outline" size={16} color="#FFFFFF" />}
+                    icon={<Ionicons name="refresh-outline" size={16} color="#FFFFFF" />}
                     onPress={handleLaunchCamera}
                     style={{ flex: 1 }}
                   />

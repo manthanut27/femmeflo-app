@@ -15,10 +15,92 @@ export {
   DEFAULT_INDIA_COORDINATES,
 };
 
+export type LocationConfidence = 'high' | 'medium' | 'low';
+export type LocationSource = 'device' | 'backend' | 'native';
+
+export interface ScoreConfidenceParams {
+  accuracy: number | null;
+  ageMs?: number | null;
+  inIndia?: boolean;
+  locationType?: string | null;
+  accuracyThresholdMeters?: number;
+}
+
+/**
+ * Pure function to evaluate location fix confidence based on satellite/network accuracy,
+ * age of the fix, territorial validity, and reverse-geocoding precision.
+ */
+export function scoreConfidence(params: ScoreConfidenceParams): {
+  confidence: LocationConfidence;
+  reasons: string[];
+} {
+  const reasons: string[] = [];
+  const threshold = params.accuracyThresholdMeters ?? 50;
+
+  // 1. Regional boundary evaluation
+  if (params.inIndia === false) {
+    reasons.push('Coordinates fall outside Indian territory bounds [6.5°-37.5° N, 68.0°-97.5° E]');
+  }
+
+  // 2. Reading staleness evaluation
+  if (params.ageMs != null) {
+    if (params.ageMs > 120000) {
+      reasons.push(`Stale location reading: ${Math.round(params.ageMs / 1000)}s old (exceeds 120s limit)`);
+    } else if (params.ageMs > 30000) {
+      reasons.push(`Aged location reading: ${Math.round(params.ageMs / 1000)}s old`);
+    }
+  }
+
+  // 3. Sensor accuracy evaluation (never fabricated)
+  if (params.accuracy == null) {
+    reasons.push('Device reported no accuracy estimate');
+  } else if (params.accuracy > threshold) {
+    reasons.push(`Accuracy estimate ${Math.round(params.accuracy)}m exceeds acceptable threshold of ${threshold}m`);
+  }
+
+  // 4. Geocoder resolution evaluation
+  if (params.locationType) {
+    const locType = params.locationType.toUpperCase();
+    if (locType === 'APPROXIMATE') {
+      reasons.push('Geocoded location resolution is approximate');
+    } else if (locType === 'GEOMETRIC_CENTER' || locType === 'RANGE_INTERPOLATED') {
+      reasons.push(`Geocoded location is ${locType.toLowerCase().replace('_', ' ')}`);
+    }
+  }
+
+  // Tier 1: Low Confidence criteria
+  if (
+    params.inIndia === false ||
+    (params.ageMs != null && params.ageMs > 120000) ||
+    params.accuracy == null ||
+    (params.accuracy != null && params.accuracy > threshold) ||
+    (params.locationType && params.locationType.toUpperCase() === 'APPROXIMATE')
+  ) {
+    return { confidence: 'low', reasons };
+  }
+
+  // Tier 2: Medium Confidence criteria
+  if (
+    (params.ageMs != null && params.ageMs > 30000) ||
+    (params.accuracy != null && params.accuracy > 25) ||
+    (params.locationType && ['GEOMETRIC_CENTER', 'RANGE_INTERPOLATED'].includes(params.locationType.toUpperCase()))
+  ) {
+    return { confidence: 'medium', reasons };
+  }
+
+  // Tier 3: High Confidence criteria
+  return { confidence: 'high', reasons };
+}
+
 export interface LocationResult {
   latitude: number;
   longitude: number;
-  accuracy?: number | null;
+  accuracy: number | null;
+  confidence?: LocationConfidence;
+  source?: LocationSource;
+  warnings?: string[];
+  timestamp?: number | null;
+  ageMs?: number | null;
   address?: string | null;
   street?: string | null;
   state?: string | null;
@@ -43,25 +125,114 @@ export interface GpsState {
   latitude: number | null;
   longitude: number | null;
   accuracy: number | null;
+  confidence?: LocationConfidence;
+  source?: LocationSource;
+  warnings?: string[];
+  timestamp?: number | null;
+  ageMs?: number | null;
   errorMessage?: string | null;
   isEmulatorFallback?: boolean;
 }
 
-function processAcquiredCoords(coords: {
-  latitude: number;
-  longitude: number;
-  accuracy: number | null;
-}): GpsState {
+export interface AcquireGpsOptions {
+  highAccuracyTimeoutMs?: number;
+  fallbackTimeoutMs?: number;
+  accuracyThresholdMeters?: number;
+  maxAgeMs?: number;
+  allowDevEmulatorSubstitution?: boolean;
+  onStatusChange?: (status: GpsAcquisitionStatus) => void;
+}
+
+/**
+ * Format coordinates with rounding to prevent leaking high-precision location in remote logs.
+ */
+function formatRedactedCoords(lat: number | null, lng: number | null): string {
+  if (lat == null || lng == null) return '[unavailable]';
+  return `${lat.toFixed(2)}°, ${lng.toFixed(2)}°`;
+}
+
+/**
+ * Executes a promise with an explicitly cleared timer to prevent event loop leaks.
+ */
+function withCancellableTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallbackValue: T
+): Promise<T> {
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timerId = setTimeout(() => resolve(fallbackValue), timeoutMs);
+  });
+
+  return Promise.race([
+    promise.then((res) => {
+      if (timerId) clearTimeout(timerId);
+      return res;
+    }),
+    timeoutPromise,
+  ]).finally(() => {
+    if (timerId) clearTimeout(timerId);
+  });
+}
+
+function processAcquiredCoords(
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+  },
+  allowDevEmulatorSubstitution = false,
+  ageMs: number | null = null,
+  timestamp: number | null = null,
+  accuracyThreshold = 50
+): GpsState {
+  const inIndia = isWithinIndiaBounds(coords.latitude, coords.longitude);
+  const accuracy = coords.accuracy ?? null; // Never fabricate a number
+  const warnings: string[] = [];
+
+  const { confidence, reasons } = scoreConfidence({
+    accuracy,
+    ageMs,
+    inIndia,
+    accuracyThresholdMeters: accuracyThreshold,
+  });
+  warnings.push(...reasons);
+
   if (!isWithinIndiaBounds(coords.latitude, coords.longitude)) {
     console.warn(
-      `[locationUtils] Acquired coordinates (${coords.latitude}, ${coords.longitude}) fall outside Indian territory bounds [6.5°-37.5° N, 68.0°-97.5° E]. Applying Indian territory fallback.`
+      `[locationUtils] Acquired coordinates (${formatRedactedCoords(
+        coords.latitude,
+        coords.longitude
+      )}) fall outside Indian territory bounds [6.5°-37.5° N, 68.0°-97.5° E].`
     );
-    const sanitized = sanitizeIndiaCoordinates(coords.latitude, coords.longitude);
+
+    // Only apply substitution when explicitly enabled by developer option; otherwise preserve authentic device coordinates
+    if (allowDevEmulatorSubstitution) {
+      const sanitized = sanitizeIndiaCoordinates(coords.latitude, coords.longitude);
+      return {
+        status: 'acquired',
+        latitude: sanitized.latitude,
+        longitude: sanitized.longitude,
+        accuracy,
+        confidence,
+        source: 'device',
+        warnings: [...warnings, 'Coordinates replaced with default territory coordinates via developer emulator mode.'],
+        timestamp,
+        ageMs,
+        isEmulatorFallback: true,
+      };
+    }
+
     return {
       status: 'acquired',
-      latitude: sanitized.latitude,
-      longitude: sanitized.longitude,
-      accuracy: coords.accuracy || 15,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy,
+      confidence,
+      source: 'device',
+      warnings,
+      timestamp,
+      ageMs,
       isEmulatorFallback: true,
     };
   }
@@ -70,7 +241,12 @@ function processAcquiredCoords(coords: {
     status: 'acquired',
     latitude: coords.latitude,
     longitude: coords.longitude,
-    accuracy: coords.accuracy,
+    accuracy,
+    confidence,
+    source: 'device',
+    warnings: warnings.length > 0 ? warnings : undefined,
+    timestamp,
+    ageMs,
     isEmulatorFallback: false,
   };
 }
@@ -78,20 +254,16 @@ function processAcquiredCoords(coords: {
 /**
  * Robust GPS acquisition strategy:
  * 1. Checks and requests foreground location permissions.
- * 2. Attempts High Accuracy position with a timeout (default 6000ms).
- * 3. If High Accuracy times out or fails, falls back to Balanced Accuracy (default 4000ms).
- * 4. If that fails, falls back to the device's last known position.
- * 5. Checks if acquired coordinates fall within Indian subcontinent bounds; if outside (e.g. Android Emulator in CA),
- *    sanitizes to valid Indian coordinates and flags isEmulatorFallback: true.
- * Non-blocking: returns a structured GpsState without halting execution.
+ * 2. Attempts Highest Accuracy satellite position with a cancellable timeout (default 6000ms).
+ * 3. Falls back to High Accuracy position with a cancellable timeout (default 4000ms).
+ * 4. Falls back to cached position only if within maxAgeMs (default 120s), rejecting stale entries.
+ * 5. Evaluates accuracy against threshold (default 50m) and scores confidence without inventing values.
  */
-export async function acquireGpsCoordinates(options?: {
-  highAccuracyTimeoutMs?: number;
-  fallbackTimeoutMs?: number;
-  onStatusChange?: (status: GpsAcquisitionStatus) => void;
-}): Promise<GpsState> {
+export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promise<GpsState> {
   const highTimeout = options?.highAccuracyTimeoutMs ?? 6000;
   const fallbackTimeout = options?.fallbackTimeoutMs ?? 4000;
+  const maxAge = options?.maxAgeMs ?? 120000;
+  const threshold = options?.accuracyThresholdMeters ?? 50;
 
   const notify = (status: GpsAcquisitionStatus) => {
     options?.onStatusChange?.(status);
@@ -107,45 +279,77 @@ export async function acquireGpsCoordinates(options?: {
         latitude: null,
         longitude: null,
         accuracy: null,
+        confidence: 'low',
+        warnings: ['Location permission was denied by user.'],
         errorMessage: 'Location permission was denied. You may enter location details manually.',
       };
     }
 
-    // Step 2: High-accuracy attempt
+    // Step 2: Highest-accuracy GPS satellite attempt with cancellable timer
     notify('acquiring_high');
     const highPromise = Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
+      accuracy: Location.Accuracy.Highest,
     });
-    const highTimeoutPromise = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), highTimeout)
+    const highResult = await withCancellableTimeout<Location.LocationObject | null>(
+      highPromise,
+      highTimeout,
+      null
     );
 
-    const highResult = await Promise.race([highPromise, highTimeoutPromise]);
     if (highResult && highResult.coords) {
       notify('acquired');
-      return processAcquiredCoords(highResult.coords);
+      const now = Date.now();
+      const ageMs = highResult.timestamp ? Math.max(0, now - highResult.timestamp) : 0;
+      return processAcquiredCoords(
+        highResult.coords,
+        options?.allowDevEmulatorSubstitution,
+        ageMs,
+        highResult.timestamp,
+        threshold
+      );
     }
 
-    // Step 3: Balanced accuracy fallback
+    // Step 3: High-accuracy fused fallback with cancellable timer
     notify('acquiring_fallback');
     const fallbackPromise = Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+      accuracy: Location.Accuracy.High,
     });
-    const fallbackTimeoutPromise = new Promise<null>((resolve) =>
-      setTimeout(() => resolve(null), fallbackTimeout)
+    const fallbackResult = await withCancellableTimeout<Location.LocationObject | null>(
+      fallbackPromise,
+      fallbackTimeout,
+      null
     );
 
-    const fallbackResult = await Promise.race([fallbackPromise, fallbackTimeoutPromise]);
     if (fallbackResult && fallbackResult.coords) {
       notify('acquired');
-      return processAcquiredCoords(fallbackResult.coords);
+      const now = Date.now();
+      const ageMs = fallbackResult.timestamp ? Math.max(0, now - fallbackResult.timestamp) : 0;
+      return processAcquiredCoords(
+        fallbackResult.coords,
+        options?.allowDevEmulatorSubstitution,
+        ageMs,
+        fallbackResult.timestamp,
+        threshold
+      );
     }
 
-    // Step 4: Last known location fallback
-    const lastKnown = await Location.getLastKnownPositionAsync();
+    // Step 4: Last known location fallback with staleness check
+    const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
     if (lastKnown && lastKnown.coords) {
-      notify('acquired');
-      return processAcquiredCoords(lastKnown.coords);
+      const now = Date.now();
+      const ageMs = lastKnown.timestamp ? Math.max(0, now - lastKnown.timestamp) : null;
+      if (ageMs != null && ageMs > maxAge) {
+        console.warn(`[locationUtils] Last known position rejected as stale (${Math.round(ageMs / 1000)}s old)`);
+      } else {
+        notify('acquired');
+        return processAcquiredCoords(
+          lastKnown.coords,
+          options?.allowDevEmulatorSubstitution,
+          ageMs,
+          lastKnown.timestamp,
+          threshold
+        );
+      }
     }
 
     notify('timeout');
@@ -154,17 +358,22 @@ export async function acquireGpsCoordinates(options?: {
       latitude: null,
       longitude: null,
       accuracy: null,
+      confidence: 'low',
+      warnings: ['GPS signal acquisition timed out.'],
       errorMessage: 'High accuracy GPS timed out. Manual location entry enabled.',
     };
-  } catch (err: any) {
-    console.warn('[locationUtils] GPS acquisition error', err);
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'GPS services are currently unavailable.';
+    console.warn('[locationUtils] GPS acquisition error:', errorMsg);
     notify('unavailable');
     return {
       status: 'unavailable',
       latitude: null,
       longitude: null,
       accuracy: null,
-      errorMessage: err?.message || 'GPS services are currently unavailable.',
+      confidence: 'low',
+      warnings: [errorMsg],
+      errorMessage: errorMsg,
     };
   }
 }
@@ -173,12 +382,17 @@ export async function acquireGpsCoordinates(options?: {
  * Backward-compatible helper for basic coordinates retrieval.
  */
 export async function getCurrentCoordinates(
-  timeoutMs = 10000
+  timeoutOrOptions?: number | AcquireGpsOptions
 ): Promise<{ latitude: number; longitude: number; accuracy: number | null } | null> {
-  const res = await acquireGpsCoordinates({
-    highAccuracyTimeoutMs: Math.round(timeoutMs * 0.6),
-    fallbackTimeoutMs: Math.round(timeoutMs * 0.4),
-  });
+  const options: AcquireGpsOptions =
+    typeof timeoutOrOptions === 'number'
+      ? {
+          highAccuracyTimeoutMs: Math.round(timeoutOrOptions * 0.6),
+          fallbackTimeoutMs: Math.round(timeoutOrOptions * 0.4),
+        }
+      : timeoutOrOptions || {};
+
+  const res = await acquireGpsCoordinates(options);
   if (res.status === 'acquired' && res.latitude !== null && res.longitude !== null) {
     return {
       latitude: res.latitude,
@@ -190,40 +404,79 @@ export async function getCurrentCoordinates(
 }
 
 /**
- * Retrieves GPS coordinates and attempts reverse geocoding via the backend geo API or native reverse geocode.
+ * Retrieves GPS coordinates and resolves addresses strictly from the backend Google Maps API,
+ * falling back to the native device reverse geocoder only as an offline backup.
  */
-export async function getCurrentLocationWithAddress(): Promise<LocationResult | null> {
-  const coords = await getCurrentCoordinates();
-  if (!coords) return null;
-
-  const result: LocationResult = {
-    latitude: coords.latitude,
-    longitude: coords.longitude,
-    accuracy: coords.accuracy,
-  };
-
-  try {
-    const geoData: ReverseGeocodeResult | null = await geoApi.reverseGeocode(
-      coords.latitude,
-      coords.longitude
-    );
-    if (geoData) {
-      result.address = geoData.formattedAddress;
-      result.street = (geoData as any).street || (geoData.formattedAddress ? geoData.formattedAddress.split(',')[0]?.trim() : null);
-      result.state = geoData.state;
-      result.district = geoData.district;
-      result.village = geoData.sublocality;
-      result.pincode = geoData.pincode;
-      return result;
-    }
-  } catch {
-    // Proceed to native fallback
+export async function getCurrentLocationWithAddress(
+  options?: AcquireGpsOptions
+): Promise<LocationResult | null> {
+  const gps = await acquireGpsCoordinates(options);
+  if (gps.status !== 'acquired' || gps.latitude === null || gps.longitude === null) {
+    return null;
   }
 
+  const { latitude, longitude, accuracy, timestamp, ageMs } = gps;
+  const inIndia = isWithinIndiaBounds(latitude, longitude);
+  const warnings: string[] = gps.warnings ? [...gps.warnings] : [];
+
+  const baseResult: LocationResult = {
+    latitude,
+    longitude,
+    accuracy,
+    confidence: gps.confidence || 'medium',
+    source: 'device',
+    warnings,
+    timestamp,
+    ageMs,
+    isEmulatorFallback: gps.isEmulatorFallback,
+  };
+
+  // 1. Backend Google Maps Geocoding Resolution (Primary Source)
+  if (inIndia) {
+    try {
+      const geoData: ReverseGeocodeResult | null = await geoApi.reverseGeocode(
+        latitude,
+        longitude
+      );
+
+      if (geoData && geoData.formattedAddress) {
+        const { confidence: geocodeConfidence, reasons: geocodeReasons } = scoreConfidence({
+          accuracy,
+          ageMs,
+          inIndia: true,
+          locationType: geoData.locationType,
+          accuracyThresholdMeters: options?.accuracyThresholdMeters ?? 50,
+        });
+
+        // Set address fields cleanly without mixing sources
+        return {
+          ...baseResult,
+          source: 'backend',
+          confidence: geocodeConfidence,
+          warnings: [...warnings, ...geocodeReasons],
+          address: geoData.formattedAddress,
+          street: geoData.street || geoData.formattedAddress.split(',')[0]?.trim() || null,
+          state: geoData.state || null,
+          district: geoData.district || null,
+          village: geoData.sublocality || null,
+          pincode: geoData.pincode || null,
+        };
+      } else {
+        warnings.push('Backend geocoder returned no address matches (ZERO_RESULTS).');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Backend geocoder request failed';
+      warnings.push(`Backend geocoding failed: ${msg}`);
+    }
+  } else {
+    warnings.push('Coordinates outside territory bounds [6.5°-37.5° N, 68°-97.5° E]; skipped backend geocoding.');
+  }
+
+  // 2. Native Device Geocoder (Offline Fallback Only)
   try {
     const nativeAddresses = await Location.reverseGeocodeAsync({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
+      latitude,
+      longitude,
     });
 
     if (nativeAddresses && nativeAddresses.length > 0) {
@@ -237,16 +490,39 @@ export async function getCurrentLocationWithAddress(): Promise<LocationResult | 
         addr.postalCode,
       ].filter(Boolean);
 
-      result.address = addressParts.join(', ');
-      result.street = addr.street || addr.name || (result.address ? result.address.split(',')[0]?.trim() : null);
-      result.state = addr.region || null;
-      result.district = addr.subregion || addr.city || null;
-      result.village = addr.district || addr.subregion || null;
-      result.pincode = addr.postalCode || null;
+      const { confidence: nativeConfidence, reasons: nativeReasons } = scoreConfidence({
+        accuracy,
+        ageMs,
+        inIndia,
+        locationType: 'APPROXIMATE',
+        accuracyThresholdMeters: options?.accuracyThresholdMeters ?? 50,
+      });
+
+      return {
+        ...baseResult,
+        source: 'native',
+        confidence: nativeConfidence,
+        warnings: [...warnings, ...nativeReasons, 'Address resolved via native device offline fallback.'],
+        address: addressParts.join(', '),
+        street: addr.street || addr.name || null,
+        state: addr.region || null,
+        district: addr.subregion || addr.city || null,
+        village: addr.district || addr.subregion || null,
+        pincode: addr.postalCode || null,
+      };
+    } else {
+      warnings.push('Native device reverse geocode returned no results.');
     }
-  } catch (err) {
-    console.warn('[locationUtils] Native reverse geocode fallback failed', err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Native reverse geocode failed';
+    warnings.push(`Native reverse geocode fallback failed: ${msg}`);
   }
 
-  return result;
+  // 3. Fallback to Device GPS Coordinates with raw un-geocoded state
+  return {
+    ...baseResult,
+    source: 'device',
+    confidence: 'low',
+    warnings: [...warnings, 'No reverse geocoding source available.'],
+  };
 }
