@@ -95,7 +95,7 @@ export function scoreConfidence(params: ScoreConfidenceParams): {
 export interface LocationResult {
   latitude: number;
   longitude: number;
-  accuracy: number | null;
+  accuracy?: number | null;
   confidence?: LocationConfidence;
   source?: LocationSource;
   warnings?: string[];
@@ -173,6 +173,19 @@ function withCancellableTimeout<T>(
   ]).finally(() => {
     if (timerId) clearTimeout(timerId);
   });
+}
+
+let customLocationProvider: any = null;
+
+/**
+ * Configure or override the underlying location provider (useful for unit testing and test harness isolation).
+ */
+export function setLocationProvider(provider: any) {
+  customLocationProvider = provider;
+}
+
+function getLocationProvider() {
+  return customLocationProvider || Location;
 }
 
 function processAcquiredCoords(
@@ -271,7 +284,8 @@ export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promis
 
   try {
     notify('requesting_permission');
-    const { status } = await Location.requestForegroundPermissionsAsync();
+    const locModule = getLocationProvider();
+    const { status } = await locModule.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
       notify('denied');
       return {
@@ -287,8 +301,9 @@ export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promis
 
     // Step 2: Highest-accuracy GPS satellite attempt with cancellable timer
     notify('acquiring_high');
-    const highPromise = Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Highest,
+    const highAccuracy = locModule.Accuracy?.Highest ?? Location.Accuracy.Highest;
+    const highPromise = locModule.getCurrentPositionAsync({
+      accuracy: highAccuracy,
     });
     const highResult = await withCancellableTimeout<Location.LocationObject | null>(
       highPromise,
@@ -311,8 +326,9 @@ export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promis
 
     // Step 3: High-accuracy fused fallback with cancellable timer
     notify('acquiring_fallback');
-    const fallbackPromise = Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
+    const fallbackAccuracy = locModule.Accuracy?.High ?? Location.Accuracy.High;
+    const fallbackPromise = locModule.getCurrentPositionAsync({
+      accuracy: fallbackAccuracy,
     });
     const fallbackResult = await withCancellableTimeout<Location.LocationObject | null>(
       fallbackPromise,
@@ -334,7 +350,7 @@ export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promis
     }
 
     // Step 4: Last known location fallback with staleness check
-    const lastKnown = await Location.getLastKnownPositionAsync().catch(() => null);
+    const lastKnown = await locModule.getLastKnownPositionAsync().catch(() => null);
     if (lastKnown && lastKnown.coords) {
       const now = Date.now();
       const ageMs = lastKnown.timestamp ? Math.max(0, now - lastKnown.timestamp) : null;
@@ -474,7 +490,8 @@ export async function getCurrentLocationWithAddress(
 
   // 2. Native Device Geocoder (Offline Fallback Only)
   try {
-    const nativeAddresses = await Location.reverseGeocodeAsync({
+    const locModule = getLocationProvider();
+    const nativeAddresses = await locModule.reverseGeocodeAsync({
       latitude,
       longitude,
     });

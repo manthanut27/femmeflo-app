@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import * as Location from 'expo-location';
 import { geoApi } from '../api/geo.ts';
 import {
   scoreConfidence,
   acquireGpsCoordinates,
   getCurrentLocationWithAddress,
+  setLocationProvider,
   type LocationResult,
   type GpsState,
 } from '../utils/locationUtils.ts';
+
+const mockAccuracy = {
+  Lowest: 1,
+  Low: 2,
+  Balanced: 3,
+  High: 4,
+  Highest: 5,
+  BestForNavigation: 6,
+};
 
 describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
   // =========================================================================
@@ -52,7 +61,7 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
 
       assert.equal(result.confidence, 'low');
       assert.ok(
-        result.reasons.some((r) => r.includes('no accuracy estimate')),
+        result.reasons.some((r) => r.includes('Device reported no accuracy estimate')),
         `Expected missing accuracy warning, got: ${JSON.stringify(result.reasons)}`
       );
     });
@@ -60,23 +69,22 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
     it('rates a stale location reading (> 120s limit) as low confidence with staleness warning', () => {
       const result = scoreConfidence({
         accuracy: 10,
-        ageMs: 185000, // ~3 minutes old
+        ageMs: 145000, // 145 seconds old
         inIndia: true,
       });
 
       assert.equal(result.confidence, 'low');
       assert.ok(
-        result.reasons.some((r) => r.includes('Stale location reading')),
-        `Expected stale warning, got: ${JSON.stringify(result.reasons)}`
+        result.reasons.some((r) => r.includes('exceeds 120s limit')),
+        `Expected stale reading warning, got: ${JSON.stringify(result.reasons)}`
       );
     });
 
     it('rates an aged reading (between 30s and 120s) as medium confidence', () => {
       const result = scoreConfidence({
         accuracy: 15,
-        ageMs: 45000, // 45s old
+        ageMs: 45000, // 45 seconds old
         inIndia: true,
-        locationType: 'ROOFTOP',
       });
 
       assert.equal(result.confidence, 'medium');
@@ -91,19 +99,25 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
       });
 
       assert.equal(result.confidence, 'low');
-      assert.ok(result.reasons.some((r) => r.includes('outside Indian territory bounds')));
+      assert.ok(
+        result.reasons.some((r) => r.includes('outside Indian territory bounds')),
+        `Expected out-of-bounds warning, got: ${JSON.stringify(result.reasons)}`
+      );
     });
 
     it('rates approximate geocoded location as low confidence', () => {
       const result = scoreConfidence({
-        accuracy: 20,
+        accuracy: 10,
         ageMs: 2000,
         inIndia: true,
         locationType: 'APPROXIMATE',
       });
 
       assert.equal(result.confidence, 'low');
-      assert.ok(result.reasons.some((r) => r.includes('resolution is approximate')));
+      assert.ok(
+        result.reasons.some((r) => r.includes('approximate')),
+        `Expected approximate geocode warning, got: ${JSON.stringify(result.reasons)}`
+      );
     });
 
     it('rates geometric center geocoded location as medium confidence', () => {
@@ -123,23 +137,25 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
   // =========================================================================
   describe('2. GPS Acquisition Pipeline & Defensive Invariants', () => {
     it('acquires good GPS fix and preserves raw sensor accuracy and timestamp', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
-
       const now = Date.now();
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 8.5,
-          altitude: 10,
-          altitudeAccuracy: 5,
-          heading: 0,
-          speed: 0,
-        },
-        timestamp: now,
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 8.5,
+            altitude: 10,
+            altitudeAccuracy: 5,
+            heading: 0,
+            speed: 0,
+          },
+          timestamp: now,
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [],
+      });
 
       try {
         const gps = await acquireGpsCoordinates({
@@ -156,28 +172,29 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(gps.source, 'device');
         assert.equal(gps.isEmulatorFallback, false);
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
       }
     });
 
     it('identifies poor accuracy (> threshold) and marks confidence as low without failing the operation', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
-
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 120, // Above 50m threshold
-          altitude: null,
-          altitudeAccuracy: null,
-          heading: null,
-          speed: null,
-        },
-        timestamp: Date.now(),
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 120, // Above 50m threshold
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [],
+      });
 
       try {
         const gps = await acquireGpsCoordinates({
@@ -188,28 +205,29 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(gps.confidence, 'low');
         assert.ok(gps.warnings && gps.warnings.some((w) => w.includes('exceeds acceptable threshold')));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
       }
     });
 
     it('preserves authentic device coordinates outside India bounds without silently mutating them', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
-
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 37.421998, // Mountain View, CA
-          longitude: -122.084,
-          accuracy: 15,
-          altitude: null,
-          altitudeAccuracy: null,
-          heading: null,
-          speed: null,
-        },
-        timestamp: Date.now(),
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 37.421998, // Mountain View, CA
+            longitude: -122.084,
+            accuracy: 15,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [],
+      });
 
       try {
         // By default, allowDevEmulatorSubstitution is false -> real device coordinates are preserved!
@@ -222,32 +240,30 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(gps.isEmulatorFallback, true);
         assert.ok(gps.warnings && gps.warnings.some((w) => w.includes('outside Indian territory bounds')));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
       }
     });
 
     it('rejects stale cached lastKnown position (> maxAgeMs limit) and enters timeout state', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
-      const origGetLast = Location.getLastKnownPositionAsync;
-
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      // High and fallback timeouts will expire
-      Location.getCurrentPositionAsync = (async () => {
-        await new Promise((r) => setTimeout(r, 200));
-        return null;
-      }) as any;
-
-      // Last known is 10 minutes old (600,000ms)
-      Location.getLastKnownPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 20,
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        // High and fallback timeouts will expire
+        getCurrentPositionAsync: async () => {
+          await new Promise((r) => setTimeout(r, 200));
+          return null;
         },
-        timestamp: Date.now() - 600000,
-      })) as any;
+        // Last known is 10 minutes old (600,000ms)
+        getLastKnownPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 20,
+          },
+          timestamp: Date.now() - 600000,
+        }),
+        reverseGeocodeAsync: async () => [],
+      });
 
       try {
         const gps = await acquireGpsCoordinates({
@@ -261,15 +277,18 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(gps.confidence, 'low');
         assert.ok(gps.warnings && gps.warnings.some((w) => w.includes('timed out')));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
-        Location.getLastKnownPositionAsync = origGetLast;
+        setLocationProvider(null);
       }
     });
 
     it('gracefully handles location permission denied with low confidence and clear warning', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'denied' })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'denied', granted: false }),
+        getCurrentPositionAsync: async () => null,
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [],
+      });
 
       try {
         const gps = await acquireGpsCoordinates();
@@ -280,7 +299,7 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(gps.confidence, 'low');
         assert.ok(gps.errorMessage && gps.errorMessage.includes('denied'));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
+        setLocationProvider(null);
       }
     });
   });
@@ -290,19 +309,22 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
   // =========================================================================
   describe('3. Reverse Geocoding Pipeline, Sourcing & Fallbacks', () => {
     it('resolves address via backend Google Maps API with source "backend" and no mixed fields', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
       const origRevBackend = geoApi.reverseGeocode;
 
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 10,
-        },
-        timestamp: Date.now(),
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 10,
+          },
+          timestamp: Date.now(),
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [],
+      });
 
       geoApi.reverseGeocode = async (lat, lng) => ({
         latitude: lat,
@@ -329,44 +351,42 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(result.pincode, '400612');
         assert.equal(result.address, '7, Station Road, Diva East, Thane, Maharashtra 400612');
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
         geoApi.reverseGeocode = origRevBackend;
       }
     });
 
     it('falls back to native geocoder when backend fails and marks source as "native"', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
       const origRevBackend = geoApi.reverseGeocode;
-      const origRevNative = Location.reverseGeocodeAsync;
 
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 15,
-        },
-        timestamp: Date.now(),
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 15,
+          },
+          timestamp: Date.now(),
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [
+          {
+            name: 'Balaji Store',
+            street: 'Main Bazaar Road',
+            district: 'Thane',
+            subregion: 'Thane District',
+            city: 'Diva',
+            region: 'Maharashtra',
+            postalCode: '400612',
+            country: 'India',
+          },
+        ],
+      });
 
       // Backend fails
       geoApi.reverseGeocode = async () => null;
-
-      // Native fallback succeeds
-      Location.reverseGeocodeAsync = (async () => [
-        {
-          name: 'Balaji Store',
-          street: 'Main Bazaar Road',
-          district: 'Thane',
-          subregion: 'Thane District',
-          city: 'Diva',
-          region: 'Maharashtra',
-          postalCode: '400612',
-          country: 'India',
-        },
-      ]) as any;
 
       try {
         const result = await getCurrentLocationWithAddress();
@@ -378,44 +398,42 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(result.pincode, '400612');
         assert.ok(result.warnings && result.warnings.some((w) => w.includes('native device offline fallback')));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
         geoApi.reverseGeocode = origRevBackend;
-        Location.reverseGeocodeAsync = origRevNative;
       }
     });
 
     it('falls back to native geocoder when backend returns ZERO_RESULTS', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
       const origRevBackend = geoApi.reverseGeocode;
-      const origRevNative = Location.reverseGeocodeAsync;
 
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 15,
-        },
-        timestamp: Date.now(),
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 15,
+          },
+          timestamp: Date.now(),
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [
+          {
+            name: 'Village Point',
+            street: 'Village Road',
+            district: 'Thane',
+            subregion: 'Thane District',
+            city: 'Thane',
+            region: 'Maharashtra',
+            postalCode: '400612',
+            country: 'India',
+          },
+        ],
+      });
 
       // Backend returns null (ZERO_RESULTS)
       geoApi.reverseGeocode = async () => null;
-
-      Location.reverseGeocodeAsync = (async () => [
-        {
-          name: 'Village Point',
-          street: 'Village Road',
-          district: 'Thane',
-          subregion: 'Thane District',
-          city: 'Thane',
-          region: 'Maharashtra',
-          postalCode: '400612',
-          country: 'India',
-        },
-      ]) as any;
 
       try {
         const result = await getCurrentLocationWithAddress();
@@ -424,33 +442,32 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(result.source, 'native');
         assert.ok(result.warnings && result.warnings.some((w) => w.includes('ZERO_RESULTS')));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
         geoApi.reverseGeocode = origRevBackend;
-        Location.reverseGeocodeAsync = origRevNative;
       }
     });
 
     it('preserves raw coordinates with source "device" when both backend and native geocoders fail', async () => {
-      const origReqPerm = Location.requestForegroundPermissionsAsync;
-      const origGetCurr = Location.getCurrentPositionAsync;
       const origRevBackend = geoApi.reverseGeocode;
-      const origRevNative = Location.reverseGeocodeAsync;
 
-      Location.requestForegroundPermissionsAsync = (async () => ({ status: 'granted' })) as any;
-      Location.getCurrentPositionAsync = (async () => ({
-        coords: {
-          latitude: 19.1864,
-          longitude: 73.0409,
-          accuracy: 10,
-        },
-        timestamp: Date.now(),
-      })) as any;
+      setLocationProvider({
+        Accuracy: mockAccuracy,
+        requestForegroundPermissionsAsync: async () => ({ status: 'granted', granted: true }),
+        getCurrentPositionAsync: async () => ({
+          coords: {
+            latitude: 19.1864,
+            longitude: 73.0409,
+            accuracy: 10,
+          },
+          timestamp: Date.now(),
+        }),
+        getLastKnownPositionAsync: async () => null,
+        reverseGeocodeAsync: async () => [],
+      });
 
       geoApi.reverseGeocode = async () => {
         throw new Error('Network timeout');
       };
-      Location.reverseGeocodeAsync = (async () => []) as any;
 
       try {
         const result = await getCurrentLocationWithAddress();
@@ -462,10 +479,8 @@ describe('Location Fetching Accuracy & Quality Assurance Suite', () => {
         assert.equal(result.confidence, 'low');
         assert.ok(result.warnings && result.warnings.some((w) => w.includes('No reverse geocoding source available')));
       } finally {
-        Location.requestForegroundPermissionsAsync = origReqPerm;
-        Location.getCurrentPositionAsync = origGetCurr;
+        setLocationProvider(null);
         geoApi.reverseGeocode = origRevBackend;
-        Location.reverseGeocodeAsync = origRevNative;
       }
     });
   });

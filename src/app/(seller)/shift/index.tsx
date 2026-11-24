@@ -347,10 +347,11 @@ export default function ShiftScreen() {
     setFeedback(null);
 
     try {
-      const loc = currentLocation || await fetchLiveLocation() || {
+      const loc: LocationResult = currentLocation || (await fetchLiveLocation()) || {
         latitude: 22.7196,
         longitude: 75.8577,
         address: 'Starting duty location',
+        street: 'Starting duty location',
       };
       const res = await sellerApi.startShift({
         startOdometerKm: 0,
@@ -386,10 +387,11 @@ export default function ShiftScreen() {
       Alert.alert('Duty Started', `Duty shift active with live camera face verification.\nLocation: ${loc.street || loc.village || loc.district || loc.address || 'Starting Location'}`);
     } catch (err: any) {
       console.warn('Shift start API error, falling back to local active shift:', err);
-      const loc = currentLocation || {
+      const loc: LocationResult = currentLocation || {
         latitude: 22.7196,
         longitude: 75.8577,
         address: 'Starting duty location',
+        street: 'Starting duty location',
       };
       const fallbackShift: Shift = {
         id: `shift_local_${Date.now()}`,
