@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -56,6 +57,7 @@ export default function AdminSalesScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleBack = useCallback(() => {
     try {
@@ -227,14 +229,25 @@ export default function AdminSalesScreen() {
         title="Sales Directory"
         subtitle="National transaction ledger, POS orders and invoices"
         leftAction={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to administrative actions"
-            onPress={handleBack}
-            style={styles.headerBackBtn}
-          >
-            <Ionicons name="arrow-back" size={22} color={Colors.light.text} />
-          </Pressable>
+          params?.from === 'actions' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back to administrative actions"
+              onPress={handleBack}
+              style={styles.headerBackBtn}
+            >
+              <Ionicons name="arrow-back" size={22} color={Colors.light.text} />
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open mobile navigation menu"
+              onPress={() => setMenuOpen(true)}
+              style={styles.headerBackBtn}
+            >
+              <Ionicons name="menu-outline" size={26} color={Colors.light.text} />
+            </Pressable>
+          )
         }
       />
 
@@ -435,6 +448,12 @@ export default function AdminSalesScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Slide-out Mobile Navigation Drawer / Sidebar */}
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }

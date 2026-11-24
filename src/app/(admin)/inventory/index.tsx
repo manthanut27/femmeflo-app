@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -111,6 +112,7 @@ export default function AdminInventoryMainScreen() {
   const [inventorySummary, setInventorySummary] = useState<InventorySummaryData | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Section 1: Stock Transfer Form State
   const [sourceWarehouseId, setSourceWarehouseId] = useState('');
@@ -626,6 +628,8 @@ export default function AdminInventoryMainScreen() {
         subtitle="Transfer stock, add factory inward, and view history"
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
+        showMenu={params?.from !== 'actions'}
+        onMenuPress={() => setMenuOpen(true)}
         rightAction={
           <TouchableOpacity
             style={styles.addWarehouseHeaderBtn}
@@ -1283,6 +1287,12 @@ export default function AdminInventoryMainScreen() {
         }}
         onClose={() => setInwardProdPickerOpen(false)}
         emptyMessage="No matching products found"
+      />
+
+      {/* Slide-out Mobile Navigation Drawer / Sidebar */}
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
       />
     </KeyboardAvoidingView>
   );

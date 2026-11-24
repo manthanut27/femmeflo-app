@@ -26,7 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.82, 320);
+const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.84, 340);
 
 export interface MobileNavigationDrawerProps {
   visible: boolean;
@@ -58,7 +58,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
     }, 150);
   };
 
-  const handleItemPress = (item: (typeof NAV_ITEMS)[0]) => {
+  const handleItemPress = (item: { route: string; [key: string]: any }) => {
     handleNavigate(item.route);
   };
 
@@ -77,101 +77,180 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
     ]);
   };
 
-  const isManager = user?.role === 'MANAGER' || user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isManager = user?.role === 'MANAGER';
 
-  const NAV_ITEMS = [
-    {
-      title: 'Dashboard',
-      subtitle: 'Overview & daily metrics',
-      icon: 'pie-chart-outline',
-      route: isManager ? '/(manager)' : '/(seller)',
-    },
-    {
-      title: 'New Field Sale',
-      subtitle: 'Create POS retail bill',
-      icon: 'bag-add-outline',
-      route: '/(seller)/sales/new',
-      highlight: true,
-    },
-    {
-      title: 'My Duty Shift',
-      subtitle: hasActiveShift ? 'Duty is running' : 'Start duty & meter log',
-      icon: 'speedometer-outline',
-      route: '/(seller)/shift',
-      badge: hasActiveShift ? 'ACTIVE' : 'START',
-    },
-    ...(isManager
-      ? [
-          {
-            title: 'Territory Sales',
-            subtitle: 'Daily beat & orders report',
-            icon: 'receipt-outline',
-            route: '/(manager)/sales',
-          },
-          {
-            title: 'Team Sellers',
-            subtitle: 'Field sales reps & onboarding',
-            icon: 'people-outline',
-            route: '/(manager)/sellers',
-          },
-          {
-            title: 'Retail Stores',
-            subtitle: 'Shop directory & KYC onboarding',
-            icon: 'storefront-outline',
-            route: '/(manager)/customers',
-          },
-          {
-            title: 'Depot Stock',
-            subtitle: 'Regional inventory balances',
-            icon: 'cube-outline',
-            route: '/(manager)/inventory',
-          },
-          {
-            title: 'Incentives',
-            subtitle: 'Earnings & commissions',
-            icon: 'cash-outline',
-            route: '/(manager)/incentives',
-          },
-        ]
-      : [
-          {
-            title: 'My Sales History',
-            subtitle: 'Past orders & invoices',
-            icon: 'receipt-outline',
-            route: '/(seller)/sales',
-          },
-          {
-            title: 'Retail Customers',
-            subtitle: 'Shop list & onboarding',
-            icon: 'storefront-outline',
-            route: '/(seller)/customers',
-          },
-          {
-            title: 'My Stock & Inventory',
-            subtitle: 'Packets & transfer history',
-            icon: 'cube-outline',
-            route: '/(seller)/inventory',
-          },
-          {
-            title: 'My Earnings',
-            subtitle: 'Incentives & payouts',
-            icon: 'cash-outline',
-            route: '/(seller)/incentives',
-          },
-        ]),
-    {
-      title: 'My Profile',
-      subtitle: 'Account details & password',
-      icon: 'person-outline',
-      route: isManager ? '/(manager)/profile' : '/(seller)/profile',
-    },
-    {
-      title: 'Notifications',
-      subtitle: 'System alerts & announcements',
-      icon: 'notifications-outline',
-      route: '/(shared)/notifications',
-    },
-  ];
+  const NAV_ITEMS = isSuperAdmin
+    ? [
+        {
+          title: 'Reports & Analytics',
+          subtitle: 'Revenue, performance & CSV exports',
+          icon: 'bar-chart-outline',
+          route: '/(admin)/reports',
+          highlight: true,
+          badge: 'REPORTS',
+        },
+        {
+          title: 'System Settings',
+          subtitle: 'Legal entity, pricing floors & configuration',
+          icon: 'settings-outline',
+          route: '/(admin)/settings',
+        },
+        {
+          title: 'Invoices & Billing',
+          subtitle: 'Official tax invoices, WhatsApp & PDF',
+          icon: 'document-text-outline',
+          route: '/(admin)/invoices',
+        },
+        {
+          title: 'Duty Shifts & Attendance',
+          subtitle: 'Live GPS route tracking & audit timeline',
+          icon: 'speedometer-outline',
+          route: '/(admin)/shifts',
+        },
+        {
+          title: 'Retail Stores & Customers',
+          subtitle: 'Retail outlets, KYC & store visits',
+          icon: 'storefront-outline',
+          route: '/(admin)/customers',
+        },
+        {
+          title: 'Product Catalog',
+          subtitle: 'National SKUs & base price rules',
+          icon: 'pricetag-outline',
+          route: '/(admin)/products',
+        },
+        {
+          title: 'Product Categories',
+          subtitle: 'FMCG classifications, HSN & GST codes',
+          icon: 'grid-outline',
+          route: '/(admin)/categories',
+        },
+        {
+          title: 'Incentives Engine',
+          subtitle: 'Seller commission & payout structures',
+          icon: 'cash-outline',
+          route: '/(admin)/incentives',
+        },
+        {
+          title: 'Access Permissions',
+          subtitle: 'Fine-grained access matrix & security',
+          icon: 'key-outline',
+          route: '/(admin)/permissions',
+        },
+        {
+          title: 'All Admin Operations',
+          subtitle: 'Central launcher for all 13 modules',
+          icon: 'apps-outline',
+          route: '/(admin)/actions',
+          badge: '13 TOOLS',
+        },
+        {
+          title: 'Change Password',
+          subtitle: 'Update administrative password',
+          icon: 'lock-closed-outline',
+          route: '/(admin)/settings/password',
+        },
+        {
+          title: 'Notifications',
+          subtitle: 'System alerts & announcements',
+          icon: 'notifications-outline',
+          route: '/(shared)/notifications',
+        },
+      ]
+    : [
+        {
+          title: 'Dashboard',
+          subtitle: 'Overview & daily metrics',
+          icon: 'pie-chart-outline',
+          route: isManager ? '/(manager)' : '/(seller)',
+        },
+        {
+          title: 'New Field Sale',
+          subtitle: 'Create POS retail bill',
+          icon: 'bag-add-outline',
+          route: '/(seller)/sales/new',
+          highlight: true,
+        },
+        {
+          title: 'My Duty Shift',
+          subtitle: hasActiveShift ? 'Duty is running' : 'Start duty & meter log',
+          icon: 'speedometer-outline',
+          route: '/(seller)/shift',
+          badge: hasActiveShift ? 'ACTIVE' : 'START',
+        },
+        ...(isManager
+          ? [
+              {
+                title: 'Territory Sales',
+                subtitle: 'Daily beat & orders report',
+                icon: 'receipt-outline',
+                route: '/(manager)/sales',
+              },
+              {
+                title: 'Team Sellers',
+                subtitle: 'Field sales reps & onboarding',
+                icon: 'people-outline',
+                route: '/(manager)/sellers',
+              },
+              {
+                title: 'Retail Stores',
+                subtitle: 'Shop directory & KYC onboarding',
+                icon: 'storefront-outline',
+                route: '/(manager)/customers',
+              },
+              {
+                title: 'Depot Stock',
+                subtitle: 'Regional inventory balances',
+                icon: 'cube-outline',
+                route: '/(manager)/inventory',
+              },
+              {
+                title: 'Incentives',
+                subtitle: 'Earnings & commissions',
+                icon: 'cash-outline',
+                route: '/(manager)/incentives',
+              },
+            ]
+          : [
+              {
+                title: 'My Sales History',
+                subtitle: 'Past orders & invoices',
+                icon: 'receipt-outline',
+                route: '/(seller)/sales',
+              },
+              {
+                title: 'Retail Customers',
+                subtitle: 'Shop list & onboarding',
+                icon: 'storefront-outline',
+                route: '/(seller)/customers',
+              },
+              {
+                title: 'My Stock & Inventory',
+                subtitle: 'Packets & transfer history',
+                icon: 'cube-outline',
+                route: '/(seller)/inventory',
+              },
+              {
+                title: 'My Earnings',
+                subtitle: 'Incentives & payouts',
+                icon: 'cash-outline',
+                route: '/(seller)/incentives',
+              },
+            ]),
+        {
+          title: 'My Profile',
+          subtitle: 'Account details & password',
+          icon: 'person-outline',
+          route: isManager ? '/(manager)/profile' : '/(seller)/profile',
+        },
+        {
+          title: 'Notifications',
+          subtitle: 'System alerts & announcements',
+          icon: 'notifications-outline',
+          route: '/(shared)/notifications',
+        },
+      ];
 
   return (
     <Modal
@@ -219,7 +298,12 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
 
           {/* User Profile Card */}
           <View style={styles.userCard}>
-            <View style={styles.userAvatar}>
+            <View
+              style={[
+                styles.userAvatar,
+                isSuperAdmin && { backgroundColor: BrandColors.pink.dark },
+              ]}
+            >
               <Text style={styles.userAvatarText}>
                 {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </Text>
@@ -228,52 +312,96 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
               <Text style={styles.userName} numberOfLines={1}>
                 {user?.name || 'Authorized User'}
               </Text>
-              <Text style={styles.userRole}>
-                {user?.role === 'MANAGER' ? 'TERRITORY MANAGER' : 'FIELD SELLER'}
+              <Text
+                style={[
+                  styles.userRole,
+                  isSuperAdmin && { color: BrandColors.pink.dark },
+                ]}
+              >
+                {isSuperAdmin
+                  ? 'SUPER ADMIN'
+                  : user?.role === 'MANAGER'
+                  ? 'TERRITORY MANAGER'
+                  : 'FIELD SELLER'}
               </Text>
               <Text style={styles.userTerritory} numberOfLines={1}>
-                📍 {[user?.district, user?.state].filter(Boolean).join(', ') || 'Regional Field'}
+                📍{' '}
+                {isSuperAdmin
+                  ? 'National Headquarters (HQ)'
+                  : [user?.district, user?.state].filter(Boolean).join(', ') || 'Regional Field'}
               </Text>
             </View>
           </View>
 
-          {/* Duty Shift Quick Status Banner */}
-          <Pressable
-            style={[
-              styles.shiftBanner,
-              hasActiveShift ? styles.shiftBannerActive : styles.shiftBannerInactive,
-            ]}
-            onPress={() => handleNavigate('/(seller)/shift')}
-            accessibilityRole="button"
-            accessibilityLabel={`Duty Shift: ${hasActiveShift ? 'Active' : 'Off'}`}
-          >
-            <View style={styles.shiftIconBox}>
-              <Ionicons
-                name="speedometer-outline"
-                size={18}
-                color={hasActiveShift ? BrandColors.green.dark : '#D97706'}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.shiftBannerTitle}>
-                  {hasActiveShift ? 'Duty Shift Running' : 'Duty Shift Inactive'}
-                </Text>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: hasActiveShift ? BrandColors.green.primary : '#F59E0B' },
-                  ]}
+          {/* Duty Shift / Executive Fleet Status Banner */}
+          {isSuperAdmin ? (
+            <Pressable
+              style={[
+                styles.shiftBanner,
+                { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' },
+              ]}
+              onPress={() => handleNavigate('/(admin)/shifts')}
+              accessibilityRole="button"
+              accessibilityLabel="Field Fleet Live Tracking & Duty Shifts"
+            >
+              <View style={[styles.shiftIconBox, { backgroundColor: '#FCE7F3' }]}>
+                <Ionicons
+                  name="speedometer-outline"
+                  size={18}
+                  color={BrandColors.pink.dark}
                 />
               </View>
-              <Text style={styles.shiftBannerSub}>
-                {hasActiveShift
-                  ? 'Tap to view visits or punch out'
-                  : 'Start duty to record field sales'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.light.textTertiary} />
-          </Pressable>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.shiftBannerTitle, { color: BrandColors.pink.dark }]}>
+                    Field Fleet Live Beat
+                  </Text>
+                  <View style={[styles.statusDot, { backgroundColor: BrandColors.pink.primary }]} />
+                </View>
+                <Text style={styles.shiftBannerSub}>
+                  Live GPS route tracking & attendance logs
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={BrandColors.pink.dark} />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[
+                styles.shiftBanner,
+                hasActiveShift ? styles.shiftBannerActive : styles.shiftBannerInactive,
+              ]}
+              onPress={() => handleNavigate('/(seller)/shift')}
+              accessibilityRole="button"
+              accessibilityLabel={`Duty Shift: ${hasActiveShift ? 'Active' : 'Off'}`}
+            >
+              <View style={styles.shiftIconBox}>
+                <Ionicons
+                  name="speedometer-outline"
+                  size={18}
+                  color={hasActiveShift ? BrandColors.green.dark : '#D97706'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.shiftBannerTitle}>
+                    {hasActiveShift ? 'Duty Shift Running' : 'Duty Shift Inactive'}
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: hasActiveShift ? BrandColors.green.primary : '#F59E0B' },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.shiftBannerSub}>
+                  {hasActiveShift
+                    ? 'Tap to view visits or punch out'
+                    : 'Start duty to record field sales'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Colors.light.textTertiary} />
+            </Pressable>
+          )}
 
           {/* Navigation Links ScrollView */}
           <ScrollView
@@ -281,7 +409,9 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
             contentContainerStyle={styles.navScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.sectionLabel}>OPERATIONS & ACTIONS</Text>
+            <Text style={styles.sectionLabel}>
+              {isSuperAdmin ? 'ADMIN OPERATIONS & REPORTS' : 'OPERATIONS & ACTIONS'}
+            </Text>
 
             {NAV_ITEMS.map((item, idx) => (
               <Pressable
@@ -289,6 +419,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                 style={({ pressed }) => [
                   styles.navItem,
                   item.highlight && styles.navItemHighlight,
+                  item.highlight && isSuperAdmin && { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' },
                   pressed && styles.navItemPressed,
                 ]}
                 onPress={() => handleItemPress(item)}
@@ -299,12 +430,19 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                   style={[
                     styles.navIconBox,
                     item.highlight && styles.navIconBoxHighlight,
+                    item.highlight && isSuperAdmin && { backgroundColor: BrandColors.pink.dark },
                   ]}
                 >
                   <Ionicons
                     name={item.icon as any}
                     size={20}
-                    color={item.highlight ? '#FFFFFF' : BrandColors.green.dark}
+                    color={
+                      item.highlight
+                        ? '#FFFFFF'
+                        : isSuperAdmin
+                        ? BrandColors.pink.dark
+                        : BrandColors.green.dark
+                    }
                   />
                 </View>
 
@@ -314,6 +452,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                       style={[
                         styles.navItemTitle,
                         item.highlight && styles.navItemTitleHighlight,
+                        item.highlight && isSuperAdmin && { color: BrandColors.pink.dark },
                       ]}
                       numberOfLines={1}
                     >
@@ -322,7 +461,13 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                     {item.badge ? (
                       <Badge
                         label={item.badge}
-                        variant={item.badge === 'ACTIVE' ? 'ACTIVE' : 'warning'}
+                        variant={
+                          item.badge === 'ACTIVE'
+                            ? 'ACTIVE'
+                            : isSuperAdmin
+                            ? 'purple'
+                            : 'warning'
+                        }
                         size="sm"
                       />
                     ) : null}
@@ -335,7 +480,13 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                 <Ionicons
                   name="chevron-forward"
                   size={16}
-                  color={item.highlight ? BrandColors.green.primary : Colors.light.textTertiary}
+                  color={
+                    item.highlight
+                      ? isSuperAdmin
+                        ? BrandColors.pink.dark
+                        : BrandColors.green.primary
+                      : Colors.light.textTertiary
+                  }
                 />
               </Pressable>
             ))}

@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -35,6 +36,7 @@ export default function AdminApprovalsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleBack = useCallback(() => {
     if (params?.from === 'actions') {
@@ -406,8 +408,10 @@ export default function AdminApprovalsScreen() {
       <Header
         title="Price Approvals"
         subtitle={`${approvals.length} orders waiting for approval`}
-        showBack
+        showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
+        showMenu={params?.from !== 'actions'}
+        onMenuPress={() => setMenuOpen(true)}
       />
 
       <View style={styles.innerContainer}>
@@ -545,6 +549,11 @@ export default function AdminApprovalsScreen() {
           />
         )}
       </View>
+
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }

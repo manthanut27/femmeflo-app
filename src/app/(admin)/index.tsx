@@ -24,6 +24,7 @@ import { Header } from '@/components/ui/Header';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import {
   BorderRadius,
   BrandColors,
@@ -47,6 +48,7 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Filters State
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -366,6 +368,8 @@ export default function AdminDashboardScreen() {
       <Header
         title="Admin Dashboard"
         subtitle={`Hello, ${user?.name || 'Admin'}`}
+        showMenu
+        onMenuPress={() => setMenuOpen(true)}
         showNotificationBell
       />
 
@@ -1313,6 +1317,12 @@ export default function AdminDashboardScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Slide-out Mobile Navigation Drawer / Sidebar */}
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }

@@ -88,23 +88,6 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="reports/index"
-        options={{
-          title: 'Reports',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name="bar-chart-outline"
-              focusedName="bar-chart"
-              focused={focused}
-              color={color}
-              size={iconSize}
-              tintColor={BrandColors.pink.dark}
-              isSmallMobile={isSmallMobile}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="approvals/index"
         options={{
           title: 'Approvals',
@@ -112,23 +95,6 @@ export default function AdminTabsLayout() {
             <TabBarIcon
               name="checkmark-done-circle-outline"
               focusedName="checkmark-done-circle"
-              focused={focused}
-              color={color}
-              size={iconSize}
-              tintColor={BrandColors.pink.dark}
-              isSmallMobile={isSmallMobile}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="inventory"
-        options={{
-          title: isSmallMobile ? 'Stock' : 'Inventory',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name="cube-outline"
-              focusedName="cube"
               focused={focused}
               color={color}
               size={iconSize}
@@ -156,13 +122,13 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="settings/index"
+        name="inventory"
         options={{
-          title: 'Settings',
+          title: isSmallMobile ? 'Stock' : 'Inventory',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon
-              name="settings-outline"
-              focusedName="settings"
+              name="cube-outline"
+              focusedName="cube"
               focused={focused}
               color={color}
               size={iconSize}
@@ -170,6 +136,39 @@ export default function AdminTabsLayout() {
               isSmallMobile={isSmallMobile}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="sales/index"
+        options={{
+          title: 'Sales',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="receipt-outline"
+              focusedName="receipt"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="reports/index"
+        options={{
+          title: 'Reports',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+        }}
+      />
+      <Tabs.Screen
+        name="settings/index"
+        options={{
+          title: 'Settings',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
         }}
       />
                   <Tabs.Screen
@@ -275,15 +274,6 @@ export default function AdminTabsLayout() {
         name="permissions/index"
         options={{
           title: 'Permissions',
-          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="sales/index"
-        options={{
-          title: 'Sales',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },

@@ -26,6 +26,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
+import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
@@ -124,6 +125,7 @@ export default function AdminUsersScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Success / Error Feedback for the screen
   const [screenFeedback, setScreenFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -753,6 +755,8 @@ export default function AdminUsersScreen() {
         subtitle="Managers & Field Sales Team"
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
+        showMenu={params?.from !== 'actions'}
+        onMenuPress={() => setMenuOpen(true)}
         rightAction={
           <Pressable
             accessibilityRole="button"
@@ -1983,6 +1987,11 @@ export default function AdminUsersScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <MobileNavigationDrawer
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
     </View>
   );
 }
