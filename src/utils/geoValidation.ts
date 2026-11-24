@@ -87,3 +87,80 @@ export function validateCoordinates(
 
   return { valid: true };
 }
+
+export type LocationConfidence = 'high' | 'medium' | 'low';
+export type LocationSource = 'device' | 'backend' | 'native';
+
+export interface ScoreConfidenceParams {
+  accuracy: number | null;
+  ageMs?: number | null;
+  inIndia?: boolean;
+  locationType?: string | null;
+  accuracyThresholdMeters?: number;
+}
+
+/**
+ * Pure function to evaluate location fix confidence based on satellite/network accuracy,
+ * age of the fix, territorial validity, and reverse-geocoding precision.
+ */
+export function scoreConfidence(params: ScoreConfidenceParams): {
+  confidence: LocationConfidence;
+  reasons: string[];
+} {
+  const reasons: string[] = [];
+  const threshold = params.accuracyThresholdMeters ?? 50;
+
+  // 1. Regional boundary evaluation
+  if (params.inIndia === false) {
+    reasons.push('Coordinates fall outside Indian territory bounds [6.5°-37.5° N, 68.0°-97.5° E]');
+  }
+
+  // 2. Reading staleness evaluation
+  if (params.ageMs != null) {
+    if (params.ageMs > 120000) {
+      reasons.push(`Stale location reading: ${Math.round(params.ageMs / 1000)}s old (exceeds 120s limit)`);
+    } else if (params.ageMs > 30000) {
+      reasons.push(`Aged location reading: ${Math.round(params.ageMs / 1000)}s old`);
+    }
+  }
+
+  // 3. Sensor accuracy evaluation (never fabricated)
+  if (params.accuracy == null) {
+    reasons.push('Device reported no accuracy estimate');
+  } else if (params.accuracy > threshold) {
+    reasons.push(`Accuracy estimate ${Math.round(params.accuracy)}m exceeds acceptable threshold of ${threshold}m`);
+  }
+
+  // 4. Geocoder resolution evaluation
+  if (params.locationType) {
+    const locType = params.locationType.toUpperCase();
+    if (locType === 'APPROXIMATE') {
+      reasons.push('Geocoded location resolution is approximate');
+    } else if (locType === 'GEOMETRIC_CENTER' || locType === 'RANGE_INTERPOLATED') {
+      reasons.push(`Geocoded location is ${locType.toLowerCase().replace('_', ' ')}`);
+    }
+  }
+
+  // Tier 1: Low Confidence criteria
+  if (
+    params.inIndia === false ||
+    (params.ageMs != null && params.ageMs > 120000) ||
+    params.accuracy == null ||
+    (params.accuracy != null && params.accuracy > threshold) ||
+    (params.locationType && params.locationType.toUpperCase() === 'APPROXIMATE')
+  ) {
+    return { confidence: 'low', reasons };
+  }
+
+  // Tier 2: Medium Confidence criteria
+  if (
+    (params.ageMs != null && params.ageMs > 30000) ||
+    (params.accuracy != null && params.accuracy > 25) ||
+    (params.locationType && ['GEOMETRIC_CENTER', 'RANGE_INTERPOLATED'].includes(params.locationType.toUpperCase()))
+  ) {
+    return { confidence: 'medium', reasons };
+  }
+
+  // Tier 3: High Confidence criteria
+  return { confidence: 'high', reasons };
+}
