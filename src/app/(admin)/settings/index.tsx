@@ -39,7 +39,7 @@ export default function AdminSettingsScreen() {
   const handleBack = useCallback(() => {
     if (params?.from === 'actions') {
       try {
-        (navigation as any).navigate('actions/index');
+        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
         return;
       } catch {
         // fallback
@@ -49,9 +49,9 @@ export default function AdminSettingsScreen() {
       router.back();
     } else {
       try {
-        (navigation as any).navigate('actions/index');
+        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
       } catch {
-        router.replace('/(admin)/actions' as any);
+        router.replace('/(admin)' as any);
       }
     }
   }, [params, navigation, router]);

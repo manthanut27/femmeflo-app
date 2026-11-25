@@ -217,15 +217,6 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="actions/index"
-        options={{
-          title: 'Actions Hub',
-          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
         name="categories/index"
         options={{
           title: 'Categories',

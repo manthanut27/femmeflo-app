@@ -351,12 +351,12 @@ export default function AdminDashboardScreen() {
 
   const handleOpenActionsHub = useCallback(() => {
     try {
-      (navigation as any).navigate('actions/index');
+      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
     } catch {
       try {
-        router.navigate('/(admin)/actions' as any);
+        router.replace('/(admin)' as any);
       } catch {
-        router.push('/(admin)/actions' as any);
+        router.replace('/(admin)' as any);
       }
     }
   }, [navigation, router]);

@@ -50,12 +50,12 @@ export default function AdminIncentivesScreen() {
 
   const handleBack = useCallback(() => {
     try {
-      (navigation as any).navigate('actions/index');
+      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
     } catch {
       if (router.canGoBack()) {
         router.back();
       } else {
-        router.replace('/(admin)/actions' as any);
+        router.replace('/(admin)' as any);
       }
     }
   }, [navigation, router]);
