@@ -1,12 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   BackHandler,
   FlatList,
   Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi, isSaleResubmitted } from '@/api/admin';
+import { tokenStorage } from '@/api/client';
 import type { SaleItem, PaymentMode } from '@/api/types';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +28,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
+import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -92,6 +98,7 @@ export default function AdminSalesScreen() {
 
   // Selected Sale for Detailed Modal
   const [selectedSale, setSelectedSale] = useState<SaleItem | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; title: string } | null>(null);
 
   const fetchSales = useCallback(async () => {
     try {
@@ -133,19 +140,15 @@ export default function AdminSalesScreen() {
     fetchSales();
   }, [fetchSales]);
 
-  const handleOpenInvoice = (saleId: string) => {
-    const url = adminApi.getInvoicePdfUrl(saleId);
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Alert.alert('Invoice URL', url);
-        }
-      })
-      .catch(() => {
-        Alert.alert('Invoice URL', url);
-      });
+  const handleOpenInvoice = (sale: SaleItem) => {
+    const invoiceId = sale.invoice?.id || sale.id;
+    const url = adminApi.getInvoicePdfUrl(invoiceId);
+    const filename = `Invoice_${sale.saleNumber || invoiceId.slice(0, 8)}.pdf`;
+    setPdfPreview({
+      url,
+      filename,
+      title: sale.customer?.shopName ? `Invoice - ${sale.customer.shopName}` : 'Tax Invoice',
+    });
   };
 
   const renderSaleItem = ({ item }: { item: SaleItem }) => {
@@ -210,7 +213,8 @@ export default function AdminSalesScreen() {
           {item.status === 'CONFIRMED' || item.status === 'APPROVED' ? (
             <TouchableOpacity
               style={styles.pdfBtn}
-              onPress={() => handleOpenInvoice(item.id)}
+              onPress={() => handleOpenInvoice(item)}
+              activeOpacity={0.75}
               accessibilityRole="button"
               accessibilityLabel="Download invoice PDF"
             >
@@ -439,7 +443,11 @@ export default function AdminSalesScreen() {
                     title="Open Tax Invoice"
                     variant="admin"
                     icon={<Ionicons name="document-text-outline" size={18} color="#FFFFFF" />}
-                    onPress={() => handleOpenInvoice(selectedSale.id)}
+                    onPress={() => {
+                      const target = selectedSale;
+                      setSelectedSale(null);
+                      if (target) handleOpenInvoice(target);
+                    }}
                     style={{ flex: 1 }}
                   />
                 ) : null}
@@ -448,6 +456,14 @@ export default function AdminSalesScreen() {
           </View>
         </View>
       </Modal>
+
+      <PdfPreviewModal
+        visible={pdfPreview !== null}
+        pdfUrl={pdfPreview?.url || null}
+        filename={pdfPreview?.filename}
+        title={pdfPreview?.title}
+        onClose={() => setPdfPreview(null)}
+      />
 
       {/* Slide-out Mobile Navigation Drawer / Sidebar */}
       <MobileNavigationDrawer

@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { tokenStorage } from '@/api/client';
 import type { InvoiceItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -166,8 +167,11 @@ export default function AdminInvoicesScreen() {
 
       const filename = `${invoice.number || `Invoice_${invoice.id}`}.pdf`;
       const localUri = `${FileSystem.cacheDirectory}${filename}`;
+      const token = await tokenStorage.getToken();
 
-      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
 
       if (downloadRes.status === 200) {
         const canShare = await Sharing.isAvailableAsync();

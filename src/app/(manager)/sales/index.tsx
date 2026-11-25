@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { tokenStorage } from '@/api/client';
 import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Badge } from '@/components/ui/Badge';
@@ -296,26 +297,16 @@ export default function ManagerSalesScreen() {
   ];
 
   async function handleViewInvoice(sale: SaleItem) {
-    const invoiceId = sale.invoice?.id || sale.id;
-    const pdfUrl = managerApi.getInvoicePdfUrl(invoiceId, false);
-
     if (Platform.OS === 'web') {
+      const invoiceId = sale.invoice?.id || sale.id;
+      const pdfUrl = managerApi.getInvoicePdfUrl(invoiceId, false);
       if (typeof window !== 'undefined') {
         window.open(pdfUrl, '_blank');
       }
       return;
     }
 
-    try {
-      const canOpen = await Linking.canOpenURL(pdfUrl);
-      if (canOpen) {
-        await Linking.openURL(pdfUrl);
-      } else {
-        await handleShareInvoicePdf(sale);
-      }
-    } catch {
-      await handleShareInvoicePdf(sale);
-    }
+    await handleShareInvoicePdf(sale);
   }
 
   async function handleShareInvoicePdf(sale: SaleItem) {
@@ -335,8 +326,11 @@ export default function ManagerSalesScreen() {
 
       const filename = `Invoice_${sale.saleNumber || invoiceId}.pdf`;
       const localUri = `${FileSystem.cacheDirectory}${filename}`;
+      const token = await tokenStorage.getToken();
 
-      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
 
       if (downloadRes.status === 200) {
         const canShare = await Sharing.isAvailableAsync();
