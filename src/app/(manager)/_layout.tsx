@@ -19,8 +19,8 @@ export default function ManagerTabsLayout() {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 16 : 8);
   const tabHeight = (isSmallMobile ? 54 : 60) + bottomInset;
   const horizontalPadding = isTablet ? Math.max((width - 760) / 2, 24) : 4;
-  const iconSize = isSmallMobile ? 21 : isTablet ? 25 : 23;
-  const labelFontSize = isSmallMobile ? 10 : isTablet ? 12 : 11;
+  const iconSize = isSmallMobile ? 20 : isTablet ? 25 : 22;
+  const labelFontSize = isSmallMobile ? 9.5 : isTablet ? 12 : 10.5;
 
   const allowSellers = canViewSellers(user);
   const allowCustomers = canViewCustomers(user);
@@ -153,13 +153,13 @@ export default function ManagerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile/index"
+        name="shifts/index"
         options={{
-          title: 'Profile',
+          title: 'Attendance',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon
-              name="person-outline"
-              focusedName="person"
+              name="calendar-outline"
+              focusedName="calendar"
               focused={focused}
               color={color}
               size={iconSize}
@@ -170,18 +170,18 @@ export default function ManagerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="inventory/index"
+        name="profile/index"
         options={{
-          title: 'Inventory',
+          title: 'Profile',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen
-        name="shifts/index"
+        name="inventory/index"
         options={{
-          title: 'Shifts',
+          title: 'Inventory',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },

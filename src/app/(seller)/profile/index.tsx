@@ -145,7 +145,7 @@ export default function SellerProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="My Profile" subtitle="Field Officer Account & Duty Log" />
+      <Header title="My Profile" subtitle="Field Officer Account & Duty Log" showBack />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.contentWrapper}>

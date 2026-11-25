@@ -283,6 +283,8 @@ export const AutoHideBottomTabBar: React.FC<AutoHideBottomTabBarProps> = (props)
                   {typeof label === 'string' ? (
                     <Text
                       numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.85}
                       style={[
                         styles.tabLabel,
                         focusedOptions.tabBarLabelStyle,
@@ -321,6 +323,8 @@ export const AutoHideBottomTabBar: React.FC<AutoHideBottomTabBarProps> = (props)
               {typeof label === 'string' ? (
                 <Text
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
                   style={[
                     styles.tabLabel,
                     focusedOptions.tabBarLabelStyle,

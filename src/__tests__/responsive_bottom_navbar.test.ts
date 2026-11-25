@@ -31,7 +31,7 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.match(code, /backBehavior="history"/, 'Admin tabs must retain history back behavior');
   });
 
-  it('verifies (manager)/_layout.tsx uses responsive insets, history navigation, and TabBarIcon', () => {
+  it('verifies (manager)/_layout.tsx uses responsive insets, history navigation, Attendance tab, and TabBarIcon', () => {
     const code = readFile('src/app/(manager)/_layout.tsx');
 
     // Naming checks
@@ -39,7 +39,7 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.match(code, /title:\s*'Team'/, 'Manager must have Team tab');
     assert.match(code, /title:\s*'Stores'/, 'Manager must have Stores tab');
     assert.match(code, /title:\s*'Sales'/, 'Manager must have Sales tab');
-    assert.match(code, /title:\s*'Profile'/, 'Manager must have Profile tab');
+    assert.match(code, /title:\s*'Attendance'/, 'Manager must have Attendance tab in bottom navbar');
 
     // Responsiveness & Insets
     assert.match(code, /useSafeAreaInsets/, 'Manager layout must use dynamic safe area insets');
@@ -48,7 +48,7 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.match(code, /backBehavior="history"/, 'Manager tabs must retain history back behavior');
   });
 
-  it('verifies (seller)/_layout.tsx renames Duty Shift to Shift and implements responsive insets', () => {
+  it('verifies (seller)/_layout.tsx renames Duty Shift to Shift, replaces Profile with Attendance, and implements responsive insets', () => {
     const code = readFile('src/app/(seller)/_layout.tsx');
 
     // Naming checks
@@ -57,7 +57,7 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.doesNotMatch(code, /title:\s*'Duty Shift'/, 'Duty Shift naming must not be present');
     assert.match(code, /title:\s*'Sales'/, 'Seller must have Sales tab');
     assert.match(code, /title:\s*'Customers'/, 'Seller must have Customers tab');
-    assert.match(code, /title:\s*'Profile'/, 'Seller must have Profile tab');
+    assert.match(code, /title:\s*'Attendance'/, 'Seller must have Attendance tab in bottom navbar');
 
     // Responsiveness & Insets
     assert.match(code, /useSafeAreaInsets/, 'Seller layout must use dynamic safe area insets');

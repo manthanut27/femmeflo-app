@@ -40,6 +40,7 @@ import { draftStorage } from '@/utils/draftStorage';
 import { computeShiftTravelDistance } from '@/utils/distanceUtils';
 import { getCurrentLocationWithAddress, type LocationResult } from '@/utils/locationUtils';
 import { sanitizeIndiaCoordinates } from '@/utils/geoValidation';
+import { useResponsiveLayout } from '@/utils/responsive';
 
 const PREDEFINED_VISIT_REASONS = [
   'Stock already sufficient',
@@ -53,6 +54,8 @@ const PREDEFINED_VISIT_REASONS = [
 
 export default function ShiftScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useResponsiveLayout();
+  const isCompactScreen = width < 380;
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id || 'anonymous';
@@ -776,10 +779,10 @@ export default function ShiftScreen() {
 
       setFeedback({
         type: 'success',
-        title: 'Shift Ended',
-        message: `Duty shift ended successfully. GPS Route Travel: ${totalDist}${measurementNote}.`,
+        title: 'Duty Ended',
+        message: `Today's duty ended. Travel: ${totalDist}${measurementNote}.`,
       });
-      Alert.alert('Shift Ended', `Duty shift ended successfully.\nGPS Route Distance: ${totalDist}${measurementNote} (Google Maps Tracked).`);
+      Alert.alert('Duty Ended', `Today's duty ended.\nTravel: ${totalDist}${measurementNote}.`);
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -850,14 +853,14 @@ export default function ShiftScreen() {
   }, [currentShift, pastShifts]);
 
   if (loading) {
-    return <LoadingState message="Syncing field duty & GPS shift status..." />;
+    return <LoadingState message="Loading today's duty..." />;
   }
 
   return (
     <View style={styles.container}>
       <Header
-        title="Duty Shift & Visits"
-        subtitle="Live Beat Tracker & Geolocation"
+        title="Daily Duty"
+        subtitle="Your work & shop visits"
         showBack
       />
 
@@ -881,12 +884,12 @@ export default function ShiftScreen() {
           {/* Hero Shift Card */}
           <Card style={styles.heroCard}>
             <View style={styles.heroHeader}>
-              <View>
-                <Text style={styles.heroOverline}>Current Field Shift</Text>
+              <View style={{ flex: 1, minWidth: 0, marginRight: Spacing.sm }}>
+                <Text style={styles.heroOverline}>Today&apos;s Duty</Text>
                 <Text style={styles.heroTimer}>{isShiftActive ? elapsedTime : '--:--:--'}</Text>
               </View>
               <Badge
-                label={isShiftActive ? 'ACTIVE SHIFT' : 'OFF DUTY'}
+                label={isShiftActive ? 'ON DUTY' : 'OFF DUTY'}
                 variant={isShiftActive ? 'ACTIVE' : 'neutral'}
                 pulse={isShiftActive}
               />
@@ -906,7 +909,7 @@ export default function ShiftScreen() {
                 {currentShift.startAddress ? (
                   <View style={styles.heroDetailRow}>
                     <Ionicons name="location-outline" size={16} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
-                    <Text style={[styles.heroDetailText, { color: BrandColors.green.primary, fontWeight: '600' }]} numberOfLines={1}>
+                    <Text style={[styles.heroDetailText, { color: BrandColors.green.primary, fontWeight: '600', flex: 1 }]} numberOfLines={1}>
                       Start: {currentShift.startAddress.split(',')[0]}
                     </Text>
                   </View>
@@ -914,7 +917,7 @@ export default function ShiftScreen() {
                   <View style={styles.heroDetailRow}>
                     <Ionicons name="location-outline" size={16} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
                     <Text style={[styles.heroDetailText, { color: BrandColors.green.primary, fontWeight: '600' }]}>
-                      GPS Locked ({Number(currentShift.startLatitude).toFixed(4)}, {currentShift.startLongitude != null ? Number(currentShift.startLongitude).toFixed(4) : '0.0000'})
+                      Location saved
                     </Text>
                   </View>
                 ) : null}
@@ -922,31 +925,33 @@ export default function ShiftScreen() {
                   <View style={styles.heroDetailRow}>
                     <Ionicons name="navigate-outline" size={16} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
                     <Text style={styles.heroDetailText}>
-                      GPS Route: {currentShift.totalDistanceKm} km
+                      Travel: {currentShift.totalDistanceKm} km
                     </Text>
                   </View>
                 ) : null}
 
-                {/* Active Shop Check-In Card matching img 7 */}
+                {/* Active Shop Check-In Card */}
                 {activeShopVisit ? (
                   <View style={styles.activeShopBanner}>
                     <View style={styles.activeShopLeft}>
                       <View style={styles.activeShopIcon}>
                         <Ionicons name="storefront" size={20} color="#16A34A" />
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.activeShopOverline}>
-                          CURRENTLY AT SHOP: Since{' '}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.activeShopOverline} numberOfLines={1}>
+                          At shop ·{' '}
                           {new Date(activeShopVisit.checkInTime).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
                         </Text>
-                        <Text style={styles.activeShopName}>{activeShopVisit.shopName}</Text>
+                        <Text style={styles.activeShopName} numberOfLines={1}>
+                          {activeShopVisit.shopName}
+                        </Text>
                       </View>
                     </View>
                     <View style={styles.activeShopRight}>
-                      <Text style={styles.activeShopTimerLabel}>TIME AT SHOP</Text>
+                      <Text style={styles.activeShopTimerLabel}>TIME</Text>
                       <Text style={styles.activeShopTimerValue}>{activeShopElapsed}</Text>
                       <TouchableOpacity
                         style={styles.activeShopCheckoutBtn}
@@ -954,49 +959,52 @@ export default function ShiftScreen() {
                         activeOpacity={0.8}
                       >
                         <Ionicons name="exit-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.activeShopCheckoutBtnText}>Check Out</Text>
+                        <Text style={styles.activeShopCheckoutBtnText}>Leave</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 ) : null}
 
                 {/* Quick Shift Actions */}
-                <View style={styles.heroActionRow}>
+                <View style={[styles.heroActionRow, isCompactScreen && styles.heroActionRowStacked]}>
                   {activeShopVisit ? (
                     <Button
-                      title={`Check Out from ${activeShopVisit.shopName}`}
+                      title={`Leave ${activeShopVisit.shopName}`}
                       onPress={() => handleOpenCheckout(activeShopVisit)}
                       variant="primary"
                       size="md"
                       icon={<Ionicons name="exit-outline" size={18} color="#FFFFFF" />}
-                      style={{ flex: 1.4, backgroundColor: '#16A34A', marginRight: Spacing.sm }}
+                      style={[
+                        { backgroundColor: '#16A34A' },
+                        !isCompactScreen ? { flex: 1.4, marginRight: Spacing.sm } : undefined,
+                      ]}
                     />
                   ) : (
                     <Button
-                      title="Check In at Shop"
+                      title="Visit Shop"
                       onPress={() => setCheckInModalVisible(true)}
                       variant="primary"
                       size="md"
                       icon={<Ionicons name="location" size={18} color="#FFFFFF" />}
-                      style={{ flex: 1.4, marginRight: Spacing.sm }}
+                      style={!isCompactScreen ? { flex: 1.4, marginRight: Spacing.sm } : undefined}
                     />
                   )}
                   <Button
-                    title="End Duty Shift"
+                    title="End Duty"
                     onPress={handleOpenEndShiftModal}
                     variant="outline"
                     size="md"
-                    style={{ flex: 0.8 }}
+                    style={!isCompactScreen ? { flex: 0.9 } : undefined}
                   />
                 </View>
               </View>
             ) : (
               <View style={styles.offDutyBox}>
                 <Text style={styles.offDutyText}>
-                  You are currently off duty. Start your shift with Face Verification to activate GPS beat tracking, log retailer visits, and bill products.
+                  You have not started duty yet. Start duty to visit shops and make bills.
                 </Text>
                 <Button
-                  title="Start Duty Shift (Face ID)"
+                  title="Start Duty"
                   onPress={handleOpenStartShiftModal}
                   variant="primary"
                   size="lg"
@@ -1011,26 +1019,26 @@ export default function ShiftScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{visits.length}</Text>
-              <Text style={styles.statLabel}>Visits Today</Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Shops Visited</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>
                 {visits.filter((v) => v.checkOutTime).length}
               </Text>
-              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Done</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>
+              <Text style={styles.statValue} numberOfLines={1}>
                 {totalDistanceTodayKm > 0 ? `${totalDistanceTodayKm} km` : startKm > 0 ? `${startKm}k` : '0 km'}
               </Text>
-              <Text style={styles.statLabel}>Total KM</Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Distance</Text>
             </View>
           </View>
 
           {/* Visits Timeline Section */}
           <View style={styles.timelineSection}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Today&apos;s Store Visits</Text>
+              <Text style={styles.sectionTitle}>Today&apos;s Shop Visits</Text>
               {isShiftActive && currentShift ? (
                 <Pressable
                   onPress={() => setCheckInModalVisible(true)}
@@ -1038,7 +1046,7 @@ export default function ShiftScreen() {
                   style={styles.addVisitLink}
                 >
                   <Ionicons name="add-circle" size={16} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
-                  <Text style={styles.addVisitText}>New Visit</Text>
+                  <Text style={styles.addVisitText}>Visit Shop</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1046,18 +1054,18 @@ export default function ShiftScreen() {
             {visits.length === 0 ? (
               <EmptyState
                 icon="storefront-outline"
-                title="No Store Visits Recorded"
+                title="No shop visits today"
                 description={
                   isShiftActive
-                    ? 'Tap "New Visit" above or check in when arriving at a retail customer outlet.'
-                    : 'Start your shift to begin logging store visits along your beat.'
+                    ? 'Tap "Visit Shop" when you reach a shop.'
+                    : 'Start your duty first to add shop visits.'
                 }
-                actionTitle={isShiftActive ? 'Check-in Store Visit' : 'Start Duty Shift'}
+                actionTitle={isShiftActive ? 'Visit Shop' : 'Start Duty'}
                 onAction={() => {
                   if (isShiftActive) {
                     setCheckInModalVisible(true);
                   } else {
-                    setStartModalVisible(true);
+                    handleOpenStartShiftModal();
                   }
                 }}
               />
@@ -1068,12 +1076,12 @@ export default function ShiftScreen() {
                 const hasSale = Boolean(v.saleDone || (v as any).sale_done || v.saleId || (v as any).sale_id || v.sale);
                 const durationDisplay =
                   v.durationMins != null
-                    ? `${Number(v.durationMins).toFixed(1)} mins`
+                    ? `${Number(v.durationMins).toFixed(0)} min`
                     : (v as any).duration_mins != null
-                    ? `${Number((v as any).duration_mins).toFixed(1)} mins`
+                    ? `${Number((v as any).duration_mins).toFixed(0)} min`
                     : isCheckedOut
-                    ? 'Completed'
-                    : 'In store now';
+                    ? 'Done'
+                    : 'At shop';
 
                 const formatTimeSafely = (rawDate?: string | number | null): string => {
                   if (!rawDate) return 'Just now';
@@ -1110,29 +1118,29 @@ export default function ShiftScreen() {
                           }
                         />
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.visitStoreName}>
-                          {customer?.shopName || v.shopName || 'Retail Customer Store'}
+                      <View style={{ flex: 1, minWidth: 0, marginRight: Spacing.xs }}>
+                        <Text style={styles.visitStoreName} numberOfLines={1}>
+                          {customer?.shopName || v.shopName || 'Shop'}
                         </Text>
-                        <Text style={styles.visitSub}>
-                          Arrived: {checkInTimeStr}
+                        <Text style={styles.visitSub} numberOfLines={1}>
+                          In: {checkInTimeStr}
                           {checkOutTimeStr
-                            ? ` • Left: ${checkOutTimeStr} (${durationDisplay})`
-                            : ` • ${durationDisplay}`}
+                            ? ` · Out: ${checkOutTimeStr} (${durationDisplay})`
+                            : ` · ${durationDisplay}`}
                         </Text>
                       </View>
                       <Badge
-                        label={hasSale ? 'SALE DONE' : isCheckedOut ? 'NO SALE' : 'IN PROGRESS'}
+                        label={hasSale ? 'SALE DONE' : isCheckedOut ? 'NO SALE' : 'AT SHOP'}
                         variant={hasSale ? 'success' : isCheckedOut ? 'neutral' : 'warning'}
                       />
                     </View>
 
-                    {/* Customer Feedback Display Box */}
+                    {/* Shopkeeper Note */}
                     {v.customerFeedback ? (
                       <View style={styles.visitFeedbackCard}>
                         <View style={styles.visitFeedbackHeader}>
                           <Ionicons name="chatbubble-ellipses" size={13} color={BrandColors.pink.primary} />
-                          <Text style={styles.visitFeedbackTitle}>Customer Feedback / Observation:</Text>
+                          <Text style={styles.visitFeedbackTitle}>Shopkeeper Note:</Text>
                         </View>
                         <Text style={styles.visitFeedbackText}>
                           &ldquo;{v.customerFeedback}&rdquo;
@@ -1143,16 +1151,16 @@ export default function ShiftScreen() {
                     {/* Visit Notes */}
                     {v.notes && v.notes !== v.customerFeedback ? (
                       <Text style={styles.visitNotes} numberOfLines={2}>
-                        Notes: &ldquo;{v.notes}&rdquo;
+                        Note: &ldquo;{v.notes}&rdquo;
                       </Text>
                     ) : null}
 
                     {/* Action button if visit is active */}
                     {!isCheckedOut ? (
-                      <View style={{ marginTop: Spacing.sm, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+                      <View style={styles.visitActionsRow}>
                         {v.customerId ? (
                           <Button
-                            title="New POS Sale"
+                            title="New Sale"
                             variant="secondary"
                             size="sm"
                             icon={<Ionicons name="cart-outline" size={15} color={BrandColors.pink.primary} />}
@@ -1165,7 +1173,7 @@ export default function ShiftScreen() {
                           />
                         ) : null}
                         <Button
-                          title="Check Out Visit"
+                          title="Leave Shop"
                           variant="primary"
                           size="sm"
                           icon={<Ionicons name="log-out-outline" size={15} color="#FFFFFF" />}
@@ -1179,43 +1187,51 @@ export default function ShiftScreen() {
             )}
           </View>
 
-          {/* Shift Attendance History Section matching Web Dashboard */}
+          {/* Past Duties Section */}
           <View style={styles.historySection}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="time" size={18} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.sectionTitle}>Shift Attendance History</Text>
+                <Text style={styles.sectionTitle}>Past Duties</Text>
               </View>
-              <Badge label={`${pastShifts.length} Shifts`} variant="neutral" />
+              <Badge
+                label={`${pastShifts.length} ${pastShifts.length === 1 ? 'Day' : 'Days'}`}
+                variant="neutral"
+              />
             </View>
-            <Text style={styles.historySubtitle}>
-              Day-wise log of official field tours, shop visits, and travel reimbursement road kilometres.
-            </Text>
 
             {pastShifts.length === 0 ? (
               <View style={styles.emptyHistoryBox}>
                 <Ionicons name="calendar-outline" size={32} color="#94A3B8" />
-                <Text style={styles.emptyHistoryTitle}>No Shift History Yet</Text>
+                <Text style={styles.emptyHistoryTitle}>No past duties yet</Text>
                 <Text style={styles.emptyHistoryText}>
-                  Your completed duty shifts and route tracking logs will appear here.
+                  Finished duties will show here.
                 </Text>
               </View>
             ) : (
               pastShifts.map((s, idx) => {
                 const isActive = s.status === 'ACTIVE';
+                const startDateStr = s.startTime
+                  ? new Date(s.startTime).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                    })
+                  : '';
                 const startTimeStr = s.startTime
                   ? new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   : 'Start';
                 const endTimeStr = s.endTime
                   ? new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : 'Active Now';
+                  : 'Active';
                 const stopsCount = s.visits?.length || 0;
                 const distanceDisplay = s.totalDistanceKm ? `${Number(s.totalDistanceKm).toFixed(2)} km` : '0 km';
-                const startLocStr = s.startAddress
-                  ? s.startAddress.split(',')[0]
-                  : s.startLatitude
-                  ? `GPS: ${Number(s.startLatitude).toFixed(4)}, ${Number(s.startLongitude || 0).toFixed(4)}`
-                  : 'Starting Location';
+                const rawStartLoc = s.startAddress ? s.startAddress.split(',')[0].trim() : '';
+                const startLocStr =
+                  rawStartLoc && rawStartLoc.length > 2 && !/^\d+$/.test(rawStartLoc)
+                    ? rawStartLoc
+                    : s.startLatitude
+                    ? 'Location saved'
+                    : 'Start location';
 
                 const durationStr = (() => {
                   if (!s.startTime) return '0 min';
@@ -1229,39 +1245,42 @@ export default function ShiftScreen() {
 
                 return (
                   <Card key={s.id || idx} style={styles.historyCard}>
-                    <View style={styles.historyCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                          <Ionicons name="time-outline" size={15} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
-                          <Text style={styles.historyTimeRange}>
-                            {startTimeStr} &rarr; {endTimeStr}
-                          </Text>
-                        </View>
-                        <Text style={styles.historyLocation} numberOfLines={1}>
-                          <Ionicons name="location-outline" size={13} color="#64748B" /> {startLocStr}
+                    <View style={styles.historyTopBadgeRow}>
+                      <View style={styles.historyDateTimeWrap}>
+                        <Ionicons name="calendar-outline" size={14} color={BrandColors.pink.primary} />
+                        <Text style={styles.historyTimeRange} numberOfLines={1}>
+                          {startDateStr ? `${startDateStr} · ` : ''}
+                          {startTimeStr} → {endTimeStr}
                         </Text>
                       </View>
-                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                        <Badge label="✓ Face ID" variant="success" size="sm" />
-                        <Badge
-                          label={isActive ? 'ACTIVE' : 'COMPLETED'}
-                          variant={isActive ? 'warning' : 'neutral'}
-                          size="sm"
-                        />
+                      <Badge
+                        label={isActive ? 'ACTIVE' : 'DONE'}
+                        variant={isActive ? 'warning' : 'neutral'}
+                        size="sm"
+                      />
+                    </View>
+
+                    <View style={styles.historyLocationRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8 }}>
+                        <Ionicons name="location-outline" size={14} color="#64748B" style={{ marginRight: 4 }} />
+                        <Text style={styles.historyLocation} numberOfLines={1}>
+                          {startLocStr}
+                        </Text>
                       </View>
+                      <Badge label="✓ Verified" variant="success" size="sm" />
                     </View>
 
                     <View style={styles.historyMetricsRow}>
                       <View style={styles.historyMetricBox}>
-                        <Text style={styles.historyMetricLabel}>DURATION</Text>
+                        <Text style={styles.historyMetricLabel}>TIME</Text>
                         <Text style={styles.historyMetricValue}>{durationStr}</Text>
                       </View>
                       <View style={styles.historyMetricBox}>
-                        <Text style={styles.historyMetricLabel}>STOPS</Text>
+                        <Text style={styles.historyMetricLabel}>SHOPS</Text>
                         <Text style={styles.historyMetricValue}>{stopsCount} shops</Text>
                       </View>
                       <View style={styles.historyMetricBox}>
-                        <Text style={styles.historyMetricLabel}>ROAD DISTANCE</Text>
+                        <Text style={styles.historyMetricLabel}>DISTANCE</Text>
                         <Text style={[styles.historyMetricValue, { color: BrandColors.pink.primary }]}>{distanceDisplay}</Text>
                       </View>
                     </View>
@@ -1270,9 +1289,10 @@ export default function ShiftScreen() {
                       <Pressable
                         style={styles.viewRouteAuditBtn}
                         onPress={() => setSelectedAuditShift(s)}
+                        hitSlop={HitSlop.sm}
                       >
-                        <Ionicons name="git-network-outline" size={14} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
-                        <Text style={styles.viewRouteAuditBtnText}>View Shift Route Audit &rarr;</Text>
+                        <Ionicons name="list-outline" size={14} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
+                        <Text style={styles.viewRouteAuditBtnText}>See Details →</Text>
                       </Pressable>
                     </View>
                   </Card>
@@ -1307,22 +1327,22 @@ export default function ShiftScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.modalTitle}>Start Field Duty Shift</Text>
+              <Text style={styles.modalTitle}>Start Today&apos;s Duty</Text>
               <Text style={styles.modalSubtitle}>
-                Starting location is verified via Google Maps. Route distance is tracked automatically via live GPS coordinates.
+                Your start location will be saved automatically.
               </Text>
 
               <VerifiedLocationCard
                 location={currentLocation}
                 loading={isAcquiringLocation}
                 onRefresh={fetchLiveLocation}
-                title="Starting Duty Location"
-                subtitle="Accurate street, area, city & pincode detected via Google Maps"
+                title="Start Location"
+                subtitle="Your current area"
               />
 
               <Input
-                label="Shift Remarks (Optional)"
-                placeholder="Optional notes for shift start"
+                label="Note (Optional)"
+                placeholder="Any short note..."
                 value={startNotes}
                 onChangeText={setStartNotes}
                 leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
@@ -1336,7 +1356,7 @@ export default function ShiftScreen() {
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title="Proceed to Verify"
+                  title="Continue"
                   variant="primary"
                   icon={<Ionicons name="finger-print-outline" size={16} color="#FFFFFF" />}
                   onPress={handleInitiateStartShift}
@@ -1367,17 +1387,17 @@ export default function ShiftScreen() {
             onPress={() => setCheckInModalVisible(false)}
           />
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Record Shop Check-In</Text>
+            <Text style={styles.modalTitle}>Visit Shop</Text>
             <Text style={styles.modalSubtitle}>
-              Log your arrival at this customer location
+              Choose the shop you are visiting now
             </Text>
 
-            <Text style={styles.modalFieldLabel}>Select Existing Customer</Text>
+            <Text style={styles.modalFieldLabel}>Select Shop</Text>
             <View style={styles.checkInSearchRow}>
               <Ionicons name="search" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
               <TextInput
                 style={styles.checkInSearchInput}
-                placeholder="-- Choose from your customer list --"
+                placeholder="Search shop name..."
                 placeholderTextColor="#94A3B8"
                 value={checkInCustomerSearch}
                 onChangeText={setCheckInCustomerSearch}
@@ -1413,10 +1433,10 @@ export default function ShiftScreen() {
             </ScrollView>
 
             <View style={{ marginTop: Spacing.sm }}>
-              <Text style={styles.modalFieldLabel}>Or Enter Shop / Store Name</Text>
+              <Text style={styles.modalFieldLabel}>Or Type Shop Name</Text>
               <TextInput
                 style={styles.modalTextInput}
-                placeholder="e.g. Balaji Medical Store"
+                placeholder="Enter shop name..."
                 placeholderTextColor="#94A3B8"
                 value={checkInCustomShopName}
                 onChangeText={(t) => {
@@ -1427,10 +1447,10 @@ export default function ShiftScreen() {
             </View>
 
             <View style={{ marginTop: Spacing.sm }}>
-              <Text style={styles.modalFieldLabel}>Visit Notes (Optional)</Text>
+              <Text style={styles.modalFieldLabel}>Note (Optional)</Text>
               <TextInput
                 style={styles.modalTextInput}
-                placeholder="e.g. Order booked, samples provided, shop closed..."
+                placeholder="Write short note..."
                 placeholderTextColor="#94A3B8"
                 value={visitNotes}
                 onChangeText={setVisitNotes}
@@ -1440,7 +1460,7 @@ export default function ShiftScreen() {
             <View style={styles.checkoutGpsNotice}>
               <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
               <Text style={styles.checkoutGpsNoticeText}>
-                Your exact GPS location will be captured at this moment to record your arrival.
+                Current location is saved with your shop visit.
               </Text>
             </View>
 
@@ -1452,7 +1472,7 @@ export default function ShiftScreen() {
                 style={{ flex: 1, marginRight: Spacing.sm }}
               />
               <Button
-                title={isCheckingIn ? 'Checking in...' : 'Confirm Check-In'}
+                title={isCheckingIn ? 'Saving...' : 'Start Visit'}
                 variant="primary"
                 icon={<Ionicons name="location" size={16} color="#FFFFFF" />}
                 onPress={handleCheckInVisit}
@@ -1487,11 +1507,11 @@ export default function ShiftScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.checkoutModalHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalTitle}>Shop Visit Check-Out</Text>
+                  <Text style={styles.modalTitle}>Finish Shop Visit</Text>
                   <Text style={styles.checkoutShopSubName}>
                     {customers.find((c) => c.id === activeCheckoutVisit?.customerId)?.shopName ||
                       activeCheckoutVisit?.shopName ||
-                      'Store Visit'}
+                      'Shop Visit'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1505,7 +1525,7 @@ export default function ShiftScreen() {
               {/* Arrived at & Time spent metrics */}
               <View style={styles.checkoutTimeMetricsRow}>
                 <View style={styles.checkoutTimeMetricBox}>
-                  <Text style={styles.checkoutTimeMetricLabel}>ARRIVED AT</Text>
+                  <Text style={styles.checkoutTimeMetricLabel}>IN TIME</Text>
                   <Text style={styles.checkoutTimeMetricValue}>
                     {activeCheckoutVisit?.checkInTime
                       ? new Date(activeCheckoutVisit.checkInTime).toLocaleTimeString([], {
@@ -1529,12 +1549,12 @@ export default function ShiftScreen() {
                 </View>
               </View>
 
-              {/* Question: DID YOU GENERATE A SALE AT THIS SHOP? */}
+              {/* Question: DID YOU MAKE A SALE AT THIS SHOP? */}
               <Text style={styles.checkoutPromptQuestion}>
-                DID YOU GENERATE A SALE AT THIS SHOP?
+                DID YOU MAKE A SALE?
               </Text>
 
-              {/* BRANCH SELECTOR: NO SALE vs SALE COMPLETED */}
+              {/* BRANCH SELECTOR: NO SALE vs SALE DONE */}
               <View style={styles.branchSelector}>
                 <Pressable
                   style={[styles.branchButton, !checkoutSaleDone && styles.branchButtonActiveNoSale]}
@@ -1549,10 +1569,10 @@ export default function ShiftScreen() {
                     color={!checkoutSaleDone ? '#FFFFFF' : '#64748B'}
                   />
                   <Text style={[styles.branchButtonTitle, !checkoutSaleDone && styles.branchButtonTextActive]}>
-                    No Sale Done
+                    No Sale
                   </Text>
                   <Text style={[styles.branchButtonSub, !checkoutSaleDone && styles.branchButtonSubActive]}>
-                    Follow-up / inquiry only
+                    Just visited
                   </Text>
                 </Pressable>
 
@@ -1569,10 +1589,10 @@ export default function ShiftScreen() {
                     color={checkoutSaleDone ? '#FFFFFF' : BrandColors.green.primary}
                   />
                   <Text style={[styles.branchButtonTitle, checkoutSaleDone && styles.branchButtonTextActive]}>
-                    Yes, Sale Completed!
+                    Yes, Sale Done
                   </Text>
                   <Text style={[styles.branchButtonSub, checkoutSaleDone && styles.branchButtonSubActive]}>
-                    Book order & record units
+                    Make bill now
                   </Text>
                 </Pressable>
               </View>
@@ -1582,7 +1602,7 @@ export default function ShiftScreen() {
               {/* ==================================================== */}
               {!checkoutSaleDone ? (
                 <View style={styles.noSaleSection}>
-                  <Text style={styles.subSectionTitle}>Predefined Visit Reason *</Text>
+                  <Text style={styles.subSectionTitle}>Why no sale? *</Text>
                   <View style={styles.reasonChipsRow}>
                     {PREDEFINED_VISIT_REASONS.map((r) => {
                       const isSelected = checkoutReason === r;
@@ -1612,13 +1632,13 @@ export default function ShiftScreen() {
                 <View style={styles.saleSection}>
                   <View style={styles.saleSectionHeader}>
                     <Ionicons name="cart" size={18} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
-                    <Text style={styles.saleSectionTitle}>Live Order &amp; Billing Details</Text>
+                    <Text style={styles.saleSectionTitle}>Sale Details</Text>
                   </View>
 
                   {/* Customer Link Selector if visit has no customerId */}
                   {!activeCheckoutVisit?.customerId && (
                     <View style={{ marginBottom: Spacing.sm }}>
-                      <Text style={styles.modalFieldLabel}>Link Customer Account *</Text>
+                      <Text style={styles.modalFieldLabel}>Select Shop *</Text>
                       <ScrollView style={styles.modalCustomerList}>
                         {customers.map((c) => {
                           const isSelected = checkoutCustomerId === c.id;
@@ -1715,7 +1735,7 @@ export default function ShiftScreen() {
 
                   {/* Total Sale Preview Banner */}
                   <View style={styles.totalSaleBanner}>
-                    <Text style={styles.totalSaleLabel}>Total Sale Value:</Text>
+                    <Text style={styles.totalSaleLabel}>Total Amount:</Text>
                     <Text style={styles.totalSaleAmount}>
                       ₹{(saleQuantity * (saleUnitPrice || 0)).toLocaleString('en-IN')}
                     </Text>
@@ -1723,11 +1743,11 @@ export default function ShiftScreen() {
 
                   {/* Payment Mode Selector matching backend enum */}
                   <View style={{ marginTop: Spacing.sm, marginBottom: Spacing.sm }}>
-                    <Text style={styles.modalFieldLabel}>Payment Mode *</Text>
+                    <Text style={styles.modalFieldLabel}>Payment *</Text>
                     <View style={styles.paymentModeRow}>
                       {(['CASH', 'BANK', 'PENDING'] as PaymentMode[]).map((mode) => {
                         const isSelected = salePaymentMode === mode;
-                        const label = mode === 'CASH' ? 'Cash' : mode === 'BANK' ? 'UPI / Bank' : 'Pending';
+                        const label = mode === 'CASH' ? 'Cash' : mode === 'BANK' ? 'UPI / Bank' : 'Pay Later';
                         return (
                           <Pressable
                             key={mode}
@@ -1781,7 +1801,7 @@ export default function ShiftScreen() {
 
               {/* Departure Notes */}
               <Input
-                label="Departure Notes (Optional)"
+                label="Notes (Optional)"
                 value={checkoutNotes}
                 onChangeText={(t) => {
                   setCheckoutNotes(t);
@@ -1793,7 +1813,7 @@ export default function ShiftScreen() {
               <View style={styles.checkoutGpsNotice}>
                 <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
                 <Text style={styles.checkoutGpsNoticeText}>
-                  Live GPS location will be captured to finalize your shop duration and route.
+                  Your location is saved when leaving the shop.
                 </Text>
               </View>
 
@@ -1812,10 +1832,10 @@ export default function ShiftScreen() {
                 <Button
                   title={
                     isCheckingOut
-                      ? 'Checking out...'
+                      ? 'Saving...'
                       : checkoutSaleDone
-                      ? 'Record Sale & Check Out'
-                      : 'Confirm Check-Out (No Sale)'
+                      ? 'Save Sale & Leave'
+                      : 'Finish Visit'
                   }
                   variant="primary"
                   size="md"
@@ -1866,17 +1886,17 @@ export default function ShiftScreen() {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.modalTitle}>End Field Duty Shift</Text>
+              <Text style={styles.modalTitle}>End Today&apos;s Duty</Text>
               <Text style={styles.modalSubtitle}>
-                Review closing location and total route distance tracked automatically via GPS and Google Maps.
+                Check your end location and travel distance.
               </Text>
 
               <VerifiedLocationCard
                 location={currentLocation}
                 loading={isAcquiringLocation}
                 onRefresh={fetchLiveLocation}
-                title="Closing Duty Location"
-                subtitle="Automatic GPS route calculation"
+                title="End Location"
+                subtitle="Your current area"
                 routeDistanceKm={gpsTraveledDistanceKm}
               />
 
@@ -1884,14 +1904,14 @@ export default function ShiftScreen() {
                 <View style={styles.meterPreviewCard}>
                   <Ionicons name="navigate-circle" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
                   <Text style={styles.meterPreviewText}>
-                    Calculated Travel: <Text style={{ fontWeight: '700' }}>{gpsTraveledDistanceKm} km</Text> (GPS route)
+                    Calculated Travel: <Text style={{ fontWeight: '700' }}>{gpsTraveledDistanceKm} km</Text>
                   </Text>
                 </View>
               ) : null}
 
               <Input
-                label="Shift Summary / Remarks (Optional)"
-                placeholder="Enter shift notes or summary"
+                label="Note (Optional)"
+                placeholder="Any short note..."
                 value={endNotes}
                 onChangeText={setEndNotes}
                 leftIcon={<Ionicons name="create-outline" size={18} color="#94A3B8" />}
@@ -1905,7 +1925,7 @@ export default function ShiftScreen() {
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title="Proceed to Face ID"
+                  title="End Duty"
                   variant="primary"
                   onPress={handleInitiateEndShift}
                   style={{ flex: 1.4 }}
@@ -1968,12 +1988,12 @@ export default function ShiftScreen() {
               {/* Header */}
               <View style={styles.auditHeader}>
                 <View style={styles.auditIcon}>
-                  <Ionicons name="git-network" size={22} color={BrandColors.pink.primary} />
+                  <Ionicons name="list" size={22} color={BrandColors.pink.primary} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.modalTitle}>Shift Route Audit</Text>
+                  <Text style={styles.modalTitle}>Duty Details</Text>
                   <Text style={styles.modalSubtitle}>
-                    Officer: {user?.name || 'Field Officer'} · {selectedAuditShift?.totalDistanceKm ?? 0} km
+                    {user?.name || 'Seller'} · {selectedAuditShift?.totalDistanceKm ?? 0} km
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => setSelectedAuditShift(null)} hitSlop={HitSlop.md}>
@@ -1994,24 +2014,24 @@ export default function ShiftScreen() {
                   <View style={styles.auditTimingCard}>
                     <View style={styles.auditTimingHeader}>
                       <Ionicons name="time" size={13} color="#E11D48" style={{ marginRight: 4 }} />
-                      <Text style={styles.auditTimingTitle}>OFFICER TIMING BREAKDOWN</Text>
-                      <Text style={styles.auditTimingStops}>{auditVisits.length} shops visited</Text>
+                      <Text style={styles.auditTimingTitle}>TIME SUMMARY</Text>
+                      <Text style={styles.auditTimingStops}>{auditVisits.length} shops</Text>
                     </View>
                     <View style={styles.auditTimingGrid}>
                       <View style={styles.auditTimingCol}>
-                        <Text style={styles.auditTimingLabel}>TOTAL SHIFT</Text>
-                        <Text style={styles.auditTimingVal}>{totalMins > 0 ? `${totalMins} min` : 'In progress'}</Text>
+                        <Text style={styles.auditTimingLabel}>TOTAL TIME</Text>
+                        <Text style={styles.auditTimingVal}>{totalMins > 0 ? `${totalMins} min` : 'Active'}</Text>
                       </View>
                       <View style={styles.auditTimingCol}>
-                        <Text style={styles.auditTimingLabel}>TIME AT SHOPS</Text>
+                        <Text style={styles.auditTimingLabel}>AT SHOPS</Text>
                         <Text style={[styles.auditTimingVal, { color: '#16A34A' }]}>{timeAtShops} min</Text>
                       </View>
                       <View style={styles.auditTimingCol}>
-                        <Text style={styles.auditTimingLabel}>TRAVEL TIME</Text>
+                        <Text style={styles.auditTimingLabel}>TRAVEL</Text>
                         <Text style={[styles.auditTimingVal, { color: '#D97706' }]}>{travelTime} min</Text>
                       </View>
                       <View style={styles.auditTimingCol}>
-                        <Text style={styles.auditTimingLabel}>SHOPS VISITED</Text>
+                        <Text style={styles.auditTimingLabel}>SHOPS</Text>
                         <Text style={styles.auditTimingVal}>{auditVisits.length}</Text>
                       </View>
                     </View>
@@ -2029,16 +2049,15 @@ export default function ShiftScreen() {
                     </View>
                     <View style={styles.auditNodeContent}>
                       <View style={styles.auditNodeHeaderRow}>
-                        <Text style={styles.auditNodeTitle}>Shift Started</Text>
+                        <Text style={styles.auditNodeTitle}>Duty Started</Text>
                         <Text style={styles.auditNodeTime}>
                           {new Date(selectedAuditShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                       </View>
-                      <Text style={styles.auditNodeGps}>
-                        GPS: {Number(selectedAuditShift.startLatitude).toFixed(4)}, {Number(selectedAuditShift.startLongitude || 0).toFixed(4)}
-                      </Text>
                       {selectedAuditShift.startAddress ? (
                         <Text style={styles.auditNodeAddress}>{selectedAuditShift.startAddress}</Text>
+                      ) : selectedAuditShift.startLatitude ? (
+                        <Text style={styles.auditNodeGps}>Location saved</Text>
                       ) : null}
                     </View>
                   </View>
@@ -2051,7 +2070,7 @@ export default function ShiftScreen() {
                       : '00:00';
                     const leftStr = v.checkOutTime
                       ? new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : 'In progress';
+                      : 'Active';
                     const durStr = v.durationMins ? `${v.durationMins} min` : '1 min';
 
                     return (
@@ -2061,17 +2080,17 @@ export default function ShiftScreen() {
                         </View>
                         <View style={styles.auditNodeCard}>
                           <View style={styles.auditNodeHeaderRow}>
-                            <Text style={styles.auditShopName}>{v.shopName || 'Retail Customer'}</Text>
+                            <Text style={styles.auditShopName}>{v.shopName || 'Shop'}</Text>
                             <Badge
-                              label={hasSale ? 'Sale Completed' : 'No Sale Generated'}
+                              label={hasSale ? 'Sale Done' : 'No Sale'}
                               variant={hasSale ? 'success' : 'neutral'}
                               size="sm"
                             />
                           </View>
 
                           <View style={styles.auditShopTimes}>
-                            <Text style={styles.auditShopTimeItem}>ARRIVED: <Text style={{ fontWeight: '700' }}>{arriveStr}</Text></Text>
-                            <Text style={styles.auditShopTimeItem}>LEFT: <Text style={{ fontWeight: '700' }}>{leftStr}</Text></Text>
+                            <Text style={styles.auditShopTimeItem}>IN: <Text style={{ fontWeight: '700' }}>{arriveStr}</Text></Text>
+                            <Text style={styles.auditShopTimeItem}>OUT: <Text style={{ fontWeight: '700' }}>{leftStr}</Text></Text>
                             <Text style={[styles.auditShopTimeItem, { color: '#16A34A' }]}>({durStr})</Text>
                           </View>
 
@@ -2080,12 +2099,6 @@ export default function ShiftScreen() {
                               <Ionicons name="chatbubble-ellipses" size={12} color={BrandColors.pink.primary} style={{ marginRight: 4 }} />
                               <Text style={styles.auditFeedbackText}>&ldquo;{v.customerFeedback}&rdquo;</Text>
                             </View>
-                          ) : null}
-
-                          {v.latitude ? (
-                            <Text style={styles.auditNodeGps}>
-                              GPS: {Number(v.latitude).toFixed(4)}, {Number(v.longitude || 0).toFixed(4)}
-                            </Text>
                           ) : null}
                         </View>
                       </View>
@@ -2100,7 +2113,7 @@ export default function ShiftScreen() {
                     <View style={styles.auditNodeContent}>
                       <View style={styles.auditNodeHeaderRow}>
                         <Text style={styles.auditNodeTitle}>
-                          {selectedAuditShift.endTime ? 'Shift Ended' : 'Shift Active (In Progress)'}
+                          {selectedAuditShift.endTime ? 'Duty Ended' : 'On Duty Now'}
                         </Text>
                         <Text style={styles.auditNodeTime}>
                           {selectedAuditShift.endTime
@@ -2108,23 +2121,20 @@ export default function ShiftScreen() {
                             : 'Now'}
                         </Text>
                       </View>
-                      {selectedAuditShift.endLatitude ? (
-                        <Text style={styles.auditNodeGps}>
-                          GPS: {Number(selectedAuditShift.endLatitude).toFixed(4)}, {Number(selectedAuditShift.endLongitude || 0).toFixed(4)}
-                        </Text>
-                      ) : null}
                       {selectedAuditShift.endAddress ? (
                         <Text style={styles.auditNodeAddress}>{selectedAuditShift.endAddress}</Text>
+                      ) : selectedAuditShift.endLatitude ? (
+                        <Text style={styles.auditNodeGps}>Location saved</Text>
                       ) : null}
                     </View>
                   </View>
                 </View>
               )}
 
-              {/* Total Route KM and Close */}
+              {/* Total Distance and Close */}
               <View style={styles.auditBottomBar}>
                 <Text style={styles.auditTotalKm}>
-                  Total Route KM: <Text style={{ fontWeight: '800', color: BrandColors.pink.primary }}>{selectedAuditShift?.totalDistanceKm ?? 0} km</Text>
+                  Total Distance: <Text style={{ fontWeight: '800', color: BrandColors.pink.primary }}>{selectedAuditShift?.totalDistanceKm ?? 0} km</Text>
                 </Text>
                 <Button
                   title="Close"
@@ -2202,6 +2212,10 @@ const styles = StyleSheet.create({
   heroActionRow: {
     flexDirection: 'row',
     marginTop: Spacing.lg,
+  },
+  heroActionRowStacked: {
+    flexDirection: 'column',
+    gap: Spacing.sm,
   },
   offDutyBox: {
     borderTopWidth: 1,
@@ -2316,6 +2330,13 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: Spacing.xs,
     paddingLeft: 4,
+  },
+  visitActionsRow: {
+    marginTop: Spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
   modalOverlay: {
     flex: 1,
@@ -2841,15 +2862,36 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: Spacing.sm,
   },
+  historyTopBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  historyDateTimeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  historyLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+  },
   historyTimeRange: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+    flexShrink: 1,
   },
   historyLocation: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    flexShrink: 1,
   },
   historyMetricsRow: {
     flexDirection: 'row',

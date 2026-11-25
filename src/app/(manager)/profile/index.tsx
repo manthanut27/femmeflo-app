@@ -128,7 +128,7 @@ export default function ManagerProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Manager Profile" subtitle="Area Management" />
+      <Header title="Manager Profile" subtitle="Area Management" showBack />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.innerContainer}>
