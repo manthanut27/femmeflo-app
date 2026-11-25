@@ -6,7 +6,11 @@ import {
   buildShiftWaypoints,
   calculateLegDistanceKm,
   calculateWaypointRouteKm,
+  computeShiftTimingSummary,
+  formatDurationHuman,
+  getVisitDurationSeconds,
 } from '../utils/distanceUtils.ts';
+import { validateCapturedFaceFrame } from '../utils/faceFrameValidation.ts';
 
 describe('Shift Check-in/out, GPS Accuracy & Route Distance Suite', () => {
   const rootDir = process.cwd();
@@ -39,12 +43,90 @@ describe('Shift Check-in/out, GPS Accuracy & Route Distance Suite', () => {
     assert.ok(legStartToA >= 0.7 && legStartToA <= 1.2, `Expected 0.7-1.2 km leg, got ${legStartToA}`);
   });
 
-  it('collapses indoor stationary jitter (<25m) to 0 km', () => {
+  it('collapses indoor stationary jitter (<60m) to 0 km', () => {
     const km = calculateWaypointRouteKm([
       { lat: 19.18621, lng: 73.03997 },
-      { lat: 19.18626, lng: 73.04004 },
+      { lat: 19.18637, lng: 73.03996 },
+      { lat: 19.18655, lng: 73.04015 },
     ]);
     assert.equal(km, 0);
+  });
+
+  it('computes unambiguous integer-second timeline durations without float noise (e.g. 0.8600000000000001)', () => {
+    assert.equal(formatDurationHuman(68), '1m 08s');
+    assert.equal(formatDurationHuman(112), '1m 52s');
+    assert.equal(formatDurationHuman(45), '45s');
+
+    const visitSecs = getVisitDurationSeconds({
+      checkInTime: '2026-11-26T04:53:00.000Z',
+      checkOutTime: '2026-11-26T04:54:08.000Z',
+      durationMins: 1.14,
+    });
+    assert.equal(visitSecs, 68);
+
+    const summary = computeShiftTimingSummary({
+      startTime: '2026-11-26T04:52:00.000Z',
+      endTime: '2026-11-26T04:55:00.000Z',
+      startLatitude: 19.18621,
+      startLongitude: 73.03997,
+      endLatitude: 19.19121,
+      endLongitude: 73.04297,
+      totalDistanceKm: 0.7,
+      visits: [
+        {
+          checkInTime: '2026-11-26T04:53:00.000Z',
+          checkOutTime: '2026-11-26T04:54:08.000Z',
+          durationMins: 1.14,
+          latitude: 19.19121,
+          longitude: 73.04297,
+        },
+      ],
+    });
+    assert.equal(summary.totalSeconds, 180);
+    assert.equal(summary.atShopsSeconds, 68);
+    assert.equal(summary.travelSeconds, 112);
+    assert.equal(summary.formattedAtShops, '1m 08s');
+    assert.equal(summary.formattedTravel, '1m 52s');
+    assert.ok(!summary.formattedTravel.includes('0.86000000'));
+  });
+
+  it('rejects pitch-black night mode and blank frames in validateCapturedFaceFrame', () => {
+    // Covered / night-mode dark Web frame
+    const darkWeb = validateCapturedFaceFrame({
+      width: 640,
+      height: 480,
+      avgLuma: 14,
+      lumaStdDev: 4,
+    });
+    assert.equal(darkWeb.valid, false);
+    assert.match(darkWeb.reason || '', /dark/i);
+
+    // Uniform blank gray/black Native JPEG (~3000 bytes on 1080p)
+    const darkNative = validateCapturedFaceFrame({
+      width: 1280,
+      height: 960,
+      base64Length: 6000,
+    });
+    assert.equal(darkNative.valid, false);
+
+    // Illuminated real selfie JPEG (~120 KB on 640x480)
+    const validSelfie = validateCapturedFaceFrame({
+      width: 640,
+      height: 480,
+      base64Length: 160000,
+      avgLuma: 118,
+      lumaStdDev: 42,
+    });
+    assert.equal(validSelfie.valid, true);
+  });
+
+  it('attendance screen coordinates saved shop pins, quick-add shop, stock availability, editable qty, and low-price approval', () => {
+    const attendanceCode = readSource('src/app/(seller)/attendance/index.tsx');
+    assert.ok(attendanceCode.includes('getCustomerSavedCoords'), 'Must reuse selected shop saved coordinates');
+    assert.ok(attendanceCode.includes('openQuickAddShopModal'), 'Must provide inline Add New Shop flow');
+    assert.ok(attendanceCode.includes('sellerApi.getInventory()'), 'Must fetch product stock availability for checkout');
+    assert.ok(attendanceCode.includes('saleQuantityStr'), 'Must support typing quantity in addition to +/- steppers');
+    assert.ok(attendanceCode.includes('isBelowMinPrice'), 'Must warn & apply low-price Admin approval notice');
   });
 
   it('sellerApi.checkIn omits forbidden shiftId from HTTP payload and uses no-cache on shift reads', () => {

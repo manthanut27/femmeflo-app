@@ -124,8 +124,151 @@ export interface RouteCoordinate {
   lng: number;
 }
 
-const GPS_STATIONARY_DEADBAND_KM = 0.025; // 25m stationary jitter threshold (matches backend)
+const GPS_STATIONARY_DEADBAND_KM = 0.06; // 60m indoor/stationary GPS drift threshold (matches backend)
 const ROAD_WINDING_MULTIPLIER = 1.25;
+
+/**
+ * Formats an integer second count into clean, unambiguous human-readable text
+ * (e.g. "45s", "1m 08s", "1h 12m"), avoiding decimal-minute confusion like "1.14 min".
+ */
+export function formatDurationHuman(totalSeconds: number): string {
+  const secs = Math.max(0, Math.round(totalSeconds));
+  if (secs < 60) {
+    return `${secs}s`;
+  }
+  if (secs < 3600) {
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    return remSecs > 0 ? `${mins}m ${String(remSecs).padStart(2, '0')}s` : `${mins}m`;
+  }
+  const hours = Math.floor(secs / 3600);
+  const remMins = Math.floor((secs % 3600) / 60);
+  return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+}
+
+/**
+ * Returns exact stay duration in seconds for a shop visit using timestamps when available.
+ */
+export function getVisitDurationSeconds(visit?: {
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  durationMins?: number | string | null;
+} | null): number {
+  if (!visit) return 0;
+  if (visit.checkInTime && visit.checkOutTime) {
+    const inMs = new Date(visit.checkInTime).getTime();
+    const outMs = new Date(visit.checkOutTime).getTime();
+    if (!Number.isNaN(inMs) && !Number.isNaN(outMs) && outMs >= inMs) {
+      return Math.max(1, Math.round((outMs - inMs) / 1000));
+    }
+  }
+  if (visit.durationMins != null && visit.durationMins !== '') {
+    const mins = Number(visit.durationMins);
+    if (Number.isFinite(mins) && mins > 0) {
+      return Math.round(mins * 60);
+    }
+  }
+  return 0;
+}
+
+export interface ShiftTimingSummary {
+  totalSeconds: number;
+  atShopsSeconds: number;
+  travelSeconds: number;
+  distanceKm: number;
+  formattedTotal: string;
+  formattedAtShops: string;
+  formattedTravel: string;
+  formattedDistance: string;
+}
+
+/**
+ * Computes consistent shift timing (Total, At Shops, Travel) and live/closed distance
+ * in integer seconds so values sum accurately without floating-point artifacts.
+ */
+export function computeShiftTimingSummary(shift?: {
+  startTime?: string | null;
+  endTime?: string | null;
+  totalDistanceKm?: number | string | null;
+  startOdometerKm?: number | string | null;
+  endOdometerKm?: number | string | null;
+  startOdometer?: number | string | null;
+  endOdometer?: number | string | null;
+  startLatitude?: number | string | null;
+  startLongitude?: number | string | null;
+  endLatitude?: number | string | null;
+  endLongitude?: number | string | null;
+  visits?: Array<{
+    checkInTime?: string | null;
+    checkOutTime?: string | null;
+    durationMins?: number | string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    customer?: {
+      latitude?: number | string | null;
+      longitude?: number | string | null;
+      [key: string]: any;
+    } | null;
+    [key: string]: any;
+  }> | null;
+  [key: string]: any;
+} | null): ShiftTimingSummary {
+  if (!shift || !shift.startTime) {
+    return {
+      totalSeconds: 0,
+      atShopsSeconds: 0,
+      travelSeconds: 0,
+      distanceKm: 0,
+      formattedTotal: '0s',
+      formattedAtShops: '0s',
+      formattedTravel: '0s',
+      formattedDistance: '0 km',
+    };
+  }
+
+  const startMs = new Date(shift.startTime).getTime();
+  const endMs = shift.endTime ? new Date(shift.endTime).getTime() : Date.now();
+  const totalSeconds =
+    !Number.isNaN(startMs) && !Number.isNaN(endMs) ? Math.max(0, Math.round((endMs - startMs) / 1000)) : 0;
+
+  const visits = Array.isArray(shift.visits) ? shift.visits : [];
+  const rawShopSeconds = visits.reduce((sum, v) => {
+    if (v.checkOutTime || v.durationMins != null) {
+      return sum + getVisitDurationSeconds(v);
+    }
+    if (!shift.endTime && v.checkInTime) {
+      const checkInMs = new Date(v.checkInTime).getTime();
+      if (!Number.isNaN(checkInMs)) {
+        return sum + Math.max(0, Math.round((Date.now() - checkInMs) / 1000));
+      }
+    }
+    return sum;
+  }, 0);
+
+  const atShopsSeconds = Math.min(totalSeconds, rawShopSeconds);
+  const storedOrOdom = computeShiftTravelDistance(shift);
+  const waypointKm =
+    storedOrOdom.distanceKm > 0
+      ? storedOrOdom.distanceKm
+      : !shift.endTime
+      ? calculateWaypointRouteKm(buildShiftWaypoints({ ...shift, visits }))
+      : 0;
+  const distanceKm = Math.round(waypointKm * 10) / 10;
+
+  const travelSeconds =
+    distanceKm === 0 && visits.length === 0 ? 0 : Math.max(0, totalSeconds - atShopsSeconds);
+
+  return {
+    totalSeconds,
+    atShopsSeconds,
+    travelSeconds,
+    distanceKm,
+    formattedTotal: totalSeconds > 0 ? formatDurationHuman(totalSeconds) : 'Active',
+    formattedAtShops: formatDurationHuman(atShopsSeconds),
+    formattedTravel: formatDurationHuman(travelSeconds),
+    formattedDistance: `${distanceKm} km`,
+  };
+}
 
 /**
  * Calculates Haversine great-circle distance in km between two GPS points.
@@ -141,7 +284,7 @@ export function calculateHaversineKm(a: RouteCoordinate, b: RouteCoordinate): nu
 }
 
 /**
- * Estimates road distance in km for a single route leg, returning 0 inside the 25m stationary band.
+ * Estimates road distance in km for a single route leg, returning 0 inside the 60m stationary band.
  */
 export function calculateLegDistanceKm(a: RouteCoordinate, b: RouteCoordinate): number {
   const straight = calculateHaversineKm(a, b);
@@ -151,7 +294,7 @@ export function calculateLegDistanceKm(a: RouteCoordinate, b: RouteCoordinate): 
 
 /**
  * Computes estimated road distance across ordered shift waypoints
- * (start -> store visits -> current/end), ignoring stationary jitter under 25m.
+ * (start -> store visits -> current/end), ignoring stationary jitter under 60m.
  */
 export function calculateWaypointRouteKm(waypoints: RouteCoordinate[]): number {
   if (!Array.isArray(waypoints) || waypoints.length < 2) return 0;

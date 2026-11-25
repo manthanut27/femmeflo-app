@@ -17,6 +17,13 @@ import {
 import { Button } from '@/components/ui/Button';
 import { BrandColors, Colors, Radius, Shadows, Spacing } from '@/constants/theme';
 import { compressImage } from '@/utils/imageUtils';
+import {
+  validateCapturedFaceFrame,
+  type FrameValidationInput,
+  type FrameValidationResult,
+} from '@/utils/faceFrameValidation';
+
+export { validateCapturedFaceFrame, type FrameValidationInput, type FrameValidationResult };
 
 const BUTTON_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -38,6 +45,60 @@ function getExpoCameraModule(): ExpoCameraModule | null {
   }
   cachedExpoCamera = null;
   return null;
+}
+
+async function analyzeWebFrameBrightness(
+  uri: string
+): Promise<{ avgLuma?: number; lumaStdDev?: number }> {
+  if (Platform.OS !== 'web' || typeof document === 'undefined' || !uri) {
+    return {};
+  }
+  return new Promise((resolve) => {
+    try {
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const sampleW = 64;
+          const sampleH = 64;
+          const canvas = document.createElement('canvas');
+          canvas.width = sampleW;
+          canvas.height = sampleH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve({});
+            return;
+          }
+          ctx.drawImage(img, 0, 0, sampleW, sampleH);
+          const pixels = ctx.getImageData(0, 0, sampleW, sampleH).data;
+          const count = sampleW * sampleH;
+          let sum = 0;
+          const lumas = new Float32Array(count);
+          for (let i = 0; i < count; i++) {
+            const r = pixels[i * 4];
+            const g = pixels[i * 4 + 1];
+            const b = pixels[i * 4 + 2];
+            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+            lumas[i] = luma;
+            sum += luma;
+          }
+          const avg = sum / count;
+          let varSum = 0;
+          for (let i = 0; i < count; i++) {
+            const diff = lumas[i] - avg;
+            varSum += diff * diff;
+          }
+          resolve({ avgLuma: avg, lumaStdDev: Math.sqrt(varSum / count) });
+        } catch {
+          resolve({});
+        }
+      };
+      img.onerror = () => resolve({});
+      img.src = uri;
+    } catch {
+      resolve({});
+    }
+  });
 }
 
 export interface FaceVerificationResult {
@@ -80,6 +141,7 @@ export function FaceVerificationModal({
   const [scanProgress, setScanProgress] = useState(0);
   const [hasDeviceBiometric, setHasDeviceBiometric] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [fillLightOn, setFillLightOn] = useState(false);
 
   const cameraRef = useRef<any>(null);
   const scanAnim = useRef(new Animated.Value(0)).current;
@@ -170,12 +232,18 @@ export function FaceVerificationModal({
 
       setStep('LIVE_SCAN');
 
-      // Safety fallback in case a device does not emit onCameraReady promptly
+      // Guard against camera hardware stalling without ever calling onCameraReady
       readyFallbackTimerRef.current = setTimeout(() => {
-        if (visibleRef.current) {
-          setCameraReady(true);
+        if (visibleRef.current && !isVerifiedDispatchedRef.current) {
+          setCameraReady((ready) => {
+            if (!ready) {
+              setStep('ERROR');
+              setErrorMessage('Front camera did not initialize cleanly. Tap Scan Again or Open Face Scanner.');
+            }
+            return ready;
+          });
         }
-      }, 2500);
+      }, 6500);
     } catch (err) {
       console.warn('[FaceVerification] Live camera init error:', err);
       if (!visibleRef.current) return;
@@ -249,7 +317,7 @@ export function FaceVerificationModal({
     );
   }, [clearTimers]);
 
-  // Silently capture real frame from the live front camera once aligned (no shutter click required)
+  // Silently capture real frame from the live front camera once aligned and verify brightness/detail
   const captureLiveFrameSilently = useCallback(async () => {
     if (captureInFlightRef.current || isVerifiedDispatchedRef.current || !visibleRef.current) {
       return;
@@ -266,6 +334,7 @@ export function FaceVerificationModal({
         quality: 0.55,
         shutterSound: false,
         skipProcessing: false,
+        base64: true,
       });
 
       if (!visibleRef.current) return;
@@ -274,11 +343,21 @@ export function FaceVerificationModal({
         throw new Error('Empty camera frame');
       }
 
-      if (
-        (typeof photo.width === 'number' && photo.width < 60) ||
-        (typeof photo.height === 'number' && photo.height < 60)
-      ) {
-        throw new Error('Captured frame too small');
+      const webMetrics = await analyzeWebFrameBrightness(photo.uri);
+      if (!visibleRef.current) return;
+
+      const frameCheck = validateCapturedFaceFrame({
+        width: photo.width,
+        height: photo.height,
+        base64Length: typeof photo.base64 === 'string' ? photo.base64.length : undefined,
+        ...webMetrics,
+      });
+
+      if (!frameCheck.valid) {
+        stopScanAnimation();
+        setStep('ERROR');
+        setErrorMessage(frameCheck.reason || 'No clear face detected. Move to light and retry.');
+        return;
       }
 
       const compressed = await compressImage(photo.uri).catch(() => ({ uri: photo.uri }));
@@ -311,7 +390,7 @@ export function FaceVerificationModal({
     }
   }, [mode, stopScanAnimation]);
 
-  // Animate live laser scanner + automatic scan progress while live camera is active
+  // Animate live laser scanner + automatic scan progress after auto-exposure settles
   useEffect(() => {
     if (!visible || step !== 'LIVE_SCAN') {
       stopScanAnimation();
@@ -348,21 +427,25 @@ export function FaceVerificationModal({
     setScanProgress(progress);
     if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
 
-    scanIntervalRef.current = setInterval(() => {
-      progress += 10;
-      const clamped = Math.min(progress, 90);
-      setScanProgress(clamped);
+    // Wait 750ms for front camera auto-exposure/focus before sampling the frame
+    const settleTimer = setTimeout(() => {
+      scanIntervalRef.current = setInterval(() => {
+        progress += 10;
+        const clamped = Math.min(progress, 90);
+        setScanProgress(clamped);
 
-      if (progress >= 90) {
-        if (scanIntervalRef.current) {
-          clearInterval(scanIntervalRef.current);
-          scanIntervalRef.current = null;
+        if (progress >= 90) {
+          if (scanIntervalRef.current) {
+            clearInterval(scanIntervalRef.current);
+            scanIntervalRef.current = null;
+          }
+          captureLiveFrameSilently();
         }
-        captureLiveFrameSilently();
-      }
-    }, 150);
+      }, 175);
+    }, 750);
 
     return () => {
+      clearTimeout(settleTimer);
       if (scanIntervalRef.current) {
         clearInterval(scanIntervalRef.current);
         scanIntervalRef.current = null;
@@ -416,20 +499,34 @@ export function FaceVerificationModal({
           mediaTypes: ['images'],
           allowsEditing: false,
           quality: 0.7,
+          base64: true,
         });
         if (res.canceled || !res.assets?.[0]?.uri) {
           setStep('ERROR');
           setErrorMessage('No photo selected. Please capture or choose a photo.');
           return;
         }
-        setCapturedPhotoUri(res.assets[0].uri);
+        const webAsset = res.assets[0];
+        const webMetrics = await analyzeWebFrameBrightness(webAsset.uri);
+        const frameCheck = validateCapturedFaceFrame({
+          width: webAsset.width,
+          height: webAsset.height,
+          base64Length: typeof webAsset.base64 === 'string' ? webAsset.base64.length : undefined,
+          ...webMetrics,
+        });
+        if (!frameCheck.valid) {
+          setStep('ERROR');
+          setErrorMessage(frameCheck.reason || 'Selected image is too dark or blank.');
+          return;
+        }
+        setCapturedPhotoUri(webAsset.uri);
         setStep('VERIFIED');
         verificationTimerRef.current = setTimeout(() => {
           if (isVerifiedDispatchedRef.current) return;
           isVerifiedDispatchedRef.current = true;
           onVerifiedRef.current({
             faceVerified: true,
-            facePhoto: res.assets[0].uri,
+            facePhoto: webAsset.uri,
             faceConfidence: mode === 'REGISTER' ? 0.99 : 0.98,
             faceMethod: mode === 'REGISTER' ? 'FACE_ID_ENROLLED' : 'FACE_ID_BIOMETRIC',
           });
@@ -449,6 +546,7 @@ export function FaceVerificationModal({
         cameraType: ImagePicker.CameraType.front,
         allowsEditing: false,
         quality: 0.65,
+        base64: true,
       });
 
       if (res.canceled || !res.assets || res.assets.length === 0 || !res.assets[0]?.uri) {
@@ -457,7 +555,19 @@ export function FaceVerificationModal({
         return;
       }
 
-      const compressed = await compressImage(res.assets[0].uri).catch(() => ({ uri: res.assets[0].uri }));
+      const asset = res.assets[0];
+      const frameCheck = validateCapturedFaceFrame({
+        width: asset.width,
+        height: asset.height,
+        base64Length: typeof asset.base64 === 'string' ? asset.base64.length : undefined,
+      });
+      if (!frameCheck.valid) {
+        setStep('ERROR');
+        setErrorMessage(frameCheck.reason || 'Captured selfie was too dark or blank. Please retry in bright light.');
+        return;
+      }
+
+      const compressed = await compressImage(asset.uri).catch(() => ({ uri: asset.uri }));
       setCapturedPhotoUri(compressed.uri);
       setStep('VERIFIED');
       verificationTimerRef.current = setTimeout(() => {
@@ -544,8 +654,8 @@ export function FaceVerificationModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
+      <View style={[styles.modalOverlay, fillLightOn && styles.modalOverlayFillLight]}>
+        <View style={[styles.modalCard, fillLightOn && styles.modalCardFillLight]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerIcon}>
@@ -565,6 +675,22 @@ export function FaceVerificationModal({
                 {userName} · {userRole}
               </Text>
             </View>
+            <Pressable
+              onPress={() => setFillLightOn((v) => !v)}
+              hitSlop={10}
+              style={[styles.fillLightChip, fillLightOn && styles.fillLightChipActive]}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle Night Fill Light"
+            >
+              <Ionicons
+                name={fillLightOn ? 'sunny' : 'sunny-outline'}
+                size={15}
+                color={fillLightOn ? '#92400E' : '#475569'}
+              />
+              <Text style={[styles.fillLightChipText, fillLightOn && styles.fillLightChipTextActive]}>
+                {fillLightOn ? 'Light ON' : 'Fill Light'}
+              </Text>
+            </Pressable>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
               <Ionicons name="close" size={20} color="#94A3B8" />
             </Pressable>
@@ -575,6 +701,7 @@ export function FaceVerificationModal({
             <Animated.View
               style={[
                 styles.scannerCircle,
+                fillLightOn && styles.scannerCircleFillLight,
                 {
                   transform: [{ scale: pulseAnim }],
                   borderColor:
@@ -582,6 +709,8 @@ export function FaceVerificationModal({
                       ? BrandColors.green.primary
                       : step === 'ERROR'
                       ? Colors.light.danger
+                      : fillLightOn
+                      ? '#FFFFFF'
                       : BrandColors.pink.primary,
                 },
               ]}
@@ -716,21 +845,14 @@ export function FaceVerificationModal({
           {/* Action Buttons */}
           <View style={styles.btnRow}>
             {step === 'LIVE_SCAN' && (
-              <View style={{ width: '100%' }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: isStart ? 'center' : 'space-between',
-                    alignItems: 'center',
-                    gap: Spacing.sm,
-                  }}
-                >
+              <View style={{ width: '100%', gap: Spacing.xs }}>
+                <View style={styles.liveActionGrid}>
                   <Button
                     title="Cancel"
                     variant="outline"
                     size="sm"
                     onPress={onClose}
-                    style={{ flex: isStart ? 1 : 0.7 }}
+                    style={{ flex: 1 }}
                   />
                   {hasDeviceBiometric && mode !== 'REGISTER' && (
                     <Button
@@ -739,21 +861,21 @@ export function FaceVerificationModal({
                       size="sm"
                       icon={<Ionicons name="finger-print-outline" size={15} color={BrandColors.pink.dark} />}
                       onPress={handleDeviceBiometric}
-                      style={{ flex: 1 }}
+                      style={{ flex: 1.4 }}
                     />
                   )}
-                  {!isStart && (
-                    <Pressable
-                      onPress={handleUseStandardVerification}
-                      hitSlop={BUTTON_HIT_SLOP}
-                      style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.xs }}
-                    >
-                      <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
-                        Standard Audit (No Photo)
-                      </Text>
-                    </Pressable>
-                  )}
                 </View>
+                {!isStart && (
+                  <Pressable
+                    onPress={handleUseStandardVerification}
+                    hitSlop={BUTTON_HIT_SLOP}
+                    style={styles.standardAuditLinkBtn}
+                  >
+                    <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
+                      Standard Audit (No Photo)
+                    </Text>
+                  </Pressable>
+                )}
               </View>
             )}
 
@@ -888,6 +1010,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.lg,
   },
+  modalOverlayFillLight: {
+    backgroundColor: 'rgba(255, 252, 245, 0.94)',
+  },
   modalCard: {
     width: '100%',
     maxWidth: 420,
@@ -895,6 +1020,51 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     padding: Spacing.lg,
     ...Shadows.md,
+  },
+  modalCardFillLight: {
+    borderWidth: 2,
+    borderColor: '#FDE68A',
+  },
+  fillLightChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginRight: 6,
+  },
+  fillLightChipActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  fillLightChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  fillLightChipTextActive: {
+    color: '#92400E',
+  },
+  scannerCircleFillLight: {
+    borderWidth: 8,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 24,
+  },
+  liveActionGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  standardAuditLinkBtn: {
+    alignSelf: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
   },
   header: {
     flexDirection: 'row',

@@ -763,13 +763,13 @@ export const adminApi = {
       phone,
       categoryId: payload.categoryId,
       address: payload.address,
-      pincode: payload.pincode,
       state: payload.state,
       district: payload.district,
       village: payload.village || 'Default',
       latitude: coords.latitude,
       longitude: coords.longitude,
     };
+    if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
     if (payload.email) body.email = payload.email.trim();
     if (payload.accuracy != null) body.accuracy = payload.accuracy;
     if (noPhotoReason) body.noPhotoReason = noPhotoReason;

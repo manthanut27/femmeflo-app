@@ -104,7 +104,7 @@ export interface CreateCustomerPayload {
   phone: string;
   categoryId: string;
   address: string;
-  pincode: string;
+  pincode?: string;
   state: string;
   district: string;
   village?: string;

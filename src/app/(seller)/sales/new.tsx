@@ -561,9 +561,12 @@ export default function NewSaleScreen() {
       return {
         id: p.id,
         title: p.name,
-        subtitle: `Available: ${stock} packets · ₹${formatRupeeDisplay(priceRupees)}`,
-        badge: stock > 0 ? `${stock} pkts` : '0 pkts',
-        badgeVariant: stock > 0 ? 'success' : 'neutral',
+        subtitle:
+          stock > 0
+            ? `Available: ${stock.toLocaleString('en-IN')} packets · ₹${formatRupeeDisplay(priceRupees)}`
+            : `Out of stock (0 packets) · ₹${formatRupeeDisplay(priceRupees)}`,
+        badge: stock > 0 ? `${stock} pkts` : 'Out of stock',
+        badgeVariant: stock > 0 ? 'success' : 'REJECTED',
         icon: 'cube-outline',
         metadata: `${p.name}`,
       };
@@ -801,11 +804,13 @@ export default function NewSaleScreen() {
                       <Text
                         style={[
                           styles.productStockText,
-                          isExceedingStock && { color: Colors.light.danger },
+                          (isExceedingStock || availStock === 0) && { color: Colors.light.danger },
                         ]}
                         numberOfLines={1}
                       >
-                        Available: {availStock.toLocaleString('en-IN')} packets
+                        {availStock > 0
+                          ? `Available: ${availStock.toLocaleString('en-IN')} packets`
+                          : 'Out of stock (0 packets available)'}
                       </Text>
                     </View>
                     <View style={styles.selectPill}>

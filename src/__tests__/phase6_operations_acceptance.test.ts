@@ -429,7 +429,7 @@ describe('FemmeFlo Phase 6: Seller & Manager Operations Acceptance Suite', () =>
     };
 
     assert.ok(customerPayloadWithoutPhoto.shopName);
-    assert.ok(customerPayloadWithoutPhoto.pincode.length === 6);
+    assert.ok(customerPayloadWithoutPhoto.pincode?.length === 6);
     assert.ok(customerPayloadWithoutPhoto.noPhotoReason);
     assert.ok(customerPayloadWithoutPhoto.latitude && customerPayloadWithoutPhoto.longitude);
 

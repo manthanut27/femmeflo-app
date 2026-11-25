@@ -15,8 +15,9 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { categoriesApi } from '@/api/categories';
 import { sellerApi } from '@/api/seller';
-import type { CustomerItem, PaymentMode, ProductItem, Shift, ShiftVisit } from '@/api/types';
+import type { CategoryItem, CustomerItem, PaymentMode, ProductItem, ProductStockItem, Shift, ShiftVisit } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
 import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
 import { VerifiedLocationCard } from '@/components/common/VerifiedLocationCard';
@@ -45,13 +46,17 @@ import {
   buildShiftWaypoints,
   calculateLegDistanceKm,
   calculateWaypointRouteKm,
+  computeShiftTimingSummary,
   computeShiftTravelDistance,
+  formatDurationHuman,
+  getVisitDurationSeconds,
 } from '@/utils/distanceUtils';
 import { draftStorage } from '@/utils/draftStorage';
 import {
   acquireGpsCoordinates,
   formatShortAddressLabel,
   getCurrentLocationWithAddress,
+  isWithinIndiaBounds,
   type LocationResult,
 } from '@/utils/locationUtils';
 import { useResponsiveLayout } from '@/utils/responsive';
@@ -66,6 +71,27 @@ const PREDEFINED_VISIT_REASONS = [
   'Sample provided for trial',
 ];
 
+function getCustomerSavedCoords(customer?: CustomerItem | null): { latitude: number; longitude: number } | null {
+  if (!customer) return null;
+  const lat = Number(customer.latitude);
+  const lng = Number(customer.longitude);
+  if (
+    customer.latitude != null &&
+    customer.longitude != null &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat !== 0 &&
+    lng !== 0 &&
+    isWithinIndiaBounds(lat, lng)
+  ) {
+    return {
+      latitude: Number(lat.toFixed(6)),
+      longitude: Number(lng.toFixed(6)),
+    };
+  }
+  return null;
+}
+
 export default function SellerAttendanceScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useResponsiveLayout();
@@ -79,6 +105,9 @@ export default function SellerAttendanceScreen() {
   const [selectedAuditShift, setSelectedAuditShift] = useState<Shift | null>(null);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [products, setProducts] = useState<ProductItem[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+  const [stockMap, setStockMap] = useState<Record<string, number>>({});
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
@@ -128,11 +157,42 @@ export default function SellerAttendanceScreen() {
   const [checkoutFeedback, setCheckoutFeedback] = useState('');
   const [checkoutNotes, setCheckoutNotes] = useState('');
   const [checkoutCustomerId, setCheckoutCustomerId] = useState('');
+  const [checkoutShopSearch, setCheckoutShopSearch] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [saleQuantity, setSaleQuantity] = useState(1);
+  const [saleQuantityStr, setSaleQuantityStr] = useState('1');
   const [saleUnitPrice, setSaleUnitPrice] = useState(25);
+  const [saleUnitPriceStr, setSaleUnitPriceStr] = useState('25');
   const [salePaymentMode, setSalePaymentMode] = useState<PaymentMode>('CASH');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  // Quick Add New Shop Modal (In-Place during Check-In / Checkout)
+  const [quickAddShopVisible, setQuickAddShopVisible] = useState(false);
+  const [quickShopTarget, setQuickShopTarget] = useState<'CHECKIN' | 'CHECKOUT'>('CHECKIN');
+  const [newShopName, setNewShopName] = useState('');
+  const [newShopOwner, setNewShopOwner] = useState('');
+  const [newShopPhone, setNewShopPhone] = useState('');
+  const [newShopCategoryId, setNewShopCategoryId] = useState('');
+  const [newShopPincode, setNewShopPincode] = useState('');
+  const [newShopVillage, setNewShopVillage] = useState('');
+  const [newShopDistrict, setNewShopDistrict] = useState('');
+  const [newShopState, setNewShopState] = useState('Maharashtra');
+  const [newShopAddress, setNewShopAddress] = useState('');
+  const [isSavingQuickShop, setIsSavingQuickShop] = useState(false);
+
+  const filteredCheckoutCustomers = useMemo(() => {
+    const q = checkoutShopSearch.trim().toLowerCase();
+    if (!Array.isArray(customers)) return [];
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        (c.shopName ? c.shopName.toLowerCase().includes(q) : false) ||
+        (c.ownerName ? c.ownerName.toLowerCase().includes(q) : false) ||
+        (c.phone ? c.phone.includes(q) : false) ||
+        (c.district ? c.district.toLowerCase().includes(q) : false) ||
+        (c.village ? c.village.toLowerCase().includes(q) : false)
+    );
+  }, [customers, checkoutShopSearch]);
 
   // End Shift Form State
   const [endModalVisible, setEndModalVisible] = useState(false);
@@ -151,7 +211,7 @@ export default function SellerAttendanceScreen() {
 
   const loadShiftData = useCallback(async () => {
     try {
-      const [shiftRes, custRes, prodRes, historyRes] = await Promise.all([
+      const [shiftRes, custRes, prodRes, historyRes, invRes, catRes] = await Promise.all([
         sellerApi.getCurrentShift().catch(async () => {
           const cached = await draftStorage.getActiveShift(userId);
           return { shift: cached };
@@ -159,6 +219,8 @@ export default function SellerAttendanceScreen() {
         sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
         sellerApi.listProducts().catch(() => ({ items: [] })),
         sellerApi.getShiftHistory({ page: 1, pageSize: 50 }).catch(() => ({ items: [] })),
+        sellerApi.getInventory().then((inv) => ({ ...inv, _ok: true })).catch(() => ({ balance: 0, products: [], _ok: false })),
+        categoriesApi.listCategories().catch(() => ({ items: [] })),
       ]);
 
       let active: any = (shiftRes as any)?.shift;
@@ -212,6 +274,31 @@ export default function SellerAttendanceScreen() {
         setSelectedProductId((prev) => prev || prodList[0].id);
         const firstBasePrice = ((prodList[0].basePricePaise ?? 2500) as number) / 100;
         setSaleUnitPrice((prev) => (prev ? prev : firstBasePrice || 25));
+        setSaleUnitPriceStr((prev) => (prev ? prev : String(firstBasePrice || 25)));
+      }
+
+      const map: Record<string, number> = {};
+      if ((invRes as any)?.products && Array.isArray((invRes as any).products)) {
+        (invRes as any).products.forEach((p: ProductStockItem) => {
+          const pId = p.productId || (p as any).id;
+          if (pId) {
+            map[pId] = p.balance;
+          }
+        });
+      }
+      const totalBal = (invRes as any)?.balance ?? (invRes as any)?.remaining ?? 0;
+      if (Object.keys(map).length === 0 && totalBal > 0 && prodList.length > 0) {
+        prodList.forEach((p) => {
+          map[p.id] = totalBal;
+        });
+      }
+      setStockMap(map);
+      setInventoryLoaded(Boolean((invRes as any)?._ok));
+
+      const catList = Array.isArray((catRes as any)?.items) ? (catRes as any).items : [];
+      setCategories(catList);
+      if (catList.length > 0) {
+        setNewShopCategoryId((prev) => prev || catList[0].id);
       }
     } catch (err) {
       console.warn('loadShiftData handled error:', err);
@@ -449,10 +536,139 @@ export default function SellerAttendanceScreen() {
     }
   }
 
+  function openQuickAddShopModal(target: 'CHECKIN' | 'CHECKOUT') {
+    setQuickShopTarget(target);
+    if (target === 'CHECKIN' && checkInCustomShopName.trim()) {
+      setNewShopName(checkInCustomShopName.trim());
+    } else {
+      setNewShopName('');
+    }
+    setNewShopOwner('');
+    setNewShopPhone('');
+    if (!newShopCategoryId && categories.length > 0) {
+      setNewShopCategoryId(categories[0].id);
+    }
+    if (currentLocation) {
+      if (currentLocation.pincode && !newShopPincode) setNewShopPincode(currentLocation.pincode);
+      if (currentLocation.village && !newShopVillage) setNewShopVillage(currentLocation.village);
+      if (currentLocation.district && !newShopDistrict) setNewShopDistrict(currentLocation.district);
+      if (currentLocation.state) setNewShopState(currentLocation.state);
+      if (currentLocation.address && !newShopAddress) setNewShopAddress(currentLocation.address);
+    } else {
+      fetchLiveLocation(false);
+    }
+    setQuickAddShopVisible(true);
+  }
+
+  async function handleQuickPincodeChange(pin: string) {
+    const cleanPin = pin.replace(/[^0-9]/g, '').slice(0, 6);
+    setNewShopPincode(cleanPin);
+    if (cleanPin.length === 6) {
+      try {
+        const res = await sellerApi.lookupPincode(cleanPin);
+        if (res.state) setNewShopState(res.state);
+        if (res.district) setNewShopDistrict(res.district);
+        if (res.village) setNewShopVillage(res.village);
+      } catch {
+        // ignore pincode auto-fill failure
+      }
+    }
+  }
+
+  async function handleCreateQuickShop() {
+    if (isSavingQuickShop) return;
+    const cleanPhone = newShopPhone.replace(/[^0-9]/g, '').slice(-10);
+    if (!newShopName.trim()) {
+      Alert.alert('Shop Name Required', 'Please enter the shop name.');
+      return;
+    }
+    if (!newShopOwner.trim()) {
+      Alert.alert('Owner Name Required', 'Please enter the shop owner name.');
+      return;
+    }
+    if (cleanPhone.length !== 10) {
+      Alert.alert('Valid Phone Required', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    const cleanPincode = newShopPincode.trim();
+    if (cleanPincode && !/^[1-9][0-9]{5}$/.test(cleanPincode)) {
+      Alert.alert('Invalid Pincode', 'Please enter a valid 6-digit Indian pincode or leave it blank.');
+      return;
+    }
+    const categoryId = newShopCategoryId || categories[0]?.id;
+    if (!categoryId) {
+      Alert.alert('Category Required', 'No active shop categories found. Please contact Admin.');
+      return;
+    }
+
+    setIsSavingQuickShop(true);
+    try {
+      let loc = currentLocation;
+      if (!loc) {
+        loc = await fetchLiveLocation(true);
+      }
+      if (!loc) {
+        const coords = await acquireCoordinates();
+        if (coords) {
+          loc = { latitude: coords.latitude, longitude: coords.longitude };
+        }
+      }
+      if (!loc) {
+        Alert.alert('GPS Location Required', 'Could not lock GPS location for this shop. Please enable Location and retry.');
+        return;
+      }
+
+      const finalDistrict = newShopDistrict.trim() || loc.district || user?.district || 'Thane';
+      const finalState = newShopState.trim() || loc.state || user?.state || 'Maharashtra';
+      const finalVillage = newShopVillage.trim() || loc.village || finalDistrict;
+      const finalAddress =
+        newShopAddress.trim() ||
+        loc.address ||
+        [finalVillage, finalDistrict, finalState, newShopPincode].filter(Boolean).join(', ');
+
+      const res = await sellerApi.createCustomer({
+        shopName: newShopName.trim(),
+        ownerName: newShopOwner.trim(),
+        phone: `+91${cleanPhone}`,
+        categoryId,
+        address: finalAddress,
+        pincode: cleanPincode || loc.pincode || undefined,
+        state: finalState,
+        district: finalDistrict,
+        village: finalVillage,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        noPhotoReason: 'Added during field shop check-in',
+      });
+
+      const createdCustomer = (res as any)?.customer || res;
+      if (createdCustomer?.id) {
+        setCustomers((prev) => [createdCustomer, ...prev.filter((c) => c.id !== createdCustomer.id)]);
+        if (quickShopTarget === 'CHECKIN') {
+          setSelectedCustomerId(createdCustomer.id);
+          setCheckInCustomShopName('');
+          setCheckInCustomerSearch('');
+        } else {
+          setCheckoutCustomerId(createdCustomer.id);
+          saveCurrentCheckoutDraft({ selectedCustomerId: createdCustomer.id });
+        }
+        setQuickAddShopVisible(false);
+        Alert.alert(
+          'Shop Added',
+          `${createdCustomer.shopName} has been added and selected.`
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Could Not Add Shop', err?.message || 'Unable to save new shop.');
+    } finally {
+      setIsSavingQuickShop(false);
+    }
+  }
+
   async function handleCheckInVisit() {
     if (isCheckingIn) return;
     if (!selectedCustomerId && !checkInCustomShopName.trim()) {
-      Alert.alert('Select or Enter Shop', 'Please select a shop or type the shop name.');
+      Alert.alert('Select or Add Shop', 'Please select an existing shop, add a new shop, or type the shop name.');
       return;
     }
 
@@ -460,16 +676,17 @@ export default function SellerAttendanceScreen() {
     setFeedback(null);
 
     try {
-      const coords = await acquireCoordinates();
+      const customer = customers.find((c) => c.id === selectedCustomerId);
+      const savedCustomerCoords = getCustomerSavedCoords(customer);
+      const coords = savedCustomerCoords || (await acquireCoordinates());
       if (!coords) {
         Alert.alert(
           'GPS Location Required',
-          'Could not capture your live GPS location at this shop. Please enable High Accuracy GPS and tap Start Check-In again.'
+          'Could not capture your live GPS location at this shop. Please enable High Accuracy GPS and tap Check In again.'
         );
         return;
       }
 
-      const customer = customers.find((c) => c.id === selectedCustomerId);
       const resolvedShopName = customer?.shopName || checkInCustomShopName.trim();
 
       const checkInRes = await sellerApi.checkIn({
@@ -540,6 +757,7 @@ export default function SellerAttendanceScreen() {
 
     setActiveCheckoutVisit(visit);
     setCheckoutCustomerId(visit.customerId || (customers[0]?.id ?? ''));
+    setCheckoutShopSearch('');
 
     const draft = await draftStorage.getVisitCheckoutDraft(userId, visit.id);
     if (draft) {
@@ -549,8 +767,12 @@ export default function SellerAttendanceScreen() {
       setCheckoutNotes(draft.notes || '');
       if (draft.selectedCustomerId) setCheckoutCustomerId(draft.selectedCustomerId);
       if (draft.selectedProductId) setSelectedProductId(draft.selectedProductId);
-      if (draft.quantity) setSaleQuantity(draft.quantity);
-      if (draft.unitPrice) setSaleUnitPrice(draft.unitPrice);
+      const qVal = draft.quantity || 1;
+      setSaleQuantity(qVal);
+      setSaleQuantityStr(String(qVal));
+      const pVal = draft.unitPrice || 25;
+      setSaleUnitPrice(pVal);
+      setSaleUnitPriceStr(String(pVal));
       if (draft.paymentMode) setSalePaymentMode(draft.paymentMode);
     } else {
       setCheckoutSaleDone(false);
@@ -558,10 +780,16 @@ export default function SellerAttendanceScreen() {
       setCheckoutFeedback('');
       setCheckoutNotes('');
       setSaleQuantity(1);
+      setSaleQuantityStr('1');
       const defaultProd = products[0];
       if (defaultProd) {
         setSelectedProductId(defaultProd.id);
-        setSaleUnitPrice(defaultProd.basePricePaise / 100 || 25);
+        const baseRupees = defaultProd.basePricePaise / 100 || 25;
+        setSaleUnitPrice(baseRupees);
+        setSaleUnitPriceStr(String(baseRupees));
+      } else {
+        setSaleUnitPrice(25);
+        setSaleUnitPriceStr('25');
       }
       setSalePaymentMode('CASH');
     }
@@ -620,37 +848,79 @@ export default function SellerAttendanceScreen() {
       return;
     }
 
+    const targetCustomerId = checkoutCustomerId || activeCheckoutVisit.customerId;
+    const chosenProduct = products.find((p) => p.id === selectedProductId) || products[0];
+    const prodId = chosenProduct?.id || '';
+    const availStock = prodId ? (stockMap[prodId] ?? 0) : 0;
+    const minPricePaise = chosenProduct?.minimumPricePaise ?? 2500;
+    const unitPricePaise = Math.round((saleUnitPrice || 0) * 100);
+    const isLowPriceSale = checkoutSaleDone && unitPricePaise > 0 && unitPricePaise < minPricePaise;
+
+    if (checkoutSaleDone) {
+      if (!targetCustomerId) {
+        Alert.alert('Select or Add Shop', 'Please select a shop or add a new shop for this sale.');
+        return;
+      }
+      if (!saleQuantity || saleQuantity <= 0) {
+        Alert.alert('Enter Quantity', 'Please enter at least 1 packet.');
+        return;
+      }
+      if (!saleUnitPrice || saleUnitPrice <= 0) {
+        Alert.alert('Enter Price', 'Please enter a valid price per packet.');
+        return;
+      }
+      if (inventoryLoaded && chosenProduct) {
+        if (availStock <= 0) {
+          Alert.alert('Out of Stock', `You currently have 0 packets of ${chosenProduct.name} available.`);
+          return;
+        }
+        if (saleQuantity > availStock) {
+          Alert.alert(
+            'Not Enough Stock',
+            `Only ${availStock.toLocaleString('en-IN')} packets of ${chosenProduct.name} available (${saleQuantity} entered).`
+          );
+          return;
+        }
+      }
+    }
+
     setIsCheckingOut(true);
     setFeedback(null);
 
     try {
-      const coords = await acquireCoordinates();
+      // Reuse selected shop's saved coordinates or the active visit's check-in pin
+      // instead of pulling drifted live indoor GPS during checkout.
+      const targetCustomer = customers.find((c) => c.id === targetCustomerId);
+      const customerSavedCoords = getCustomerSavedCoords(targetCustomer);
+      const visitLat = Number(activeCheckoutVisit.latitude);
+      const visitLng = Number(activeCheckoutVisit.longitude);
+      const hasValidVisitCoords =
+        activeCheckoutVisit.latitude != null &&
+        activeCheckoutVisit.longitude != null &&
+        Number.isFinite(visitLat) &&
+        Number.isFinite(visitLng) &&
+        visitLat !== 0 &&
+        visitLng !== 0 &&
+        isWithinIndiaBounds(visitLat, visitLng);
+
+      const coords =
+        customerSavedCoords ||
+        (hasValidVisitCoords
+          ? { latitude: Number(visitLat.toFixed(6)), longitude: Number(visitLng.toFixed(6)) }
+          : await acquireCoordinates());
+
       if (!coords) {
         Alert.alert(
           'GPS Location Required',
-          'Could not capture your live GPS location when leaving the shop. Please turn ON High Accuracy GPS and try again.'
+          'Could not determine shop GPS location when finishing visit. Please turn ON High Accuracy GPS and try again.'
         );
         return;
       }
+
       let generatedSaleId: string | undefined = undefined;
+      let createdSaleStatus: string | undefined = undefined;
 
-      if (checkoutSaleDone) {
-        const targetCustomerId = checkoutCustomerId || activeCheckoutVisit.customerId;
-        if (!targetCustomerId) {
-          Alert.alert('Select Shop', 'Please select a shop for this sale.');
-          setIsCheckingOut(false);
-          return;
-        }
-
-        if (!saleQuantity || saleQuantity <= 0) {
-          Alert.alert('Enter Quantity', 'Please enter at least 1 packet.');
-          setIsCheckingOut(false);
-          return;
-        }
-
-        const chosenProduct = products.find((p) => p.id === selectedProductId) || products[0];
-        const prodId = chosenProduct?.id || '';
-        const unitPricePaise = Math.round((saleUnitPrice || 25) * 100);
+      if (checkoutSaleDone && targetCustomerId) {
         const reqKey = `sale_checkout_${activeCheckoutVisit.id}_${Date.now()}`;
 
         const saleRes = await sellerApi.createSale({
@@ -665,6 +935,7 @@ export default function SellerAttendanceScreen() {
 
         const createdSale = (saleRes as any)?.sale || (saleRes as any)?.item || saleRes;
         generatedSaleId = createdSale?.id;
+        createdSaleStatus = createdSale?.status;
       }
 
       const finalNotes = checkoutNotes.trim() || (checkoutReason ? `Reason: ${checkoutReason}` : undefined);
@@ -681,9 +952,12 @@ export default function SellerAttendanceScreen() {
       const updatedVisit = (checkOutRes as any)?.visit || (checkOutRes as any)?.data?.visit || checkOutRes;
       const checkoutTimestamp = updatedVisit?.checkOutTime || new Date().toISOString();
       const checkInMs = new Date(activeCheckoutVisit.checkInTime).getTime();
-      const calcDurationMins =
-        updatedVisit?.durationMins ??
-        Math.max(1, Math.round((Date.now() - (isNaN(checkInMs) ? Date.now() : checkInMs)) / 60000));
+      const rawStaySecs = Math.max(
+        1,
+        Math.round((new Date(checkoutTimestamp).getTime() - (isNaN(checkInMs) ? Date.now() : checkInMs)) / 1000)
+      );
+      const stayDisplayStr = formatDurationHuman(rawStaySecs);
+      const calcDurationMins = updatedVisit?.durationMins ?? Math.round((rawStaySecs / 60) * 100) / 100;
 
       const completedVisit: ShiftVisit = {
         ...activeCheckoutVisit,
@@ -714,13 +988,20 @@ export default function SellerAttendanceScreen() {
       setCheckoutReason('');
       setCheckoutSaleDone(false);
 
-      const successTitle = checkoutSaleDone ? 'Check Out & Sale Saved' : 'Checked Out of Shop';
+      const pendingApproval = createdSaleStatus === 'PENDING_APPROVAL' || isLowPriceSale;
+      const successTitle = checkoutSaleDone
+        ? pendingApproval
+          ? 'Check Out & Sent for Approval'
+          : 'Check Out & Sale Saved'
+        : 'Checked Out of Shop';
       const successMessage = checkoutSaleDone
-        ? `Stayed ${calcDurationMins} min · Sale saved: ₹${(saleQuantity * saleUnitPrice).toLocaleString('en-IN')}.`
-        : `Stayed ${calcDurationMins} min (${checkoutReason || 'Shop Visit'}).`;
+        ? pendingApproval
+          ? `Stayed ${stayDisplayStr} · Low-price bill (₹${(saleQuantity * (saleUnitPrice || 0)).toLocaleString('en-IN')}) sent to Admin for approval.`
+          : `Stayed ${stayDisplayStr} · Sale saved: ₹${(saleQuantity * (saleUnitPrice || 0)).toLocaleString('en-IN')}.`
+        : `Stayed ${stayDisplayStr} (${checkoutReason || 'Shop Visit'}).`;
 
       setFeedback({
-        type: 'success',
+        type: pendingApproval ? 'warning' : 'success',
         title: successTitle,
         message: successMessage,
       });
@@ -859,7 +1140,7 @@ export default function SellerAttendanceScreen() {
 
     for (const s of pastShifts) {
       totalShops += s.visits?.length || 0;
-      totalKm += computeShiftTravelDistance(s).distanceKm;
+      totalKm += computeShiftTimingSummary(s).distanceKm;
     }
 
     return {
@@ -1161,7 +1442,7 @@ export default function SellerAttendanceScreen() {
                 const isActive = s.status === 'ACTIVE' || (!s.endTime && Boolean(s.startTime));
                 const isExpanded = Boolean(expandedShiftIds[s.id]);
                 const shiftVisits = s.visits || [];
-                const distInfo = computeShiftTravelDistance(s);
+                const shiftTiming = computeShiftTimingSummary(s);
                 const startDateStr = s.startTime
                   ? new Date(s.startTime).toLocaleDateString('en-IN', {
                       weekday: 'short',
@@ -1180,15 +1461,7 @@ export default function SellerAttendanceScreen() {
                   s.startLatitude ? 'Location saved' : 'Start location'
                 );
 
-                const durationStr = (() => {
-                  if (!s.startTime) return '0 min';
-                  const startMs = new Date(s.startTime).getTime();
-                  const endMs = s.endTime ? new Date(s.endTime).getTime() : Date.now();
-                  const diffMins = Math.max(0, Math.floor((endMs - startMs) / 60000));
-                  const h = Math.floor(diffMins / 60);
-                  const m = diffMins % 60;
-                  return h > 0 ? `${h}h ${m}m` : `${m} min`;
-                })();
+                const durationStr = shiftTiming.totalSeconds > 0 ? shiftTiming.formattedTotal : '0s';
 
                 return (
                   <Card key={s.id || idx} style={[styles.historyCard, isActive && styles.historyCardActive]}>
@@ -1229,7 +1502,7 @@ export default function SellerAttendanceScreen() {
                       <View style={styles.historyMetricBox}>
                         <Text style={styles.historyMetricLabel}>DISTANCE</Text>
                         <Text style={[styles.historyMetricValue, { color: BrandColors.pink.primary }]}>
-                          {distInfo.formatted}
+                          {shiftTiming.formattedDistance}
                         </Text>
                       </View>
                     </View>
@@ -1397,9 +1670,19 @@ export default function SellerAttendanceScreen() {
           >
             <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>Check In at Shop</Text>
-              <Text style={styles.modalSubtitle}>Choose the shop you are visiting now</Text>
+              <Text style={styles.modalSubtitle}>Choose an existing shop or add a new shop to check in</Text>
 
-            <Text style={styles.modalFieldLabel}>Select Shop</Text>
+            <View style={styles.sectionLabelRow}>
+              <Text style={styles.modalFieldLabel}>Select Shop</Text>
+              <Pressable
+                style={styles.addShopInlineBtn}
+                onPress={() => openQuickAddShopModal('CHECKIN')}
+                hitSlop={HitSlop.sm}
+              >
+                <Ionicons name="add-circle-outline" size={14} color={BrandColors.pink.dark} />
+                <Text style={styles.addShopInlineBtnText}>Add New Shop</Text>
+              </Pressable>
+            </View>
             <View style={styles.checkInSearchRow}>
               <Ionicons name="search" size={16} color="#94A3B8" style={{ marginRight: 6 }} />
               <TextInput
@@ -1418,30 +1701,49 @@ export default function SellerAttendanceScreen() {
             </View>
 
             <ScrollView style={styles.modalCustomerList} nestedScrollEnabled>
-              {filteredCheckInCustomers.map((c) => {
-                const isSelected = selectedCustomerId === c.id;
-                return (
-                  <Pressable
-                    key={c.id}
-                    style={[styles.modalCustomerItem, isSelected && styles.modalCustomerItemActive]}
-                    onPress={() => {
-                      setSelectedCustomerId(c.id);
-                      setCheckInCustomShopName('');
-                    }}
-                  >
-                    <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
-                      {c.shopName}
-                    </Text>
-                    <Text style={styles.modalCustomerSub}>
-                      {c.ownerName} • {c.village || c.district || 'Area'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {filteredCheckInCustomers.length === 0 ? (
+                <View style={styles.emptyShopBox}>
+                  <Ionicons name="storefront-outline" size={24} color="#94A3B8" />
+                  <Text style={styles.emptyShopText}>
+                    {customers.length === 0
+                      ? 'No shops added yet. Add a new shop first to link visits and bills.'
+                      : 'No matching shop found.'}
+                  </Text>
+                  <Button
+                    title="+ Add New Shop"
+                    size="sm"
+                    variant="primary"
+                    onPress={() => openQuickAddShopModal('CHECKIN')}
+                  />
+                </View>
+              ) : (
+                filteredCheckInCustomers.map((c) => {
+                  const isSelected = selectedCustomerId === c.id;
+                  const savedPin = getCustomerSavedCoords(c);
+                  return (
+                    <Pressable
+                      key={c.id}
+                      style={[styles.modalCustomerItem, isSelected && styles.modalCustomerItemActive]}
+                      onPress={() => {
+                        setSelectedCustomerId(c.id);
+                        setCheckInCustomShopName('');
+                      }}
+                    >
+                      <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
+                        {c.shopName}
+                      </Text>
+                      <Text style={styles.modalCustomerSub}>
+                        {c.ownerName} • {c.village || c.district || 'Area'}
+                        {savedPin ? ' · Saved GPS' : ''}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              )}
             </ScrollView>
 
             <View style={{ marginTop: Spacing.sm }}>
-              <Text style={styles.modalFieldLabel}>Or Type Shop Name</Text>
+              <Text style={styles.modalFieldLabel}>Or Type Walk-In Shop Name</Text>
               <TextInput
                 style={styles.modalTextInput}
                 placeholder="Enter shop name..."
@@ -1465,19 +1767,29 @@ export default function SellerAttendanceScreen() {
               />
             </View>
 
-            <View style={styles.checkoutGpsNotice}>
-              <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
-              <Text style={[styles.checkoutGpsNoticeText, { flex: 1 }]} numberOfLines={2}>
-                {isAcquiringLocation
-                  ? 'Fetching live shop GPS location...'
-                  : currentLocation?.address
-                  ? `GPS Ready: ${formatShortAddressLabel(currentLocation.address)} (${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)})`
-                  : 'Live shop GPS will be captured when you Check In.'}
-              </Text>
-              <Pressable onPress={() => fetchLiveLocation(true)} hitSlop={HitSlop.sm} style={{ marginLeft: 8 }}>
-                <Ionicons name="refresh" size={16} color="#16A34A" />
-              </Pressable>
-            </View>
+            {(() => {
+              const chosenCust = customers.find((c) => c.id === selectedCustomerId);
+              const savedPin = getCustomerSavedCoords(chosenCust);
+              return (
+                <View style={styles.checkoutGpsNotice}>
+                  <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
+                  <Text style={[styles.checkoutGpsNoticeText, { flex: 1 }]} numberOfLines={2}>
+                    {savedPin
+                      ? `Using ${chosenCust?.shopName}'s saved GPS (${savedPin.latitude.toFixed(4)}, ${savedPin.longitude.toFixed(4)})`
+                      : isAcquiringLocation
+                      ? 'Fetching live shop GPS location...'
+                      : currentLocation?.address
+                      ? `Live GPS Ready: ${formatShortAddressLabel(currentLocation.address)} (${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)})`
+                      : 'Live shop GPS will be captured when you Check In.'}
+                  </Text>
+                  {!savedPin ? (
+                    <Pressable onPress={() => fetchLiveLocation(true)} hitSlop={HitSlop.sm} style={{ marginLeft: 8 }}>
+                      <Ionicons name="refresh" size={16} color="#16A34A" />
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })()}
 
             <View style={styles.modalBtnRow}>
               <Button
@@ -1522,7 +1834,7 @@ export default function SellerAttendanceScreen() {
               { maxHeight: '90%', paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
             ]}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.checkoutModalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>Finish Shop Visit</Text>
@@ -1556,7 +1868,7 @@ export default function SellerAttendanceScreen() {
                       ? (() => {
                           const ms = new Date(activeCheckoutVisit.checkInTime).getTime();
                           const s = Math.max(0, Math.floor((Date.now() - (isNaN(ms) ? Date.now() : ms)) / 1000));
-                          return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+                          return formatDurationHuman(s);
                         })()
                       : '0s'}
                   </Text>
@@ -1637,100 +1949,233 @@ export default function SellerAttendanceScreen() {
 
                   {!activeCheckoutVisit?.customerId && (
                     <View style={{ marginBottom: Spacing.sm }}>
-                      <Text style={styles.modalFieldLabel}>Select Shop *</Text>
+                      <View style={styles.sectionLabelRow}>
+                        <Text style={styles.modalFieldLabel}>Select Shop *</Text>
+                        <Pressable
+                          style={styles.addShopInlineBtn}
+                          onPress={() => openQuickAddShopModal('CHECKOUT')}
+                          hitSlop={HitSlop.sm}
+                        >
+                          <Ionicons name="add-circle-outline" size={14} color={BrandColors.pink.dark} />
+                          <Text style={styles.addShopInlineBtnText}>Add New Shop</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.checkInSearchRow}>
+                        <Ionicons name="search" size={15} color="#94A3B8" style={{ marginRight: 6 }} />
+                        <TextInput
+                          style={styles.checkInSearchInput}
+                          placeholder="Search shop..."
+                          placeholderTextColor="#94A3B8"
+                          value={checkoutShopSearch}
+                          onChangeText={setCheckoutShopSearch}
+                          autoCorrect={false}
+                        />
+                        {checkoutShopSearch ? (
+                          <Pressable onPress={() => setCheckoutShopSearch('')} hitSlop={HitSlop.sm}>
+                            <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                          </Pressable>
+                        ) : null}
+                      </View>
                       <ScrollView style={styles.modalCustomerList} nestedScrollEnabled>
-                        {customers.map((c) => {
-                          const isSelected = checkoutCustomerId === c.id;
-                          return (
-                            <Pressable
-                              key={c.id}
-                              style={[styles.modalCustomerItem, isSelected && styles.modalCustomerItemActive]}
-                              onPress={() => {
-                                setCheckoutCustomerId(c.id);
-                                saveCurrentCheckoutDraft({ selectedCustomerId: c.id });
-                              }}
-                            >
-                              <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
-                                {c.shopName}
-                              </Text>
-                              <Text style={styles.modalCustomerSub}>
-                                {c.ownerName} • {c.village || c.district}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
+                        {filteredCheckoutCustomers.length === 0 ? (
+                          <View style={styles.emptyShopBox}>
+                            <Text style={styles.emptyShopText}>
+                              No shops found. Add a shop now to bill this sale cleanly.
+                            </Text>
+                            <Button
+                              title="+ Add New Shop"
+                              size="sm"
+                              variant="primary"
+                              onPress={() => openQuickAddShopModal('CHECKOUT')}
+                            />
+                          </View>
+                        ) : (
+                          filteredCheckoutCustomers.map((c) => {
+                            const isSelected = checkoutCustomerId === c.id;
+                            return (
+                              <Pressable
+                                key={c.id}
+                                style={[styles.modalCustomerItem, isSelected && styles.modalCustomerItemActive]}
+                                onPress={() => {
+                                  setCheckoutCustomerId(c.id);
+                                  saveCurrentCheckoutDraft({ selectedCustomerId: c.id });
+                                }}
+                              >
+                                <Text style={[styles.modalCustomerName, isSelected && styles.modalCustomerNameActive]}>
+                                  {c.shopName}
+                                </Text>
+                                <Text style={styles.modalCustomerSub}>
+                                  {c.ownerName} • {c.village || c.district}
+                                </Text>
+                              </Pressable>
+                            );
+                          })
+                        )}
                       </ScrollView>
                     </View>
                   )}
 
-                  <View style={{ marginBottom: Spacing.sm }}>
-                    <Text style={styles.modalFieldLabel}>Select Product *</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
-                      {products.map((p) => {
-                        const isSelected = selectedProductId === p.id;
-                        return (
-                          <Pressable
-                            key={p.id}
-                            style={[styles.productCard, isSelected && styles.productCardActive]}
-                            onPress={() => {
-                              setSelectedProductId(p.id);
-                              const base = p.basePricePaise / 100 || 25;
-                              setSaleUnitPrice(base);
-                              saveCurrentCheckoutDraft({ selectedProductId: p.id, unitPrice: base });
-                            }}
-                          >
-                            <Text style={[styles.productCardName, isSelected && styles.productCardNameActive]}>
-                              {p.name}
+                  {(() => {
+                    const activeProd = products.find((p) => p.id === selectedProductId) || products[0];
+                    const activeAvail = activeProd ? (stockMap[activeProd.id] ?? 0) : 0;
+                    const minPricePaise = activeProd?.minimumPricePaise ?? 2500;
+                    const unitPaise = Math.round((saleUnitPrice || 0) * 100);
+                    const isBelowMinPrice = saleUnitPrice > 0 && unitPaise < minPricePaise;
+                    const isStockOut = inventoryLoaded && Boolean(activeProd) && activeAvail <= 0;
+                    const isOverStock = inventoryLoaded && Boolean(activeProd) && activeAvail > 0 && saleQuantity > activeAvail;
+
+                    return (
+                      <>
+                        <View style={{ marginBottom: Spacing.sm }}>
+                          <Text style={styles.modalFieldLabel}>Select Product *</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                            {products.map((p) => {
+                              const isSelected = (activeProd?.id || selectedProductId) === p.id;
+                              const pStock = stockMap[p.id] ?? 0;
+                              return (
+                                <Pressable
+                                  key={p.id}
+                                  style={[styles.productCard, isSelected && styles.productCardActive]}
+                                  onPress={() => {
+                                    setSelectedProductId(p.id);
+                                    const base = p.basePricePaise / 100 || 25;
+                                    setSaleUnitPrice(base);
+                                    setSaleUnitPriceStr(String(base));
+                                    const clamped = pStock > 0 && saleQuantity > pStock ? pStock : saleQuantity;
+                                    if (clamped !== saleQuantity) {
+                                      setSaleQuantity(clamped);
+                                      setSaleQuantityStr(String(clamped));
+                                    }
+                                    saveCurrentCheckoutDraft({
+                                      selectedProductId: p.id,
+                                      unitPrice: base,
+                                      quantity: clamped,
+                                    });
+                                  }}
+                                >
+                                  <Text style={[styles.productCardName, isSelected && styles.productCardNameActive]}>
+                                    {p.name}
+                                  </Text>
+                                  <Text style={styles.productCardPrice}>₹{p.basePricePaise / 100} / pkt</Text>
+                                  <View
+                                    style={[
+                                      styles.productStockTag,
+                                      inventoryLoaded && pStock <= 0 && styles.productStockTagEmpty,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.productStockTagText,
+                                        inventoryLoaded && pStock <= 0 && { color: '#B91C1C' },
+                                      ]}
+                                    >
+                                      {!inventoryLoaded
+                                        ? 'Stock: —'
+                                        : pStock > 0
+                                        ? `Avail: ${pStock} pkts`
+                                        : 'Out of stock'}
+                                    </Text>
+                                  </View>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+
+                        <View style={styles.quantityPriceRow}>
+                          <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                            <Text style={styles.modalFieldLabel}>
+                              Packets {inventoryLoaded && activeProd ? `(${activeAvail} avail)` : ''}
                             </Text>
-                            <Text style={styles.productCardPrice}>₹{p.basePricePaise / 100} / pkt</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                            <View style={styles.stepperRow}>
+                              <Pressable
+                                style={styles.stepperBtn}
+                                onPress={() => {
+                                  const newQ = Math.max(1, saleQuantity - 1);
+                                  setSaleQuantity(newQ);
+                                  setSaleQuantityStr(String(newQ));
+                                  saveCurrentCheckoutDraft({ quantity: newQ });
+                                }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Decrease packets"
+                              >
+                                <Text style={styles.stepperBtnText}>-</Text>
+                              </Pressable>
+                              <TextInput
+                                keyboardType="numeric"
+                                value={saleQuantityStr}
+                                onChangeText={(t) => {
+                                  const cleaned = t.replace(/[^0-9]/g, '');
+                                  setSaleQuantityStr(cleaned);
+                                  const parsed = cleaned ? parseInt(cleaned, 10) : 0;
+                                  const validQty = isNaN(parsed) || parsed < 0 ? 0 : parsed;
+                                  setSaleQuantity(validQty);
+                                  saveCurrentCheckoutDraft({ quantity: validQty });
+                                }}
+                                style={styles.stepperInput}
+                                placeholder="0"
+                                placeholderTextColor="#94A3B8"
+                              />
+                              <Pressable
+                                style={styles.stepperBtn}
+                                onPress={() => {
+                                  const candidate = saleQuantity + 1;
+                                  const bounded =
+                                    inventoryLoaded && activeAvail > 0
+                                      ? Math.min(candidate, activeAvail)
+                                      : candidate;
+                                  setSaleQuantity(bounded);
+                                  setSaleQuantityStr(String(bounded));
+                                  saveCurrentCheckoutDraft({ quantity: bounded });
+                                }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Increase packets"
+                              >
+                                <Text style={styles.stepperBtnText}>+</Text>
+                              </Pressable>
+                            </View>
+                          </View>
 
-                  <View style={styles.quantityPriceRow}>
-                    <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                      <Text style={styles.modalFieldLabel}>Packets</Text>
-                      <View style={styles.stepperRow}>
-                        <Pressable
-                          style={styles.stepperBtn}
-                          onPress={() => {
-                            const newQ = Math.max(1, saleQuantity - 1);
-                            setSaleQuantity(newQ);
-                            saveCurrentCheckoutDraft({ quantity: newQ });
-                          }}
-                        >
-                          <Text style={styles.stepperBtnText}>-</Text>
-                        </Pressable>
-                        <Text style={styles.stepperValue}>{saleQuantity}</Text>
-                        <Pressable
-                          style={styles.stepperBtn}
-                          onPress={() => {
-                            const newQ = saleQuantity + 1;
-                            setSaleQuantity(newQ);
-                            saveCurrentCheckoutDraft({ quantity: newQ });
-                          }}
-                        >
-                          <Text style={styles.stepperBtnText}>+</Text>
-                        </Pressable>
-                      </View>
-                    </View>
+                          <View style={{ flex: 1 }}>
+                            <Input
+                              label="Price per Packet (₹) *"
+                              value={saleUnitPriceStr}
+                              onChangeText={(t) => {
+                                const cleaned = t.replace(/[^0-9.]/g, '');
+                                setSaleUnitPriceStr(cleaned);
+                                const val = parseFloat(cleaned) || 0;
+                                setSaleUnitPrice(val);
+                                saveCurrentCheckoutDraft({ unitPrice: val });
+                              }}
+                              keyboardType="numeric"
+                              leftIcon={<Text style={{ fontWeight: '700', color: '#64748B' }}>₹</Text>}
+                              containerStyle={{ marginBottom: 0 }}
+                            />
+                          </View>
+                        </View>
 
-                    <View style={{ flex: 1 }}>
-                      <Input
-                        label="Price per Packet (₹) *"
-                        value={String(saleUnitPrice)}
-                        onChangeText={(t) => {
-                          const val = parseFloat(t) || 0;
-                          setSaleUnitPrice(val);
-                          saveCurrentCheckoutDraft({ unitPrice: val });
-                        }}
-                        keyboardType="numeric"
-                        leftIcon={<Text style={{ fontWeight: '700', color: '#64748B' }}>₹</Text>}
-                      />
-                    </View>
-                  </View>
+                        {isStockOut || isOverStock ? (
+                          <View style={styles.stockWarningBox}>
+                            <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                            <Text style={styles.stockWarningText}>
+                              {isStockOut
+                                ? `${activeProd?.name || 'Product'} is out of stock (0 packets available).`
+                                : `Only ${activeAvail.toLocaleString('en-IN')} packets available (${saleQuantity} entered).`}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {isBelowMinPrice ? (
+                          <View style={styles.lowPriceWarningBox}>
+                            <Ionicons name="warning-outline" size={16} color="#D97706" />
+                            <Text style={styles.lowPriceWarningText}>
+                              Below ₹{(minPricePaise / 100).toFixed(2)}/pkt floor — Sale will be sent to Admin for price approval.
+                            </Text>
+                          </View>
+                        ) : null}
+                      </>
+                    );
+                  })()}
 
                   <View style={styles.totalSaleBanner}>
                     <Text style={styles.totalSaleLabel}>Total Amount:</Text>
@@ -1886,14 +2331,14 @@ export default function SellerAttendanceScreen() {
                 routeDistanceKm={gpsTraveledDistanceKm}
               />
 
-              <View style={styles.meterPreviewCard}>
-                <Ionicons name="navigate-circle" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
-                <Text style={styles.meterPreviewText}>
-                  Calculated Travel:{' '}
-                  <Text style={{ fontWeight: '700' }}>{gpsTraveledDistanceKm} km</Text>
-                  {gpsTraveledDistanceKm === 0 ? ' (Same location)' : ''}
-                </Text>
-              </View>
+              {gpsTraveledDistanceKm === 0 ? (
+                <View style={styles.meterPreviewCard}>
+                  <Ionicons name="navigate-circle" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
+                  <Text style={styles.meterPreviewText}>
+                    Calculated Travel: <Text style={{ fontWeight: '700' }}>0 km</Text> (Same location · Stationary)
+                  </Text>
+                </View>
+              ) : null}
 
               <Input
                 label="Note (Optional)"
@@ -1973,249 +2418,402 @@ export default function SellerAttendanceScreen() {
             ]}
           >
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.auditHeader}>
-                <View style={styles.auditIcon}>
-                  <Ionicons name="list" size={22} color={BrandColors.pink.primary} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.modalTitle}>Duty Timeline</Text>
+              {(() => {
+                const timelineSummary = computeShiftTimingSummary(selectedAuditShift);
+                const auditVisits = selectedAuditShift?.visits || [];
+                return (
+                  <>
+                    <View style={styles.auditHeader}>
+                      <View style={styles.auditIcon}>
+                        <Ionicons name="list" size={22} color={BrandColors.pink.primary} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.modalTitle}>Duty Timeline</Text>
+                        <Text style={styles.modalSubtitle}>
+                          {user?.name || 'Seller'} · {timelineSummary.formattedDistance}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => setSelectedAuditShift(null)} hitSlop={HitSlop.md}>
+                        <Ionicons name="close" size={22} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {selectedAuditShift ? (
+                      <View style={styles.auditTimingCard}>
+                        <View style={styles.auditTimingHeader}>
+                          <Ionicons name="time" size={13} color="#E11D48" style={{ marginRight: 4 }} />
+                          <Text style={styles.auditTimingTitle}>TIME SUMMARY</Text>
+                          <Text style={styles.auditTimingStops}>
+                            {auditVisits.length} {auditVisits.length === 1 ? 'shop' : 'shops'}
+                          </Text>
+                        </View>
+                        <View style={styles.auditTimingGrid}>
+                          <View style={styles.auditTimingCol}>
+                            <Text style={styles.auditTimingLabel}>TOTAL TIME</Text>
+                            <Text style={styles.auditTimingVal}>{timelineSummary.formattedTotal}</Text>
+                          </View>
+                          <View style={styles.auditTimingCol}>
+                            <Text style={styles.auditTimingLabel}>AT SHOPS</Text>
+                            <Text style={[styles.auditTimingVal, { color: '#16A34A' }]}>
+                              {timelineSummary.formattedAtShops}
+                            </Text>
+                          </View>
+                          <View style={styles.auditTimingCol}>
+                            <Text style={styles.auditTimingLabel}>TRAVEL</Text>
+                            <Text
+                              style={[
+                                styles.auditTimingVal,
+                                { color: timelineSummary.travelSeconds > 0 ? '#D97706' : '#64748B' },
+                              ]}
+                            >
+                              {timelineSummary.formattedTravel}
+                            </Text>
+                          </View>
+                          <View style={styles.auditTimingCol}>
+                            <Text style={styles.auditTimingLabel}>DISTANCE</Text>
+                            <Text style={styles.auditTimingVal}>{timelineSummary.formattedDistance}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {selectedAuditShift ? (
+                      <View style={styles.auditTimeline}>
+                        <View style={styles.auditTimelineRow}>
+                          <View style={[styles.auditNodeDot, { backgroundColor: '#16A34A' }]}>
+                            <Text style={styles.auditNodeDotText}>S</Text>
+                          </View>
+                          <View style={styles.auditNodeContent}>
+                            <View style={styles.auditNodeHeaderRow}>
+                              <Text style={styles.auditNodeTitle}>Duty Started</Text>
+                              <Text style={styles.auditNodeTime}>
+                                {new Date(selectedAuditShift.startTime).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Text>
+                            </View>
+                            {selectedAuditShift.startAddress ? (
+                              <Text style={styles.auditNodeAddress}>{selectedAuditShift.startAddress}</Text>
+                            ) : selectedAuditShift.startLatitude ? (
+                              <Text style={styles.auditNodeGps}>Location saved</Text>
+                            ) : null}
+                          </View>
+                        </View>
+
+                        {auditVisits.length === 0 ? (
+                          <View style={styles.auditTimelineRow}>
+                            <View style={[styles.auditNodeDot, { backgroundColor: '#94A3B8' }]}>
+                              <Ionicons name="location-outline" size={12} color="#FFFFFF" />
+                            </View>
+                            <View style={styles.auditNodeContent}>
+                              <View style={styles.auditNodeHeaderRow}>
+                                <Text style={styles.auditNodeTitle}>
+                                  {timelineSummary.distanceKm === 0
+                                    ? 'Same Location (No Travel)'
+                                    : `Travelled ${timelineSummary.formattedDistance}`}
+                                </Text>
+                                <Text style={styles.auditNodeTime}>0 shops</Text>
+                              </View>
+                              <Text style={styles.auditNodeAddress}>
+                                {timelineSummary.distanceKm === 0
+                                  ? 'No location change or shop visits recorded during this duty.'
+                                  : 'No shop visits were checked in during this duty.'}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+
+                        {auditVisits.map((v, vIdx, allVisits) => {
+                          const hasSale = Boolean(v.saleDone || (v as any).sale_done || v.saleId);
+                          const arriveStr = v.checkInTime
+                            ? new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : '00:00';
+                          const leftStr = v.checkOutTime
+                            ? new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : 'Active';
+                          const visitSecs = getVisitDurationSeconds(v);
+                          const durStr = visitSecs > 0 ? formatDurationHuman(visitSecs) : v.checkOutTime ? '1s' : 'Live';
+
+                          const prevLat = vIdx === 0 ? selectedAuditShift.startLatitude : allVisits[vIdx - 1]?.latitude;
+                          const prevLng = vIdx === 0 ? selectedAuditShift.startLongitude : allVisits[vIdx - 1]?.longitude;
+                          const legKm =
+                            prevLat != null &&
+                            prevLng != null &&
+                            v.latitude != null &&
+                            v.longitude != null
+                              ? calculateLegDistanceKm(
+                                  { lat: Number(prevLat), lng: Number(prevLng) },
+                                  { lat: Number(v.latitude), lng: Number(v.longitude) }
+                                )
+                              : 0;
+
+                          return (
+                            <View key={v.id || vIdx} style={styles.auditTimelineRow}>
+                              <View style={[styles.auditNodeDot, { backgroundColor: '#E11D48' }]}>
+                                <Text style={styles.auditNodeDotText}>{vIdx + 1}</Text>
+                              </View>
+                              <View style={styles.auditNodeCard}>
+                                <View style={styles.auditNodeHeaderRow}>
+                                  <Text style={styles.auditShopName}>{v.customer?.shopName || v.shopName || 'Shop'}</Text>
+                                  <Badge
+                                    label={hasSale ? 'Sale Done' : 'No Sale'}
+                                    variant={hasSale ? 'success' : 'neutral'}
+                                    size="sm"
+                                  />
+                                </View>
+
+                                <View style={styles.auditShopTimes}>
+                                  <Text style={styles.auditShopTimeItem}>
+                                    IN: <Text style={{ fontWeight: '700' }}>{arriveStr}</Text>
+                                  </Text>
+                                  <Text style={styles.auditShopTimeItem}>
+                                    OUT: <Text style={{ fontWeight: '700' }}>{leftStr}</Text>
+                                  </Text>
+                                  <Text style={[styles.auditShopTimeItem, { color: '#16A34A' }]}>({durStr})</Text>
+                                </View>
+
+                                {legKm > 0 ? (
+                                  <Text style={[styles.auditNodeGps, { marginBottom: 4 }]}>
+                                    Travelled ~{legKm} km from {vIdx === 0 ? 'start point' : 'previous shop'}
+                                  </Text>
+                                ) : null}
+
+                                {v.customerFeedback ? (
+                                  <View style={styles.auditFeedbackBox}>
+                                    <Ionicons
+                                      name="chatbubble-ellipses"
+                                      size={12}
+                                      color={BrandColors.pink.primary}
+                                      style={{ marginRight: 4 }}
+                                    />
+                                    <Text style={styles.auditFeedbackText}>&ldquo;{v.customerFeedback}&rdquo;</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                            </View>
+                          );
+                        })}
+
+                        <View style={styles.auditTimelineRow}>
+                          <View style={[styles.auditNodeDot, { backgroundColor: '#0F172A' }]}>
+                            <Text style={styles.auditNodeDotText}>E</Text>
+                          </View>
+                          <View style={styles.auditNodeContent}>
+                            <View style={styles.auditNodeHeaderRow}>
+                              <Text style={styles.auditNodeTitle}>
+                                {selectedAuditShift.endTime ? 'Duty Ended' : 'On Duty Now'}
+                              </Text>
+                              <Text style={styles.auditNodeTime}>
+                                {selectedAuditShift.endTime
+                                  ? new Date(selectedAuditShift.endTime).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : 'Now'}
+                              </Text>
+                            </View>
+                            {selectedAuditShift.endAddress ? (
+                              <Text style={styles.auditNodeAddress}>{selectedAuditShift.endAddress}</Text>
+                            ) : selectedAuditShift.endLatitude ? (
+                              <Text style={styles.auditNodeGps}>Location saved</Text>
+                            ) : null}
+                            {(() => {
+                              const lastStop = auditVisits.length > 0 ? auditVisits[auditVisits.length - 1] : null;
+                              const prevLat = lastStop ? lastStop.latitude : selectedAuditShift.startLatitude;
+                              const prevLng = lastStop ? lastStop.longitude : selectedAuditShift.startLongitude;
+                              if (
+                                prevLat == null ||
+                                prevLng == null ||
+                                selectedAuditShift.endLatitude == null ||
+                                selectedAuditShift.endLongitude == null
+                              ) {
+                                return null;
+                              }
+                              const finalLegKm = calculateLegDistanceKm(
+                                { lat: Number(prevLat), lng: Number(prevLng) },
+                                {
+                                  lat: Number(selectedAuditShift.endLatitude),
+                                  lng: Number(selectedAuditShift.endLongitude),
+                                }
+                              );
+                              if (finalLegKm <= 0) return null;
+                              return (
+                                <Text style={[styles.auditNodeGps, { marginTop: 4 }]}>
+                                  Travelled ~{finalLegKm} km from {lastStop ? 'last shop' : 'start point'} to end location
+                                </Text>
+                              );
+                            })()}
+                          </View>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.auditBottomBar}>
+                      <Text style={styles.auditTotalKm}>
+                        Total Distance:{' '}
+                        <Text style={{ fontWeight: '800', color: BrandColors.pink.primary }}>
+                          {timelineSummary.formattedDistance}
+                        </Text>
+                      </Text>
+                      <Button title="Close" variant="outline" size="sm" onPress={() => setSelectedAuditShift(null)} />
+                    </View>
+                  </>
+                );
+              })()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------------------------------------------------- */}
+      {/* 8. QUICK ADD NEW SHOP MODAL (IN-PLACE CHECK-IN / SALE) */}
+      {/* ---------------------------------------------------- */}
+      <Modal
+        visible={quickAddShopVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setQuickAddShopVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <Pressable style={styles.modalBackdropDismiss} onPress={() => setQuickAddShopVisible(false)} />
+          <View
+            style={[
+              styles.modalContent,
+              { maxHeight: '92%', paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
+            <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={styles.checkoutModalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>Add New Shop</Text>
                   <Text style={styles.modalSubtitle}>
-                    {user?.name || 'Seller'} · {selectedAuditShift ? computeShiftTravelDistance(selectedAuditShift).formatted : '0 km'}
+                    Saves the shop with GPS pin and selects it automatically
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setSelectedAuditShift(null)} hitSlop={HitSlop.md}>
+                <TouchableOpacity onPress={() => setQuickAddShopVisible(false)} hitSlop={HitSlop.md}>
                   <Ionicons name="close" size={22} color="#94A3B8" />
                 </TouchableOpacity>
               </View>
 
-              {selectedAuditShift &&
-                (() => {
-                  const startMs = new Date(selectedAuditShift.startTime).getTime();
-                  const endMs = selectedAuditShift.endTime ? new Date(selectedAuditShift.endTime).getTime() : Date.now();
-                  const totalMins = Math.max(0, Math.floor((endMs - startMs) / 60000));
-                  const auditVisits = selectedAuditShift.visits || [];
-                  const timeAtShops = auditVisits.reduce((acc, v) => acc + (v.durationMins || 0), 0);
-                  const auditDistanceKm = computeShiftTravelDistance(selectedAuditShift).distanceKm;
-                  const travelTime =
-                    auditDistanceKm === 0 && auditVisits.length === 0
-                      ? 0
-                      : Math.max(0, totalMins - timeAtShops);
+              <Input
+                label="Shop Name *"
+                placeholder="e.g. Sai Medical Store"
+                value={newShopName}
+                onChangeText={setNewShopName}
+                leftIcon={<Ionicons name="storefront-outline" size={16} color="#94A3B8" />}
+              />
+              <Input
+                label="Owner / Contact Name *"
+                placeholder="e.g. Ramesh Patil"
+                value={newShopOwner}
+                onChangeText={setNewShopOwner}
+                leftIcon={<Ionicons name="person-outline" size={16} color="#94A3B8" />}
+              />
+              <Input
+                label="10-Digit Mobile Number *"
+                placeholder="98XXXXXXXX"
+                value={newShopPhone}
+                onChangeText={(t) => setNewShopPhone(t.replace(/[^0-9]/g, '').slice(0, 10))}
+                keyboardType="phone-pad"
+                leftIcon={<Ionicons name="call-outline" size={16} color="#94A3B8" />}
+              />
 
-                  return (
-                    <View style={styles.auditTimingCard}>
-                      <View style={styles.auditTimingHeader}>
-                        <Ionicons name="time" size={13} color="#E11D48" style={{ marginRight: 4 }} />
-                        <Text style={styles.auditTimingTitle}>TIME SUMMARY</Text>
-                        <Text style={styles.auditTimingStops}>{auditVisits.length} shops</Text>
-                      </View>
-                      <View style={styles.auditTimingGrid}>
-                        <View style={styles.auditTimingCol}>
-                          <Text style={styles.auditTimingLabel}>TOTAL TIME</Text>
-                          <Text style={styles.auditTimingVal}>{totalMins > 0 ? `${totalMins} min` : 'Active'}</Text>
-                        </View>
-                        <View style={styles.auditTimingCol}>
-                          <Text style={styles.auditTimingLabel}>AT SHOPS</Text>
-                          <Text style={[styles.auditTimingVal, { color: '#16A34A' }]}>{timeAtShops} min</Text>
-                        </View>
-                        <View style={styles.auditTimingCol}>
-                          <Text style={styles.auditTimingLabel}>TRAVEL</Text>
-                          <Text style={[styles.auditTimingVal, { color: travelTime > 0 ? '#D97706' : '#64748B' }]}>
-                            {travelTime} min
-                          </Text>
-                        </View>
-                        <View style={styles.auditTimingCol}>
-                          <Text style={styles.auditTimingLabel}>DISTANCE</Text>
-                          <Text style={styles.auditTimingVal}>{auditDistanceKm} km</Text>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })()}
-
-              {selectedAuditShift && (
-                <View style={styles.auditTimeline}>
-                  <View style={styles.auditTimelineRow}>
-                    <View style={[styles.auditNodeDot, { backgroundColor: '#16A34A' }]}>
-                      <Text style={styles.auditNodeDotText}>S</Text>
-                    </View>
-                    <View style={styles.auditNodeContent}>
-                      <View style={styles.auditNodeHeaderRow}>
-                        <Text style={styles.auditNodeTitle}>Duty Started</Text>
-                        <Text style={styles.auditNodeTime}>
-                          {new Date(selectedAuditShift.startTime).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </Text>
-                      </View>
-                      {selectedAuditShift.startAddress ? (
-                        <Text style={styles.auditNodeAddress}>{selectedAuditShift.startAddress}</Text>
-                      ) : selectedAuditShift.startLatitude ? (
-                        <Text style={styles.auditNodeGps}>Location saved</Text>
-                      ) : null}
-                    </View>
-                  </View>
-
-                  {(selectedAuditShift.visits || []).length === 0 ? (
-                    <View style={styles.auditTimelineRow}>
-                      <View style={[styles.auditNodeDot, { backgroundColor: '#94A3B8' }]}>
-                        <Ionicons name="location-outline" size={12} color="#FFFFFF" />
-                      </View>
-                      <View style={styles.auditNodeContent}>
-                        <View style={styles.auditNodeHeaderRow}>
-                          <Text style={styles.auditNodeTitle}>
-                            {computeShiftTravelDistance(selectedAuditShift).distanceKm === 0
-                              ? 'Same Location (No Travel)'
-                              : `Travelled ${computeShiftTravelDistance(selectedAuditShift).formatted}`}
-                          </Text>
-                          <Text style={styles.auditNodeTime}>0 shops</Text>
-                        </View>
-                        <Text style={styles.auditNodeAddress}>
-                          {computeShiftTravelDistance(selectedAuditShift).distanceKm === 0
-                            ? 'No location change or shop visits recorded during this duty.'
-                            : 'No shop visits were checked in during this duty.'}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : null}
-
-                  {(selectedAuditShift.visits || []).map((v, vIdx, allVisits) => {
-                    const hasSale = Boolean(v.saleDone || (v as any).sale_done || v.saleId);
-                    const arriveStr = v.checkInTime
-                      ? new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : '00:00';
-                    const leftStr = v.checkOutTime
-                      ? new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : 'Active';
-                    const durStr = v.durationMins ? `${v.durationMins} min` : v.checkOutTime ? '1 min' : 'Live';
-
-                    const prevLat = vIdx === 0 ? selectedAuditShift.startLatitude : allVisits[vIdx - 1]?.latitude;
-                    const prevLng = vIdx === 0 ? selectedAuditShift.startLongitude : allVisits[vIdx - 1]?.longitude;
-                    const legKm =
-                      prevLat != null &&
-                      prevLng != null &&
-                      v.latitude != null &&
-                      v.longitude != null
-                        ? calculateLegDistanceKm(
-                            { lat: Number(prevLat), lng: Number(prevLng) },
-                            { lat: Number(v.latitude), lng: Number(v.longitude) }
-                          )
-                        : 0;
-
-                    return (
-                      <View key={v.id || vIdx} style={styles.auditTimelineRow}>
-                        <View style={[styles.auditNodeDot, { backgroundColor: '#E11D48' }]}>
-                          <Text style={styles.auditNodeDotText}>{vIdx + 1}</Text>
-                        </View>
-                        <View style={styles.auditNodeCard}>
-                          <View style={styles.auditNodeHeaderRow}>
-                            <Text style={styles.auditShopName}>{v.customer?.shopName || v.shopName || 'Shop'}</Text>
-                            <Badge
-                              label={hasSale ? 'Sale Done' : 'No Sale'}
-                              variant={hasSale ? 'success' : 'neutral'}
-                              size="sm"
-                            />
-                          </View>
-
-                          <View style={styles.auditShopTimes}>
-                            <Text style={styles.auditShopTimeItem}>
-                              IN: <Text style={{ fontWeight: '700' }}>{arriveStr}</Text>
-                            </Text>
-                            <Text style={styles.auditShopTimeItem}>
-                              OUT: <Text style={{ fontWeight: '700' }}>{leftStr}</Text>
-                            </Text>
-                            <Text style={[styles.auditShopTimeItem, { color: '#16A34A' }]}>({durStr})</Text>
-                          </View>
-
-                          {legKm > 0 ? (
-                            <Text style={[styles.auditNodeGps, { marginBottom: 4 }]}>
-                              Travelled ~{legKm} km from {vIdx === 0 ? 'start point' : 'previous shop'}
-                            </Text>
-                          ) : null}
-
-                          {v.customerFeedback ? (
-                            <View style={styles.auditFeedbackBox}>
-                              <Ionicons
-                                name="chatbubble-ellipses"
-                                size={12}
-                                color={BrandColors.pink.primary}
-                                style={{ marginRight: 4 }}
-                              />
-                              <Text style={styles.auditFeedbackText}>&ldquo;{v.customerFeedback}&rdquo;</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                      </View>
-                    );
-                  })}
-
-                  <View style={styles.auditTimelineRow}>
-                    <View style={[styles.auditNodeDot, { backgroundColor: '#0F172A' }]}>
-                      <Text style={styles.auditNodeDotText}>E</Text>
-                    </View>
-                    <View style={styles.auditNodeContent}>
-                      <View style={styles.auditNodeHeaderRow}>
-                        <Text style={styles.auditNodeTitle}>
-                          {selectedAuditShift.endTime ? 'Duty Ended' : 'On Duty Now'}
-                        </Text>
-                        <Text style={styles.auditNodeTime}>
-                          {selectedAuditShift.endTime
-                            ? new Date(selectedAuditShift.endTime).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            : 'Now'}
-                        </Text>
-                      </View>
-                      {selectedAuditShift.endAddress ? (
-                        <Text style={styles.auditNodeAddress}>{selectedAuditShift.endAddress}</Text>
-                      ) : selectedAuditShift.endLatitude ? (
-                        <Text style={styles.auditNodeGps}>Location saved</Text>
-                      ) : null}
-                      {(() => {
-                        const auditVisits = selectedAuditShift.visits || [];
-                        const lastStop = auditVisits.length > 0 ? auditVisits[auditVisits.length - 1] : null;
-                        const prevLat = lastStop ? lastStop.latitude : selectedAuditShift.startLatitude;
-                        const prevLng = lastStop ? lastStop.longitude : selectedAuditShift.startLongitude;
-                        if (
-                          prevLat == null ||
-                          prevLng == null ||
-                          selectedAuditShift.endLatitude == null ||
-                          selectedAuditShift.endLongitude == null
-                        ) {
-                          return null;
-                        }
-                        const finalLegKm = calculateLegDistanceKm(
-                          { lat: Number(prevLat), lng: Number(prevLng) },
-                          {
-                            lat: Number(selectedAuditShift.endLatitude),
-                            lng: Number(selectedAuditShift.endLongitude),
-                          }
-                        );
-                        if (finalLegKm <= 0) return null;
+              {categories.length > 0 ? (
+                <View style={{ marginBottom: Spacing.sm }}>
+                  <Text style={styles.modalFieldLabel}>Category *</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={styles.quickCatRow}>
+                      {categories.map((cat) => {
+                        const selected = (newShopCategoryId || categories[0]?.id) === cat.id;
                         return (
-                          <Text style={[styles.auditNodeGps, { marginTop: 4 }]}>
-                            Travelled ~{finalLegKm} km from {lastStop ? 'last shop' : 'start point'} to end location
-                          </Text>
+                          <Pressable
+                            key={cat.id}
+                            style={[styles.quickCatChip, selected && styles.quickCatChipActive]}
+                            onPress={() => setNewShopCategoryId(cat.id)}
+                          >
+                            <Text style={[styles.quickCatChipText, selected && styles.quickCatChipTextActive]}>
+                              {cat.name}
+                            </Text>
+                          </Pressable>
                         );
-                      })()}
+                      })}
                     </View>
-                  </View>
+                  </ScrollView>
                 </View>
-              )}
+              ) : null}
 
-              <View style={styles.auditBottomBar}>
-                <Text style={styles.auditTotalKm}>
-                  Total Distance:{' '}
-                  <Text style={{ fontWeight: '800', color: BrandColors.pink.primary }}>
-                    {selectedAuditShift ? computeShiftTravelDistance(selectedAuditShift).formatted : '0 km'}
-                  </Text>
-                </Text>
-                <Button title="Close" variant="outline" size="sm" onPress={() => setSelectedAuditShift(null)} />
+              <View style={styles.row2Col}>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="Pincode"
+                    placeholder="400612"
+                    value={newShopPincode}
+                    onChangeText={handleQuickPincodeChange}
+                    keyboardType="numeric"
+                    maxLength={6}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="Area / Village *"
+                    placeholder="Area"
+                    value={newShopVillage}
+                    onChangeText={setNewShopVillage}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row2Col}>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="District *"
+                    placeholder="District"
+                    value={newShopDistrict}
+                    onChangeText={setNewShopDistrict}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="State *"
+                    placeholder="Maharashtra"
+                    value={newShopState}
+                    onChangeText={setNewShopState}
+                  />
+                </View>
+              </View>
+
+              <Input
+                label="Full Address (Optional)"
+                placeholder="Shop address..."
+                value={newShopAddress}
+                onChangeText={setNewShopAddress}
+              />
+
+              <View style={styles.modalBtnRow}>
+                <Button
+                  title="Cancel"
+                  variant="outline"
+                  onPress={() => setQuickAddShopVisible(false)}
+                  style={{ flex: 1, marginRight: Spacing.sm }}
+                />
+                <Button
+                  title={isSavingQuickShop ? 'Saving Shop...' : 'Save & Select Shop'}
+                  variant="primary"
+                  onPress={handleCreateQuickShop}
+                  loading={isSavingQuickShop}
+                  disabled={isSavingQuickShop}
+                  icon={<Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />}
+                  style={{ flex: 1.5 }}
+                />
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -3162,5 +3760,128 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#334155',
     fontWeight: '600',
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  addShopInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: BrandColors.pink.tint,
+    borderWidth: 1,
+    borderColor: '#FBCFE8',
+  },
+  addShopInlineBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  emptyShopBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.md,
+    gap: 8,
+  },
+  emptyShopText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  stepperInput: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    paddingHorizontal: 4,
+    height: '100%',
+  },
+  productStockTag: {
+    marginTop: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  productStockTagEmpty: {
+    backgroundColor: '#FEF2F2',
+  },
+  productStockTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  lowPriceWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+    marginTop: Spacing.xs,
+  },
+  lowPriceWarningText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    flex: 1,
+  },
+  stockWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+    marginTop: Spacing.xs,
+  },
+  stockWarningText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#B91C1C',
+    flex: 1,
+  },
+  quickCatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  quickCatChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  quickCatChipActive: {
+    backgroundColor: BrandColors.pink.dark,
+    borderColor: BrandColors.pink.dark,
+  },
+  quickCatChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  quickCatChipTextActive: {
+    color: '#FFFFFF',
+  },
+  row2Col: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
 });
