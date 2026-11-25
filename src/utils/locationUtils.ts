@@ -210,7 +210,7 @@ async function watchBestPosition(
     return null;
   }
 
-  let subscription: { remove: () => void } | null = null;
+  const subRef: { current: { remove: () => void } | null } = { current: null };
   let timerId: ReturnType<typeof setTimeout> | null = null;
   let best: Location.LocationObject | null = null;
   const startedAt = Date.now();
@@ -223,7 +223,7 @@ async function watchBestPosition(
         settled = true;
         if (timerId) clearTimeout(timerId);
         try {
-          subscription?.remove();
+          subRef.current?.remove();
         } catch {
           // Ignore cleanup errors
         }
@@ -263,7 +263,7 @@ async function watchBestPosition(
               // Ignore
             }
           } else {
-            subscription = sub;
+            subRef.current = sub;
           }
         })
         .catch(() => finish(best));
@@ -271,7 +271,7 @@ async function watchBestPosition(
   } catch {
     if (timerId) clearTimeout(timerId);
     try {
-      subscription?.remove();
+      subRef.current?.remove();
     } catch {
       // Ignore
     }

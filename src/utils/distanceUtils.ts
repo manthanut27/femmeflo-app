@@ -179,8 +179,14 @@ export function buildShiftWaypoints(
     visits?: Array<{
       latitude?: number | string | null;
       longitude?: number | string | null;
-      customer?: { latitude?: number | string | null; longitude?: number | string | null } | null;
+      customer?: {
+        latitude?: number | string | null;
+        longitude?: number | string | null;
+        [key: string]: any;
+      } | null;
+      [key: string]: any;
     }>;
+    [key: string]: any;
   } | null,
   currentCoords?: { latitude: number; longitude: number } | null
 ): RouteCoordinate[] {

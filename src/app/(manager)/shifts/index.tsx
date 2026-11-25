@@ -379,7 +379,6 @@ export default function ManagerShiftsScreen() {
                 const distInfo = computeShiftTravelDistance(shift);
                 const startKmVal = shift.startOdometer ?? shift.startOdometerKm;
                 const endKmVal = shift.endOdometer ?? shift.endOdometerKm;
-                const distanceKm = distInfo.distanceKm > 0 || !isActive ? distInfo.distanceKm : null;
 
                 return (
                   <Card key={shift.id} style={styles.shiftCard}>
