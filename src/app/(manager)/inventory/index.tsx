@@ -209,8 +209,8 @@ export default function ManagerInventoryScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Area Inventory & Stock"
-        subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
+        title="Area Stock"
+        subtitle={`Area: ${user?.district || 'My Area'}`}
         showBack
       />
 
@@ -225,22 +225,6 @@ export default function ManagerInventoryScreen() {
         }
       >
         <View style={styles.contentWrapper}>
-          {/* Header Territory Scope Card */}
-          <Card style={styles.bannerCard}>
-            <View style={styles.bannerRow}>
-              <View style={styles.bannerIconBox}>
-                <Ionicons name="cube" size={20} color={BrandColors.green.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>Field Force Stock & Inventory</Text>
-                <Text style={styles.bannerSub}>
-                  Assigned area: {[user?.district, user?.state].filter(Boolean).join(', ') || 'Assigned Zone'}
-                </Text>
-              </View>
-              <Badge label="INVENTORY VIEW" variant="ACTIVE" />
-            </View>
-          </Card>
-
           {/* KPI Summary Cards */}
           {loading ? (
             <View style={styles.kpiContainer}>
@@ -266,9 +250,9 @@ export default function ManagerInventoryScreen() {
               <View style={styles.kpiRow}>
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Total Assigned"
+                    title="Given Stock"
                     value={`${summary.totalAssigned.toLocaleString('en-IN')} pkts`}
-                    subtitle="Allocated to sellers"
+                    subtitle="Total packets"
                     icon="cube-outline"
                     iconColor="#0284C7"
                     iconBg="#F0F9FF"
@@ -277,9 +261,9 @@ export default function ManagerInventoryScreen() {
 
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Confirmed Sold"
+                    title="Sold"
                     value={`${summary.totalSold.toLocaleString('en-IN')} pkts`}
-                    subtitle="Delivered to stores"
+                    subtitle="To shops"
                     icon="checkmark-done-circle-outline"
                     iconColor={BrandColors.green.primary}
                     iconBg={BrandColors.green.subtle}
@@ -290,9 +274,9 @@ export default function ManagerInventoryScreen() {
               <View style={styles.kpiRow}>
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Remaining Balance"
+                    title="Left Stock"
                     value={`${summary.totalRemaining.toLocaleString('en-IN')} pkts`}
-                    subtitle="In active field vans"
+                    subtitle="With sellers"
                     icon="bus-outline"
                     iconColor={summary.totalRemaining < 50 ? Colors.light.warning : BrandColors.green.primary}
                     iconBg={summary.totalRemaining < 50 ? Colors.light.warningBg : BrandColors.green.subtle}
@@ -302,9 +286,9 @@ export default function ManagerInventoryScreen() {
 
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Supervised Sellers"
+                    title="Sellers"
                     value={String(summary.totalSellers || sellers.length)}
-                    subtitle="Field officers with stock"
+                    subtitle="Active team"
                     icon="people-outline"
                     iconColor={BrandColors.pink.primary}
                     iconBg={BrandColors.pink.subtle}
@@ -326,7 +310,7 @@ export default function ManagerInventoryScreen() {
                 color={activeTab === 'SELLERS' ? BrandColors.green.dark : Colors.light.textSecondary}
               />
               <Text style={[styles.tabBtnText, activeTab === 'SELLERS' && styles.tabBtnTextActive]}>
-                Seller-wise Stock ({sellers.length})
+                By Seller ({sellers.length})
               </Text>
             </Pressable>
 
@@ -340,7 +324,7 @@ export default function ManagerInventoryScreen() {
                 color={activeTab === 'SKUS' ? BrandColors.green.dark : Colors.light.textSecondary}
               />
               <Text style={[styles.tabBtnText, activeTab === 'SKUS' && styles.tabBtnTextActive]}>
-                SKU-wise Catalog ({products.length})
+                By Product ({products.length})
               </Text>
             </Pressable>
           </View>
@@ -352,7 +336,7 @@ export default function ManagerInventoryScreen() {
               <View style={styles.searchBar}>
                 <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
                 <TextInput
-                  placeholder="Search field officer by name, phone, or village..."
+                  placeholder="Search name, phone or area..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   style={styles.searchInput}
@@ -388,18 +372,18 @@ export default function ManagerInventoryScreen() {
                     const soldPct = assigned > 0 ? Math.min(100, Math.round((sold / assigned) * 100)) : 0;
 
                     let statusVariant: 'ACTIVE' | 'PENDING' | 'REJECTED' = 'ACTIVE';
-                    let statusLabel = 'IN STOCK';
+                    let statusLabel = 'In Stock';
                     if (remaining === 0) {
                       statusVariant = 'REJECTED';
-                      statusLabel = 'DEPLETED';
+                      statusLabel = 'Empty';
                     } else if (remaining < 20) {
                       statusVariant = 'PENDING';
-                      statusLabel = 'LOW STOCK';
+                      statusLabel = 'Low Stock';
                     }
 
                     const sellerObj = item.seller || {
                       id: String(Math.random()),
-                      name: 'Field Officer',
+                      name: 'Seller',
                       phone: '',
                       village: '',
                       district: '',
@@ -409,11 +393,11 @@ export default function ManagerInventoryScreen() {
                       <Card key={sellerObj.id} style={styles.sellerCard}>
                         {/* Seller Header */}
                         <View style={styles.sellerCardTop}>
-                          <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                            <Text style={styles.sellerName}>{sellerObj.name}</Text>
-                            <Text style={styles.sellerLoc}>
+                          <View style={{ flex: 1, minWidth: 0, marginRight: Spacing.sm }}>
+                            <Text style={styles.sellerName} numberOfLines={1}>{sellerObj.name}</Text>
+                            <Text style={styles.sellerLoc} numberOfLines={1}>
                               {sellerObj.phone ? `${sellerObj.phone} • ` : ''}
-                              {sellerObj.village || sellerObj.district || 'Area Field Force'}
+                              {sellerObj.village || sellerObj.district || 'Area'}
                             </Text>
                           </View>
                           <Badge label={statusLabel} variant={statusVariant} />
@@ -422,7 +406,7 @@ export default function ManagerInventoryScreen() {
                         {/* Inventory Figures Grid */}
                         <View style={styles.figuresGrid}>
                           <View style={styles.figCol}>
-                            <Text style={styles.figLabel}>Assigned</Text>
+                            <Text style={styles.figLabel}>Given</Text>
                             <Text style={styles.figValueBlue}>{assigned} pkts</Text>
                           </View>
                           <View style={styles.figCol}>
@@ -430,7 +414,7 @@ export default function ManagerInventoryScreen() {
                             <Text style={styles.figValueGreen}>{sold} pkts</Text>
                           </View>
                           <View style={styles.figCol}>
-                            <Text style={styles.figLabel}>Remaining</Text>
+                            <Text style={styles.figLabel}>Left</Text>
                             <Text
                               style={[
                                 styles.figValueDark,

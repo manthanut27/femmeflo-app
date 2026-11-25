@@ -56,8 +56,8 @@ import {
 type StatusFilter = 'ALL' | 'CONFIRMED' | 'PENDING' | 'REJECTED';
 
 const PERIOD_FILTERS = [
-  { label: 'All Area Sales', value: 'all' },
-  { label: 'Today Only', value: 'today' },
+  { label: 'All', value: 'all' },
+  { label: 'Today', value: 'today' },
   { label: 'This Month', value: 'this_month' },
 ];
 
@@ -501,8 +501,8 @@ export default function ManagerSalesScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Area Sales & Reports"
-        subtitle={`Area Analytics • ${territoryMetrics.activeOfficersCount} field officers`}
+        title="Area Sales"
+        subtitle={`${territoryMetrics.activeOfficersCount} sellers`}
         showMenu={true}
         onMenuPress={() => setMenuOpen(true)}
         rightAction={
@@ -529,7 +529,7 @@ export default function ManagerSalesScreen() {
             style={{ marginRight: 6 }}
           />
           <Text style={[styles.modeTabText, viewMode === 'DAILY_REPORT' && styles.modeTabTextActive]}>
-            Daily Area Report
+            Daily Summary
           </Text>
         </Pressable>
 
@@ -544,7 +544,7 @@ export default function ManagerSalesScreen() {
             style={{ marginRight: 6 }}
           />
           <Text style={[styles.modeTabText, viewMode === 'TRANSACTIONS' && styles.modeTabTextActive]}>
-            Transaction Ledger
+            All Bills
           </Text>
         </Pressable>
       </View>
@@ -561,15 +561,15 @@ export default function ManagerSalesScreen() {
             {/* Area KPI Grid */}
             <View style={styles.kpiGrid}>
               <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Area Revenue</Text>
+                <Text style={styles.kpiLabel}>Total Sales</Text>
                 <Text style={styles.kpiValueGreen}>{formatCurrencyINR(territoryMetrics.revenuePaise)}</Text>
-                <Text style={styles.kpiSub}>{territoryMetrics.confirmedCount} confirmed orders</Text>
+                <Text style={styles.kpiSub}>{territoryMetrics.confirmedCount} bills</Text>
               </Card>
 
               <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>
-                <Text style={styles.kpiLabel}>Team Volume</Text>
+                <Text style={styles.kpiLabel}>Packets Sold</Text>
                 <Text style={styles.kpiValuePink}>{territoryMetrics.totalPackets} pkts</Text>
-                <Text style={styles.kpiSub}>{territoryMetrics.activeOfficersCount} active officers</Text>
+                <Text style={styles.kpiSub}>{territoryMetrics.activeOfficersCount} active sellers</Text>
               </Card>
             </View>
 
@@ -578,7 +578,7 @@ export default function ManagerSalesScreen() {
               <Card style={styles.sellerPerfCard}>
                 <View style={styles.sellerPerfHeader}>
                   <Ionicons name="people" size={16} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.sellerPerfTitle}>Seller-Wise Performance Ranking</Text>
+                  <Text style={styles.sellerPerfTitle}>Top Sellers</Text>
                 </View>
                 {sellerPerformance.map((seller, idx) => (
                   <View key={seller.name + idx} style={styles.sellerRow}>
@@ -617,8 +617,7 @@ export default function ManagerSalesScreen() {
 
             {/* Daily Sales Breakdown */}
             <View style={styles.dailySectionHeader}>
-              <Text style={styles.dailySectionTitle}>Daily Sales Breakdown</Text>
-              <Text style={styles.dailySectionSub}>Date-by-date performance across field beat</Text>
+              <Text style={styles.dailySectionTitle}>Day-by-Day Sales</Text>
             </View>
 
             {loading && !refreshing ? (
@@ -650,7 +649,7 @@ export default function ManagerSalesScreen() {
                           )}
                         </View>
                         <Text style={styles.daySubText}>
-                          {group.salesCount} orders · {group.totalPackets} packets · {group.officerNames.length} officers
+                          {group.salesCount} {group.salesCount === 1 ? 'bill' : 'bills'} · {group.totalPackets} pkts
                         </Text>
                       </View>
 
