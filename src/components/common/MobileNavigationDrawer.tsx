@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -26,7 +26,7 @@ import { useAuth } from '@/context/AuthContext';
 import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.84, 340);
+const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.86, 380);
 
 export interface MobileNavigationDrawerProps {
   visible: boolean;
@@ -35,6 +35,7 @@ export interface MobileNavigationDrawerProps {
 
 export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDrawerProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const [hasActiveShift, setHasActiveShift] = useState(false);
@@ -79,6 +80,36 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isManager = user?.role === 'MANAGER';
+
+  const SUPER_ADMIN_MAIN_NAV = [
+    { title: 'Dashboard', icon: 'pie-chart-outline', route: '/(admin)' },
+    { title: 'Managers', icon: 'people-outline', route: '/(admin)/users' },
+    { title: 'Field Officers', icon: 'shield-checkmark-outline', route: '/(admin)/permissions' },
+    { title: 'Customers', icon: 'storefront-outline', route: '/(admin)/customers' },
+    { title: 'Inventory', icon: 'cube-outline', route: '/(admin)/inventory' },
+    { title: 'Products', icon: 'pricetag-outline', route: '/(admin)/products' },
+    { title: 'Categories', icon: 'grid-outline', route: '/(admin)/categories' },
+    { title: 'Sales', icon: 'receipt-outline', route: '/(admin)/sales' },
+    { title: 'Approvals', icon: 'checkmark-done-circle-outline', route: '/(admin)/approvals' },
+  ];
+
+  const SUPER_ADMIN_MANAGEMENT_NAV = [
+    { title: 'Field Tracking', icon: 'navigate-outline', route: '/(admin)/shifts' },
+    { title: 'Reports & Analytics', icon: 'bar-chart-outline', route: '/(admin)/reports' },
+    { title: 'Invoices & Billing', icon: 'document-text-outline', route: '/(admin)/invoices' },
+    { title: 'Incentives', icon: 'cash-outline', route: '/(admin)/incentives' },
+    { title: 'Notifications', icon: 'notifications-outline', route: '/(shared)/notifications' },
+    { title: 'System Settings', icon: 'settings-outline', route: '/(admin)/settings' },
+    { title: 'Change Password', icon: 'lock-closed-outline', route: '/(admin)/settings/password' },
+  ];
+
+  const isRouteActive = (route: string) => {
+    const normalized = route.replace('/(admin)', '').replace('/(shared)', '');
+    if (!normalized || normalized === '/') {
+      return pathname === '/' || pathname === '/(admin)' || pathname === '/index';
+    }
+    return pathname === normalized || pathname.startsWith(`${normalized}/`);
+  };
 
   const NAV_ITEMS = isSuperAdmin
     ? [
@@ -273,98 +304,83 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
             },
           ]}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.brandRow}>
-              <View style={styles.brandBadge}>
-                <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
+          {/* Header (Managers & Sellers only) */}
+          {!isSuperAdmin ? (
+            <View style={styles.header}>
+              <View style={styles.brandRow}>
+                <View style={styles.brandBadge}>
+                  <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text style={styles.brandTitle}>FemmeFlo</Text>
+                  <Text style={styles.brandSubtitle}>Mobile Operations Hub</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.brandTitle}>FemmeFlo</Text>
-                <Text style={styles.brandSubtitle}>Mobile Operations Hub</Text>
-              </View>
-            </View>
 
-            <Pressable
-              onPress={onClose}
-              hitSlop={HitSlop.md}
-              style={styles.closeBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Close navigation menu"
-            >
-              <Ionicons name="close" size={22} color={Colors.light.textSecondary} />
-            </Pressable>
-          </View>
+              <Pressable
+                onPress={onClose}
+                hitSlop={HitSlop.md}
+                style={styles.closeBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close navigation menu"
+              >
+                <Ionicons name="close" size={20} color="#8491A3" />
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* User Profile Card */}
-          <View style={styles.userCard}>
-            <View
-              style={[
-                styles.userAvatar,
-                isSuperAdmin && { backgroundColor: BrandColors.pink.dark },
-              ]}
-            >
-              <Text style={styles.userAvatarText}>
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.userName} numberOfLines={1}>
-                {user?.name || 'Authorized User'}
-              </Text>
-              <Text
-                style={[
-                  styles.userRole,
-                  isSuperAdmin && { color: BrandColors.pink.dark },
-                ]}
-              >
-                {isSuperAdmin
-                  ? 'SUPER ADMIN'
-                  : user?.role === 'MANAGER'
-                  ? 'TERRITORY MANAGER'
-                  : 'FIELD SELLER'}
-              </Text>
-              <Text style={styles.userTerritory} numberOfLines={1}>
-                📍{' '}
-                {isSuperAdmin
-                  ? 'National Headquarters (HQ)'
-                  : [user?.district, user?.state].filter(Boolean).join(', ') || 'Regional Field'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Duty Shift / Executive Fleet Status Banner */}
           {isSuperAdmin ? (
-            <Pressable
-              style={[
-                styles.shiftBanner,
-                { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' },
-              ]}
-              onPress={() => handleNavigate('/(admin)/shifts')}
-              accessibilityRole="button"
-              accessibilityLabel="Field Fleet Live Tracking & Duty Shifts"
-            >
-              <View style={[styles.shiftIconBox, { backgroundColor: '#FCE7F3' }]}>
-                <Ionicons
-                  name="speedometer-outline"
-                  size={18}
-                  color={BrandColors.pink.dark}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.shiftBannerTitle, { color: BrandColors.pink.dark }]}>
-                    Field Fleet Live Beat
+            <View style={styles.saProfileCard}>
+              <View style={styles.saAvatarWrap}>
+                <View style={styles.saAvatar}>
+                  <Text style={styles.saAvatarText}>
+                    {user?.name ? user.name.charAt(0).toUpperCase() : 'S'}
                   </Text>
-                  <View style={[styles.statusDot, { backgroundColor: BrandColors.pink.primary }]} />
                 </View>
-                <Text style={styles.shiftBannerSub}>
-                  Live GPS route tracking & attendance logs
+                <View style={styles.saOnlineDot} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.saProfileName} numberOfLines={1}>
+                  {user?.name || 'Super Admin'}
+                </Text>
+                <Text style={styles.saProfileRole} numberOfLines={1}>
+                  National Headquarters
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={BrandColors.pink.dark} />
-            </Pressable>
+              <Pressable
+                onPress={onClose}
+                hitSlop={HitSlop.md}
+                style={styles.closeBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close navigation menu"
+              >
+                <Ionicons name="close" size={20} color="#8491A3" />
+              </Pressable>
+            </View>
           ) : (
+            <View style={styles.userCard}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {user?.name || 'Authorized User'}
+                </Text>
+                <Text style={styles.userRole}>
+                  {user?.role === 'MANAGER' ? 'TERRITORY MANAGER' : 'FIELD SELLER'}
+                </Text>
+                <Text style={styles.userTerritory} numberOfLines={1}>
+                  📍 {[user?.district, user?.state].filter(Boolean).join(', ') || 'Regional Field'}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Duty Shift Status Banner (Managers & Sellers only) */}
+          {isSuperAdmin ? null : (
             <Pressable
               style={[
                 styles.shiftBanner,
@@ -406,90 +422,136 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
           {/* Navigation Links ScrollView */}
           <ScrollView
             style={styles.navScroll}
-            contentContainerStyle={styles.navScrollContent}
+            contentContainerStyle={isSuperAdmin ? styles.saNavScrollContent : styles.navScrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.sectionLabel}>
-              {isSuperAdmin ? 'ADMIN OPERATIONS & REPORTS' : 'OPERATIONS & ACTIONS'}
-            </Text>
-
-            {NAV_ITEMS.map((item, idx) => (
-              <Pressable
-                key={`${item.route}_${idx}`}
-                style={({ pressed }) => [
-                  styles.navItem,
-                  item.highlight && styles.navItemHighlight,
-                  item.highlight && isSuperAdmin && { backgroundColor: '#FDF2F8', borderColor: '#FBCFE8' },
-                  pressed && styles.navItemPressed,
-                ]}
-                onPress={() => handleItemPress(item)}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
-              >
-                <View
-                  style={[
-                    styles.navIconBox,
-                    item.highlight && styles.navIconBoxHighlight,
-                    item.highlight && isSuperAdmin && { backgroundColor: BrandColors.pink.dark },
-                  ]}
-                >
-                  <Ionicons
-                    name={item.icon as any}
-                    size={20}
-                    color={
-                      item.highlight
-                        ? '#FFFFFF'
-                        : isSuperAdmin
-                        ? BrandColors.pink.dark
-                        : BrandColors.green.dark
-                    }
-                  />
-                </View>
-
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text
-                      style={[
-                        styles.navItemTitle,
-                        item.highlight && styles.navItemTitleHighlight,
-                        item.highlight && isSuperAdmin && { color: BrandColors.pink.dark },
+            {isSuperAdmin ? (
+              <>
+                {SUPER_ADMIN_MAIN_NAV.map((item) => {
+                  const active = isRouteActive(item.route);
+                  return (
+                    <Pressable
+                      key={item.route}
+                      style={({ pressed }) => [
+                        styles.saNavItem,
+                        active && styles.saNavItemActive,
+                        pressed && !active && styles.saNavItemPressed,
                       ]}
-                      numberOfLines={1}
+                      onPress={() => handleItemPress(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.title}
                     >
-                      {item.title}
-                    </Text>
-                    {item.badge ? (
-                      <Badge
-                        label={item.badge}
-                        variant={
-                          item.badge === 'ACTIVE'
-                            ? 'ACTIVE'
-                            : isSuperAdmin
-                            ? 'purple'
-                            : 'warning'
-                        }
-                        size="sm"
+                      {active ? <View style={styles.saActiveIndicator} /> : null}
+                      <Ionicons
+                        name={item.icon as any}
+                        size={20}
+                        color={active ? '#006B35' : '#8491A3'}
                       />
-                    ) : null}
-                  </View>
-                  <Text style={styles.navItemSub} numberOfLines={1}>
-                    {item.subtitle}
-                  </Text>
-                </View>
+                      <Text
+                        style={[styles.saNavLabel, active && styles.saNavLabelActive]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
 
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={
-                    item.highlight
-                      ? isSuperAdmin
-                        ? BrandColors.pink.dark
-                        : BrandColors.green.primary
-                      : Colors.light.textTertiary
-                  }
-                />
-              </Pressable>
-            ))}
+                <View style={styles.saDivider} />
+                <Text style={styles.saSectionLabel}>MANAGEMENT</Text>
+
+                {SUPER_ADMIN_MANAGEMENT_NAV.map((item) => {
+                  const active = isRouteActive(item.route);
+                  return (
+                    <Pressable
+                      key={item.route}
+                      style={({ pressed }) => [
+                        styles.saNavItem,
+                        active && styles.saNavItemActive,
+                        pressed && !active && styles.saNavItemPressed,
+                      ]}
+                      onPress={() => handleItemPress(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.title}
+                    >
+                      {active ? <View style={styles.saActiveIndicator} /> : null}
+                      <Ionicons
+                        name={item.icon as any}
+                        size={20}
+                        color={active ? '#006B35' : '#8491A3'}
+                      />
+                      <Text
+                        style={[styles.saNavLabel, active && styles.saNavLabelActive]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <Text style={styles.sectionLabel}>OPERATIONS & ACTIONS</Text>
+
+                {NAV_ITEMS.map((item, idx) => (
+                  <Pressable
+                    key={`${item.route}_${idx}`}
+                    style={({ pressed }) => [
+                      styles.navItem,
+                      item.highlight && styles.navItemHighlight,
+                      pressed && styles.navItemPressed,
+                    ]}
+                    onPress={() => handleItemPress(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.title}
+                  >
+                    <View
+                      style={[
+                        styles.navIconBox,
+                        item.highlight && styles.navIconBoxHighlight,
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={20}
+                        color={item.highlight ? '#FFFFFF' : BrandColors.green.dark}
+                      />
+                    </View>
+
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text
+                          style={[
+                            styles.navItemTitle,
+                            item.highlight && styles.navItemTitleHighlight,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                        {item.badge ? (
+                          <Badge
+                            label={item.badge}
+                            variant={item.badge === 'ACTIVE' ? 'ACTIVE' : 'warning'}
+                            size="sm"
+                          />
+                        ) : null}
+                      </View>
+                      <Text style={styles.navItemSub} numberOfLines={1}>
+                        {item.subtitle}
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color={item.highlight ? BrandColors.green.primary : Colors.light.textTertiary}
+                    />
+                  </Pressable>
+                ))}
+              </>
+            )}
           </ScrollView>
 
           {/* Footer / Logout */}
@@ -678,6 +740,127 @@ const styles = StyleSheet.create({
     color: Colors.light.textTertiary,
     letterSpacing: 0.6,
     marginVertical: Spacing.xs,
+  },
+  saHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF0F3',
+  },
+  saBrandTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172033',
+    letterSpacing: -0.2,
+  },
+  saBrandSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8491A3',
+  },
+  saProfileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF0F3',
+    backgroundColor: '#FFFFFF',
+  },
+  saAvatarWrap: {
+    position: 'relative',
+  },
+  saAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#006B35',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  saProfileName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#172033',
+  },
+  saProfileRole: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#8491A3',
+    marginTop: 1,
+  },
+  saNavScrollContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  saNavItem: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    height: 48,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 2,
+  },
+  saNavItemActive: {
+    backgroundColor: 'rgba(0, 107, 53, 0.08)',
+  },
+  saNavItemPressed: {
+    backgroundColor: '#F8FAFC',
+  },
+  saActiveIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: '#006B35',
+  },
+  saNavLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#172033',
+  },
+  saNavLabelActive: {
+    color: '#006B35',
+    fontWeight: '600',
+  },
+  saDivider: {
+    height: 1,
+    backgroundColor: '#EEF0F3',
+    marginVertical: 10,
+    marginHorizontal: 4,
+  },
+  saSectionLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8491A3',
+    letterSpacing: 0.6,
+    paddingHorizontal: 12,
+    marginBottom: 6,
   },
   navItem: {
     flexDirection: 'row',
