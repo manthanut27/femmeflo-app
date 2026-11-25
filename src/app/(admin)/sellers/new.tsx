@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -267,6 +268,8 @@ export default function AdminOnboardSellerScreen() {
         state: state.trim(),
       });
 
+      DeviceEventEmitter.emit('USER_CREATED', { role: 'SELLER', user: res.seller });
+
       setFeedback({
         type: 'success',
         message: `Seller ${res.seller.name} added!`,
@@ -296,7 +299,7 @@ export default function AdminOnboardSellerScreen() {
           },
           {
             text: 'View Sellers',
-            onPress: () => router.replace('/(admin)/users' as any),
+            onPress: () => router.replace({ pathname: '/(admin)/users', params: { tab: 'SELLERS' } } as any),
           },
         ]
       );

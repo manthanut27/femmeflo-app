@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -343,6 +344,8 @@ export default function AdminOnboardUserScreen() {
           permissions: sanitizeBackendPermissions(managerPermissions),
         });
 
+        DeviceEventEmitter.emit('USER_CREATED', { role: 'MANAGER', user: res.manager });
+
         setFeedback({
           type: 'success',
           message: `Manager ${res.manager.name} added!`,
@@ -356,7 +359,7 @@ export default function AdminOnboardUserScreen() {
           [
             {
               text: 'View Users',
-              onPress: () => router.replace('/(admin)/users' as any),
+              onPress: () => router.replace({ pathname: '/(admin)/users', params: { tab: 'MANAGERS' } } as any),
             },
           ]
         );
@@ -381,6 +384,8 @@ export default function AdminOnboardUserScreen() {
           state: state.trim(),
         });
 
+        DeviceEventEmitter.emit('USER_CREATED', { role: 'SELLER', user: res.seller });
+
         setFeedback({
           type: 'success',
           message: `Seller ${res.seller.name} added!`,
@@ -392,7 +397,7 @@ export default function AdminOnboardUserScreen() {
           [
             {
               text: 'View Users',
-              onPress: () => router.replace('/(admin)/users' as any),
+              onPress: () => router.replace({ pathname: '/(admin)/users', params: { tab: 'SELLERS' } } as any),
             },
           ]
         );

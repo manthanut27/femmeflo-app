@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -202,6 +203,8 @@ export default function AdminOnboardManagerScreen() {
         permissions: sanitizeBackendPermissions(selectedPermissions),
       });
 
+      DeviceEventEmitter.emit('USER_CREATED', { role: 'MANAGER', user: res.manager });
+
       setFeedback({
         type: 'success',
         message: `Manager ${res.manager.name} added!`,
@@ -234,7 +237,7 @@ export default function AdminOnboardManagerScreen() {
           },
           {
             text: 'View Managers',
-            onPress: () => router.replace('/(admin)/users' as any),
+            onPress: () => router.replace({ pathname: '/(admin)/users', params: { tab: 'MANAGERS' } } as any),
           },
         ]
       );

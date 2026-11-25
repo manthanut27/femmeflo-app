@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  DeviceEventEmitter,
   Platform,
   RefreshControl,
   ScrollView,
@@ -58,6 +59,19 @@ export default function ManagerDashboardScreen() {
       setCurrentLocation(`${user.district}, ${user.state}`);
     }
   }, [loadData, user?.district, user?.state]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('USER_CREATED', () => {
+      loadData();
+    });
+    return () => sub.remove();
+  }, [loadData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

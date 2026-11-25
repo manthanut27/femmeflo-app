@@ -20,10 +20,11 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { canOnboardSellers, canViewSellers } from '@/utils/permissions';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -98,6 +99,30 @@ export default function ManagerSellersScreen() {
 
   useEffect(() => {
     loadSellers();
+  }, [loadSellers]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSellers();
+    }, [loadSellers])
+  );
+
+  useEffect(() => {
+    const sub1 = DeviceEventEmitter.addListener('USER_CREATED', (payload?: { role?: string; user?: ManagerSellerItem }) => {
+      if (payload?.role === 'SELLER' && payload.user?.id) {
+        setSellers((prev) =>
+          prev.some((s) => s.id === payload.user!.id) ? prev : [payload.user!, ...prev]
+        );
+      }
+      loadSellers();
+    });
+    const sub2 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadSellers();
+    });
+    return () => {
+      sub1.remove();
+      sub2.remove();
+    };
   }, [loadSellers]);
 
   const onRefresh = useCallback(() => {

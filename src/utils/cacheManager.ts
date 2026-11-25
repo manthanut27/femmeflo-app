@@ -112,6 +112,9 @@ export class CacheManager {
     if (clean.includes('shift')) tags.push('shifts');
     if (clean.includes('incentive') || clean.includes('payout')) tags.push('incentives');
     if (clean.includes('dashboard')) tags.push('dashboard');
+    if (/(?:^|\/)(?:admin\/(?:managers|sellers|users)|manager\/sellers)(?:\/|$)/i.test(clean)) {
+      tags.push('users');
+    }
     if (clean.includes('notification')) tags.push('notifications');
 
     if (tags.length === 0) tags.push('default');
@@ -153,6 +156,11 @@ export class CacheManager {
 
     if (clean.includes('incentive') || clean.includes('payout') || clean.includes('rate')) {
       tagsToInvalidate.add('incentives');
+      tagsToInvalidate.add('dashboard');
+    }
+
+    if (/(?:^|\/)(?:admin\/(?:managers|sellers|users)|manager\/sellers)(?:\/|$)/i.test(clean)) {
+      tagsToInvalidate.add('users');
       tagsToInvalidate.add('dashboard');
     }
 

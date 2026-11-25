@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BackHandler,
+  DeviceEventEmitter,
   FlatList,
   Modal,
   KeyboardAvoidingView,
@@ -86,7 +87,7 @@ export default function AdminUsersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
+  const params = useLocalSearchParams<{ from?: string; tab?: string }>();
 
   const handleBack = useCallback(() => {
     if (params?.from === 'actions') {
@@ -118,7 +119,13 @@ export default function AdminUsersScreen() {
       return () => sub.remove();
     }
   }, [params?.from, handleBack]);
-  const [tab, setTab] = useState<UserTab>('MANAGERS');
+  const [tab, setTab] = useState<UserTab>(params?.tab === 'SELLERS' ? 'SELLERS' : 'MANAGERS');
+
+  useEffect(() => {
+    if (params?.tab === 'MANAGERS' || params?.tab === 'SELLERS') {
+      setTab(params.tab);
+    }
+  }, [params?.tab]);
   const [users, setUsers] = useState<PublicUser[]>([]);
   const [availableManagers, setAvailableManagers] = useState<PublicUser[]>([]);
   const [search, setSearch] = useState('');
@@ -284,6 +291,43 @@ export default function AdminUsersScreen() {
     loadUsers(false);
     loadManagersList();
   }, [loadUsers, loadManagersList]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUsers(false);
+      loadManagersList();
+    }, [loadUsers, loadManagersList])
+  );
+
+  useEffect(() => {
+    const sub1 = DeviceEventEmitter.addListener('USER_CREATED', (payload?: { role?: string; user?: PublicUser }) => {
+      if (payload?.user?.id) {
+        if (payload.role === 'MANAGER') {
+          setAvailableManagers((prev) =>
+            prev.some((m) => m.id === payload.user!.id) ? prev : [payload.user!, ...prev]
+          );
+        }
+        if (
+          (payload.role === 'MANAGER' && tab === 'MANAGERS') ||
+          (payload.role === 'SELLER' && tab === 'SELLERS')
+        ) {
+          setUsers((prev) =>
+            prev.some((u) => u.id === payload.user!.id) ? prev : [payload.user!, ...prev]
+          );
+        }
+      }
+      loadUsers(false);
+      loadManagersList();
+    });
+    const sub2 = DeviceEventEmitter.addListener('REALTIME_DATA_SYNC', () => {
+      loadUsers(false);
+      loadManagersList();
+    });
+    return () => {
+      sub1.remove();
+      sub2.remove();
+    };
+  }, [tab, loadUsers, loadManagersList]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

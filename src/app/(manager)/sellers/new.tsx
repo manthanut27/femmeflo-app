@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -216,6 +217,8 @@ export default function ManagerOnboardSellerScreen() {
         district: district.trim(),
         state: state.trim(),
       });
+
+      DeviceEventEmitter.emit('USER_CREATED', { role: 'SELLER', user: res.seller });
 
       setFeedback({
         type: 'success',
