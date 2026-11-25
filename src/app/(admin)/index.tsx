@@ -13,10 +13,17 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
-import type { AdminDashboardData } from '@/api/types';
+import type {
+  AdminDashboardData,
+  AdminIncentiveListResponse,
+  AdminInventoryTransactionItem,
+  SalesReportGroupItem,
+} from '@/api/types';
+import { formatTransactionIST, getTransactionRoute } from '@/utils/inventoryMovement';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -43,8 +50,13 @@ export default function AdminDashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const navigation = useNavigation();
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
 
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
+  const [salesTrend, setSalesTrend] = useState<SalesReportGroupItem[]>([]);
+  const [recentStockTxns, setRecentStockTxns] = useState<AdminInventoryTransactionItem[]>([]);
+  const [incentiveSummary, setIncentiveSummary] = useState<AdminIncentiveListResponse['summary'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -271,7 +283,18 @@ export default function AdminDashboardScreen() {
         to: dateRange.to,
       };
 
-      const res = await adminApi.getDashboard(params);
+      const [res, reportRes, stockRes, incRes] = await Promise.all([
+        adminApi.getDashboard(params),
+        adminApi.getSalesReport({
+          from: new Date(Date.now() - 7 * 86400_000).toISOString(),
+          groupBy: 'date',
+        }).catch(() => null),
+        adminApi.listInventoryTransactions({ page: 1, pageSize: 4 }).catch(() => null),
+        adminApi.getIncentives().catch(() => null),
+      ]);
+      if (reportRes?.groups) setSalesTrend(reportRes.groups.slice(-7));
+      if (stockRes?.items) setRecentStockTxns(stockRes.items.slice(0, 4));
+      if (incRes?.summary) setIncentiveSummary(incRes.summary);
       if (res) {
         setDashboard(res);
         setLoadError(null);
@@ -615,6 +638,149 @@ export default function AdminDashboardScreen() {
               </View>
             </View>
           )}
+
+          {/* Live Operations Widgets: Sales Trend Chart, Incentives & Stock History */}
+          {!loading ? (
+            <View style={{ marginTop: Spacing.lg, gap: Spacing.md }}>
+              <View style={isWide ? { flexDirection: 'row', gap: Spacing.md } : { gap: Spacing.md }}>
+                {/* 7-Day Sales Trend Chart */}
+                <Card style={[styles.widgetCard, isWide && { flex: 1.2 }]}>
+                  <View style={styles.widgetHeader}>
+                    <View>
+                      <Text style={styles.widgetTitle}>7-Day Sales Trend</Text>
+                      <Text style={styles.widgetSub}>Daily revenue & volume</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => router.push('/(admin)/reports' as any)} hitSlop={8}>
+                      <Text style={styles.widgetLink}>Reports ›</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {salesTrend.length === 0 ? (
+                    <Text style={styles.widgetEmpty}>No sales recorded in the last 7 days.</Text>
+                  ) : (
+                    <View style={styles.chartWrap}>
+                      {(() => {
+                        const maxRev = Math.max(...salesTrend.map((g) => g.totalPaise || 0), 1);
+                        return salesTrend.map((g, idx) => {
+                          const pct = Math.max(8, Math.round(((g.totalPaise || 0) / maxRev) * 100));
+                          const dayLabel = g.label ? String(g.label).slice(5, 10) : `D${idx + 1}`;
+                          return (
+                            <View key={`${g.label}-${idx}`} style={styles.chartCol}>
+                              <Text style={styles.chartVal} numberOfLines={1}>
+                                ₹{Math.round((g.totalPaise || 0) / 100).toLocaleString('en-IN')}
+                              </Text>
+                              <View style={styles.chartTrack}>
+                                <View
+                                  style={[
+                                    styles.chartBar,
+                                    {
+                                      height: `${pct}%`,
+                                      backgroundColor:
+                                        idx === salesTrend.length - 1
+                                          ? BrandColors.pink.primary
+                                          : BrandColors.green.primary,
+                                    },
+                                  ]}
+                                />
+                              </View>
+                              <Text style={styles.chartDay} numberOfLines={1}>
+                                {dayLabel}
+                              </Text>
+                            </View>
+                          );
+                        });
+                      })()}
+                    </View>
+                  )}
+                </Card>
+
+                {/* Incentives Snapshot */}
+                <Card style={[styles.widgetCard, isWide && { flex: 1 }]}>
+                  <View style={styles.widgetHeader}>
+                    <View>
+                      <Text style={styles.widgetTitle}>Team Incentives</Text>
+                      <Text style={styles.widgetSub}>Earned vs pending payouts</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => router.push('/(admin)/incentives' as any)} hitSlop={8}>
+                      <Text style={styles.widgetLink}>Manage ›</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.incentiveGrid}>
+                    <View style={styles.incentiveCell}>
+                      <Text style={styles.incentiveLabel}>Total Earned</Text>
+                      <Text style={[styles.incentiveValue, { color: '#0F172A' }]}>
+                        {formatRupees(incentiveSummary?.totalEarnedPaise ?? 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.incentiveCell}>
+                      <Text style={styles.incentiveLabel}>Paid</Text>
+                      <Text style={[styles.incentiveValue, { color: BrandColors.green.primary }]}>
+                        {formatRupees(incentiveSummary?.totalPaidPaise ?? 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.incentiveCell}>
+                      <Text style={styles.incentiveLabel}>Pending</Text>
+                      <Text style={[styles.incentiveValue, { color: BrandColors.pink.dark }]}>
+                        {formatRupees(incentiveSummary?.totalPendingPaise ?? 0)}
+                      </Text>
+                    </View>
+                  </View>
+                </Card>
+              </View>
+
+              {/* Recent Stock Movements */}
+              <Card style={styles.widgetCard}>
+                <View style={styles.widgetHeader}>
+                  <View>
+                    <Text style={styles.widgetTitle}>Recent Stock History</Text>
+                    <Text style={styles.widgetSub}>Latest inward, transfers & sales</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => router.push('/(admin)/inventory' as any)} hitSlop={8}>
+                    <Text style={styles.widgetLink}>View All ›</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {recentStockTxns.length === 0 ? (
+                  <Text style={styles.widgetEmpty}>No recent stock movements recorded.</Text>
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    {recentStockTxns.map((tx) => {
+                      const route = getTransactionRoute(tx as any);
+                      const typeUpper = String(tx.type || '').toUpperCase();
+                      const isSale = typeUpper.includes('SALE');
+                      const isInward = typeUpper.includes('INWARD') || typeUpper.includes('RECEIPT');
+                      return (
+                        <View key={tx.id} style={styles.stockRow}>
+                          <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Badge
+                                label={isSale ? 'SALE' : isInward ? 'INWARD' : 'TRANSFER'}
+                                variant={isSale ? 'info' : isInward ? 'ACTIVE' : 'warning'}
+                                size="sm"
+                              />
+                              <Text style={styles.stockDate} numberOfLines={1}>
+                                {(() => {
+                                  const dt = formatTransactionIST(tx.createdAt);
+                                  return `${dt.dateStr} · ${dt.timeStr}`;
+                                })()}
+                              </Text>
+                            </View>
+                            <Text style={styles.stockRoute} numberOfLines={1}>
+                              {route.from} → {route.to}
+                            </Text>
+                          </View>
+                          <Text style={styles.stockQty}>
+                            {(tx.quantity || 0).toLocaleString('en-IN')} pkts
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </Card>
+            </View>
+          ) : null}
 
         </View>
       </ScrollView>
@@ -1337,6 +1503,124 @@ const styles = StyleSheet.create({
   approvalAlertDesc: {
     ...Typography.caption,
     color: '#B45309',
+  },
+  widgetCard: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  widgetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  widgetTitle: {
+    ...Typography.subtitle,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  widgetSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  widgetLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  widgetEmpty: {
+    fontSize: 13,
+    color: '#94A3B8',
+    paddingVertical: Spacing.md,
+    textAlign: 'center',
+  },
+  chartWrap: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    height: 140,
+    paddingTop: 18,
+    gap: 6,
+  },
+  chartCol: {
+    flex: 1,
+    alignItems: 'center',
+    height: '100%',
+  },
+  chartVal: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  chartTrack: {
+    flex: 1,
+    width: '65%',
+    maxWidth: 26,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  chartBar: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  chartDay: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 5,
+  },
+  incentiveGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  incentiveCell: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  incentiveLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  incentiveValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  stockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  stockDate: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  stockRoute: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginTop: 4,
+  },
+  stockQty: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: BrandColors.green.primary,
   },
   sectionHeading: {
     ...Typography.subtitle,
