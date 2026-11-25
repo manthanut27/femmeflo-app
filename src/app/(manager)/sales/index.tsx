@@ -336,8 +336,15 @@ export default function ManagerSalesScreen() {
         return;
       }
 
-      const filename = `Invoice_${sale.saleNumber || invoiceId}.pdf`;
-      const localUri = `${FileSystem.cacheDirectory}${filename}`;
+      const rawNum = String(sale.invoice?.number || sale.saleNumber || invoiceId.slice(0, 8));
+      const safeNum = rawNum.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filename = `Invoice_${safeNum}.pdf`;
+      const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!baseDir) {
+        Alert.alert('Download Error', 'Device storage directory is unavailable.');
+        return;
+      }
+      const localUri = `${baseDir}${filename}`;
       const token = await tokenStorage.getToken();
 
       const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
@@ -345,6 +352,11 @@ export default function ManagerSalesScreen() {
       });
 
       if (downloadRes.status === 200) {
+        const info = await FileSystem.getInfoAsync(downloadRes.uri);
+        if (!info.exists || ('size' in info && info.size === 0)) {
+          Alert.alert('Download Error', 'Downloaded invoice file was empty. Please try again.');
+          return;
+        }
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
           await Sharing.shareAsync(downloadRes.uri, {
@@ -356,7 +368,13 @@ export default function ManagerSalesScreen() {
           Alert.alert('Invoice Saved', `Downloaded to: ${downloadRes.uri}`);
         }
       } else {
-        Alert.alert('Download Error', 'Could not retrieve invoice PDF from server.');
+        const reason =
+          downloadRes.status === 403
+            ? 'You do not have permission to download this invoice.'
+            : downloadRes.status === 404
+            ? 'Invoice has not been generated for this order yet.'
+            : `Server returned status ${downloadRes.status}.`;
+        Alert.alert('Download Error', `Could not retrieve invoice PDF (${reason})`);
       }
     } catch (err: any) {
       Alert.alert('Share Failed', err.message || 'Unable to download invoice PDF.');

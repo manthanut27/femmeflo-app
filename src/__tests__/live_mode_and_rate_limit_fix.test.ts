@@ -53,6 +53,7 @@ describe('Live Data Integrity, Packet Totals & Rate-Limit Protection Suite', () 
 
     assert.ok(clientCode.includes('if (isMockMode())'), 'client.ts must gate mock fallback behind isMockMode()');
     assert.ok(clientCode.includes('cachedOnRateLimit'), 'client.ts must serve cached GET data on HTTP 429');
+    assert.ok(clientCode.includes('skipRateLimit = true'), 'client.ts should not enforce client-side rate-limit blocking by default');
     assert.ok(managerCode.includes('if (isMockMode())'), 'manager.ts must gate mock fallback behind isMockMode()');
     assert.ok(sellerCode.includes('if (isMockMode())'), 'seller.ts must gate mock fallback behind isMockMode()');
     assert.ok(adminCode.includes('if (isMockMode())'), 'admin.ts must gate mock fallback behind isMockMode()');
@@ -66,5 +67,23 @@ describe('Live Data Integrity, Packet Totals & Rate-Limit Protection Suite', () 
     assert.ok(syncCode.includes('10000'), 'realtimeSync poll interval must be >= 10s');
     assert.ok(!mgrSalesCode.includes('}, 7000)'), '(manager)/sales must not hammer 3 endpoints every 7s');
     assert.ok(!sellerSalesCode.includes('}, 7000)'), '(seller)/sales must not hammer server every 7s');
+  });
+
+  it('admin approvals uses responsive grid, safe-area insets, and error banner without clipping', () => {
+    const approvalsCode = readSource('src/app/(admin)/approvals/index.tsx');
+
+    assert.ok(approvalsCode.includes('useSafeAreaInsets'), 'approvals screen must apply safe-area bottom inset');
+    assert.ok(approvalsCode.includes('useResponsiveLayout'), 'approvals screen must adapt layout by screen size');
+    assert.ok(approvalsCode.includes('ListHeaderComponent'), 'approvals screen must scroll KPIs and filters inside FlatList');
+    assert.ok(approvalsCode.includes('FeedbackBanner'), 'approvals screen must display actionable API error feedback');
+  });
+
+  it('invoice PDF downloads sanitize filenames and support documentDirectory fallback', () => {
+    const mgrSalesCode = readSource('src/app/(manager)/sales/index.tsx');
+    const sellerSaleDetailCode = readSource('src/app/(seller)/sales/[id].tsx');
+
+    assert.ok(mgrSalesCode.includes('documentDirectory'), '(manager)/sales must fallback to FileSystem.documentDirectory');
+    assert.ok(sellerSaleDetailCode.includes('documentDirectory'), '(seller)/sales/[id] must fallback to FileSystem.documentDirectory');
+    assert.ok(sellerSaleDetailCode.includes('sale.invoice?.id || sale.id'), '(seller)/sales/[id] must prefer invoice id when present');
   });
 });

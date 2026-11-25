@@ -204,19 +204,21 @@ export default function SaleDetailScreen() {
           return;
         }
 
-        const url = sellerApi.getInvoicePdfUrl(sale.id, true);
+        const targetInvoiceId = sale.invoice?.id || sale.id;
+        const url = sellerApi.getInvoicePdfUrl(targetInvoiceId, true);
         const token = await tokenStorage.getToken();
         const response = await fetch(url, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (!response.ok) {
-          throw new Error('Server returned an error while downloading invoice PDF.');
+          throw new Error(`Server returned HTTP ${response.status} while downloading invoice PDF.`);
         }
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
+        const safeNum = String(sale.saleNumber || sale.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '_');
         link.href = blobUrl;
-        link.download = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.pdf`;
+        link.download = `Invoice_${safeNum}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -258,9 +260,11 @@ Generated in FemmeFlo Standalone Test Mode.`;
         return;
       }
 
-      const url = sellerApi.getInvoicePdfUrl(sale.id, true);
-      const filename = `Invoice_${sale.saleNumber || sale.id.slice(0, 8)}.pdf`;
-      const dir = FileSystem.documentDirectory || '';
+      const targetInvoiceId = sale.invoice?.id || sale.id;
+      const url = sellerApi.getInvoicePdfUrl(targetInvoiceId, true);
+      const safeNum = String(sale.saleNumber || sale.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filename = `Invoice_${safeNum}.pdf`;
+      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
       const fileUri = `${dir}${filename}`;
       const token = await tokenStorage.getToken();
 
@@ -279,7 +283,7 @@ Generated in FemmeFlo Standalone Test Mode.`;
           Alert.alert('Invoice Downloaded', `Saved to ${downloadResult.uri}`);
         }
       } else {
-        throw new Error('Server returned non-200 while downloading invoice PDF.');
+        throw new Error(`Server returned HTTP ${downloadResult.status} while downloading invoice PDF.`);
       }
     } catch (err: any) {
       Alert.alert('Download Error', err.message || 'Failed to download invoice PDF.');

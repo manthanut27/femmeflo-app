@@ -1,22 +1,26 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   BackHandler,
   DeviceEventEmitter,
   FlatList,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { adminApi, PendingApprovalItem } from '@/api/admin';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
@@ -31,32 +35,22 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useResponsiveLayout } from '@/utils/responsive';
 
 export default function AdminApprovalsScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
+  const insets = useSafeAreaInsets();
+  const { isSmallMobile, isTablet } = useResponsiveLayout();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleBack = useCallback(() => {
-    if (params?.from === 'actions') {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-        return;
-      } catch {
-        // fallback
-      }
-    }
     if (router.canGoBack()) {
       router.back();
-    } else {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-      } catch {
-        router.replace('/(admin)' as any);
-      }
+      return;
     }
-  }, [params, navigation, router]);
+    router.replace('/(admin)' as any);
+  }, [router]);
 
   useEffect(() => {
     if (params?.from === 'actions') {
@@ -73,6 +67,7 @@ export default function AdminApprovalsScreen() {
   const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [minPricePaise, setMinPricePaise] = useState<number>(2500);
   const [search, setSearch] = useState('');
@@ -81,16 +76,17 @@ export default function AdminApprovalsScreen() {
   const loadApprovals = useCallback(async () => {
     try {
       const [res, settings] = await Promise.all([
-        adminApi.listApprovals({ pageSize: 50 }).catch(() => ({ items: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 1 } })),
+        adminApi.listApprovals({ pageSize: 50 }),
         adminApi.getBusinessSettings().catch(() => null),
       ]);
       setApprovals(res?.items || []);
+      setLoadError(null);
       if (settings?.minimumSalePricePaise) {
         setMinPricePaise(settings.minimumSalePricePaise);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Failed to load approvals', err);
-      setApprovals([]);
+      setLoadError(err?.message || 'Unable to load pending price approvals. Pull down to retry.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -210,6 +206,8 @@ export default function AdminApprovalsScreen() {
     })}`;
   };
 
+  const formatOrderCount = (count: number) => `${count} ${count === 1 ? 'Order' : 'Orders'}`;
+
   const renderItem = ({ item }: { item: PendingApprovalItem }) => {
     const isProcessing = actionId === item.id;
     const totalPaise = Number(item.totalPaise ?? item.totalAmountPaise ?? 0);
@@ -234,32 +232,32 @@ export default function AdminApprovalsScreen() {
 
     return (
       <Card
-        style={styles.card}
+        style={[styles.card, isSmallMobile && { padding: Spacing.md }]}
         accessibilityRole="summary"
         accessibilityLabel={`Pending approval for ${item.customer?.shopName || 'Retail Customer'}, order ${orderNumber}, ${formatRupees(totalPaise)} for ${quantity} packets`}
       >
         <View style={styles.cardHeader}>
-          <View style={{ flex: 1, marginRight: Spacing.sm }}>
+          <View style={styles.cardTopMeta}>
             <View style={styles.orderNumberRow}>
               <Ionicons name="receipt-outline" size={13} color={BrandColors.pink.dark} />
               <Text style={styles.orderNumberText}>{orderNumber}</Text>
             </View>
-            <Text style={styles.customerName}>{item.customer?.shopName || 'Retail Customer'}</Text>
-            {item.customer?.contactName || item.customer?.phone ? (
-              <Text style={styles.customerContact}>
-                {[item.customer?.contactName, item.customer?.phone].filter(Boolean).join(' • ')}
-              </Text>
-            ) : null}
-            <View style={styles.officerRow}>
-              <Ionicons name="person-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
-              <Text style={styles.sellerName}>Seller: {item.seller?.name || 'Seller'}</Text>
-            </View>
+            {item.isResubmitted ? (
+              <Badge label="WAITING FOR RE-APPROVAL" variant="purple" size="sm" />
+            ) : (
+              <Badge label="WAITING FOR APPROVAL" variant="warning" size="sm" />
+            )}
           </View>
-          {item.isResubmitted ? (
-            <Badge label="WAITING FOR RE-APPROVAL" variant="purple" />
-          ) : (
-            <Badge label="WAITING FOR APPROVAL" variant="warning" />
-          )}
+          <Text style={styles.customerName}>{item.customer?.shopName || 'Retail Customer'}</Text>
+          {item.customer?.contactName || item.customer?.phone ? (
+            <Text style={styles.customerContact}>
+              {[item.customer?.contactName, item.customer?.phone].filter(Boolean).join(' • ')}
+            </Text>
+          ) : null}
+          <View style={styles.officerRow}>
+            <Ionicons name="person-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
+            <Text style={styles.sellerName}>Seller: {item.seller?.name || 'Seller'}</Text>
+          </View>
         </View>
 
         {/* Resubmission Banner if Revised */}
@@ -339,23 +337,32 @@ export default function AdminApprovalsScreen() {
         <View style={styles.priceBreakdown}>
           <View style={styles.priceCol}>
             <Text style={styles.priceLabel}>Total Value</Text>
-            <Text style={[styles.orderVal, { color: BrandColors.pink.dark }]}>{formatRupees(totalPaise)}</Text>
+            <Text
+              style={[styles.orderVal, { color: BrandColors.pink.dark }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              {formatRupees(totalPaise)}
+            </Text>
           </View>
 
           <View style={styles.priceCol}>
             <Text style={styles.priceLabel}>Quantity</Text>
-            <Text style={styles.orderVal}>{quantity} pkts</Text>
+            <Text style={styles.orderVal} numberOfLines={1}>
+              {quantity} pkts
+            </Text>
           </View>
 
-          <View style={styles.priceCol}>
+          <View style={styles.priceColBadge}>
             <Text style={styles.priceLabel}>Payment Mode</Text>
-            <View style={{ marginTop: 2 }}>
+            <View style={{ marginTop: 3 }}>
               <Badge label={item.paymentMode || 'PENDING'} variant={(item.paymentMode as any) || 'PENDING'} size="sm" showDot={false} />
             </View>
           </View>
         </View>
 
-        <View style={styles.actionsRow}>
+        <View style={[styles.actionsRow, !isTablet && styles.actionsRowMobile]}>
           <Button
             title="Reject"
             variant="danger"
@@ -363,7 +370,7 @@ export default function AdminApprovalsScreen() {
             onPress={() => handleReject(item)}
             disabled={isProcessing}
             icon={<Ionicons name="close-circle-outline" size={16} color="#FFFFFF" />}
-            style={styles.rejectBtn}
+            style={isTablet ? styles.rejectBtn : styles.rejectBtnMobile}
           />
           <Button
             title={isProcessing ? 'Authorizing...' : 'Approve Sale'}
@@ -372,7 +379,7 @@ export default function AdminApprovalsScreen() {
             onPress={() => handleApprove(item)}
             loading={isProcessing}
             icon={<Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />}
-            style={styles.approveBtn}
+            style={isTablet ? styles.approveBtn : styles.approveBtnMobile}
           />
         </View>
       </Card>
@@ -403,11 +410,135 @@ export default function AdminApprovalsScreen() {
     return list;
   }, [approvals, search, activeTab]);
 
+  const listHeaderElement = (
+    <View style={styles.listHeader}>
+      {/* Responsive KPI Summary Grid (2x2 on phones, 4-col on tablets) */}
+      <View style={[styles.kpiGrid, !isTablet && styles.kpiGridMobile]}>
+        <View style={[styles.kpiCard, !isTablet && styles.kpiCardMobile]}>
+          <Text style={styles.kpiLabel} numberOfLines={1}>Pending</Text>
+          <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
+            {formatOrderCount(approvals.length)}
+          </Text>
+          <Text style={styles.kpiSubValue} numberOfLines={1}>
+            {totalFlaggedPackets.toLocaleString('en-IN')} pkts
+          </Text>
+        </View>
+
+        {resubmittedCount > 0 ? (
+          <View style={[styles.kpiCard, !isTablet && styles.kpiCardMobile, styles.kpiCardResubmitted]}>
+            <Text style={[styles.kpiLabel, { color: '#6D28D9' }]} numberOfLines={1}>
+              Resubmitted
+            </Text>
+            <Text
+              style={[styles.kpiValue, { color: '#6D28D9' }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
+              {formatOrderCount(resubmittedCount)}
+            </Text>
+            <Text style={[styles.kpiSubValue, { color: '#7C3AED' }]} numberOfLines={1}>
+              For Re-Approval
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={[styles.kpiCard, !isTablet && styles.kpiCardMobile]}>
+          <Text style={styles.kpiLabel} numberOfLines={1}>Total Value</Text>
+          <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+            {formatRupees(totalFlaggedPaise)}
+          </Text>
+        </View>
+
+        <View style={[styles.kpiCard, !isTablet && styles.kpiCardMobile]}>
+          <Text style={styles.kpiLabel} numberOfLines={1}>Policy Floor</Text>
+          <Text
+            style={[styles.kpiValue, { color: Colors.light.warning }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+          >
+            ₹{(minPricePaise / 100).toFixed(2)}/pkt
+          </Text>
+        </View>
+      </View>
+
+      {/* Single-Row Scrollable Tab Filters */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabsScrollContent}
+      >
+        <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'ALL' }}
+          style={[styles.tabBtn, activeTab === 'ALL' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('ALL')}
+        >
+          <Text style={[styles.tabBtnText, activeTab === 'ALL' && styles.tabBtnTextActive]}>
+            All ({approvals.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'RESUBMITTED' }}
+          style={[styles.tabBtn, activeTab === 'RESUBMITTED' && styles.tabBtnActivePurple]}
+          onPress={() => setActiveTab('RESUBMITTED')}
+        >
+          <Ionicons
+            name="refresh-circle"
+            size={14}
+            color={activeTab === 'RESUBMITTED' ? '#FFFFFF' : '#7C3AED'}
+            style={{ marginRight: 4 }}
+          />
+          <Text style={[styles.tabBtnText, activeTab === 'RESUBMITTED' && styles.tabBtnTextActiveWhite]}>
+            Resubmitted ({resubmittedCount})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'FIRST_TIME' }}
+          style={[styles.tabBtn, activeTab === 'FIRST_TIME' && styles.tabBtnActive]}
+          onPress={() => setActiveTab('FIRST_TIME')}
+        >
+          <Text style={[styles.tabBtnText, activeTab === 'FIRST_TIME' && styles.tabBtnTextActive]}>
+            First-Time ({firstTimeCount})
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Quick Search Bar */}
+      <View style={styles.searchContainer}>
+        <Input
+          placeholder="Search order ID, shop, or field officer..."
+          value={search}
+          onChangeText={setSearch}
+          containerStyle={styles.searchInputContainer}
+          leftIcon={<Ionicons name="search" size={16} color={Colors.light.textMuted} />}
+          rightIcon={
+            search.length > 0 ? (
+              <Pressable
+                onPress={() => setSearch('')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+              >
+                <Ionicons name="close-circle" size={18} color={Colors.light.textMuted} />
+              </Pressable>
+            ) : undefined
+          }
+        />
+      </View>
+    </View>
+  );
+
+  const hasActiveFilters = search.trim().length > 0 || activeTab !== 'ALL';
+
   return (
     <View style={styles.container}>
       <Header
         title="Price Approvals"
-        subtitle={`${approvals.length} orders waiting for approval`}
+        subtitle={`${approvals.length === 1 ? '1 order' : `${approvals.length} orders`} waiting for approval`}
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
         showMenu={params?.from !== 'actions'}
@@ -415,77 +546,14 @@ export default function AdminApprovalsScreen() {
       />
 
       <View style={styles.innerContainer}>
-        {approvals.length > 0 ? (
-          <View style={styles.kpiRow}>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Pending</Text>
-              <Text style={styles.kpiValue}>{approvals.length} Orders</Text>
-              <Text style={styles.kpiSubValue}>({totalFlaggedPackets} pkts)</Text>
-            </View>
-            {resubmittedCount > 0 ? (
-              <View style={[styles.kpiCard, { borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }]}>
-                <Text style={[styles.kpiLabel, { color: '#6D28D9' }]}>Resubmitted</Text>
-                <Text style={[styles.kpiValue, { color: '#6D28D9' }]}>{resubmittedCount} Orders</Text>
-                <Text style={[styles.kpiSubValue, { color: '#7C3AED' }]}>For Re-Approval</Text>
-              </View>
-            ) : null}
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Total Value</Text>
-              <Text style={styles.kpiValue}>{formatRupees(totalFlaggedPaise)}</Text>
-            </View>
-            <View style={styles.kpiCard}>
-              <Text style={styles.kpiLabel}>Policy Floor</Text>
-              <Text style={[styles.kpiValue, { color: Colors.light.warning }]}>
-                ₹{(minPricePaise / 100).toFixed(2)}/pkt
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Tab Filters for All, Resubmitted, and First-Time */}
-        {approvals.length > 0 ? (
-          <View style={styles.tabsRow}>
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'ALL' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('ALL')}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'ALL' && styles.tabBtnTextActive]}>
-                All ({approvals.length})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'RESUBMITTED' && styles.tabBtnActivePurple]}
-              onPress={() => setActiveTab('RESUBMITTED')}
-            >
-              <Ionicons
-                name="refresh-circle"
-                size={14}
-                color={activeTab === 'RESUBMITTED' ? '#FFFFFF' : '#7C3AED'}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'RESUBMITTED' && styles.tabBtnTextActiveWhite]}>
-                Resubmitted for Approval ({resubmittedCount})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'FIRST_TIME' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('FIRST_TIME')}
-            >
-              <Text style={[styles.tabBtnText, activeTab === 'FIRST_TIME' && styles.tabBtnTextActive]}>
-                First-Time ({firstTimeCount})
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {/* Quick Search Bar */}
-        {approvals.length > 0 ? (
-          <View style={styles.searchContainer}>
-            <Input
-              placeholder="Search order ID, shop, or field officer..."
-              value={search}
-              onChangeText={setSearch}
-              leftIcon={<Ionicons name="search" size={16} color={Colors.light.textMuted} />}
+        {loadError && !loading ? (
+          <View style={styles.bannerWrap}>
+            <FeedbackBanner
+              type="error"
+              message={loadError}
+              actionLabel="Retry"
+              onAction={onRefresh}
+              onDismiss={() => setLoadError(null)}
             />
           </View>
         ) : null}
@@ -504,40 +572,66 @@ export default function AdminApprovalsScreen() {
             iconBgColor={BrandColors.pink.subtle}
             iconBorderColor={BrandColors.pink.tint}
           />
-        ) : filteredApprovals.length === 0 ? (
-          <EmptyState
-            icon="search-outline"
-            title={activeTab === 'RESUBMITTED' ? 'No Resubmitted Requests' : 'No Matching Requests'}
-            description={
-              activeTab === 'RESUBMITTED'
-                ? 'There are currently no rejected sales resubmitted for approval.'
-                : 'No orders match your search criteria.'
-            }
-            iconColor={activeTab === 'RESUBMITTED' ? '#7C3AED' : BrandColors.pink.dark}
-            iconBgColor={activeTab === 'RESUBMITTED' ? '#F5F3FF' : BrandColors.pink.subtle}
-            iconBorderColor={activeTab === 'RESUBMITTED' ? '#DDD6FE' : BrandColors.pink.tint}
-          />
         ) : (
           <FlatList
             data={filteredApprovals}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            ListHeaderComponent={listHeaderElement}
+            ListEmptyComponent={
+              <View style={styles.filteredEmptyWrap}>
+                <EmptyState
+                  icon="search-outline"
+                  title={activeTab === 'RESUBMITTED' ? 'No Resubmitted Requests' : 'No Matching Requests'}
+                  description={
+                    activeTab === 'RESUBMITTED' && !search.trim()
+                      ? 'There are currently no rejected sales resubmitted for approval.'
+                      : 'No orders match your search criteria.'
+                  }
+                  iconColor={activeTab === 'RESUBMITTED' ? '#7C3AED' : BrandColors.pink.dark}
+                  iconBgColor={activeTab === 'RESUBMITTED' ? '#F5F3FF' : BrandColors.pink.subtle}
+                  iconBorderColor={activeTab === 'RESUBMITTED' ? '#DDD6FE' : BrandColors.pink.tint}
+                />
+                {hasActiveFilters ? (
+                  <Button
+                    title="Clear Filters"
+                    variant="outline"
+                    size="sm"
+                    onPress={() => {
+                      setSearch('');
+                      setActiveTab('ALL');
+                    }}
+                    style={styles.clearFiltersBtn}
+                  />
+                ) : null}
+              </View>
+            }
+            contentContainerStyle={[
+              styles.listContent,
+              {
+                paddingHorizontal: isSmallMobile ? Spacing.md : Spacing.lg,
+                paddingBottom: Math.max(insets.bottom + 110, 140),
+              },
+            ]}
             ListFooterComponent={
-              <TouchableOpacity
-                style={styles.confirmedNoticeCard}
-                onPress={() => router.push('/(admin)/sales' as any)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="information-circle-outline" size={20} color="#15803D" />
-                <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                  <Text style={styles.confirmedNoticeTitle}>Looking for auto-approved orders?</Text>
-                  <Text style={styles.confirmedNoticeSub}>
-                    Orders revised to ≥ ₹{(minPricePaise / 100).toFixed(2)}/pkt meet the policy floor and are automatically confirmed without needing admin approval. Tap to view the Sales Directory.
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color="#15803D" />
-              </TouchableOpacity>
+              filteredApprovals.length > 0 ? (
+                <TouchableOpacity
+                  style={styles.confirmedNoticeCard}
+                  onPress={() => router.push('/(admin)/sales' as any)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="information-circle-outline" size={20} color="#15803D" />
+                  <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                    <Text style={styles.confirmedNoticeTitle}>Looking for auto-approved orders?</Text>
+                    <Text style={styles.confirmedNoticeSub}>
+                      Orders revised to ≥ ₹{(minPricePaise / 100).toFixed(2)}/pkt meet the policy floor and are automatically confirmed without needing admin approval. Tap to view the Sales Directory.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#15803D" />
+                </TouchableOpacity>
+              ) : undefined
             }
             refreshControl={
               <RefreshControl
@@ -569,46 +663,74 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
   },
-  kpiRow: {
+  bannerWrap: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  listHeader: {
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
+  kpiGrid: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
+  },
+  kpiGridMobile: {
+    flexWrap: 'wrap',
   },
   kpiCard: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Colors.light.surface,
     borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  kpiCardMobile: {
+    flexBasis: '48%',
+    flexGrow: 1,
+  },
+  kpiCardResubmitted: {
+    borderColor: '#DDD6FE',
+    backgroundColor: '#F5F3FF',
   },
   kpiLabel: {
     ...Typography.caption,
     fontSize: 10,
     color: Colors.light.textSecondary,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   kpiValue: {
-    ...Typography.bodyMedium,
+    ...Typography.h3,
+    fontSize: 16,
     color: Colors.light.heading,
     fontWeight: '800',
     marginTop: 2,
   },
   kpiSubValue: {
-    fontSize: 10,
+    fontSize: 11,
     color: Colors.light.textSecondary,
     fontWeight: '600',
-    marginTop: 1,
+    marginTop: 2,
   },
   loadingContainer: {
     padding: Spacing.lg,
   },
   listContent: {
-    padding: Spacing.lg,
-    paddingBottom: Spacing.huge,
+    paddingTop: Spacing.xs,
+  },
+  filteredEmptyWrap: {
+    alignItems: 'center',
+    paddingVertical: Spacing.lg,
+  },
+  clearFiltersBtn: {
+    marginTop: Spacing.xs,
   },
   card: {
     marginBottom: Spacing.md,
@@ -620,16 +742,20 @@ const styles = StyleSheet.create({
     ...Elevation.low,
   },
   cardHeader: {
+    marginBottom: Spacing.sm,
+  },
+  cardTopMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
   },
   orderNumberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 2,
   },
   orderNumberText: {
     fontSize: 11,
@@ -643,9 +769,9 @@ const styles = StyleSheet.create({
   },
   customerContact: {
     ...Typography.caption,
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.light.textSecondary,
-    marginTop: 1,
+    marginTop: 2,
   },
   officerRow: {
     flexDirection: 'row',
@@ -670,6 +796,7 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.warningText,
     fontWeight: '600',
+    flex: 1,
   },
   productsSection: {
     backgroundColor: '#F8FAFC',
@@ -708,6 +835,7 @@ const styles = StyleSheet.create({
   skuRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
     marginTop: 2,
   },
@@ -751,6 +879,8 @@ const styles = StyleSheet.create({
   },
   priceBreakdown: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.md,
     backgroundColor: '#F8FAFC',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
@@ -760,6 +890,10 @@ const styles = StyleSheet.create({
   },
   priceCol: {
     flex: 1,
+    minWidth: 90,
+  },
+  priceColBadge: {
+    minWidth: 90,
   },
   priceLabel: {
     ...Typography.caption,
@@ -778,14 +912,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginTop: Spacing.sm,
   },
+  actionsRowMobile: {
+    justifyContent: 'space-between',
+  },
   rejectBtn: {
-    minWidth: 100,
+    minWidth: 110,
   },
   approveBtn: {
-    minWidth: 130,
+    minWidth: 140,
+  },
+  rejectBtnMobile: {
+    flex: 1,
+  },
+  approveBtnMobile: {
+    flex: 1.4,
   },
   resubmittedNotice: {
     flexDirection: 'row',
@@ -805,15 +948,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
   },
-  tabsRow: {
+  tabsScrollContent: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
+    alignItems: 'center',
     gap: Spacing.xs,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   tabBtn: {
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.light.surface,
@@ -821,6 +964,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
   },
   tabBtnActive: {
     backgroundColor: BrandColors.pink.dark,
@@ -832,7 +976,7 @@ const styles = StyleSheet.create({
   },
   tabBtnText: {
     ...Typography.caption,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.light.textSecondary,
   },
@@ -843,8 +987,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   searchContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xs,
+  },
+  searchInputContainer: {
+    marginBottom: Spacing.xs,
   },
   confirmedNoticeCard: {
     flexDirection: 'row',
@@ -855,6 +1001,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     marginTop: Spacing.md,
+    marginBottom: Spacing.md,
   },
   confirmedNoticeTitle: {
     ...Typography.caption,
@@ -863,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   confirmedNoticeSub: {
     ...Typography.caption,
-    fontSize: 10,
+    fontSize: 11,
     color: '#166534',
     marginTop: 2,
   },

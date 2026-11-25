@@ -254,7 +254,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
     headers: customHeaders,
     responseType,
     retries = 0,
-    skipRateLimit = false,
+    skipRateLimit = true,
     cachePolicy = 'network-first',
     cacheTtlMs,
     cacheTags,
