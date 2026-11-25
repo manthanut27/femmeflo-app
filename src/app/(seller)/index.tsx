@@ -1,6 +1,6 @@
 import { sellerApi } from '@/api/seller';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import type { SellerDashboardData, Shift } from '@/api/types';
+import type { SellerDashboardData, Shift, SaleItem } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
 import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
@@ -40,6 +40,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 
@@ -48,6 +49,7 @@ export default function SellerDashboardScreen() {
   const { user } = useAuth();
   const userId = user?.id;
   const [data, setData] = useState<SellerDashboardData | null>(null);
+  const [recentSales, setRecentSales] = useState<SaleItem[]>([]);
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,7 +71,7 @@ export default function SellerDashboardScreen() {
 
   const loadDashboard = useCallback(async () => {
     try {
-      const [dashData, shiftData] = await Promise.all([
+      const [dashData, shiftData, salesData] = await Promise.all([
         sellerApi.getDashboard().catch(() => ({
           todaySalesPaise: 0,
           todayOrdersCount: 0,
@@ -84,9 +86,11 @@ export default function SellerDashboardScreen() {
           }
           return { shift: null };
         }),
+        sellerApi.listSales({ page: 1, pageSize: 3 }).catch(() => ({ items: [] })),
       ]);
 
       setData(dashData as SellerDashboardData);
+      setRecentSales(Array.isArray((salesData as any)?.items) ? (salesData as any).items.slice(0, 3) : []);
       let activeShift = (shiftData as any)?.shift ?? null;
       const cached = userId ? await draftStorage.getActiveShift(userId).catch(() => null) : null;
       if (activeShift && typeof activeShift === 'object') {
@@ -386,7 +390,7 @@ export default function SellerDashboardScreen() {
     <View style={styles.container}>
       <Header
         title={`Hello, ${user?.name?.split(' ')[0] || 'Seller'}`}
-        subtitle="Field Sales"
+        subtitle={[user?.district, user?.state].filter(Boolean).join(', ') || 'Field Sales'}
         showNotificationBell
         showMenu={true}
         onMenuPress={() => setMenuOpen(true)}
@@ -424,6 +428,41 @@ export default function SellerDashboardScreen() {
               />
             </Card>
           ) : null}
+
+          {/* Primary Action Card: My Field Sales */}
+          <View style={styles.heroSalesCard}>
+            <View style={styles.heroSalesHeader}>
+              <View style={styles.heroSalesIconBox}>
+                <Ionicons name="stats-chart" size={18} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.heroSalesTitle}>My Field Sales</Text>
+                <Text style={styles.heroSalesSub}>Daily sales & visits</Text>
+              </View>
+            </View>
+            <View style={styles.heroSalesButtons}>
+              <TouchableOpacity
+                style={styles.heroNewSaleBtn}
+                onPress={() => handleProtectedFieldAction('/(seller)/sales/new', 'record new sales')}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="New Sale"
+              >
+                <Ionicons name="cart" size={16} color={BrandColors.pink.dark} style={{ marginRight: 6 }} />
+                <Text style={styles.heroNewSaleText}>New Sale</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.heroShiftBtn}
+                onPress={() => router.push('/(seller)/shift' as any)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Daily Shift"
+              >
+                <Ionicons name="speedometer-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.heroShiftText}>Daily Shift</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* Active Shift Card */}
           <Card
@@ -505,11 +544,11 @@ export default function SellerDashboardScreen() {
           ) : (
             <View style={styles.metricsGrid}>
               <StatCard
-                title="Today's Revenue"
+                title="Today's Sales"
                 value={formatRupees(data?.todaySalesPaise ?? data?.todaySalesAmountPaise ?? 0)}
                 icon={<Ionicons name="wallet-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="pink"
-                changeLabel="Recorded sales"
+                changeLabel="Today"
                 onPress={() => router.push('/(seller)/sales' as any)}
               />
               <StatCard
@@ -517,15 +556,15 @@ export default function SellerDashboardScreen() {
                 value={String(data?.todayOrdersCount ?? 0)}
                 icon={<Ionicons name="receipt-outline" size={20} color={BrandColors.green.primary} />}
                 variant="green"
-                changeLabel="In-store visits"
+                changeLabel="Today"
                 onPress={() => router.push('/(seller)/sales' as any)}
               />
             </View>
           )}
 
-          {/* Monthly Overview */}
+          {/* Monthly & Stock Overview */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeading}>Month-to-Date</Text>
+            <Text style={styles.sectionHeading}>Stock & Monthly</Text>
           </View>
 
           {loading ? (
@@ -540,18 +579,63 @@ export default function SellerDashboardScreen() {
                 value={formatRupees(data?.monthSalesPaise ?? 0)}
                 icon={<Ionicons name="trending-up-outline" size={20} color={BrandColors.pink.primary} />}
                 variant="default"
-                changeLabel="Target progress"
+                changeLabel="This month"
                 onPress={() => router.push('/(seller)/incentives' as any)}
               />
               <StatCard
-                title="Stock Status"
-                value={data?.lowStockCount ? `${data.lowStockCount} Low` : (data?.stockBalance ? `${data.stockBalance} Pkts` : 'Healthy')}
+                title="Available Stock"
+                value={data?.lowStockCount ? `${data.lowStockCount} Low` : (data?.stockBalance ? `${data.stockBalance} Pkts` : '0 Pkts')}
                 icon={<Ionicons name="cube-outline" size={20} color={Colors.light.textSecondary} />}
                 variant={data?.lowStockCount ? 'pink' : 'default'}
-                changeLabel="Current stock"
+                changeLabel="Assigned stock"
                 onPress={() => router.push('/(seller)/inventory' as any)}
                 animate={false}
               />
+            </View>
+          )}
+
+          {/* Recent Sales */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionHeading}>Recent Sales</Text>
+            <TouchableOpacity onPress={() => router.push('/(seller)/sales' as any)} hitSlop={HitSlop.sm}>
+              <Text style={styles.viewAllLink}>View All ›</Text>
+            </TouchableOpacity>
+          </View>
+
+          {recentSales.length === 0 ? (
+            <Card style={{ padding: Spacing.md, marginBottom: Spacing.md }}>
+              <Text style={{ fontSize: 13, color: Colors.light.textSecondary, textAlign: 'center' }}>
+                No recent sales yet. Tap New Sale to create one.
+              </Text>
+            </Card>
+          ) : (
+            <View style={{ gap: Spacing.xs, marginBottom: Spacing.md }}>
+              {recentSales.map((s) => (
+                <Card
+                  key={s.id}
+                  style={styles.recentSaleCard}
+                  onPress={() => router.push(`/(seller)/sales/${s.id}` as any)}
+                >
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                    <Text style={styles.recentShopName} numberOfLines={1}>
+                      {s.customer?.shopName || 'Retail Store'}
+                    </Text>
+                    <Text style={styles.recentSaleMeta} numberOfLines={1}>
+                      {s.packetCount || s.quantity || 0} pkts · {s.paymentMode}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Text style={styles.recentSaleAmt}>
+                      {formatRupees(s.totalAmountPaise ?? s.totalPaise ?? 0)}
+                    </Text>
+                    <Badge
+                      label={s.status === 'PENDING_APPROVAL' ? 'PENDING' : s.status}
+                      variant={s.status === 'CONFIRMED' ? 'ACTIVE' : s.status === 'REJECTED' ? 'danger' : 'warning'}
+                      size="sm"
+                    />
+                  </View>
+                </Card>
+              ))}
             </View>
           )}
 
@@ -785,6 +869,99 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
+  },
+  heroSalesCard: {
+    backgroundColor: BrandColors.pink.dark,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    ...Shadows.md,
+  },
+  heroSalesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  heroSalesIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroSalesTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  heroSalesSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 1,
+  },
+  heroSalesButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  heroNewSaleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    minHeight: 44,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+  },
+  heroNewSaleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  heroShiftBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    minHeight: 44,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+  },
+  heroShiftText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  viewAllLink: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  recentSaleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+  },
+  recentShopName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  recentSaleMeta: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  recentSaleAmt: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
   },
   shiftCard: {
     marginBottom: Spacing.lg,

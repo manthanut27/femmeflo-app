@@ -191,99 +191,79 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
       ]
     : [
         {
-          title: 'Dashboard',
-          subtitle: 'Overview & daily metrics',
+          title: 'Home',
+          subtitle: "Today's work",
           icon: 'pie-chart-outline',
           route: isManager ? '/(manager)' : '/(seller)',
-        },
-        {
-          title: 'New Field Sale',
-          subtitle: 'Create POS retail bill',
-          icon: 'bag-add-outline',
-          route: '/(seller)/sales/new',
-          highlight: true,
-        },
-        {
-          title: 'My Duty Shift',
-          subtitle: hasActiveShift ? 'Duty is running' : 'Start duty & meter log',
-          icon: 'speedometer-outline',
-          route: '/(seller)/shift',
-          badge: hasActiveShift ? 'ACTIVE' : 'START',
         },
         ...(isManager
           ? [
               {
-                title: 'Territory Sales',
-                subtitle: 'Daily beat & orders report',
+                title: 'All Sales',
+                subtitle: 'Area shop bills',
                 icon: 'receipt-outline',
                 route: '/(manager)/sales',
               },
               {
-                title: 'Team Sellers',
-                subtitle: 'Field sales reps & onboarding',
+                title: 'My Team',
+                subtitle: 'Field sellers',
                 icon: 'people-outline',
                 route: '/(manager)/sellers',
               },
               {
-                title: 'Retail Stores',
-                subtitle: 'Shop directory & KYC onboarding',
+                title: 'Shops',
+                subtitle: 'All shops',
                 icon: 'storefront-outline',
                 route: '/(manager)/customers',
               },
               {
-                title: 'Depot Stock',
-                subtitle: 'Regional inventory balances',
+                title: 'Area Stock',
+                subtitle: 'Packets available',
                 icon: 'cube-outline',
                 route: '/(manager)/inventory',
               },
               {
-                title: 'Shift Logs',
-                subtitle: 'Team attendance & visits',
-                icon: 'time-outline',
-                route: '/(manager)/shifts',
-              },
-              {
-                title: 'Incentives',
-                subtitle: 'Earnings & commissions',
+                title: 'Earnings',
+                subtitle: 'Bonus & money',
                 icon: 'cash-outline',
                 route: '/(manager)/incentives',
               },
             ]
           : [
               {
-                title: 'My Sales History',
-                subtitle: 'Past orders & invoices',
+                title: 'My Sales',
+                subtitle: 'Shop bills',
                 icon: 'receipt-outline',
                 route: '/(seller)/sales',
               },
               {
-                title: 'Retail Customers',
-                subtitle: 'Shop list & onboarding',
+                title: 'Shops',
+                subtitle: 'Shop list',
                 icon: 'storefront-outline',
                 route: '/(seller)/customers',
               },
               {
-                title: 'My Stock & Inventory',
-                subtitle: 'Packets & transfer history',
+                title: 'My Packets',
+                subtitle: 'Packets with me',
                 icon: 'cube-outline',
                 route: '/(seller)/inventory',
               },
               {
                 title: 'My Earnings',
-                subtitle: 'Incentives & payouts',
+                subtitle: 'Bonus & money',
                 icon: 'cash-outline',
                 route: '/(seller)/incentives',
               },
             ]),
         {
           title: 'My Profile',
-          subtitle: 'Account details & password',
+          subtitle: 'Name & password',
           icon: 'person-outline',
           route: isManager ? '/(manager)/profile' : '/(seller)/profile',
         },
         {
-          title: 'Notifications',
-          subtitle: 'System alerts & announcements',
+          title: 'Alerts',
+          subtitle: 'Updates & messages',
           icon: 'notifications-outline',
           route: '/(shared)/notifications',
         },
@@ -310,31 +290,6 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
             },
           ]}
         >
-          {/* Header (Managers & Sellers only) */}
-          {!isSuperAdmin ? (
-            <View style={styles.header}>
-              <View style={styles.brandRow}>
-                <View style={styles.brandBadge}>
-                  <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
-                </View>
-                <View>
-                  <Text style={styles.brandTitle}>FemmeFlo</Text>
-                  <Text style={styles.brandSubtitle}>Mobile Operations Hub</Text>
-                </View>
-              </View>
-
-              <Pressable
-                onPress={onClose}
-                hitSlop={HitSlop.md}
-                style={styles.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Close navigation menu"
-              >
-                <Ionicons name="close" size={20} color="#8491A3" />
-              </Pressable>
-            </View>
-          ) : null}
-
           {/* User Profile Card */}
           {isSuperAdmin ? (
             <View style={styles.saProfileCard}>
@@ -376,12 +331,21 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                   {user?.name || 'Authorized User'}
                 </Text>
                 <Text style={styles.userRole}>
-                  {user?.role === 'MANAGER' ? 'TERRITORY MANAGER' : 'FIELD SELLER'}
+                  {user?.role === 'MANAGER' ? 'Area Manager' : 'Field Seller'}
                 </Text>
                 <Text style={styles.userTerritory} numberOfLines={1}>
                   📍 {[user?.district, user?.state].filter(Boolean).join(', ') || 'Regional Field'}
                 </Text>
               </View>
+              <Pressable
+                onPress={onClose}
+                hitSlop={HitSlop.md}
+                style={styles.closeBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close navigation menu"
+              >
+                <Ionicons name="close" size={20} color="#8491A3" />
+              </Pressable>
             </View>
           )}
 
@@ -498,7 +462,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
               </>
             ) : (
               <>
-                <Text style={styles.sectionLabel}>OPERATIONS & ACTIONS</Text>
+                <Text style={styles.sectionLabel}>MENU</Text>
 
                 {NAV_ITEMS.map((item, idx) => (
                   <Pressable

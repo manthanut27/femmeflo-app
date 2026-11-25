@@ -158,7 +158,7 @@ export default function ManagerDashboardScreen() {
                 </Text>
                 <View style={styles.territoryStatusRow}>
                   <View style={styles.greenDot} />
-                  <Text style={styles.territoryStatusLabel}>Active Area • GPS Verified</Text>
+                  <Text style={styles.territoryStatusLabel}>GPS Verified</Text>
                 </View>
               </View>
             </View>
@@ -211,7 +211,7 @@ export default function ManagerDashboardScreen() {
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.heroTitle}>My Field Sales</Text>
-                <Text style={styles.heroSubtitle}>Track your daily performance</Text>
+                <Text style={styles.heroSubtitle}>Daily performance</Text>
               </View>
             </View>
 
@@ -306,7 +306,7 @@ export default function ManagerDashboardScreen() {
                 <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
                   {loading ? '0' : (dashboard?.monthlyPacketsSold || 0).toLocaleString()}
                 </Text>
-                <Text style={styles.metricFooter}>Total packets sold</Text>
+                <Text style={styles.metricFooter}>Total packets</Text>
                 <View style={[styles.metricGlowAccent, { backgroundColor: '#38BDF8' }]} />
               </TouchableOpacity>
             </View>
@@ -335,7 +335,7 @@ export default function ManagerDashboardScreen() {
                     ? '0 / 0'
                     : `${dashboard?.activeSellersCount || 0} / ${dashboard?.totalSellers || 0}`}
                 </Text>
-                <Text style={styles.metricFooter}>Sellers working today</Text>
+                <Text style={styles.metricFooter}>Working today</Text>
                 <View style={[styles.metricGlowAccent, { backgroundColor: '#4ADE80' }]} />
               </TouchableOpacity>
 
