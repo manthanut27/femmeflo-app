@@ -228,16 +228,16 @@ export default function ManagerDashboardScreen() {
                 <Text style={styles.heroNewSaleText}>New Sale</Text>
               </TouchableOpacity>
 
-              {/* Translucent Outline Pill Button: Daily Shift */}
+              {/* Translucent Outline Pill Button: Attendance & Duty */}
               <TouchableOpacity
                 style={styles.heroDailyShiftBtn}
-                onPress={() => router.push('/(seller)/shift' as any)}
+                onPress={() => router.push('/(seller)/attendance' as any)}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Daily Shift"
+                accessibilityLabel="Daily Duty & Attendance"
               >
-                <Ionicons name="speedometer-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.heroDailyShiftText}>Daily Shift</Text>
+                <Ionicons name="calendar-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.heroDailyShiftText}>Attendance</Text>
               </TouchableOpacity>
             </View>
           </View>

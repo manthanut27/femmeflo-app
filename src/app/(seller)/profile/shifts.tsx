@@ -294,7 +294,7 @@ export default function SellerAllShiftsScreen() {
               title="No Shifts Recorded"
               description="You have not recorded any field duty shifts yet. Start your first shift from the Duty Shift tab."
               actionTitle="Go to Shift Screen"
-              onAction={() => router.push('/(seller)/shift' as any)}
+              onAction={() => router.push('/(seller)/attendance' as any)}
             />
           )
         }

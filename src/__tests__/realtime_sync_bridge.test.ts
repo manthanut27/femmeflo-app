@@ -28,7 +28,7 @@ describe('Mobile Live Realtime Sync & Screen Listeners Suite', () => {
       'src/app/(seller)/index.tsx',
       'src/app/(seller)/sales/index.tsx',
       'src/app/(seller)/sales/[id].tsx',
-      'src/app/(seller)/shift/index.tsx',
+      'src/app/(seller)/attendance/index.tsx',
       'src/app/(seller)/customers/index.tsx',
     ];
 

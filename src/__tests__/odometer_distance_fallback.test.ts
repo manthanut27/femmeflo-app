@@ -109,9 +109,9 @@ describe('Shift Travel Distance & Odometer Fallback Suite', () => {
     assert.strictEqual(res.source, 'none');
   });
 
-  it('verifies integration in (seller)/shift/index.tsx', () => {
-    const code = readFile('src/app/(seller)/shift/index.tsx');
-    assert.match(code, /computeShiftTravelDistance/, 'Shift index must import and use computeShiftTravelDistance');
+  it('verifies integration in (seller)/attendance/index.tsx', () => {
+    const code = readFile('src/app/(seller)/attendance/index.tsx');
+    assert.match(code, /computeShiftTravelDistance/, 'Attendance screen must import and use computeShiftTravelDistance');
     assert.match(code, /via meter fallback/, 'Shift completion alert must note meter fallback when applicable');
     assert.match(code, /Calculated Travel:/, 'Shift end modal must show live calculated meter travel preview');
   });

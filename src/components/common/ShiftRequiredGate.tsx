@@ -41,7 +41,7 @@ export function ShiftRequiredGate({
     if (onStartShift) {
       onStartShift();
     } else {
-      router.push('/(seller)/shift' as any);
+      router.push('/(seller)/attendance' as any);
     }
   }
 

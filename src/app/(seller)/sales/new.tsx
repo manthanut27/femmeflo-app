@@ -571,7 +571,7 @@ export default function NewSaleScreen() {
   }, [products, stockMap]);
 
   const handleOpenShift = useCallback(() => {
-    router.push('/(seller)/shift' as any);
+    router.push('/(seller)/attendance' as any);
   }, [router]);
 
   const paymentOptions: Array<{

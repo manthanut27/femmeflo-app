@@ -429,7 +429,7 @@ describe('Immersive Auto-Hide Navigation & Notification Bar Test Suite', () => {
 
       // Retains all active tab screen names and titles
       assert.match(code, /title:\s*'Home'/, 'Seller must retain Home tab');
-      assert.match(code, /title:\s*'Shift'/, 'Seller must retain Shift tab');
+      assert.match(code, /title:\s*'Attendance'/, 'Seller must retain Attendance tab');
       assert.match(code, /title:\s*'Sales'/, 'Seller must retain Sales tab');
       assert.match(code, /title:\s*'Customers'/, 'Seller must retain Customers tab');
       assert.match(code, /title:\s*'Profile'/, 'Seller must retain Profile tab');

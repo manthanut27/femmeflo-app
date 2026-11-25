@@ -56,7 +56,7 @@ describe('Immersive Navigation & Auto-Hide Suite', () => {
     assert.match(sellerCode, /AutoHideBottomTabBar/, 'Seller layout must import AutoHideBottomTabBar');
     assert.match(sellerCode, /tabBar=\{\(props\)\s*=>\s*<AutoHideBottomTabBar\s+\{\.\.\.props\}\s*\/>\}/, 'Seller layout must pass AutoHideBottomTabBar to tabBar prop');
     assert.match(sellerCode, /title:\s*'Home'/, 'Seller must retain Home tab');
-    assert.match(sellerCode, /title:\s*'Shift'/, 'Seller must retain Shift tab');
+    assert.match(sellerCode, /title:\s*'Attendance'/, 'Seller must retain Attendance tab');
     assert.match(sellerCode, /title:\s*'Sales'/, 'Seller must retain Sales tab');
     assert.match(sellerCode, /title:\s*'Customers'/, 'Seller must retain Customers tab');
     assert.match(sellerCode, /title:\s*'Profile'/, 'Seller must retain Profile tab');

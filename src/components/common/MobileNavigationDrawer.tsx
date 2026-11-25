@@ -356,7 +356,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                 styles.shiftBanner,
                 hasActiveShift ? styles.shiftBannerActive : styles.shiftBannerInactive,
               ]}
-              onPress={() => handleNavigate('/(seller)/shift')}
+              onPress={() => handleNavigate('/(seller)/attendance')}
               accessibilityRole="button"
               accessibilityLabel={`Duty Shift: ${hasActiveShift ? 'Active' : 'Off'}`}
             >

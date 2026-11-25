@@ -48,12 +48,12 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.match(code, /backBehavior="history"/, 'Manager tabs must retain history back behavior');
   });
 
-  it('verifies (seller)/_layout.tsx renames Duty Shift to Shift, replaces Profile with Attendance, and implements responsive insets', () => {
+  it('verifies (seller)/_layout.tsx removes separate Shift tab, keeps unified Attendance tab, and implements responsive insets', () => {
     const code = readFile('src/app/(seller)/_layout.tsx');
 
     // Naming checks
     assert.match(code, /title:\s*'Home'/, 'Seller must have Home tab');
-    assert.match(code, /title:\s*'Shift'/, 'Seller tab must be renamed from Duty Shift to Shift for responsive fit');
+    assert.doesNotMatch(code, /title:\s*'Shift'/, 'Separate Shift tab must be removed from Seller bottom navbar');
     assert.doesNotMatch(code, /title:\s*'Duty Shift'/, 'Duty Shift naming must not be present');
     assert.match(code, /title:\s*'Sales'/, 'Seller must have Sales tab');
     assert.match(code, /title:\s*'Customers'/, 'Seller must have Customers tab');

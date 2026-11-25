@@ -262,22 +262,48 @@ export default function SellerDashboardScreen() {
   }
 
   async function handleOpenEndShiftModal() {
+    setGpsTraveledDistanceKm(0);
     setIsAcquiringLocation(true);
     setEndShiftModalVisible(true);
     const loc = await fetchLiveLocation();
     if (currentShift && currentShift.startLatitude && loc) {
-      const startLat = Number(currentShift.startLatitude);
-      const startLng = Number(currentShift.startLongitude || 75.8577);
       const toRad = (x: number) => (x * Math.PI) / 180;
-      const dLat = toRad(loc.latitude - startLat);
-      const dLng = toRad(loc.longitude - startLng);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(startLat)) * Math.cos(toRad(loc.latitude)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const visitBonus = (currentShift.visits?.length || 0) * 1.5;
-      const computedKm = Math.max(0.5, Math.round((6371 * c + visitBonus) * 10) / 10);
-      setGpsTraveledDistanceKm(computedKm);
+      const segmentKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
+
+      const waypoints: Array<{ lat: number; lng: number }> = [
+        { lat: Number(currentShift.startLatitude), lng: Number(currentShift.startLongitude || loc.longitude) },
+      ];
+      for (const v of currentShift.visits || []) {
+        const rawLat = (v as any).latitude ?? (v.customer as any)?.latitude;
+        const rawLng = (v as any).longitude ?? (v.customer as any)?.longitude;
+        if (rawLat != null && rawLng != null) {
+          const vLat = Number(rawLat);
+          const vLng = Number(rawLng);
+          if (Number.isFinite(vLat) && Number.isFinite(vLng)) {
+            waypoints.push({ lat: vLat, lng: vLng });
+          }
+        }
+      }
+      waypoints.push({ lat: loc.latitude, lng: loc.longitude });
+
+      let totalKm = 0;
+      let lastAnchored = waypoints[0];
+      for (let i = 1; i < waypoints.length; i++) {
+        const dist = segmentKm(lastAnchored.lat, lastAnchored.lng, waypoints[i].lat, waypoints[i].lng);
+        if (dist >= 0.05) {
+          totalKm += dist;
+          lastAnchored = waypoints[i];
+        }
+      }
+
+      setGpsTraveledDistanceKm(Math.round(totalKm * 10) / 10);
     }
     setIsAcquiringLocation(false);
   }
@@ -453,13 +479,13 @@ export default function SellerDashboardScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.heroShiftBtn}
-                onPress={() => router.push('/(seller)/shift' as any)}
+                onPress={() => router.push('/(seller)/attendance' as any)}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Daily Shift"
+                accessibilityLabel="Attendance & Duty"
               >
-                <Ionicons name="speedometer-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.heroShiftText}>Daily Shift</Text>
+                <Ionicons name="calendar-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.heroShiftText}>Attendance</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -503,10 +529,10 @@ export default function SellerDashboardScreen() {
             {currentShift ? (
               <View style={styles.shiftActionsRow}>
                 <Button
-                  title="Shift & Shop Visits"
+                  title="Attendance & Visits"
                   variant="secondary"
                   size="sm"
-                  onPress={() => router.push('/(seller)/shift' as any)}
+                  onPress={() => router.push('/(seller)/attendance' as any)}
                   icon={<Ionicons name="time" size={16} color="#FFFFFF" />}
                   style={styles.shiftTrackerBtn}
                 />
@@ -776,14 +802,13 @@ export default function SellerDashboardScreen() {
                 routeDistanceKm={gpsTraveledDistanceKm}
               />
 
-              {gpsTraveledDistanceKm > 0 ? (
-                <View style={styles.meterPreviewCard}>
-                  <Ionicons name="navigate-circle" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
-                  <Text style={styles.meterPreviewText}>
-                    Calculated Travel: <Text style={{ fontWeight: '700' }}>{gpsTraveledDistanceKm} KM</Text> (GPS route)
-                  </Text>
-                </View>
-              ) : null}
+              <View style={styles.meterPreviewCard}>
+                <Ionicons name="navigate-circle" size={15} color={BrandColors.green.dark} style={{ marginRight: 6 }} />
+                <Text style={styles.meterPreviewText}>
+                  Calculated Travel: <Text style={{ fontWeight: '700' }}>{gpsTraveledDistanceKm} KM</Text>
+                  {gpsTraveledDistanceKm === 0 ? ' (Same location)' : ' (GPS route)'}
+                </Text>
+              </View>
 
               <Input
                 label="End of Day Remarks (Optional)"

@@ -92,13 +92,13 @@ export default function SellerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="shift/index"
+        name="attendance/index"
         options={{
-          title: 'Shift',
+          title: 'Attendance',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon
-              name="time-outline"
-              focusedName="time"
+              name="calendar-outline"
+              focusedName="calendar"
               focused={focused}
               color={color}
               size={iconSize}
@@ -143,29 +143,21 @@ export default function SellerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="inventory/index"
+        name="shift/index"
         options={{
-          title: 'Inventory',
+          title: 'Daily Shift',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen
-        name="attendance/index"
+        name="inventory/index"
         options={{
-          title: 'Attendance',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name="calendar-outline"
-              focusedName="calendar"
-              focused={focused}
-              color={color}
-              size={iconSize}
-              tintColor={BrandColors.pink.primary}
-              isSmallMobile={isSmallMobile}
-            />
-          ),
+          title: 'Inventory',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

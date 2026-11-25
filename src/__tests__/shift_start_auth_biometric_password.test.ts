@@ -153,10 +153,10 @@ describe('Shift Start Authentication: Mobile Password & Fingerprint Suite', () =
     assert.match(sellerIndexContent, /ShiftAuthVerificationModal/);
     assert.match(sellerIndexContent, /shiftAuthModalVisible/);
 
-    const shiftIndexPath = path.resolve(process.cwd(), 'src/app/(seller)/shift/index.tsx');
-    const shiftIndexContent = await fs.readFile(shiftIndexPath, 'utf-8');
-    assert.match(shiftIndexContent, /ShiftAuthVerificationModal/);
-    assert.match(shiftIndexContent, /shiftAuthModalVisible/);
+    const attendanceIndexPath = path.resolve(process.cwd(), 'src/app/(seller)/attendance/index.tsx');
+    const attendanceIndexContent = await fs.readFile(attendanceIndexPath, 'utf-8');
+    assert.match(attendanceIndexContent, /ShiftAuthVerificationModal/);
+    assert.match(attendanceIndexContent, /shiftAuthModalVisible/);
   });
 
   it('ensures ShiftRequiredGate mentions fingerprint and mobile password', async () => {
