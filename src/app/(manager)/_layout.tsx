@@ -196,15 +196,6 @@ export default function ManagerTabsLayout() {
           tabBarStyle: { display: 'none' },
         }}
       />
-      <Tabs.Screen
-        name="quick-actions/index"
-        options={{
-          title: 'Quick Actions',
-          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
     </Tabs>
   );
 }

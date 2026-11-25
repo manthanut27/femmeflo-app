@@ -237,6 +237,12 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                 route: '/(manager)/inventory',
               },
               {
+                title: 'Shift Logs',
+                subtitle: 'Team attendance & visits',
+                icon: 'time-outline',
+                route: '/(manager)/shifts',
+              },
+              {
                 title: 'Incentives',
                 subtitle: 'Earnings & commissions',
                 icon: 'cash-outline',
