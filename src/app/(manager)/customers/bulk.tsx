@@ -15,15 +15,15 @@ export default function ManagerBulkCustomerScreen() {
   if (!canOnboardCustomers(user)) {
     return (
       <View style={styles.container}>
-        <Header title="Batch Customer Onboarding" subtitle="Bulk Registration" showBack />
+        <Header title="Batch Entry" subtitle="Add many shops" showBack />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
             title="Access Restricted"
-            description="You do not have permission to onboard customers in bulk. Please contact your administrator to request 'Onboard new customers' permission."
+            description="You do not have permission to add shops in batch. Ask your Admin for access."
             iconColor={Colors.light.danger}
             iconBgColor={Colors.light.dangerBg}
-            actionTitle="Back to Customers"
+            actionTitle="Back to Shops"
             buttonVariant="secondary"
             onAction={() => router.replace('/(manager)/customers' as any)}
           />

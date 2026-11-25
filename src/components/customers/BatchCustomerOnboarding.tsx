@@ -28,7 +28,7 @@ import type {
   CreateBulkCustomersPayload,
   PublicUser,
 } from '@/api/types';
-import { ISTClock } from '@/components/common/ISTClock';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SaveConfirmationCard } from '@/components/customers/SaveConfirmationCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -47,6 +47,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { parseBulkCustomersCsv } from '@/utils/csvParser';
+import { useResponsiveLayout } from '@/utils/responsive';
 import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 interface Props {
@@ -91,6 +92,10 @@ export function BatchCustomerOnboarding({
   onCancel,
   onSwitchToSingle,
 }: Props) {
+  const insets = useSafeAreaInsets();
+  const { width } = useResponsiveLayout();
+  const isCompactScreen = width < 380;
+
   // Categories & Sellers
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [sellers, setSellers] = useState<PublicUser[]>([]);
@@ -357,20 +362,20 @@ export function BatchCustomerOnboarding({
   const getRowErrors = useCallback(
     (row: CustomerBatchRowState): string[] => {
       const errs: string[] = [];
-      if (!row.shopName.trim()) errs.push('Shop Name is required');
+      if (!row.shopName.trim()) errs.push('Enter shop name');
       const cleanPhone = (row.phone || '').replace(/\D/g, '').slice(-10);
       if (cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
-        errs.push('Phone must be 10 digits starting with 6-9');
+        errs.push('Enter valid 10-digit mobile number');
       }
       if (duplicatePhones.has(cleanPhone)) {
-        errs.push(`Duplicate phone ${cleanPhone} in batch`);
+        errs.push(`Duplicate number ${cleanPhone}`);
       }
       const dist = row.district || defaultDistrict;
       const vill = row.village || defaultVillage;
-      if (!dist) errs.push('District is required');
-      if (!vill) errs.push('Village/Town is required');
+      if (!dist) errs.push('Enter district');
+      if (!vill) errs.push('Enter area / village');
       if (!row.noPhotoReason && !row.photoPath && !defaultNoPhotoReason) {
-        errs.push('Photo exemption reason is required');
+        errs.push('Enter why no photo');
       }
       return errs;
     },
@@ -570,14 +575,15 @@ export function BatchCustomerOnboarding({
     const custs = savedResult.customers || rows;
     return (
       <View style={styles.container}>
-        <Header title="Customer Onboarding" subtitle="Batch Submission Complete" />
+        <Header title="Shops Added" subtitle="All saved" />
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.contentWrapper}>
             <SaveConfirmationCard
+              title="Shops Added"
               count={savedResult.count || custs.length}
               customers={custs}
               hasPhoto={false}
-              photoReason={defaultNoPhotoReason || 'Batch Field Onboarding'}
+              photoReason={defaultNoPhotoReason || 'Batch Entry'}
               hasGps={false}
               onReset={() => {
                 setSavedResult(null);
@@ -604,12 +610,12 @@ export function BatchCustomerOnboarding({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <Header
-        title="Batch Customer Onboarding"
-        subtitle="Register 1 to 100 Outlets Simultaneously"
+        title="Batch Entry"
+        subtitle="Add 1 to 100 shops together"
         showBack={Boolean(onCancel)}
         onBack={onCancel}
         rightAction={
@@ -622,17 +628,20 @@ export function BatchCustomerOnboarding({
               hitSlop={HitSlop.md}
             >
               <Ionicons name="person-add-outline" size={16} color={BrandColors.pink.dark} />
-              <Text style={styles.singleSwitchText}>Single</Text>
+              <Text style={styles.singleSwitchText}>One Shop</Text>
             </Pressable>
           ) : undefined
         }
       />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 40, 64) },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.contentWrapper}>
-          {/* Live IST Clock Header */}
-          <ISTClock />
-
           {/* Submission Feedback Banner */}
           {submissionFeedback && (
             <FeedbackBanner
@@ -646,10 +655,10 @@ export function BatchCustomerOnboarding({
           {/* Defaults & Territory Toolbar Card */}
           <Card style={styles.defaultsCard}>
             <View style={styles.defaultsHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.defaultsTitle}>Batch Shared Defaults</Text>
+              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <Text style={styles.defaultsTitle}>Same Area for All Shops</Text>
                 <Text style={styles.defaultsSubtitle}>
-                  Set common location and category values, then apply to all rows.
+                  Fill once and tap Apply to All.
                 </Text>
               </View>
               <Button
@@ -662,10 +671,11 @@ export function BatchCustomerOnboarding({
             </View>
 
             {/* Pincode Lookup & Territory Auto-fill */}
-            <View style={styles.rowTwoCols}>
-              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+            <View style={[styles.rowTwoCols, isCompactScreen && styles.rowTwoColsStacked]}>
+              <View style={[styles.halfCol, !isCompactScreen && styles.halfColLeft]}>
                 <Input
-                  label="Default PIN Code"
+                  label="PIN Code"
+                  placeholder="6-digit PIN"
                   value={defaultPincode}
                   onChangeText={handleDefaultPincodeChange}
                   keyboardType="numeric"
@@ -680,27 +690,30 @@ export function BatchCustomerOnboarding({
                 />
               </View>
 
-              <View style={{ flex: 1 }}>
+              <View style={styles.halfCol}>
                 <Input
-                  label="Default District *"
+                  label="District *"
+                  placeholder="Enter district"
                   value={defaultDistrict}
                   onChangeText={setDefaultDistrict}
                 />
               </View>
             </View>
 
-            <View style={styles.rowTwoCols}>
-              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+            <View style={[styles.rowTwoCols, isCompactScreen && styles.rowTwoColsStacked]}>
+              <View style={[styles.halfCol, !isCompactScreen && styles.halfColLeft]}>
                 <Input
-                  label="Default Village / Town *"
+                  label="Area / Village *"
+                  placeholder="Enter area or village"
                   value={defaultVillage}
                   onChangeText={setDefaultVillage}
                 />
               </View>
 
-              <View style={{ flex: 1 }}>
+              <View style={styles.halfCol}>
                 <Input
-                  label="Default State *"
+                  label="State *"
+                  placeholder="Enter state"
                   value={defaultState}
                   onChangeText={setDefaultState}
                 />
@@ -708,7 +721,8 @@ export function BatchCustomerOnboarding({
             </View>
 
             <Input
-              label="Default Photo Exemption Reason *"
+              label="Why no photo? *"
+              placeholder="e.g. Bulk field onboarding visit"
               value={defaultNoPhotoReason}
               onChangeText={setDefaultNoPhotoReason}
             />
@@ -716,7 +730,7 @@ export function BatchCustomerOnboarding({
             {/* Category Selector Chips */}
             {categories.length > 0 && (
               <View style={styles.categorySection}>
-                <Text style={styles.fieldLabel}>Default Category *</Text>
+                <Text style={styles.fieldLabel}>Trade Category *</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
                   {categories.map((cat) => {
                     const isSelected = defaultCategoryId === cat.id;
@@ -739,7 +753,7 @@ export function BatchCustomerOnboarding({
             {/* Seller Selector for Admin / Manager */}
             {(role === 'SUPER_ADMIN' || role === 'MANAGER') && sellers.length > 0 && (
               <View style={styles.categorySection}>
-                <Text style={styles.fieldLabel}>Default Assigned Seller *</Text>
+                <Text style={styles.fieldLabel}>Assign to Seller *</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
                   {sellers.map((s) => {
                     const isSelected = defaultSellerId === s.id;
@@ -770,7 +784,7 @@ export function BatchCustomerOnboarding({
               />
               {duplicatePhones.size > 0 && (
                 <Badge
-                  label={`${duplicatePhones.size} Duplicate Phone(s)`}
+                  label={`${duplicatePhones.size} Duplicate Phone`}
                   variant="danger"
                   size="md"
                   style={{ marginLeft: 6 }}
@@ -826,10 +840,10 @@ export function BatchCustomerOnboarding({
                 {/* Row Header */}
                 <View style={styles.rowCardHeader}>
                   <View style={styles.rowNumberPill}>
-                    <Text style={styles.rowNumberText}>#{idx + 1}</Text>
+                    <Text style={styles.rowNumberText}>Shop #{idx + 1}</Text>
                   </View>
                   <Text style={styles.rowCardTitle} numberOfLines={1}>
-                    {row.shopName || 'New Retail Customer'}
+                    {row.shopName || 'New Shop'}
                   </Text>
 
                   <View style={styles.rowCardActions}>
@@ -854,42 +868,46 @@ export function BatchCustomerOnboarding({
                 {errs.length > 0 && (
                   <View style={styles.rowWarningBox}>
                     <Ionicons name="alert-circle" size={14} color="#B91C1C" style={{ marginRight: 4 }} />
-                    <Text style={styles.rowWarningText}>{errs.join(' • ')}</Text>
+                    <Text style={styles.rowWarningText}>{errs.join(' · ')}</Text>
                   </View>
                 )}
 
                 {/* Form Fields */}
-                <View style={styles.rowTwoCols}>
-                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <View style={[styles.rowTwoCols, isCompactScreen && styles.rowTwoColsStacked]}>
+                  <View style={[styles.halfCol, !isCompactScreen && styles.halfColLeft]}>
                     <Input
-                      label="Store / Shop Name *"
+                      label="Shop Name *"
+                      placeholder="Enter shop name"
                       value={row.shopName}
                       onChangeText={(v) => updateRowField(idx, 'shopName', v)}
                     />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.halfCol}>
                     <Input
-                      label="Contact Person *"
+                      label="Owner Name *"
+                      placeholder="Enter owner's name"
                       value={row.contactName}
                       onChangeText={(v) => updateRowField(idx, 'contactName', v)}
                     />
                   </View>
                 </View>
 
-                <View style={styles.rowTwoCols}>
-                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <View style={[styles.rowTwoCols, isCompactScreen && styles.rowTwoColsStacked]}>
+                  <View style={[styles.halfCol, !isCompactScreen && styles.halfColLeft]}>
                     <Input
-                      label="Mobile Number (10 Digits) *"
+                      label="Mobile Number *"
+                      placeholder="10-digit number"
                       value={row.phone}
                       onChangeText={(v) => updateRowField(idx, 'phone', v)}
-                      keyboardType="phone-pad"
-                      maxLength={14}
-                      error={isDup ? 'Duplicate phone in batch' : undefined}
+                      keyboardType="numeric"
+                      maxLength={10}
+                      error={isDup ? 'Duplicate number' : undefined}
                     />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.halfCol}>
                     <Input
-                      label="PIN Code (6 Digits)"
+                      label="PIN Code"
+                      placeholder="6-digit PIN"
                       value={row.pincode}
                       onChangeText={(v) => handleRowPincodeChange(idx, v)}
                       keyboardType="numeric"
@@ -898,17 +916,19 @@ export function BatchCustomerOnboarding({
                   </View>
                 </View>
 
-                <View style={styles.rowTwoCols}>
-                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                <View style={[styles.rowTwoCols, isCompactScreen && styles.rowTwoColsStacked]}>
+                  <View style={[styles.halfCol, !isCompactScreen && styles.halfColLeft]}>
                     <Input
-                      label="Village / Town *"
+                      label="Area / Village *"
+                      placeholder="Enter area or village"
                       value={row.village}
                       onChangeText={(v) => updateRowField(idx, 'village', v)}
                     />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.halfCol}>
                     <Input
                       label="District *"
+                      placeholder="Enter district"
                       value={row.district}
                       onChangeText={(v) => updateRowField(idx, 'district', v)}
                     />
@@ -916,7 +936,8 @@ export function BatchCustomerOnboarding({
                 </View>
 
                 <Input
-                  label="Photo Exemption Reason *"
+                  label="Why no photo? *"
+                  placeholder="Enter reason"
                   value={row.noPhotoReason}
                   onChangeText={(v) => updateRowField(idx, 'noPhotoReason', v)}
                 />
@@ -927,14 +948,14 @@ export function BatchCustomerOnboarding({
           {/* Add Rows Buttons */}
           <View style={styles.addRowsContainer}>
             <Button
-              title="+ Add Row"
+              title="+ Add 1 Shop"
               variant="secondary"
               size="sm"
               onPress={handleAddRow}
               style={{ flex: 1, marginRight: Spacing.xs }}
             />
             <Button
-              title="+ Add 5 Rows"
+              title="+ Add 5 Shops"
               variant="secondary"
               size="sm"
               onPress={() => handleAddMultipleRows(5)}
@@ -947,8 +968,8 @@ export function BatchCustomerOnboarding({
             <Button
               title={
                 isSubmitting
-                  ? `Submitting ${stats.valid} Customers...`
-                  : `Register ${stats.valid} Customers (Atomic Batch)`
+                  ? `Saving ${stats.valid} Shops...`
+                  : `Save ${stats.valid} ${stats.valid === 1 ? 'Shop' : 'Shops'}`
               }
               variant="primary"
               size="lg"
@@ -1100,6 +1121,16 @@ const styles = StyleSheet.create({
   },
   rowTwoCols: {
     flexDirection: 'row',
+  },
+  rowTwoColsStacked: {
+    flexDirection: 'column',
+  },
+  halfCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  halfColLeft: {
+    marginRight: Spacing.sm,
   },
   categorySection: {
     marginTop: Spacing.xs,
