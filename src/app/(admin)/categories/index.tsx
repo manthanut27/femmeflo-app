@@ -65,11 +65,14 @@ export default function AdminCategoriesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Add Category Modal
+  // Add / Edit Category Modal
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [active, setActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -92,7 +95,23 @@ export default function AdminCategoriesScreen() {
     loadCategories();
   }, [loadCategories]);
 
-  async function handleCreateCategory() {
+  const openCreateModal = () => {
+    setEditingCategory(null);
+    setName('');
+    setDescription('');
+    setActive(true);
+    setModalVisible(true);
+  };
+
+  const openEditModal = (item: CategoryItem) => {
+    setEditingCategory(item);
+    setName(item.name || '');
+    setDescription(item.description || '');
+    setActive(item.active ?? true);
+    setModalVisible(true);
+  };
+
+  async function handleSaveCategory() {
     if (isSubmitting) return;
     if (!name.trim()) {
       Alert.alert('Required Field', 'Please enter a category name.');
@@ -101,21 +120,69 @@ export default function AdminCategoriesScreen() {
 
     setIsSubmitting(true);
     try {
-      await categoriesApi.createCategory({
-        name: name.trim(),
-        description: description.trim() || undefined,
-      });
+      if (editingCategory) {
+        await categoriesApi.updateCategory(editingCategory.id, {
+          name: name.trim(),
+          description: description.trim() || undefined,
+          active,
+        });
+        Alert.alert('Success', 'Customer category updated.');
+      } else {
+        await categoriesApi.createCategory({
+          name: name.trim(),
+          description: description.trim() || undefined,
+        });
+        Alert.alert('Success', 'Customer category created.');
+      }
 
       setModalVisible(false);
+      setEditingCategory(null);
       setName('');
       setDescription('');
       loadCategories();
-      Alert.alert('Success', 'Customer category created.');
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to create category.');
+      Alert.alert('Error', err.message || 'Failed to save category.');
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function handleDeleteCategory(item: CategoryItem) {
+    if (deletingId) return;
+    Alert.alert(
+      'Delete Category',
+      `Are you sure you want to delete "${item.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(item.id);
+            try {
+              const res: any = await categoriesApi.deleteCategory(item.id);
+              const wasSoftDeleted = res?.softDeleted || res?.deactivated || res?.active === false;
+              setCategories((prev) =>
+                wasSoftDeleted
+                  ? prev.map((c) => (c.id === item.id ? { ...c, active: false } : c))
+                  : prev.filter((c) => c.id !== item.id)
+              );
+              await loadCategories();
+              Alert.alert(
+                wasSoftDeleted ? 'Deactivated' : 'Deleted',
+                wasSoftDeleted
+                  ? `"${item.name}" is linked to existing customers, so it has been deactivated.`
+                  : `"${item.name}" has been deleted.`
+              );
+            } catch (err: any) {
+              Alert.alert('Delete Failed', err.message || 'Could not delete category.');
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ]
+    );
   }
 
   const renderCategory = ({ item }: { item: CategoryItem }) => (
@@ -131,11 +198,32 @@ export default function AdminCategoriesScreen() {
             <Text style={styles.desc}>{item.description}</Text>
           ) : null}
         </View>
-        <Badge
-          label={item.active ? 'ACTIVE' : 'INACTIVE'}
-          variant={item.active ? 'ACTIVE' : 'INACTIVE'}
-          size="sm"
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Badge
+            label={item.active ? 'ACTIVE' : 'INACTIVE'}
+            variant={item.active ? 'ACTIVE' : 'INACTIVE'}
+            size="sm"
+          />
+          <Pressable
+            onPress={() => openEditModal(item)}
+            hitSlop={HitSlop.sm}
+            style={{ padding: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+            accessibilityRole="button"
+            accessibilityLabel={`Edit ${item.name}`}
+          >
+            <Ionicons name="create-outline" size={16} color={BrandColors.green.primary} />
+          </Pressable>
+          <Pressable
+            onPress={() => handleDeleteCategory(item)}
+            disabled={deletingId === item.id}
+            hitSlop={HitSlop.sm}
+            style={{ padding: 6, borderRadius: 8, backgroundColor: '#FEF2F2' }}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${item.name}`}
+          >
+            <Ionicons name="trash-outline" size={16} color="#DC2626" />
+          </Pressable>
+        </View>
       </View>
     </Card>
   );
@@ -152,7 +240,7 @@ export default function AdminCategoriesScreen() {
             accessibilityRole="button"
             accessibilityLabel="Create customer category"
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            onPress={() => setModalVisible(true)}
+            onPress={openCreateModal}
             hitSlop={HitSlop.md}
           >
             <Ionicons name="add" size={22} color="#FFFFFF" />
@@ -203,7 +291,9 @@ export default function AdminCategoriesScreen() {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitle}>New Customer Category</Text>
+                <Text style={styles.modalTitle}>
+                  {editingCategory ? 'Edit Customer Category' : 'New Customer Category'}
+                </Text>
                 <Pressable
                   onPress={() => setModalVisible(false)}
                   hitSlop={HitSlop.md}
@@ -233,6 +323,35 @@ export default function AdminCategoriesScreen() {
                 leftIcon={<Ionicons name="document-text-outline" size={18} color={Colors.light.textTertiary} />}
               />
 
+              {editingCategory ? (
+                <Pressable
+                  onPress={() => setActive((prev) => !prev)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: BorderRadius.md,
+                    borderWidth: 1,
+                    borderColor: Colors.light.border,
+                    backgroundColor: '#F8FAFC',
+                    marginBottom: Spacing.md,
+                  }}
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: active }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#0F172A' }}>
+                    Active Status
+                  </Text>
+                  <Badge
+                    label={active ? 'ACTIVE' : 'INACTIVE'}
+                    variant={active ? 'ACTIVE' : 'INACTIVE'}
+                    size="sm"
+                  />
+                </Pressable>
+              ) : null}
+
               <View style={styles.modalBtnRow}>
                 <Button
                   title="Cancel"
@@ -242,9 +361,17 @@ export default function AdminCategoriesScreen() {
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
                 <Button
-                  title={isSubmitting ? 'Creating...' : 'Create Category'}
+                  title={
+                    isSubmitting
+                      ? editingCategory
+                        ? 'Saving...'
+                        : 'Creating...'
+                      : editingCategory
+                      ? 'Save Changes'
+                      : 'Create Category'
+                  }
                   variant="admin"
-                  onPress={handleCreateCategory}
+                  onPress={handleSaveCategory}
                   loading={isSubmitting}
                   style={{ flex: 1.5 }}
                 />

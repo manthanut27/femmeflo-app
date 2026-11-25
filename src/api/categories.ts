@@ -3,9 +3,13 @@ import type { CategoryItem } from './types';
 
 export const categoriesApi = {
   async listCategories(): Promise<{ items: CategoryItem[] }> {
-    const raw = await apiRequest<{ categories?: CategoryItem[]; items?: CategoryItem[] }>('categories', {
-      method: 'GET',
-    });
+    const raw = await apiRequest<{ categories?: CategoryItem[]; items?: CategoryItem[] }>(
+      `categories?_t=${Date.now()}`,
+      {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' },
+      }
+    );
     return { items: raw?.categories ?? raw?.items ?? [] };
   },
 
@@ -20,6 +24,12 @@ export const categoriesApi = {
     return apiRequest<{ category: CategoryItem }>(`categories/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteCategory(id: string): Promise<{ success: boolean }> {
+    return apiRequest<{ success: boolean }>(`categories/${id}`, {
+      method: 'DELETE',
     });
   },
 };

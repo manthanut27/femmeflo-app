@@ -13,6 +13,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
@@ -82,6 +84,9 @@ export default function AdminReportsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
+  const { width } = useWindowDimensions();
+  const isMultiColumn = width >= 768;
+  const [sortBy, setSortBy] = useState<'REVENUE_DESC' | 'REVENUE_ASC' | 'PACKETS_DESC' | 'ORDERS_DESC'>('REVENUE_DESC');
 
   const handleBack = useCallback(() => {
     if (params?.from === 'actions') {
@@ -169,6 +174,17 @@ export default function AdminReportsScreen() {
       (item) => item.customerFeedback && item.customerFeedback.trim().length > 0
     );
   }, [report]);
+
+  const sortedGroups = useMemo(() => {
+    const groups = [...(report?.groups || [])];
+    if (groupBy === 'date') return groups;
+    return groups.sort((a, b) => {
+      if (sortBy === 'REVENUE_ASC') return (a.totalPaise || 0) - (b.totalPaise || 0);
+      if (sortBy === 'PACKETS_DESC') return (b.quantity || 0) - (a.quantity || 0);
+      if (sortBy === 'ORDERS_DESC') return (b.count || 0) - (a.count || 0);
+      return (b.totalPaise || 0) - (a.totalPaise || 0);
+    });
+  }, [report?.groups, sortBy, groupBy]);
 
   async function saveAndShareCsv(filename: string, csvContent: string) {
     if (Platform.OS === 'web') {
@@ -639,26 +655,63 @@ export default function AdminReportsScreen() {
                         </Text>
                       </Pressable>
                     </View>
+                    {/* Sort Chips (District & Seller views) */}
+                    {groupBy !== 'date' && (report?.groups?.length ?? 0) > 1 ? (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.sortChipsRow}
+                        style={{ marginTop: 10 }}
+                      >
+                        {([
+                          { key: 'REVENUE_DESC', label: 'Top Revenue' },
+                          { key: 'PACKETS_DESC', label: 'Most Packets' },
+                          { key: 'ORDERS_DESC', label: 'Most Orders' },
+                          { key: 'REVENUE_ASC', label: 'Lowest Revenue' },
+                        ] as const).map((s) => {
+                          const active = sortBy === s.key;
+                          return (
+                            <TouchableOpacity
+                              key={s.key}
+                              style={[styles.sortChip, active && styles.sortChipActive]}
+                              onPress={() => setSortBy(s.key)}
+                              activeOpacity={0.75}
+                            >
+                              <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>
+                                {s.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    ) : null}
                   </View>
 
                   {loading ? (
-                    <View style={{ paddingVertical: Spacing.xl }}>
-                      <ActivityIndicator size="small" color={BrandColors.pink.dark} />
+                    <View style={{ gap: Spacing.sm, paddingVertical: Spacing.sm }}>
+                      <CardSkeleton />
+                      <CardSkeleton />
                     </View>
-                  ) : !report?.groups || report.groups.length === 0 ? (
+                  ) : sortedGroups.length === 0 ? (
                     <EmptyState
                       title="No sales recorded"
                       description="No confirmed sales found for this period and grouping selection."
                       icon="analytics-outline"
                     />
                   ) : (
-                    <View style={styles.groupsList}>
-                      {report.groups.map((group: SalesReportGroupItem, index: number) => {
-                        const totalQty = report.summary.totalQuantitySold || 1;
-                        const percentage = Math.min(
-                          100,
-                          Math.max(1, Math.round((group.quantity / totalQty) * 100))
-                        );
+                    <View style={[styles.groupsList, isMultiColumn && styles.groupsGrid]}>
+                      {sortedGroups.map((group: SalesReportGroupItem, index: number) => {
+                        const totalRevenue = report?.summary?.netSalesPaise || report?.summary?.grossSalesPaise || 0;
+                        const totalQty = report?.summary?.totalQuantitySold || 0;
+                        const revenuePct =
+                          totalRevenue > 0
+                            ? Math.min(100, Math.max(0, Math.round((group.totalPaise / totalRevenue) * 100)))
+                            : 0;
+                        const packetPct =
+                          totalQty > 0
+                            ? Math.min(100, Math.max(0, Math.round((group.quantity / totalQty) * 100)))
+                            : 0;
+                        const barPct = sortBy === 'PACKETS_DESC' ? packetPct : revenuePct;
 
                         let iconName: any = 'location-outline';
                         if (groupBy === 'seller') iconName = 'person-outline';
@@ -668,16 +721,26 @@ export default function AdminReportsScreen() {
                           groupBy === 'date' ? formatDateIST(group.label, 'medium') : group.label;
 
                         return (
-                          <View key={`${group.label}-${index}`} style={styles.groupItemRow}>
+                          <View
+                            key={`${group.label}-${index}`}
+                            style={[styles.groupItemRow, isMultiColumn && styles.groupItemGridCol]}
+                          >
                             <View style={styles.groupItemTop}>
                               <View style={styles.groupItemLeft}>
                                 <View style={styles.groupIconBox}>
                                   <Ionicons name={iconName} size={16} color={BrandColors.pink.dark} />
                                 </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.groupLabel} numberOfLines={1}>
-                                    {formattedLabel || 'Unspecified'}
-                                  </Text>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {groupBy !== 'date' ? (
+                                      <View style={styles.rankBadge}>
+                                        <Text style={styles.rankBadgeText}>#{index + 1}</Text>
+                                      </View>
+                                    ) : null}
+                                    <Text style={[styles.groupLabel, { flex: 1 }]} numberOfLines={2}>
+                                      {formattedLabel || 'Unspecified'}
+                                    </Text>
+                                  </View>
                                   <Text style={styles.groupSubInfo}>
                                     {group.count} {group.count === 1 ? 'order' : 'orders'} completed
                                   </Text>
@@ -689,7 +752,7 @@ export default function AdminReportsScreen() {
                                   {formatCurrencyINR(group.totalPaise)}
                                 </Text>
                                 <Text style={styles.groupQuantity}>
-                                  {group.quantity.toLocaleString('en-IN')} pkts ({percentage}%)
+                                  {group.quantity.toLocaleString('en-IN')} pkts • {revenuePct}% rev
                                 </Text>
                               </View>
                             </View>
@@ -700,7 +763,7 @@ export default function AdminReportsScreen() {
                                 style={[
                                   styles.progressBarFill,
                                   {
-                                    width: `${percentage}%`,
+                                    width: `${barPct}%`,
                                     backgroundColor:
                                       index === 0
                                         ? BrandColors.pink.primary
@@ -736,8 +799,9 @@ export default function AdminReportsScreen() {
                   </View>
 
                   {loading ? (
-                    <View style={{ paddingVertical: Spacing.xl }}>
-                      <ActivityIndicator size="small" color={BrandColors.pink.dark} />
+                    <View style={{ gap: Spacing.sm, paddingVertical: Spacing.sm }}>
+                      <CardSkeleton />
+                      <CardSkeleton />
                     </View>
                   ) : feedbackItems.length === 0 ? (
                     <EmptyState
@@ -776,10 +840,17 @@ export default function AdminReportsScreen() {
                           </View>
 
                           <View style={styles.feedbackFooterRow}>
-                            <Badge
-                              label={`${item.quantity || item.packetCount || 0} pkts`}
-                              variant="PENDING"
-                            />
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Badge
+                                label={`${item.quantity || item.packetCount || 0} pkts`}
+                                variant="PENDING"
+                              />
+                              {item.saleNumber ? (
+                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                                  {item.saleNumber}
+                                </Text>
+                              ) : null}
+                            </View>
                             <Text style={styles.feedbackAmount}>
                               {formatCurrencyINR(item.totalAmountPaise ?? item.totalPaise ?? 0)}
                             </Text>
@@ -932,7 +1003,47 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   scrollContent: {
-    paddingBottom: Spacing.huge,
+    paddingBottom: 110,
+  },
+  sortChipsRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  sortChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+  },
+  sortChipActive: {
+    backgroundColor: '#0F172A',
+  },
+  sortChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  sortChipTextActive: {
+    color: '#FFFFFF',
+  },
+  groupsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  groupItemGridCol: {
+    width: '48.5%',
+  },
+  rankBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  rankBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
   },
   contentWrapper: {
     width: '100%',
