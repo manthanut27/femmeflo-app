@@ -64,23 +64,44 @@ export const VerifiedLocationCard: React.FC<VerifiedLocationCardProps> = ({
     );
   }
 
-  // Parse structured address components
+  // Parse structured address components cleanly (avoid bare house numbers or revenue division labels)
+  const addressParts = (location.address || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .filter((p) => !/^india$/i.test(p));
+
+  const rawStreet = location.street?.trim() || '';
   const streetName =
-    location.street ||
-    (location.address ? location.address.split(',')[0]?.trim() : null) ||
+    (rawStreet && !/^\d+[a-z]?$/i.test(rawStreet)
+      ? rawStreet
+      : addressParts.length >= 2 && /^\d+[a-z]?$/i.test(addressParts[0])
+      ? `${addressParts[0]}, ${addressParts[1]}`
+      : addressParts[0]) ||
     'Beat Route / Main Street';
 
   const areaName =
     location.village ||
-    (location.address ? location.address.split(',')[1]?.trim() : null) ||
+    (addressParts.length >= 2 ? addressParts[1] : null) ||
     'Local Area';
 
+  const rawDistrict = location.district?.trim() || '';
   const districtCity =
-    location.district ||
-    'City Area';
+    rawDistrict && !/\bdivision$/i.test(rawDistrict)
+      ? rawDistrict
+      : addressParts.find(
+          (p) =>
+            p.length > 2 &&
+            !/^\d+$/.test(p) &&
+            !/\bdivision$/i.test(p) &&
+            p.toLowerCase() !== (location.state || '').toLowerCase() &&
+            (!location.pincode || !p.includes(location.pincode))
+        ) ||
+        rawDistrict ||
+        'City Area';
 
   const statePincode = [
-    location.state || 'Madhya Pradesh',
+    location.state || null,
     location.pincode ? `PIN ${location.pincode}` : null,
   ]
     .filter(Boolean)
@@ -139,17 +160,33 @@ export const VerifiedLocationCard: React.FC<VerifiedLocationCardProps> = ({
           <Ionicons name="location" size={15} color={BrandColors.pink.primary} style={styles.lineIcon} />
           <View style={{ flex: 1 }}>
             <Text style={styles.fieldLabel}>City, State & Pincode</Text>
-            <Text style={styles.fieldValue} numberOfLines={1}>
-              {districtCity}, {statePincode}
+            <Text style={styles.fieldValue} numberOfLines={2}>
+              {[districtCity, statePincode].filter(Boolean).join(', ')}
             </Text>
           </View>
         </View>
+
+        {location.address ? (
+          <View style={styles.addressLineRow}>
+            <Ionicons name="navigate-outline" size={15} color="#0284C7" style={styles.lineIcon} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Full Address</Text>
+              <Text style={styles.fieldValue} numberOfLines={2}>
+                {location.address}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Coordinates */}
         <View style={styles.coordsRow}>
           <Ionicons name="radio-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
           <Text style={styles.coordsText}>Coords: {coordsFormatted}</Text>
-          <Text style={styles.accuracyText}>• High Accuracy (Google Places API)</Text>
+          <Text style={styles.accuracyText}>
+            {location.accuracy != null
+              ? `• ±${Math.round(location.accuracy)}m GPS (${location.source === 'native' ? 'Device Geocoder' : 'Google Maps'})`
+              : '• High Accuracy (Google Places API)'}
+          </Text>
         </View>
       </View>
 

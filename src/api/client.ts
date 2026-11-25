@@ -444,11 +444,11 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
         cacheManager.set(cacheKey, finalResult, { ttlMs: cacheTtlMs, tags: cacheTags }).catch(() => {});
       }
 
-      // Automatically invalidate related cache tags on mutations
+      // Automatically invalidate related cache tags on mutations before resolving so immediate refetches see fresh data
       if (method !== 'GET' && method !== 'HEAD') {
         const tagsToInvalidate = cacheManager.resolveMutationInvalidationTags(cleanEndpoint, method);
         if (tagsToInvalidate.length > 0) {
-          cacheManager.invalidateByTags(tagsToInvalidate).catch(() => {});
+          await cacheManager.invalidateByTags(tagsToInvalidate).catch(() => {});
         }
       }
 

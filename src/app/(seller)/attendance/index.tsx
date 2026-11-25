@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Location from 'expo-location';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -42,10 +41,19 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import { computeShiftTravelDistance } from '@/utils/distanceUtils';
+import {
+  buildShiftWaypoints,
+  calculateLegDistanceKm,
+  calculateWaypointRouteKm,
+  computeShiftTravelDistance,
+} from '@/utils/distanceUtils';
 import { draftStorage } from '@/utils/draftStorage';
-import { sanitizeIndiaCoordinates } from '@/utils/geoValidation';
-import { getCurrentLocationWithAddress, type LocationResult } from '@/utils/locationUtils';
+import {
+  acquireGpsCoordinates,
+  formatShortAddressLabel,
+  getCurrentLocationWithAddress,
+  type LocationResult,
+} from '@/utils/locationUtils';
 import { useResponsiveLayout } from '@/utils/responsive';
 
 const PREDEFINED_VISIT_REASONS = [
@@ -164,8 +172,20 @@ export default function SellerAttendanceScreen() {
       const cached = await draftStorage.getActiveShift(userId).catch(() => null);
 
       if (active && typeof active === 'object' && ('id' in active || 'startTime' in active)) {
+        const serverVisits: ShiftVisit[] = Array.isArray(active.visits) ? active.visits : [];
+        const unsyncedLocalVisits: ShiftVisit[] = Array.isArray(cached?.visits)
+          ? cached.visits.filter(
+              (cv) =>
+                cv.id?.startsWith('visit_local_') &&
+                !serverVisits.some((sv) => sv.id === cv.id)
+            )
+          : [];
+        const mergedVisits = [...serverVisits, ...unsyncedLocalVisits].sort(
+          (a, b) => new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+        );
         const merged: Shift = {
           ...active,
+          visits: mergedVisits,
           startOdometerKm: active.startOdometerKm ?? cached?.startOdometerKm ?? 0,
         };
         setCurrentShift(merged);
@@ -264,81 +284,74 @@ export default function SellerAttendanceScreen() {
     }));
   };
 
-  async function acquireCoordinates(): Promise<{ latitude: number; longitude: number }> {
+  async function acquireCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
     try {
       if (Platform.OS !== 'web') {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const posPromise = Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Highest,
-          }).catch(async () => {
-            return await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.High,
-            }).catch(() => null);
-          });
-          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
-          const loc = await Promise.race([posPromise, timeoutPromise]);
-          if (loc && (loc as any).coords) {
-            const rawLat = (loc as any).coords.latitude;
-            const rawLng = (loc as any).coords.longitude;
-            const sanitized = sanitizeIndiaCoordinates(rawLat, rawLng);
-            return {
-              latitude: Number(sanitized.latitude.toFixed(6)),
-              longitude: Number(sanitized.longitude.toFixed(6)),
-            };
-          }
+        const gps = await acquireGpsCoordinates({
+          highAccuracyTimeoutMs: 7000,
+          fallbackTimeoutMs: 4000,
+          maxAgeMs: 10000,
+          accuracyThresholdMeters: 50,
+        });
+        if (gps.status === 'acquired' && gps.latitude != null && gps.longitude != null) {
+          return {
+            latitude: Number(gps.latitude.toFixed(6)),
+            longitude: Number(gps.longitude.toFixed(6)),
+          };
         }
+        return null;
       } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
         return new Promise((resolve) => {
           navigator.geolocation.getCurrentPosition(
             (pos) => {
-              const sanitized = sanitizeIndiaCoordinates(pos.coords.latitude, pos.coords.longitude);
               resolve({
-                latitude: Number(sanitized.latitude.toFixed(6)),
-                longitude: Number(sanitized.longitude.toFixed(6)),
+                latitude: Number(pos.coords.latitude.toFixed(6)),
+                longitude: Number(pos.coords.longitude.toFixed(6)),
               });
             },
-            () => resolve({ latitude: 19.1864, longitude: 73.0409 }),
-            { timeout: 8000, enableHighAccuracy: true }
+            () => resolve(null),
+            { timeout: 8000, enableHighAccuracy: true, maximumAge: 10000 }
           );
         });
       }
     } catch {
-      // Fallback
+      // Surface null so caller asks user to enable GPS rather than fabricating coordinates
     }
-    return { latitude: 19.1864, longitude: 73.0409 };
+    return null;
   }
 
-  const fetchLiveLocation = useCallback(async () => {
+  const fetchLiveLocation = useCallback(async (forceFresh = true): Promise<LocationResult | null> => {
     setIsAcquiringLocation(true);
     try {
-      const loc = await getCurrentLocationWithAddress();
+      const loc = await getCurrentLocationWithAddress({
+        highAccuracyTimeoutMs: 7000,
+        fallbackTimeoutMs: 4000,
+        maxAgeMs: forceFresh ? 10000 : 30000,
+        accuracyThresholdMeters: 50,
+      });
       if (loc) {
         setCurrentLocation(loc);
         return loc;
       }
+      setCurrentLocation(null);
+      return null;
     } catch (err) {
       console.warn('Failed to acquire location with address', err);
+      setCurrentLocation(null);
+      return null;
     } finally {
       setIsAcquiringLocation(false);
     }
-    const fallback: LocationResult = {
-      latitude: 19.1864,
-      longitude: 73.0409,
-      street: '7, Station Road',
-      village: 'Diva',
-      district: 'Thane',
-      state: 'Maharashtra',
-      pincode: '400612',
-      address: '7, Station Road, Diva, Thane, Maharashtra 400612',
-    };
-    setCurrentLocation(fallback);
-    return fallback;
   }, []);
 
   function handleOpenStartShiftModal() {
-    fetchLiveLocation();
+    fetchLiveLocation(true);
     setStartModalVisible(true);
+  }
+
+  function handleOpenCheckInModal() {
+    fetchLiveLocation(true);
+    setCheckInModalVisible(true);
   }
 
   function handleInitiateStartShift() {
@@ -353,13 +366,26 @@ export default function SellerAttendanceScreen() {
     setShiftAuthModalVisible(false);
     setFeedback(null);
 
+    const isFreshLocation =
+      currentLocation?.timestamp != null && Date.now() - currentLocation.timestamp < 30000;
+    let loc: LocationResult | null = isFreshLocation ? currentLocation : await fetchLiveLocation(true);
+
+    if (!loc) {
+      const coords = await acquireCoordinates();
+      if (coords) {
+        loc = { latitude: coords.latitude, longitude: coords.longitude };
+      }
+    }
+
+    if (!loc) {
+      Alert.alert(
+        'GPS Location Required',
+        'Could not capture your live GPS location to start duty. Please turn ON device Location / High Accuracy and try again.'
+      );
+      return;
+    }
+
     try {
-      const loc: LocationResult = currentLocation || (await fetchLiveLocation()) || {
-        latitude: 22.7196,
-        longitude: 75.8577,
-        address: 'Starting duty location',
-        street: 'Starting duty location',
-      };
       const res = await sellerApi.startShift({
         startOdometerKm: 0,
         latitude: loc.latitude,
@@ -375,8 +401,8 @@ export default function SellerAttendanceScreen() {
       if (startedShift && typeof startedShift === 'object') {
         const enrichedShift: Shift = {
           ...startedShift,
-          startLatitude: loc.latitude,
-          startLongitude: loc.longitude,
+          startLatitude: startedShift.startLatitude ?? loc.latitude,
+          startLongitude: startedShift.startLongitude ?? loc.longitude,
           startAddress: loc.address || startedShift.startAddress,
           startOdometerKm: 0,
         };
@@ -385,21 +411,19 @@ export default function SellerAttendanceScreen() {
       }
       setStartNotes('');
 
+      const areaLabel = formatShortAddressLabel(
+        loc.address,
+        loc.street || loc.village || loc.district || 'your area'
+      );
       setFeedback({
         type: 'success',
         title: 'Duty Started',
-        message: `Duty started with face verification at ${loc.street || loc.village || loc.district || loc.address || 'your area'}.`,
+        message: `Duty started with face verification at ${areaLabel}.`,
       });
-      Alert.alert('Duty Started', `Duty is now active.\nLocation: ${loc.street || loc.village || loc.district || loc.address || 'Saved'}`);
+      Alert.alert('Duty Started', `Duty is now active.\nLocation: ${areaLabel}`);
       loadShiftData();
     } catch (err: any) {
       console.warn('Shift start API error, falling back to local active shift:', err);
-      const loc: LocationResult = currentLocation || {
-        latitude: 22.7196,
-        longitude: 75.8577,
-        address: 'Starting duty location',
-        street: 'Starting duty location',
-      };
       const fallbackShift: Shift = {
         id: `shift_local_${Date.now()}`,
         sellerId: userId || 'local_user',
@@ -407,7 +431,7 @@ export default function SellerAttendanceScreen() {
         startTime: new Date().toISOString(),
         startLatitude: loc.latitude,
         startLongitude: loc.longitude,
-        startAddress: loc.address,
+        startAddress: loc.address || undefined,
         startOdometerKm: 0,
       };
       setCurrentShift(fallbackShift);
@@ -415,12 +439,13 @@ export default function SellerAttendanceScreen() {
         await draftStorage.saveActiveShift(userId, fallbackShift).catch(() => {});
       }
       setStartNotes('');
+      const areaLabel = formatShortAddressLabel(loc.address, loc.street || 'your location');
       setFeedback({
         type: 'success',
         title: 'Shift Started',
-        message: `Duty started at ${loc.street || loc.address || 'your location'}.`,
+        message: `Duty started at ${areaLabel}.`,
       });
-      Alert.alert('Shift Started', `Duty is now active at ${loc.street || loc.address || 'your location'}.`);
+      Alert.alert('Shift Started', `Duty is now active at ${areaLabel}.`);
     }
   }
 
@@ -436,8 +461,16 @@ export default function SellerAttendanceScreen() {
 
     try {
       const coords = await acquireCoordinates();
+      if (!coords) {
+        Alert.alert(
+          'GPS Location Required',
+          'Could not capture your live GPS location at this shop. Please enable High Accuracy GPS and tap Start Check-In again.'
+        );
+        return;
+      }
+
       const customer = customers.find((c) => c.id === selectedCustomerId);
-      const resolvedShopName = customer?.shopName || checkInCustomShopName.trim() || 'Shop';
+      const resolvedShopName = customer?.shopName || checkInCustomShopName.trim();
 
       const checkInRes = await sellerApi.checkIn({
         customerId: selectedCustomerId || undefined,
@@ -455,11 +488,21 @@ export default function SellerAttendanceScreen() {
         checkInRes;
 
       if (newVisit && typeof newVisit === 'object' && ('id' in newVisit || 'checkInTime' in newVisit)) {
+        const normalizedVisit: ShiftVisit = {
+          ...newVisit,
+          shopName: newVisit.shopName || resolvedShopName,
+          latitude: newVisit.latitude ?? coords.latitude,
+          longitude: newVisit.longitude ?? coords.longitude,
+        };
         setCurrentShift((prev) => {
           if (!prev) return prev;
           const currentVisits = Array.isArray(prev.visits) ? prev.visits : [];
-          const exists = currentVisits.some((v) => v.id && v.id === newVisit.id);
-          const updatedVisits = exists ? currentVisits : [newVisit, ...currentVisits];
+          const exists = currentVisits.some((v) => v.id && v.id === normalizedVisit.id);
+          const updatedVisits = exists
+            ? currentVisits
+            : [...currentVisits, normalizedVisit].sort(
+                (a, b) => new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
+              );
           const updated = { ...prev, visits: updatedVisits };
           draftStorage.saveActiveShift(userId, updated).catch(() => {});
           return updated;
@@ -468,14 +511,15 @@ export default function SellerAttendanceScreen() {
 
       setCheckInModalVisible(false);
       setCheckInCustomShopName('');
+      setCheckInCustomerSearch('');
       setVisitNotes('');
       setFeedback({
         type: 'success',
-        title: 'Visit Started',
-        message: `Visit started at ${resolvedShopName}.`,
+        title: 'Checked In at Shop',
+        message: `Checked in at ${resolvedShopName}. Tap Check Out when leaving.`,
       });
-      Alert.alert('Visit Started', `Visit started at ${resolvedShopName}.`);
       await loadShiftData().catch(() => {});
+      fetchLiveLocation(true).catch(() => {});
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -581,6 +625,13 @@ export default function SellerAttendanceScreen() {
 
     try {
       const coords = await acquireCoordinates();
+      if (!coords) {
+        Alert.alert(
+          'GPS Location Required',
+          'Could not capture your live GPS location when leaving the shop. Please turn ON High Accuracy GPS and try again.'
+        );
+        return;
+      }
       let generatedSaleId: string | undefined = undefined;
 
       if (checkoutSaleDone) {
@@ -663,10 +714,10 @@ export default function SellerAttendanceScreen() {
       setCheckoutReason('');
       setCheckoutSaleDone(false);
 
-      const successTitle = checkoutSaleDone ? 'Visit & Sale Done' : 'Visit Completed';
+      const successTitle = checkoutSaleDone ? 'Check Out & Sale Saved' : 'Checked Out of Shop';
       const successMessage = checkoutSaleDone
-        ? `Sale saved: ₹${(saleQuantity * saleUnitPrice).toLocaleString('en-IN')}.`
-        : `Visit saved (${checkoutReason || 'Shop Visit'}).`;
+        ? `Stayed ${calcDurationMins} min · Sale saved: ₹${(saleQuantity * saleUnitPrice).toLocaleString('en-IN')}.`
+        : `Stayed ${calcDurationMins} min (${checkoutReason || 'Shop Visit'}).`;
 
       setFeedback({
         type: 'success',
@@ -674,8 +725,8 @@ export default function SellerAttendanceScreen() {
         message: successMessage,
       });
       Alert.alert(successTitle, successMessage);
-      loadShiftData();
-      fetchLiveLocation();
+      await loadShiftData().catch(() => {});
+      fetchLiveLocation(true).catch(() => {});
     } catch (err: any) {
       setFeedback({
         type: 'error',
@@ -688,52 +739,37 @@ export default function SellerAttendanceScreen() {
     }
   }
 
-  async function handleOpenEndShiftModal() {
+  async function proceedOpenEndShiftModal() {
     setGpsTraveledDistanceKm(0);
     setIsAcquiringLocation(true);
     setEndModalVisible(true);
-    const loc = await fetchLiveLocation();
-    if (currentShift && currentShift.startLatitude && loc) {
-      const toRad = (x: number) => (x * Math.PI) / 180;
-      const segmentKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-        const dLat = toRad(lat2 - lat1);
-        const dLng = toRad(lng2 - lng1);
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      };
-
-      const waypoints: Array<{ lat: number; lng: number }> = [
-        { lat: Number(currentShift.startLatitude), lng: Number(currentShift.startLongitude || loc.longitude) },
-      ];
-      for (const v of currentShift.visits || []) {
-        const rawLat = (v as any).latitude ?? (v.customer as any)?.latitude;
-        const rawLng = (v as any).longitude ?? (v.customer as any)?.longitude;
-        if (rawLat != null && rawLng != null) {
-          const vLat = Number(rawLat);
-          const vLng = Number(rawLng);
-          if (Number.isFinite(vLat) && Number.isFinite(vLng)) {
-            waypoints.push({ lat: vLat, lng: vLng });
-          }
-        }
-      }
-      waypoints.push({ lat: loc.latitude, lng: loc.longitude });
-
-      let totalKm = 0;
-      let lastAnchored = waypoints[0];
-      for (let i = 1; i < waypoints.length; i++) {
-        const dist = segmentKm(lastAnchored.lat, lastAnchored.lng, waypoints[i].lat, waypoints[i].lng);
-        // Ignore indoor GPS jitter under 50 meters so stationary shifts remain 0 km
-        if (dist >= 0.05) {
-          totalKm += dist;
-          lastAnchored = waypoints[i];
-        }
-      }
-
-      setGpsTraveledDistanceKm(Math.round(totalKm * 10) / 10);
+    const loc = await fetchLiveLocation(true);
+    if (currentShift && loc) {
+      const waypoints = buildShiftWaypoints(currentShift, loc);
+      setGpsTraveledDistanceKm(calculateWaypointRouteKm(waypoints));
     }
     setIsAcquiringLocation(false);
+  }
+
+  async function handleOpenEndShiftModal() {
+    const openVisit = Array.isArray(currentShift?.visits)
+      ? currentShift.visits.find((v) => !v.checkOutTime)
+      : null;
+
+    if (openVisit) {
+      Alert.alert(
+        'Finish Current Shop First',
+        `You are still checked in at ${openVisit.shopName}. Please Check Out first so your shop stay time and sale/feedback are saved cleanly.`,
+        [
+          { text: 'Check Out Now', onPress: () => handleOpenCheckout(openVisit) },
+          { text: 'End Duty Anyway', style: 'destructive', onPress: () => proceedOpenEndShiftModal() },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    await proceedOpenEndShiftModal();
   }
 
   function handleInitiateEndShift() {
@@ -749,15 +785,32 @@ export default function SellerAttendanceScreen() {
     setFeedback(null);
 
     try {
-      const loc = currentLocation || (await fetchLiveLocation()) || {
-        latitude: 22.7196,
-        longitude: 75.8577,
-        address: 'Closing duty location',
-      };
+      const isFreshLocation =
+        currentLocation?.timestamp != null && Date.now() - currentLocation.timestamp < 20000;
+      let loc: LocationResult | null = isFreshLocation ? currentLocation : await fetchLiveLocation(true);
+      if (!loc) {
+        const coords = await acquireCoordinates();
+        if (coords) {
+          loc = { latitude: coords.latitude, longitude: coords.longitude };
+        }
+      }
+
+      if (!loc) {
+        Alert.alert(
+          'GPS Location Required',
+          'Unable to capture your ending GPS location. Please enable High Accuracy Location and try ending duty again.'
+        );
+        return;
+      }
+
+      const estimatedRouteKm = currentShift
+        ? calculateWaypointRouteKm(buildShiftWaypoints(currentShift, loc))
+        : gpsTraveledDistanceKm;
+
       const shiftIdToEnd = currentShift?.id;
       const res = await sellerApi.endShift({
         shiftId: shiftIdToEnd,
-        endOdometerKm: gpsTraveledDistanceKm,
+        endOdometerKm: estimatedRouteKm,
         latitude: loc.latitude,
         longitude: loc.longitude,
         address: loc.address || (pendingNotes ? `Closing notes: ${pendingNotes}` : undefined),
@@ -775,15 +828,15 @@ export default function SellerAttendanceScreen() {
       setEndNotes('');
 
       const distResult = computeShiftTravelDistance(closedShift);
-      const totalDist = distResult.formatted !== '0 km' ? distResult.formatted : `${gpsTraveledDistanceKm} km`;
+      const totalDist = distResult.formatted !== '0 km' ? distResult.formatted : `${estimatedRouteKm} km`;
       const measurementNote = distResult.source === 'odometer' ? ' (via meter fallback)' : '';
 
       setFeedback({
         type: 'success',
         title: 'Duty Ended',
-        message: `Today's duty ended. Travel: ${totalDist}${measurementNote}.`,
+        message: `Today's duty ended. Total travel: ${totalDist}${measurementNote}.`,
       });
-      Alert.alert('Duty Ended', `Today's duty ended.\nTravel: ${totalDist}${measurementNote}.`);
+      Alert.alert('Duty Ended', `Today's duty ended.\nTotal travel: ${totalDist}${measurementNote}.`);
       loadShiftData();
     } catch (err: any) {
       setFeedback({
@@ -835,15 +888,16 @@ export default function SellerAttendanceScreen() {
         rightAction={
           isShiftActive ? (
             <Button
-              title={activeShopVisit ? 'Leave Shop' : 'Visit Shop'}
+              title={activeShopVisit ? 'Check Out' : 'Check In'}
               size="sm"
               variant="primary"
+              style={activeShopVisit ? { backgroundColor: '#16A34A' } : undefined}
               icon={<Ionicons name={activeShopVisit ? 'exit-outline' : 'location'} size={15} color="#FFFFFF" />}
               onPress={() => {
                 if (activeShopVisit) {
                   handleOpenCheckout(activeShopVisit);
                 } else {
-                  setCheckInModalVisible(true);
+                  handleOpenCheckInModal();
                 }
               }}
             />
@@ -920,9 +974,9 @@ export default function SellerAttendanceScreen() {
                     <Ionicons name="location-outline" size={16} color={BrandColors.green.primary} style={{ marginRight: 6 }} />
                     <Text
                       style={[styles.heroDetailText, { color: BrandColors.green.primary, fontWeight: '600', flex: 1 }]}
-                      numberOfLines={1}
+                      numberOfLines={2}
                     >
-                      Start: {currentShift.startAddress.split(',')[0]}
+                      Start: {formatShortAddressLabel(currentShift.startAddress, 'Location saved')}
                     </Text>
                   </View>
                 ) : currentShift.startLatitude ? (
@@ -934,12 +988,23 @@ export default function SellerAttendanceScreen() {
                   </View>
                 ) : null}
 
-                {currentShift.totalDistanceKm ? (
-                  <View style={styles.heroDetailRow}>
-                    <Ionicons name="navigate-outline" size={16} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
-                    <Text style={styles.heroDetailText}>Travel: {currentShift.totalDistanceKm} km</Text>
-                  </View>
-                ) : null}
+                {(() => {
+                  const liveRouteKm =
+                    Number(currentShift.totalDistanceKm || 0) > 0
+                      ? Number(currentShift.totalDistanceKm)
+                      : calculateWaypointRouteKm(buildShiftWaypoints(currentShift));
+                  const completedVisitCount = (currentShift.visits || []).filter((v) => Boolean(v.checkOutTime)).length;
+                  if (liveRouteKm <= 0 && completedVisitCount === 0) return null;
+                  return (
+                    <View style={styles.heroDetailRow}>
+                      <Ionicons name="navigate-outline" size={16} color={BrandColors.pink.primary} style={{ marginRight: 6 }} />
+                      <Text style={styles.heroDetailText}>
+                        Route so far: {liveRouteKm} km · {completedVisitCount}{' '}
+                        {completedVisitCount === 1 ? 'shop done' : 'shops done'}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
                 {/* Active Shop Check-In Card */}
                 {activeShopVisit ? (
@@ -950,7 +1015,7 @@ export default function SellerAttendanceScreen() {
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={styles.activeShopOverline} numberOfLines={1}>
-                          At shop ·{' '}
+                          Checked in ·{' '}
                           {new Date(activeShopVisit.checkInTime).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -962,7 +1027,7 @@ export default function SellerAttendanceScreen() {
                       </View>
                     </View>
                     <View style={styles.activeShopRight}>
-                      <Text style={styles.activeShopTimerLabel}>TIME</Text>
+                      <Text style={styles.activeShopTimerLabel}>STAY TIME</Text>
                       <Text style={styles.activeShopTimerValue}>{activeShopElapsed}</Text>
                       <TouchableOpacity
                         style={styles.activeShopCheckoutBtn}
@@ -970,7 +1035,7 @@ export default function SellerAttendanceScreen() {
                         activeOpacity={0.8}
                       >
                         <Ionicons name="exit-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.activeShopCheckoutBtnText}>Leave</Text>
+                        <Text style={styles.activeShopCheckoutBtnText}>Check Out</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -980,7 +1045,7 @@ export default function SellerAttendanceScreen() {
                 <View style={[styles.heroActionRow, isCompactScreen && styles.heroActionRowStacked]}>
                   {activeShopVisit ? (
                     <Button
-                      title={`Leave ${activeShopVisit.shopName}`}
+                      title={`Check Out · ${activeShopVisit.shopName}`}
                       onPress={() => handleOpenCheckout(activeShopVisit)}
                       variant="primary"
                       size="md"
@@ -992,8 +1057,8 @@ export default function SellerAttendanceScreen() {
                     />
                   ) : (
                     <Button
-                      title="Visit Shop"
-                      onPress={() => setCheckInModalVisible(true)}
+                      title="Check In (Visit Shop)"
+                      onPress={handleOpenCheckInModal}
                       variant="primary"
                       size="md"
                       icon={<Ionicons name="location" size={18} color="#FFFFFF" />}
@@ -1110,13 +1175,10 @@ export default function SellerAttendanceScreen() {
                 const endTimeStr = s.endTime
                   ? new Date(s.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   : 'Active';
-                const rawStartLoc = s.startAddress ? s.startAddress.split(',')[0].trim() : '';
-                const startLocStr =
-                  rawStartLoc && rawStartLoc.length > 2 && !/^\d+$/.test(rawStartLoc)
-                    ? rawStartLoc
-                    : s.startLatitude
-                    ? 'Location saved'
-                    : 'Start location';
+                const startLocStr = formatShortAddressLabel(
+                  s.startAddress,
+                  s.startLatitude ? 'Location saved' : 'Start location'
+                );
 
                 const durationStr = (() => {
                   if (!s.startTime) return '0 min';
@@ -1264,7 +1326,12 @@ export default function SellerAttendanceScreen() {
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdropDismiss} onPress={() => setStartModalVisible(false)} />
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
             <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>Start Today&apos;s Duty</Text>
               <Text style={styles.modalSubtitle}>
@@ -1274,7 +1341,7 @@ export default function SellerAttendanceScreen() {
               <VerifiedLocationCard
                 location={currentLocation}
                 loading={isAcquiringLocation}
-                onRefresh={fetchLiveLocation}
+                onRefresh={() => fetchLiveLocation(true)}
                 title="Start Location"
                 subtitle="Your current area"
               />
@@ -1322,9 +1389,15 @@ export default function SellerAttendanceScreen() {
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdropDismiss} onPress={() => setCheckInModalVisible(false)} />
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Visit Shop</Text>
-            <Text style={styles.modalSubtitle}>Choose the shop you are visiting now</Text>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
+            <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>Check In at Shop</Text>
+              <Text style={styles.modalSubtitle}>Choose the shop you are visiting now</Text>
 
             <Text style={styles.modalFieldLabel}>Select Shop</Text>
             <View style={styles.checkInSearchRow}>
@@ -1344,7 +1417,7 @@ export default function SellerAttendanceScreen() {
               ) : null}
             </View>
 
-            <ScrollView style={styles.modalCustomerList}>
+            <ScrollView style={styles.modalCustomerList} nestedScrollEnabled>
               {filteredCheckInCustomers.map((c) => {
                 const isSelected = selectedCustomerId === c.id;
                 return (
@@ -1394,7 +1467,16 @@ export default function SellerAttendanceScreen() {
 
             <View style={styles.checkoutGpsNotice}>
               <Ionicons name="location" size={14} color="#16A34A" style={{ marginRight: 6 }} />
-              <Text style={styles.checkoutGpsNoticeText}>Current location is saved with your shop visit.</Text>
+              <Text style={[styles.checkoutGpsNoticeText, { flex: 1 }]} numberOfLines={2}>
+                {isAcquiringLocation
+                  ? 'Fetching live shop GPS location...'
+                  : currentLocation?.address
+                  ? `GPS Ready: ${formatShortAddressLabel(currentLocation.address)} (${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)})`
+                  : 'Live shop GPS will be captured when you Check In.'}
+              </Text>
+              <Pressable onPress={() => fetchLiveLocation(true)} hitSlop={HitSlop.sm} style={{ marginLeft: 8 }}>
+                <Ionicons name="refresh" size={16} color="#16A34A" />
+              </Pressable>
             </View>
 
             <View style={styles.modalBtnRow}>
@@ -1405,7 +1487,7 @@ export default function SellerAttendanceScreen() {
                 style={{ flex: 1, marginRight: Spacing.sm }}
               />
               <Button
-                title={isCheckingIn ? 'Saving...' : 'Start Visit'}
+                title={isCheckingIn ? 'Checking In...' : 'Check In'}
                 variant="primary"
                 icon={<Ionicons name="location" size={16} color="#FFFFFF" />}
                 onPress={handleCheckInVisit}
@@ -1414,6 +1496,7 @@ export default function SellerAttendanceScreen() {
                 style={{ flex: 1.4 }}
               />
             </View>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1433,7 +1516,12 @@ export default function SellerAttendanceScreen() {
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdropDismiss} onPress={() => setCheckOutModalVisible(false)} />
-          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { maxHeight: '90%', paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.checkoutModalHeader}>
                 <View style={{ flex: 1 }}>
@@ -1550,7 +1638,7 @@ export default function SellerAttendanceScreen() {
                   {!activeCheckoutVisit?.customerId && (
                     <View style={{ marginBottom: Spacing.sm }}>
                       <Text style={styles.modalFieldLabel}>Select Shop *</Text>
-                      <ScrollView style={styles.modalCustomerList}>
+                      <ScrollView style={styles.modalCustomerList} nestedScrollEnabled>
                         {customers.map((c) => {
                           const isSelected = checkoutCustomerId === c.id;
                           return (
@@ -1779,7 +1867,12 @@ export default function SellerAttendanceScreen() {
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdropDismiss} onPress={() => setEndModalVisible(false)} />
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
             <ScrollView bounces={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>End Today&apos;s Duty</Text>
               <Text style={styles.modalSubtitle}>Check your end location and travel distance.</Text>
@@ -1787,7 +1880,7 @@ export default function SellerAttendanceScreen() {
               <VerifiedLocationCard
                 location={currentLocation}
                 loading={isAcquiringLocation}
-                onRefresh={fetchLiveLocation}
+                onRefresh={() => fetchLiveLocation(true)}
                 title="End Location"
                 subtitle="Your current area"
                 routeDistanceKm={gpsTraveledDistanceKm}
@@ -1873,7 +1966,12 @@ export default function SellerAttendanceScreen() {
       >
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdropDismiss} onPress={() => setSelectedAuditShift(null)} />
-          <View style={[styles.modalContent, { maxHeight: '92%' }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { maxHeight: '92%', paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.auditHeader}>
                 <View style={styles.auditIcon}>
@@ -1981,7 +2079,7 @@ export default function SellerAttendanceScreen() {
                     </View>
                   ) : null}
 
-                  {(selectedAuditShift.visits || []).map((v, vIdx) => {
+                  {(selectedAuditShift.visits || []).map((v, vIdx, allVisits) => {
                     const hasSale = Boolean(v.saleDone || (v as any).sale_done || v.saleId);
                     const arriveStr = v.checkInTime
                       ? new Date(v.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -1989,7 +2087,20 @@ export default function SellerAttendanceScreen() {
                     const leftStr = v.checkOutTime
                       ? new Date(v.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                       : 'Active';
-                    const durStr = v.durationMins ? `${v.durationMins} min` : '1 min';
+                    const durStr = v.durationMins ? `${v.durationMins} min` : v.checkOutTime ? '1 min' : 'Live';
+
+                    const prevLat = vIdx === 0 ? selectedAuditShift.startLatitude : allVisits[vIdx - 1]?.latitude;
+                    const prevLng = vIdx === 0 ? selectedAuditShift.startLongitude : allVisits[vIdx - 1]?.longitude;
+                    const legKm =
+                      prevLat != null &&
+                      prevLng != null &&
+                      v.latitude != null &&
+                      v.longitude != null
+                        ? calculateLegDistanceKm(
+                            { lat: Number(prevLat), lng: Number(prevLng) },
+                            { lat: Number(v.latitude), lng: Number(v.longitude) }
+                          )
+                        : 0;
 
                     return (
                       <View key={v.id || vIdx} style={styles.auditTimelineRow}>
@@ -2015,6 +2126,12 @@ export default function SellerAttendanceScreen() {
                             </Text>
                             <Text style={[styles.auditShopTimeItem, { color: '#16A34A' }]}>({durStr})</Text>
                           </View>
+
+                          {legKm > 0 ? (
+                            <Text style={[styles.auditNodeGps, { marginBottom: 4 }]}>
+                              Travelled ~{legKm} km from {vIdx === 0 ? 'start point' : 'previous shop'}
+                            </Text>
+                          ) : null}
 
                           {v.customerFeedback ? (
                             <View style={styles.auditFeedbackBox}>
@@ -2055,6 +2172,33 @@ export default function SellerAttendanceScreen() {
                       ) : selectedAuditShift.endLatitude ? (
                         <Text style={styles.auditNodeGps}>Location saved</Text>
                       ) : null}
+                      {(() => {
+                        const auditVisits = selectedAuditShift.visits || [];
+                        const lastStop = auditVisits.length > 0 ? auditVisits[auditVisits.length - 1] : null;
+                        const prevLat = lastStop ? lastStop.latitude : selectedAuditShift.startLatitude;
+                        const prevLng = lastStop ? lastStop.longitude : selectedAuditShift.startLongitude;
+                        if (
+                          prevLat == null ||
+                          prevLng == null ||
+                          selectedAuditShift.endLatitude == null ||
+                          selectedAuditShift.endLongitude == null
+                        ) {
+                          return null;
+                        }
+                        const finalLegKm = calculateLegDistanceKm(
+                          { lat: Number(prevLat), lng: Number(prevLng) },
+                          {
+                            lat: Number(selectedAuditShift.endLatitude),
+                            lng: Number(selectedAuditShift.endLongitude),
+                          }
+                        );
+                        if (finalLegKm <= 0) return null;
+                        return (
+                          <Text style={[styles.auditNodeGps, { marginTop: 4 }]}>
+                            Travelled ~{finalLegKm} km from {lastStop ? 'last shop' : 'start point'} to end location
+                          </Text>
+                        );
+                      })()}
                     </View>
                   </View>
                 </View>

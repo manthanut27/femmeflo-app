@@ -196,9 +196,196 @@ function processAcquiredCoords(
 }
 
 /**
+ * Attempts a fast live GPS fix using watchPositionAsync alongside getCurrentPositionAsync.
+ * On many Android devices, single-shot Accuracy.Highest stalls while watchPositionAsync
+ * returns a fresh fused/satellite fix in 1-3 seconds.
+ */
+async function watchBestPosition(
+  locModule: any,
+  accuracy: Location.LocationAccuracy,
+  maxWaitMs: number,
+  desiredAccuracyMeters: number
+): Promise<Location.LocationObject | null> {
+  if (typeof locModule.watchPositionAsync !== 'function') {
+    return null;
+  }
+
+  let subscription: { remove: () => void } | null = null;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+  let best: Location.LocationObject | null = null;
+  const startedAt = Date.now();
+
+  try {
+    return await new Promise<Location.LocationObject | null>((resolve) => {
+      let settled = false;
+      const finish = (val: Location.LocationObject | null) => {
+        if (settled) return;
+        settled = true;
+        if (timerId) clearTimeout(timerId);
+        try {
+          subscription?.remove();
+        } catch {
+          // Ignore cleanup errors
+        }
+        resolve(val);
+      };
+
+      timerId = setTimeout(() => finish(best), maxWaitMs);
+
+      Promise.resolve(
+        locModule.watchPositionAsync(
+          {
+            accuracy,
+            timeInterval: 500,
+            distanceInterval: 0,
+          },
+          (pos: Location.LocationObject) => {
+            if (!pos?.coords) return;
+            const acc = pos.coords.accuracy ?? Infinity;
+            const ts = pos.timestamp ?? Date.now();
+            // Reject obviously ancient cached callbacks (>30s old before watch began)
+            if (ts < startedAt - 30000) return;
+
+            if (!best || (acc < (best.coords.accuracy ?? Infinity))) {
+              best = pos;
+            }
+            if (acc <= desiredAccuracyMeters) {
+              finish(pos);
+            }
+          }
+        )
+      )
+        .then((sub) => {
+          if (settled) {
+            try {
+              sub?.remove();
+            } catch {
+              // Ignore
+            }
+          } else {
+            subscription = sub;
+          }
+        })
+        .catch(() => finish(best));
+    });
+  } catch {
+    if (timerId) clearTimeout(timerId);
+    try {
+      subscription?.remove();
+    } catch {
+      // Ignore
+    }
+    return best;
+  }
+}
+
+/**
+ * Strips bare house/plot numbers ("1", "4") and revenue division labels ("Konkan Division")
+ * so displayed addresses are complete and human-readable.
+ */
+export function normalizeAddressParts(input: {
+  formattedAddress?: string | null;
+  street?: string | null;
+  village?: string | null;
+  district?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+}): {
+  street: string | null;
+  village: string | null;
+  district: string | null;
+} {
+  const isBareNumber = (v?: string | null) => Boolean(v && /^\d+[a-z]?$/i.test(v.trim()));
+  const cleanSegments = (input.formattedAddress || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .filter((p) => {
+      if (/^india$/i.test(p)) return false;
+      if (input.pincode && p === input.pincode.trim()) return false;
+      if (
+        input.state &&
+        (p.toLowerCase() === input.state.trim().toLowerCase() ||
+          p.toLowerCase().startsWith(`${input.state.trim().toLowerCase()} `))
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+  let district = input.district?.trim() || null;
+  if (!district || /\bdivision$/i.test(district)) {
+    const cityCandidate =
+      cleanSegments.length > 0 ? cleanSegments[cleanSegments.length - 1] : null;
+    if (cityCandidate && !isBareNumber(cityCandidate)) {
+      district = cityCandidate;
+    }
+  }
+
+  let street = input.street?.trim() || null;
+  if (!street || isBareNumber(street)) {
+    if (cleanSegments.length >= 2 && isBareNumber(cleanSegments[0])) {
+      street = `${cleanSegments[0]}, ${cleanSegments[1]}`;
+    } else if (cleanSegments.length > 0 && !isBareNumber(cleanSegments[0])) {
+      street = cleanSegments[0];
+    } else if (input.village && street) {
+      street = `${street}, ${input.village}`;
+    } else if (input.village) {
+      street = input.village;
+    }
+  }
+
+  let village = input.village?.trim() || null;
+  if (!village && cleanSegments.length >= 2) {
+    const middle = cleanSegments.slice(1, cleanSegments.length - 1);
+    if (middle.length > 0) {
+      village = middle.join(', ');
+    }
+  } else if (village && cleanSegments.length >= 3) {
+    // Include secondary town/suburb (e.g. "Diva" next to "Sabe Gaon") if distinct from street & district
+    const subArea = cleanSegments.find(
+      (seg) =>
+        !isBareNumber(seg) &&
+        seg.toLowerCase() !== village!.toLowerCase() &&
+        seg.toLowerCase() !== district?.toLowerCase() &&
+        !street?.toLowerCase().includes(seg.toLowerCase())
+    );
+    if (subArea && !village.toLowerCase().includes(subArea.toLowerCase())) {
+      village = `${village}, ${subArea}`;
+    }
+  }
+
+  return { street, village, district };
+}
+
+/**
+ * Formats a concise human-readable address label from a full formatted address string,
+ * never collapsing to just a bare house/plot number like "1".
+ */
+export function formatShortAddressLabel(
+  address?: string | null,
+  fallbackLabel = 'Location saved'
+): string {
+  if (!address || !address.trim()) return fallbackLabel;
+  const parts = address
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .filter((p) => !/^india$/i.test(p));
+  if (parts.length === 0) return fallbackLabel;
+
+  const first = parts[0];
+  if (/^\d+[a-z]?$/i.test(first) && parts.length >= 2) {
+    return parts.slice(0, Math.min(3, parts.length)).join(', ');
+  }
+  return parts.length >= 2 && first.length < 12 ? parts.slice(0, 2).join(', ') : first;
+}
+
+/**
  * Robust GPS acquisition strategy:
  * 1. Checks and requests foreground location permissions.
- * 2. Attempts Highest Accuracy satellite position with a cancellable timeout (default 6000ms).
+ * 2. Attempts Highest Accuracy satellite position with a cancellable timeout (default 6000ms),
+ *    racing watchPositionAsync for fast fresh locks on real Android/iOS hardware.
  * 3. Falls back to High Accuracy position with a cancellable timeout (default 4000ms).
  * 4. Falls back to cached position only if within maxAgeMs (default 120s), rejecting stale entries.
  * 5. Evaluates accuracy against threshold (default 50m) and scores confidence without inventing values.
@@ -230,12 +417,21 @@ export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promis
       };
     }
 
-    // Step 2: Highest-accuracy GPS satellite attempt with cancellable timer
+    // Step 2: Highest-accuracy GPS satellite attempt with cancellable timer & live watch race
     notify('acquiring_high');
     const highAccuracy = locModule.Accuracy?.Highest ?? Location.Accuracy.Highest;
-    const highPromise = locModule.getCurrentPositionAsync({
-      accuracy: highAccuracy,
-    });
+    const bestNavAccuracy =
+      locModule.Accuracy?.BestForNavigation ?? locModule.Accuracy?.High ?? highAccuracy;
+    const highPromise = Promise.race([
+      Promise.resolve(
+        locModule.getCurrentPositionAsync({
+          accuracy: highAccuracy,
+        })
+      ).catch(() => null),
+      watchBestPosition(locModule, bestNavAccuracy, Math.max(2500, highTimeout - 500), 30).then(
+        (pos) => pos || new Promise<null>(() => {})
+      ),
+    ]);
     const highResult = await withCancellableTimeout<Location.LocationObject | null>(
       highPromise,
       highTimeout,
@@ -258,9 +454,16 @@ export async function acquireGpsCoordinates(options?: AcquireGpsOptions): Promis
     // Step 3: High-accuracy fused fallback with cancellable timer
     notify('acquiring_fallback');
     const fallbackAccuracy = locModule.Accuracy?.High ?? Location.Accuracy.High;
-    const fallbackPromise = locModule.getCurrentPositionAsync({
-      accuracy: fallbackAccuracy,
-    });
+    const fallbackPromise = Promise.race([
+      Promise.resolve(
+        locModule.getCurrentPositionAsync({
+          accuracy: fallbackAccuracy,
+        })
+      ).catch(() => null),
+      watchBestPosition(locModule, fallbackAccuracy, Math.max(2000, fallbackTimeout - 400), 60).then(
+        (pos) => pos || new Promise<null>(() => {})
+      ),
+    ]);
     const fallbackResult = await withCancellableTimeout<Location.LocationObject | null>(
       fallbackPromise,
       fallbackTimeout,
@@ -395,6 +598,15 @@ export async function getCurrentLocationWithAddress(
           accuracyThresholdMeters: options?.accuracyThresholdMeters ?? 50,
         });
 
+        const normalized = normalizeAddressParts({
+          formattedAddress: geoData.formattedAddress,
+          street: geoData.street,
+          village: geoData.sublocality,
+          district: geoData.district,
+          state: geoData.state,
+          pincode: geoData.pincode,
+        });
+
         // Set address fields cleanly without mixing sources
         return {
           ...baseResult,
@@ -402,10 +614,10 @@ export async function getCurrentLocationWithAddress(
           confidence: geocodeConfidence,
           warnings: [...warnings, ...geocodeReasons],
           address: geoData.formattedAddress,
-          street: geoData.street || geoData.formattedAddress.split(',')[0]?.trim() || null,
+          street: normalized.street,
           state: geoData.state || null,
-          district: geoData.district || null,
-          village: geoData.sublocality || null,
+          district: normalized.district,
+          village: normalized.village,
           pincode: geoData.pincode || null,
         };
       } else {

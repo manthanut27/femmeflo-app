@@ -501,6 +501,9 @@ export const sellerApi = {
     try {
       return await apiRequest<{ shift: Shift | null }>('seller/shifts/current', {
         method: 'GET',
+        cachePolicy: 'no-cache',
+        skipCache: true,
+        skipRateLimit: true,
       });
     } catch {
       return { shift: null };
@@ -560,7 +563,8 @@ export const sellerApi = {
   },
 
   async checkIn(payload: CheckInPayload): Promise<{ visit: ShiftVisit }> {
-    // Backend checkInSchema is z.strictObject({ latitude, longitude, shopName, customerId?, notes?, shiftId? })
+    // Backend checkInSchema is z.strictObject({ latitude, longitude, shopName, customerId?, notes? })
+    // Never include shiftId in request body; strict Zod validation on backend rejects unrecognized keys.
     const body: Record<string, any> = {
       latitude: Number(payload.latitude ?? 0),
       longitude: Number(payload.longitude ?? 0),
@@ -573,17 +577,34 @@ export const sellerApi = {
     if (notesText) {
       body.notes = notesText.slice(0, 1000);
     }
-    if (payload.shiftId && !payload.shiftId.startsWith('shift_local_') && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.shiftId)) {
-      body.shiftId = payload.shiftId;
+
+    if (payload.shiftId?.startsWith('shift_local_')) {
+      return {
+        visit: {
+          id: `visit_local_${Date.now()}`,
+          customerId: payload.customerId || '',
+          shopName: body.shopName,
+          checkInTime: new Date().toISOString(),
+          latitude: body.latitude,
+          longitude: body.longitude,
+          notes: body.notes,
+        } as ShiftVisit,
+      };
     }
 
     try {
       return await apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-in', {
         method: 'POST',
         body: JSON.stringify(body),
+        skipRateLimit: true,
       });
     } catch (err: any) {
-      console.warn('[sellerApi.checkIn] Server rejected check-in, recording local visit:', err?.message);
+      const status = typeof err?.status === 'number' ? err.status : 0;
+      const isClientRejection = status >= 400 && status < 500;
+      if (isClientRejection) {
+        throw err;
+      }
+      console.warn('[sellerApi.checkIn] Network/server unavailable, recording local visit:', err?.message);
       return {
         visit: {
           id: `visit_local_${Date.now()}`,
@@ -600,13 +621,19 @@ export const sellerApi = {
 
   async checkOut(payload: CheckOutPayload): Promise<{ visit: ShiftVisit }> {
     if (payload.visitId && payload.visitId.startsWith('visit_local_')) {
+      const durationFallback =
+        typeof (payload as any).durationMins === 'number' && (payload as any).durationMins >= 1
+          ? (payload as any).durationMins
+          : 1;
       return {
         visit: {
           id: payload.visitId,
           checkOutTime: new Date().toISOString(),
-          durationMins: 15,
+          durationMins: durationFallback,
           notes: payload.notes,
           saleDone: payload.saleDone,
+          customerFeedback: payload.customerFeedback,
+          saleId: payload.saleId,
         } as ShiftVisit,
       };
     }
@@ -635,16 +662,24 @@ export const sellerApi = {
       return await apiRequest<{ visit: ShiftVisit }>('seller/shifts/check-out', {
         method: 'POST',
         body: JSON.stringify(body),
+        skipRateLimit: true,
       });
     } catch (err: any) {
-      console.warn('[sellerApi.checkOut] Server rejected check-out, recording local visit completion:', err?.message);
+      const status = typeof err?.status === 'number' ? err.status : 0;
+      const isClientRejection = status >= 400 && status < 500;
+      if (isClientRejection) {
+        throw err;
+      }
+      console.warn('[sellerApi.checkOut] Network/server unavailable, recording local visit completion:', err?.message);
       return {
         visit: {
           id: payload.visitId,
           checkOutTime: new Date().toISOString(),
-          durationMins: 15,
+          durationMins: 1,
           notes: body.notes,
           saleDone: payload.saleDone,
+          customerFeedback: payload.customerFeedback,
+          saleId: payload.saleId,
         } as ShiftVisit,
       };
     }
@@ -714,6 +749,9 @@ export const sellerApi = {
         {
           method: 'GET',
           params,
+          cachePolicy: 'no-cache',
+          skipCache: true,
+          skipRateLimit: true,
         }
       );
       const list = raw?.items ?? raw?.shifts ?? [];

@@ -423,17 +423,18 @@ export default function ManagerShiftsScreen() {
                       </View>
                     </View>
 
-                    {/* Odometer & Verification Row */}
+                    {/* Travel & Verification Row */}
                     <View style={styles.odometerRow}>
                       <View style={styles.odometerItem}>
-                        <Ionicons name="speedometer-outline" size={16} color={BrandColors.green.dark} />
+                        <Ionicons name="navigate-outline" size={16} color={BrandColors.green.dark} />
                         <Text style={styles.odometerText}>
-                          Odometer:{' '}
+                          Travel:{' '}
                           <Text style={{ fontWeight: '700' }}>
-                            {startKmVal ?? '—'} km
+                            {distInfo.formatted}
                           </Text>
-                          {endKmVal != null ? ` → ${endKmVal} km` : ''}
-                          {distanceKm != null ? ` (${distanceKm} km)` : ''}
+                          {startKmVal != null && endKmVal != null && endKmVal > startKmVal
+                            ? ` (${startKmVal} → ${endKmVal} km)`
+                            : ` (${distInfo.sourceLabel})`}
                         </Text>
                       </View>
 
@@ -475,7 +476,7 @@ export default function ManagerShiftsScreen() {
                               <View style={styles.visitDot} />
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.visitShopName}>
-                                  {v.customer?.shopName || 'Retail Customer'}
+                                  {v.customer?.shopName || v.shopName || 'Retail Customer'}
                                 </Text>
                                 <Text style={styles.visitTime}>
                                   Checked in: {formatTimeIST(v.checkInTime)}

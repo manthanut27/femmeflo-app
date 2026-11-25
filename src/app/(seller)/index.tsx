@@ -24,11 +24,21 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { draftStorage } from '@/utils/draftStorage';
-import { computeShiftTravelDistance } from '@/utils/distanceUtils';
-import { getCurrentLocationWithAddress, type LocationResult } from '@/utils/locationUtils';
+import {
+  buildShiftWaypoints,
+  calculateWaypointRouteKm,
+  computeShiftTravelDistance,
+} from '@/utils/distanceUtils';
+import {
+  acquireGpsCoordinates,
+  formatShortAddressLabel,
+  getCurrentLocationWithAddress,
+  type LocationResult,
+} from '@/utils/locationUtils';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Alert,
@@ -45,6 +55,7 @@ import {
 } from 'react-native';
 
 export default function SellerDashboardScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id;
@@ -112,31 +123,28 @@ export default function SellerDashboardScreen() {
     }
   }, [userId]);
 
-  const fetchLiveLocation = useCallback(async () => {
+  const fetchLiveLocation = useCallback(async (forceFresh = true): Promise<LocationResult | null> => {
     setIsAcquiringLocation(true);
     try {
-      const loc = await getCurrentLocationWithAddress();
+      const loc = await getCurrentLocationWithAddress({
+        highAccuracyTimeoutMs: 7000,
+        fallbackTimeoutMs: 4000,
+        maxAgeMs: forceFresh ? 10000 : 30000,
+        accuracyThresholdMeters: 50,
+      });
       if (loc) {
         setCurrentLocation(loc);
         return loc;
       }
+      setCurrentLocation(null);
+      return null;
     } catch (err) {
       console.warn('Failed to acquire live location with address', err);
+      setCurrentLocation(null);
+      return null;
     } finally {
       setIsAcquiringLocation(false);
     }
-    const fallback: LocationResult = {
-      latitude: 22.7196,
-      longitude: 75.8577,
-      street: 'MG Road',
-      village: 'New Palasia',
-      district: 'Indore',
-      state: 'Madhya Pradesh',
-      pincode: '452001',
-      address: 'MG Road, New Palasia, Indore, Madhya Pradesh 452001',
-    };
-    setCurrentLocation(fallback);
-    return fallback;
   }, []);
 
   useEffect(() => {
@@ -167,16 +175,24 @@ export default function SellerDashboardScreen() {
     loadDashboard();
   }, [loadDashboard]);
 
-  async function acquireCoordinates(): Promise<{ latitude?: number; longitude?: number }> {
-    if (currentLocation?.latitude && currentLocation?.longitude) {
-      return { latitude: currentLocation.latitude, longitude: currentLocation.longitude };
+  async function acquireCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
+    const gps = await acquireGpsCoordinates({
+      highAccuracyTimeoutMs: 7000,
+      fallbackTimeoutMs: 4000,
+      maxAgeMs: 10000,
+      accuracyThresholdMeters: 50,
+    });
+    if (gps.status === 'acquired' && gps.latitude != null && gps.longitude != null) {
+      return {
+        latitude: Number(gps.latitude.toFixed(6)),
+        longitude: Number(gps.longitude.toFixed(6)),
+      };
     }
-    const fresh = await fetchLiveLocation();
-    return { latitude: fresh?.latitude ?? 22.7196, longitude: fresh?.longitude ?? 75.8577 };
+    return null;
   }
 
   function handleOpenStartShiftModal() {
-    fetchLiveLocation();
+    fetchLiveLocation(true);
     setStartShiftModalVisible(true);
   }
 
@@ -189,13 +205,26 @@ export default function SellerDashboardScreen() {
   async function handleVerifiedShiftStart(authResult: ShiftAuthResult) {
     setShiftAuthModalVisible(false);
     setIsShiftSubmitting(true);
+
+    const isFreshLocation =
+      currentLocation?.timestamp != null && Date.now() - currentLocation.timestamp < 30000;
+    let loc: LocationResult | null = isFreshLocation ? currentLocation : await fetchLiveLocation(true);
+    if (!loc) {
+      const coords = await acquireCoordinates();
+      if (coords) {
+        loc = { latitude: coords.latitude, longitude: coords.longitude };
+      }
+    }
+    if (!loc) {
+      setIsShiftSubmitting(false);
+      Alert.alert(
+        'GPS Location Required',
+        'Could not capture live GPS location. Please enable High Accuracy Location and try again.'
+      );
+      return;
+    }
+
     try {
-      const loc = currentLocation || await fetchLiveLocation() || {
-        latitude: 22.7196,
-        longitude: 75.8577,
-        address: 'MG Road, New Palasia, Indore, Madhya Pradesh 452001',
-        street: 'MG Road',
-      };
       const res = await sellerApi.startShift({
         startOdometerKm: 0,
         latitude: loc.latitude,
@@ -211,8 +240,8 @@ export default function SellerDashboardScreen() {
       if (startedShift && typeof startedShift === 'object') {
         const enrichedShift: Shift = {
           ...startedShift,
-          startLatitude: loc.latitude,
-          startLongitude: loc.longitude,
+          startLatitude: startedShift.startLatitude ?? loc.latitude,
+          startLongitude: startedShift.startLongitude ?? loc.longitude,
           startAddress: loc.address || startedShift.startAddress,
           startOdometerKm: 0,
         };
@@ -223,19 +252,14 @@ export default function SellerDashboardScreen() {
       }
       setOdometerKm('');
       const authLabel = authResult.method === 'FINGERPRINT' ? 'fingerprint verification' : 'mobile password';
+      const areaLabel = formatShortAddressLabel(loc.address, loc.street || 'Location verified');
       Alert.alert(
         'Shift Started',
-        `Duty shift active with ${authLabel}.\nVerified Location: ${loc.street || loc.address || 'Indore Beat'}`
+        `Duty shift active with ${authLabel}.\nVerified Location: ${areaLabel}`
       );
       loadDashboard();
     } catch (err: any) {
       console.warn('Shift start API error, falling back to local active shift:', err);
-      const loc = currentLocation || {
-        latitude: 22.7196,
-        longitude: 75.8577,
-        address: 'MG Road, New Palasia, Indore, Madhya Pradesh 452001',
-        street: 'MG Road',
-      };
       const fallbackShift: Shift = {
         id: `shift_local_${Date.now()}`,
         sellerId: userId || 'local_user',
@@ -243,7 +267,7 @@ export default function SellerDashboardScreen() {
         startTime: new Date().toISOString(),
         startLatitude: loc.latitude,
         startLongitude: loc.longitude,
-        startAddress: loc.address,
+        startAddress: loc.address || undefined,
         startOdometerKm: 0,
       };
       setCurrentShift(fallbackShift);
@@ -253,7 +277,7 @@ export default function SellerDashboardScreen() {
       setOdometerKm('');
       Alert.alert(
         'Shift Started',
-        `Duty shift active.\nVerified Location: ${loc.street || loc.address || 'Indore Beat'}`
+        `Duty shift active.\nVerified Location: ${formatShortAddressLabel(loc.address, loc.street || 'Location verified')}`
       );
       loadDashboard();
     } finally {
@@ -265,45 +289,9 @@ export default function SellerDashboardScreen() {
     setGpsTraveledDistanceKm(0);
     setIsAcquiringLocation(true);
     setEndShiftModalVisible(true);
-    const loc = await fetchLiveLocation();
-    if (currentShift && currentShift.startLatitude && loc) {
-      const toRad = (x: number) => (x * Math.PI) / 180;
-      const segmentKm = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-        const dLat = toRad(lat2 - lat1);
-        const dLng = toRad(lng2 - lng1);
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      };
-
-      const waypoints: Array<{ lat: number; lng: number }> = [
-        { lat: Number(currentShift.startLatitude), lng: Number(currentShift.startLongitude || loc.longitude) },
-      ];
-      for (const v of currentShift.visits || []) {
-        const rawLat = (v as any).latitude ?? (v.customer as any)?.latitude;
-        const rawLng = (v as any).longitude ?? (v.customer as any)?.longitude;
-        if (rawLat != null && rawLng != null) {
-          const vLat = Number(rawLat);
-          const vLng = Number(rawLng);
-          if (Number.isFinite(vLat) && Number.isFinite(vLng)) {
-            waypoints.push({ lat: vLat, lng: vLng });
-          }
-        }
-      }
-      waypoints.push({ lat: loc.latitude, lng: loc.longitude });
-
-      let totalKm = 0;
-      let lastAnchored = waypoints[0];
-      for (let i = 1; i < waypoints.length; i++) {
-        const dist = segmentKm(lastAnchored.lat, lastAnchored.lng, waypoints[i].lat, waypoints[i].lng);
-        if (dist >= 0.05) {
-          totalKm += dist;
-          lastAnchored = waypoints[i];
-        }
-      }
-
-      setGpsTraveledDistanceKm(Math.round(totalKm * 10) / 10);
+    const loc = await fetchLiveLocation(true);
+    if (currentShift && loc) {
+      setGpsTraveledDistanceKm(calculateWaypointRouteKm(buildShiftWaypoints(currentShift, loc)));
     }
     setIsAcquiringLocation(false);
   }
@@ -342,14 +330,30 @@ export default function SellerDashboardScreen() {
 
     setIsShiftSubmitting(true);
     try {
-      const loc = currentLocation || await fetchLiveLocation() || {
-        latitude: 22.7196,
-        longitude: 75.8577,
-        address: 'Indore Beat Location',
-      };
+      const isFreshLocation =
+        currentLocation?.timestamp != null && Date.now() - currentLocation.timestamp < 20000;
+      let loc: LocationResult | null = isFreshLocation ? currentLocation : await fetchLiveLocation(true);
+      if (!loc) {
+        const coords = await acquireCoordinates();
+        if (coords) {
+          loc = { latitude: coords.latitude, longitude: coords.longitude };
+        }
+      }
+      if (!loc) {
+        Alert.alert(
+          'GPS Location Required',
+          'Could not capture live GPS location to end duty. Please enable High Accuracy Location and try again.'
+        );
+        return;
+      }
+
+      const estimatedRouteKm = currentShift
+        ? calculateWaypointRouteKm(buildShiftWaypoints(currentShift, loc))
+        : gpsTraveledDistanceKm;
+
       const res = await sellerApi.endShift({
         shiftId: currentShift?.id,
-        endOdometerKm: gpsTraveledDistanceKm,
+        endOdometerKm: estimatedRouteKm,
         latitude: loc.latitude,
         longitude: loc.longitude,
         address: loc.address || (shiftRemarks ? `Closing notes: ${shiftRemarks}` : undefined),
@@ -715,7 +719,12 @@ export default function SellerDashboardScreen() {
             style={styles.modalBackdropDismiss}
             onPress={() => setStartShiftModalVisible(false)}
           />
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
@@ -734,7 +743,7 @@ export default function SellerDashboardScreen() {
               <VerifiedLocationCard
                 location={currentLocation}
                 loading={isAcquiringLocation}
-                onRefresh={fetchLiveLocation}
+                onRefresh={() => fetchLiveLocation(true)}
                 title="Starting Duty Location"
                 subtitle="Accurate street, area, city & pincode detected via Google Maps"
               />
@@ -777,7 +786,12 @@ export default function SellerDashboardScreen() {
             style={styles.modalBackdropDismiss}
             onPress={() => setEndShiftModalVisible(false)}
           />
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalContent,
+              { paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl) },
+            ]}
+          >
             <ScrollView
               bounces={false}
               keyboardShouldPersistTaps="handled"
@@ -796,7 +810,7 @@ export default function SellerDashboardScreen() {
               <VerifiedLocationCard
                 location={currentLocation}
                 loading={isAcquiringLocation}
-                onRefresh={fetchLiveLocation}
+                onRefresh={() => fetchLiveLocation(true)}
                 title="Closing Duty Location"
                 subtitle="GPS route calculation"
                 routeDistanceKm={gpsTraveledDistanceKm}
