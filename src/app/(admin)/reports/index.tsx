@@ -87,6 +87,7 @@ export default function AdminReportsScreen() {
   const { width } = useWindowDimensions();
   const isMultiColumn = width >= 768;
   const [sortBy, setSortBy] = useState<'REVENUE_DESC' | 'REVENUE_ASC' | 'PACKETS_DESC' | 'ORDERS_DESC'>('REVENUE_DESC');
+  const [expandedFeedbackIds, setExpandedFeedbackIds] = useState<Record<string, boolean>>({});
 
   const handleBack = useCallback(() => {
     if (params?.from === 'actions') {
@@ -342,7 +343,7 @@ export default function AdminReportsScreen() {
     <View style={styles.container}>
       <Header
         title="Reports & Analytics"
-        subtitle={`Super Admin • ${user?.name || 'HQ Operations'}`}
+        subtitle="Sales & Inventory"
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
         showNotificationBell
@@ -367,11 +368,8 @@ export default function AdminReportsScreen() {
                   <View style={styles.bannerIconBadge}>
                     <Ionicons name="bar-chart" size={18} color={BrandColors.pink.dark} />
                   </View>
-                  <Text style={styles.bannerTitle}>National Business Intelligence</Text>
+                  <Text style={styles.bannerTitle}>Business Overview</Text>
                 </View>
-                <Text style={styles.bannerSubtitle}>
-                  Real-time database aggregated sales, district penetration & inventory audits.
-                </Text>
               </View>
 
               <Pressable
@@ -493,7 +491,7 @@ export default function AdminReportsScreen() {
                       <StatCard
                         title="Net Revenue"
                         value={formatCurrencyINR(report?.summary.grossSalesPaise || 0)}
-                        subtitle="Confirmed verified sales"
+                        subtitle="Confirmed revenue"
                         icon="wallet-outline"
                         iconColor={BrandColors.pink.primary}
                         iconBg={BrandColors.pink.subtle}
@@ -503,8 +501,8 @@ export default function AdminReportsScreen() {
                     <View style={styles.kpiCardWrapper}>
                       <StatCard
                         title="Packets Delivered"
-                        value={`${(report?.summary.totalQuantitySold || 0).toLocaleString('en-IN')} pkts`}
-                        subtitle="Sanitary napkin volume"
+                        value={`${(report?.summary.totalQuantitySold || 0).toLocaleString('en-IN')}`}
+                        subtitle="Packets"
                         icon="cube-outline"
                         iconColor="#0284C7"
                         iconBg="#F0F9FF"
@@ -518,7 +516,7 @@ export default function AdminReportsScreen() {
                       <StatCard
                         title="Total Orders"
                         value={(report?.summary.totalSalesCount || 0).toLocaleString('en-IN')}
-                        subtitle="Completed store receipts"
+                        subtitle="Completed"
                         icon="receipt-outline"
                         iconColor={BrandColors.green.primary}
                         iconBg={BrandColors.green.subtle}
@@ -530,7 +528,7 @@ export default function AdminReportsScreen() {
                       <StatCard
                         title="Avg Order Value"
                         value={`₹${Math.round(report?.summary.averageOrderValueRupees || 0).toLocaleString('en-IN')}`}
-                        subtitle="Per retail store transaction"
+                        subtitle="Per order"
                         icon="trending-up-outline"
                         iconColor="#F59E0B"
                         iconBg="#FEF3C7"
@@ -557,7 +555,7 @@ export default function AdminReportsScreen() {
                       viewTab === 'ANALYTICS' && styles.viewTabTextActive,
                     ]}
                   >
-                    Grouped Breakdown
+                    Grouped
                   </Text>
                 </Pressable>
 
@@ -576,7 +574,7 @@ export default function AdminReportsScreen() {
                       viewTab === 'FEEDBACK' && styles.viewTabTextActive,
                     ]}
                   >
-                    Customer Feedback ({feedbackItems.length})
+                    Feedback ({feedbackItems.length})
                   </Text>
                 </Pressable>
               </View>
@@ -588,17 +586,10 @@ export default function AdminReportsScreen() {
                     <View style={styles.breakdownHeaderTextGroup}>
                       <Text style={styles.breakdownTitle}>
                         {groupBy === 'date'
-                          ? 'Daily Sales Performance'
+                          ? 'Daily Performance'
                           : groupBy === 'seller'
-                          ? 'Field Officer Rankings'
-                          : 'Area District Performance'}
-                      </Text>
-                      <Text style={styles.breakdownSubtitle}>
-                        {groupBy === 'date'
-                          ? 'Chronological day-by-day sales volume & revenue'
-                          : groupBy === 'seller'
-                          ? 'Total volume and revenue generated by field officers'
-                          : 'Geographic distribution and regional market penetration'}
+                          ? 'Seller Performance'
+                          : 'District Performance'}
                       </Text>
                     </View>
 
@@ -742,7 +733,7 @@ export default function AdminReportsScreen() {
                                     </Text>
                                   </View>
                                   <Text style={styles.groupSubInfo}>
-                                    {group.count} {group.count === 1 ? 'order' : 'orders'} completed
+                                    {group.count} {group.count === 1 ? 'order' : 'orders'} · {group.quantity.toLocaleString('en-IN')} packets
                                   </Text>
                                 </View>
                               </View>
@@ -752,7 +743,9 @@ export default function AdminReportsScreen() {
                                   {formatCurrencyINR(group.totalPaise)}
                                 </Text>
                                 <Text style={styles.groupQuantity}>
-                                  {group.quantity.toLocaleString('en-IN')} pkts • {revenuePct}% rev
+                                  {sortBy === 'PACKETS_DESC'
+                                    ? `${packetPct}% packet share`
+                                    : `${revenuePct}% revenue share`}
                                 </Text>
                               </View>
                             </View>
@@ -787,13 +780,10 @@ export default function AdminReportsScreen() {
                 <Card style={styles.feedbackCard}>
                   <View style={styles.feedbackCardHeader}>
                     <View style={styles.feedbackHeaderTextGroup}>
-                      <Text style={styles.feedbackSectionTitle}>Field Customer Observations</Text>
-                      <Text style={styles.feedbackSectionSub}>
-                        Real observations recorded by field officers during store visits
-                      </Text>
+                      <Text style={styles.feedbackSectionTitle}>Customer Feedback</Text>
                     </View>
                     <Badge
-                      label={`${feedbackItems.length} Notes`}
+                      label={`${feedbackItems.length}`}
                       variant={feedbackItems.length > 0 ? 'ACTIVE' : 'neutral'}
                     />
                   </View>
@@ -805,58 +795,76 @@ export default function AdminReportsScreen() {
                     </View>
                   ) : feedbackItems.length === 0 ? (
                     <EmptyState
-                      title="No feedback observations"
-                      description="None of the sales in this time frame recorded verbal or written customer feedback."
+                      title="No feedback"
+                      description="No customer feedback recorded for this period."
                       icon="chatbubble-outline"
                     />
                   ) : (
                     <View style={styles.feedbackList}>
-                      {feedbackItems.map((item: SaleItem) => (
-                        <View key={item.id} style={styles.feedbackItem}>
-                          <View style={styles.feedbackHeaderRow}>
-                            <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                              <Text style={styles.feedbackShopName}>
-                                {item.customer?.shopName || item.customer?.name || 'Retail Partner'}
-                              </Text>
-                              <Text style={styles.feedbackLocation}>
-                                {item.customer?.district || 'General Area'} • Seller:{' '}
-                                {item.seller?.name || 'Officer'}
-                              </Text>
-                            </View>
-                            <Text style={styles.feedbackDate}>
-                              {formatDateIST(item.createdAt, 'short')}
-                            </Text>
-                          </View>
-
-                          {/* Feedback Quote */}
-                          <View style={styles.quoteBox}>
-                            <Ionicons
-                              name="chatbox-ellipses"
-                              size={16}
-                              color={BrandColors.pink.dark}
-                              style={{ marginRight: 8, marginTop: 2 }}
-                            />
-                            <Text style={styles.quoteText}>{item.customerFeedback}</Text>
-                          </View>
-
-                          <View style={styles.feedbackFooterRow}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Badge
-                                label={`${item.quantity || item.packetCount || 0} pkts`}
-                                variant="PENDING"
-                              />
-                              {item.saleNumber ? (
-                                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
-                                  {item.saleNumber}
+                      {feedbackItems.map((item: SaleItem) => {
+                        const msg = item.customerFeedback || '';
+                        const isLong = msg.length > 110;
+                        const isExpanded = Boolean(expandedFeedbackIds[item.id]);
+                        return (
+                          <View key={item.id} style={styles.feedbackItem}>
+                            <View style={styles.feedbackHeaderRow}>
+                              <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                                <Text style={styles.feedbackShopName} numberOfLines={1}>
+                                  {item.customer?.shopName || item.customer?.name || 'Retail Partner'}
                                 </Text>
-                              ) : null}
+                                <Text style={styles.feedbackLocation} numberOfLines={1}>
+                                  {item.seller?.name || 'Officer'} · {item.customer?.district || 'General'}
+                                </Text>
+                              </View>
+                              <Text style={styles.feedbackDate}>
+                                {formatDateIST(item.createdAt, 'short')}
+                              </Text>
                             </View>
-                            <Text style={styles.feedbackAmount}>
-                              {formatCurrencyINR(item.totalAmountPaise ?? item.totalPaise ?? 0)}
-                            </Text>
+
+                            <View style={styles.quoteBox}>
+                              <Ionicons
+                                name="chatbox-ellipses"
+                                size={15}
+                                color={BrandColors.pink.dark}
+                                style={{ marginRight: 8, marginTop: 2 }}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text
+                                  style={styles.quoteText}
+                                  numberOfLines={isLong && !isExpanded ? 2 : undefined}
+                                >
+                                  {msg}
+                                </Text>
+                                {isLong ? (
+                                  <Pressable
+                                    onPress={() =>
+                                      setExpandedFeedbackIds((prev) => ({
+                                        ...prev,
+                                        [item.id]: !prev[item.id],
+                                      }))
+                                    }
+                                    hitSlop={6}
+                                  >
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: BrandColors.pink.dark, marginTop: 4 }}>
+                                      {isExpanded ? 'Show Less' : 'View More'}
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
+                            </View>
+
+                            <View style={styles.feedbackFooterRow}>
+                              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '500' }}>
+                                {item.quantity || item.packetCount || 0} packets
+                                {item.saleNumber ? ` · ${item.saleNumber}` : ''}
+                              </Text>
+                              <Text style={styles.feedbackAmount}>
+                                {formatCurrencyINR(item.totalAmountPaise ?? item.totalPaise ?? 0)}
+                              </Text>
+                            </View>
                           </View>
-                        </View>
-                      ))}
+                        );
+                      })}
                     </View>
                   )}
                 </Card>
