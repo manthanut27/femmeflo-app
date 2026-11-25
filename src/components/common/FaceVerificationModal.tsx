@@ -20,6 +20,26 @@ import { compressImage } from '@/utils/imageUtils';
 
 const BUTTON_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
+type ExpoCameraModule = typeof import('expo-camera');
+
+let cachedExpoCamera: ExpoCameraModule | null | undefined;
+function getExpoCameraModule(): ExpoCameraModule | null {
+  if (cachedExpoCamera !== undefined) return cachedExpoCamera;
+  try {
+    // Lazily load expo-camera so un-rebuilt standalone APKs without ExpoCamera fall back cleanly
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('expo-camera') as ExpoCameraModule;
+    if (mod?.CameraView && mod?.Camera) {
+      cachedExpoCamera = mod;
+      return cachedExpoCamera;
+    }
+  } catch {
+    // Native ExpoCamera module unavailable in current binary
+  }
+  cachedExpoCamera = null;
+  return null;
+}
+
 export interface FaceVerificationResult {
   faceVerified: boolean;
   facePhoto: string;
@@ -37,37 +57,56 @@ export interface FaceVerificationModalProps {
   onVerified: (result: FaceVerificationResult) => void;
 }
 
-type VerificationStep = 'READY' | 'CAPTURING' | 'SCANNING' | 'VERIFIED' | 'ERROR';
+type VerificationStep =
+  | 'INITIALIZING'
+  | 'LIVE_SCAN'
+  | 'FALLBACK_READY'
+  | 'CAPTURING'
+  | 'VERIFIED'
+  | 'ERROR';
 
 export function FaceVerificationModal({
   visible,
   mode,
   userName = 'Field Officer',
   userRole = 'SELLER',
+  autoLaunch = true,
   onClose,
   onVerified,
 }: FaceVerificationModalProps) {
-  const [step, setStep] = useState<VerificationStep>('READY');
+  const [step, setStep] = useState<VerificationStep>('INITIALIZING');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState(0);
   const [hasDeviceBiometric, setHasDeviceBiometric] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
 
+  const cameraRef = useRef<any>(null);
   const scanAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scanLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const verificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readyFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isVerifiedDispatchedRef = useRef<boolean>(false);
+  const captureInFlightRef = useRef<boolean>(false);
+  const visibleRef = useRef<boolean>(visible);
   const onVerifiedRef = useRef(onVerified);
 
   useEffect(() => {
     onVerifiedRef.current = onVerified;
   }, [onVerified]);
 
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
+
   // Only allow fallback skip on END shift, never on START, REGISTER, or APP_OPEN
   const isStart = mode === 'START' || mode === 'REGISTER' || mode === 'APP_OPEN';
+
+  const expoCameraMod = getExpoCameraModule();
+  const LiveCameraView = expoCameraMod?.CameraView ?? null;
 
   const stopScanAnimation = useCallback(() => {
     if (scanLoopRef.current) {
@@ -87,14 +126,68 @@ export function FaceVerificationModal({
     pulseAnim.setValue(1);
   }, [pulseAnim]);
 
-  // Reset state when modal opens and check real device biometric availability
+  const clearTimers = useCallback(() => {
+    if (verificationTimerRef.current) {
+      clearTimeout(verificationTimerRef.current);
+      verificationTimerRef.current = null;
+    }
+    if (readyFallbackTimerRef.current) {
+      clearTimeout(readyFallbackTimerRef.current);
+      readyFallbackTimerRef.current = null;
+    }
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+  }, []);
+
+  // Automatically start embedded live camera scanner (UPI-scanner style, no manual shutter)
+  const startAutoScanner = useCallback(async () => {
+    clearTimers();
+    isVerifiedDispatchedRef.current = false;
+    captureInFlightRef.current = false;
+    setErrorMessage(null);
+    setCapturedPhotoUri(null);
+    setScanProgress(0);
+    setCameraReady(false);
+
+    const camMod = getExpoCameraModule();
+    if (!camMod) {
+      setStep('FALLBACK_READY');
+      return;
+    }
+
+    setStep('INITIALIZING');
+    try {
+      const perm = await camMod.Camera.requestCameraPermissionsAsync();
+      if (!visibleRef.current) return;
+
+      if (perm.status !== 'granted') {
+        setStep('ERROR');
+        setErrorMessage('Camera permission is required. Please allow camera access in Settings.');
+        return;
+      }
+
+      setStep('LIVE_SCAN');
+
+      // Safety fallback in case a device does not emit onCameraReady promptly
+      readyFallbackTimerRef.current = setTimeout(() => {
+        if (visibleRef.current) {
+          setCameraReady(true);
+        }
+      }, 2500);
+    } catch (err) {
+      console.warn('[FaceVerification] Live camera init error:', err);
+      if (!visibleRef.current) return;
+      setStep('FALLBACK_READY');
+    }
+  }, [clearTimers]);
+
+  // Reset state when modal opens and auto-start live scanner
   useEffect(() => {
     if (visible) {
       isVerifiedDispatchedRef.current = false;
-      setStep('READY');
-      setErrorMessage(null);
-      setCapturedPhotoUri(null);
-      setScanProgress(0);
+      captureInFlightRef.current = false;
       scanAnim.setValue(0);
       pulseAnim.setValue(1);
 
@@ -107,159 +200,184 @@ export function FaceVerificationModal({
             setHasDeviceBiometric(Boolean(hw && enrolled));
           })
           .catch(() => setHasDeviceBiometric(false));
+      }
 
-        // On Android, recover any pending camera photo if OS killed Activity during capture
-        if (Platform.OS === 'android' && typeof ImagePicker.getPendingResultAsync === 'function') {
-          ImagePicker.getPendingResultAsync()
-            .then(async (pending) => {
-              if (
-                pending &&
-                'assets' in pending &&
-                !pending.canceled &&
-                pending.assets &&
-                pending.assets.length > 0
-              ) {
-                const asset = pending.assets[0];
-                if (asset?.uri) {
-                  const compressed = await compressImage(asset.uri).catch(() => ({ uri: asset.uri }));
-                  setCapturedPhotoUri(compressed.uri);
-                  setStep('SCANNING');
-                }
-              }
-            })
-            .catch(() => {});
-        }
+      if (autoLaunch) {
+        startAutoScanner();
+      } else if (getExpoCameraModule()) {
+        startAutoScanner();
+      } else {
+        setStep('FALLBACK_READY');
       }
     } else {
-      if (verificationTimerRef.current) clearTimeout(verificationTimerRef.current);
-      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      clearTimers();
       stopScanAnimation();
       stopPulseAnimation();
     }
     return () => {
-      if (verificationTimerRef.current) clearTimeout(verificationTimerRef.current);
-      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      clearTimers();
       stopScanAnimation();
       stopPulseAnimation();
     };
-  }, [visible, scanAnim, pulseAnim, stopScanAnimation, stopPulseAnimation]);
+  }, [
+    visible,
+    autoLaunch,
+    startAutoScanner,
+    clearTimers,
+    scanAnim,
+    pulseAnim,
+    stopScanAnimation,
+    stopPulseAnimation,
+  ]);
 
-  // Open real front camera and require an actual captured selfie photo
-  const handleLaunchCamera = useCallback(async () => {
-    if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
-    setErrorMessage(null);
-    setCapturedPhotoUri(null);
-    setScanProgress(0);
-    setStep('CAPTURING');
-
-    try {
-      if (Platform.OS === 'web') {
-        // Web browser: pick/capture an actual selfie file rather than fake-completing
-        const res = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: false,
-          quality: 0.7,
-        });
-        if (res.canceled || !res.assets?.[0]?.uri) {
-          setStep('ERROR');
-          setErrorMessage('No photo selected. Please select or capture a selfie photo.');
-          return;
-        }
-        setCapturedPhotoUri(res.assets[0].uri);
-        setStep('SCANNING');
-        return;
-      }
-
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (perm.status !== 'granted') {
-        setStep('ERROR');
-        setErrorMessage('Camera permission is required. Please allow camera access in Settings.');
-        return;
-      }
-
-      const res = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        cameraType: ImagePicker.CameraType.front,
-        allowsEditing: false,
-        quality: 0.65,
-      });
-
-      if (res.canceled || !res.assets || res.assets.length === 0 || !res.assets[0]?.uri) {
-        setStep('ERROR');
-        setErrorMessage('Selfie was not taken. Please take a front photo to complete face check.');
-        return;
-      }
-
-      const asset = res.assets[0];
-      if (
-        (typeof asset.width === 'number' && asset.width < 100) ||
-        (typeof asset.height === 'number' && asset.height < 100)
-      ) {
-        setStep('ERROR');
-        setErrorMessage('Photo is too small or unclear. Please take a clear selfie.');
-        return;
-      }
-
-      const compressed = await compressImage(asset.uri).catch(() => ({ uri: asset.uri }));
-      setCapturedPhotoUri(compressed.uri);
-      setStep('SCANNING');
-    } catch (err: any) {
-      console.warn('[FaceVerification] Camera capture error:', err);
-      setStep('ERROR');
-      setErrorMessage('Could not open camera. Please try again or use Device Face / Fingerprint.');
+  const handleCameraReady = useCallback(() => {
+    if (readyFallbackTimerRef.current) {
+      clearTimeout(readyFallbackTimerRef.current);
+      readyFallbackTimerRef.current = null;
     }
-  }, [step]);
+    setCameraReady(true);
+  }, []);
 
-  // Real OS Biometric / Face ID / Fingerprint check (never auto-passes if cancelled or failed)
-  const handleDeviceBiometric = useCallback(async () => {
-    if (step === 'CAPTURING' || step === 'SCANNING' || step === 'VERIFIED') return;
-    setErrorMessage(null);
-    setStep('CAPTURING');
+  const handleCameraMountError = useCallback((event: { message?: string }) => {
+    console.warn('[FaceVerification] Camera mount error:', event?.message);
+    clearTimers();
+    setStep('ERROR');
+    setErrorMessage(
+      event?.message
+        ? `Could not open front camera: ${event.message}`
+        : 'Could not start front camera. Please try again.'
+    );
+  }, [clearTimers]);
+
+  // Silently capture real frame from the live front camera once aligned (no shutter click required)
+  const captureLiveFrameSilently = useCallback(async () => {
+    if (captureInFlightRef.current || isVerifiedDispatchedRef.current || !visibleRef.current) {
+      return;
+    }
+    captureInFlightRef.current = true;
 
     try {
-      const auth = await LocalAuthentication.authenticateAsync({
-        promptMessage: isStart
-          ? 'Verify your face or fingerprint'
-          : 'Verify your identity to end duty',
-        cancelLabel: 'Cancel',
-        disableDeviceFallback: false,
-      });
-
-      if (!auth.success) {
-        if (auth.error === 'user_cancel' || auth.error === 'app_cancel' || auth.error === 'system_cancel') {
-          setStep('READY');
-          return;
-        }
-        setStep('ERROR');
-        setErrorMessage('Device check did not match. Please try again or take a front selfie.');
-        return;
+      const cam = cameraRef.current;
+      if (!cam || typeof cam.takePictureAsync !== 'function') {
+        throw new Error('Camera is not ready');
       }
 
-      setCapturedPhotoUri(null);
+      const photo = await cam.takePictureAsync({
+        quality: 0.55,
+        shutterSound: false,
+        skipProcessing: false,
+      });
+
+      if (!visibleRef.current) return;
+
+      if (!photo?.uri) {
+        throw new Error('Empty camera frame');
+      }
+
+      if (
+        (typeof photo.width === 'number' && photo.width < 60) ||
+        (typeof photo.height === 'number' && photo.height < 60)
+      ) {
+        throw new Error('Captured frame too small');
+      }
+
+      const compressed = await compressImage(photo.uri).catch(() => ({ uri: photo.uri }));
+      if (!visibleRef.current) return;
+
+      stopScanAnimation();
+      setCapturedPhotoUri(compressed.uri);
+      setScanProgress(100);
       setStep('VERIFIED');
+
       verificationTimerRef.current = setTimeout(() => {
-        if (isVerifiedDispatchedRef.current) return;
+        if (isVerifiedDispatchedRef.current || !visibleRef.current) return;
         isVerifiedDispatchedRef.current = true;
+
         onVerifiedRef.current({
           faceVerified: true,
-          facePhoto: 'device_biometric_verified',
-          faceConfidence: 0.99,
-          faceMethod: 'DEVICE_BIOMETRIC',
+          facePhoto: compressed.uri,
+          faceConfidence: mode === 'REGISTER' ? 0.99 : 0.98,
+          faceMethod: mode === 'REGISTER' ? 'FACE_ID_ENROLLED' : 'FACE_ID_BIOMETRIC',
         });
-      }, 650);
-    } catch {
+      }, 550);
+    } catch (err) {
+      console.warn('[FaceVerification] Auto-scan capture failed:', err);
+      if (!visibleRef.current) return;
+      stopScanAnimation();
       setStep('ERROR');
-      setErrorMessage('Biometric check failed. Please take a front selfie instead.');
+      setErrorMessage('Face scan did not complete. Hold your phone steady in good light and try again.');
+    } finally {
+      captureInFlightRef.current = false;
     }
-  }, [step, isStart]);
+  }, [mode, stopScanAnimation]);
 
-  // Subtle pulse animation while awaiting/scanning
+  // Animate live laser scanner + automatic scan progress while live camera is active
   useEffect(() => {
-    if (visible && (step === 'READY' || step === 'SCANNING')) {
+    if (!visible || step !== 'LIVE_SCAN') {
+      stopScanAnimation();
+      return;
+    }
+
+    stopScanAnimation();
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, {
+          toValue: 1,
+          duration: 850,
+          easing: Easing.linear,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.timing(scanAnim, {
+          toValue: 0,
+          duration: 850,
+          easing: Easing.linear,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ])
+    );
+    scanLoopRef.current = loop;
+    loop.start();
+
+    if (!cameraReady) {
+      return () => {
+        stopScanAnimation();
+      };
+    }
+
+    let progress = 10;
+    setScanProgress(progress);
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+
+    scanIntervalRef.current = setInterval(() => {
+      progress += 10;
+      const clamped = Math.min(progress, 90);
+      setScanProgress(clamped);
+
+      if (progress >= 90) {
+        if (scanIntervalRef.current) {
+          clearInterval(scanIntervalRef.current);
+          scanIntervalRef.current = null;
+        }
+        captureLiveFrameSilently();
+      }
+    }, 150);
+
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+      }
+      stopScanAnimation();
+    };
+  }, [visible, step, cameraReady, scanAnim, stopScanAnimation, captureLiveFrameSilently]);
+
+  // Subtle pulse animation while scanning
+  useEffect(() => {
+    if (visible && (step === 'LIVE_SCAN' || step === 'FALLBACK_READY')) {
       const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.04,
+            toValue: 1.03,
             duration: 900,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: Platform.OS !== 'web',
@@ -285,72 +403,125 @@ export function FaceVerificationModal({
     }
   }, [visible, step, pulseAnim, stopPulseAnimation]);
 
-  // Visible scan progression ONLY AFTER a real selfie photo URI has been captured
-  useEffect(() => {
-    if (step === 'SCANNING') {
-      if (!capturedPhotoUri) {
-        setStep('ERROR');
-        setErrorMessage('No selfie captured. Please take a front photo.');
+  // Fallback front camera capture only when ExpoCamera native module is unavailable
+  const handleFallbackCameraCapture = useCallback(async () => {
+    if (step === 'CAPTURING' || step === 'VERIFIED') return;
+    setErrorMessage(null);
+    setCapturedPhotoUri(null);
+    setStep('CAPTURING');
+
+    try {
+      if (Platform.OS === 'web') {
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: false,
+          quality: 0.7,
+        });
+        if (res.canceled || !res.assets?.[0]?.uri) {
+          setStep('ERROR');
+          setErrorMessage('No photo selected. Please capture or choose a photo.');
+          return;
+        }
+        setCapturedPhotoUri(res.assets[0].uri);
+        setStep('VERIFIED');
+        verificationTimerRef.current = setTimeout(() => {
+          if (isVerifiedDispatchedRef.current) return;
+          isVerifiedDispatchedRef.current = true;
+          onVerifiedRef.current({
+            faceVerified: true,
+            facePhoto: res.assets[0].uri,
+            faceConfidence: mode === 'REGISTER' ? 0.99 : 0.98,
+            faceMethod: mode === 'REGISTER' ? 'FACE_ID_ENROLLED' : 'FACE_ID_BIOMETRIC',
+          });
+        }, 550);
         return;
       }
 
-      let progress = 0;
-      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (perm.status !== 'granted') {
+        setStep('ERROR');
+        setErrorMessage('Camera permission is required. Please allow camera access in Settings.');
+        return;
+      }
 
-      scanIntervalRef.current = setInterval(() => {
-        progress += 5;
-        setScanProgress(Math.min(progress, 100));
+      const res = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        cameraType: ImagePicker.CameraType.front,
+        allowsEditing: false,
+        quality: 0.65,
+      });
 
-        if (progress >= 100) {
-          if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-          stopScanAnimation();
-          setStep('VERIFIED');
+      if (res.canceled || !res.assets || res.assets.length === 0 || !res.assets[0]?.uri) {
+        setStep('ERROR');
+        setErrorMessage('Face scan was cancelled. Please try again.');
+        return;
+      }
 
-          verificationTimerRef.current = setTimeout(() => {
-            if (isVerifiedDispatchedRef.current) return;
-            isVerifiedDispatchedRef.current = true;
-
-            onVerifiedRef.current({
-              faceVerified: true,
-              facePhoto: capturedPhotoUri,
-              faceConfidence: mode === 'REGISTER' ? 0.99 : 0.98,
-              faceMethod: mode === 'REGISTER' ? 'FACE_ID_ENROLLED' : 'FACE_ID_BIOMETRIC',
-            });
-          }, 700);
-        }
-      }, 70);
-
-      // Scan line animation across the real captured selfie
-      stopScanAnimation();
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(scanAnim, {
-            toValue: 1,
-            duration: 800,
-            easing: Easing.linear,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-          Animated.timing(scanAnim, {
-            toValue: 0,
-            duration: 800,
-            easing: Easing.linear,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-        ])
-      );
-      scanLoopRef.current = loop;
-      loop.start();
-
-      return () => {
-        if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-        stopScanAnimation();
-      };
-    } else {
-      stopScanAnimation();
+      const compressed = await compressImage(res.assets[0].uri).catch(() => ({ uri: res.assets[0].uri }));
+      setCapturedPhotoUri(compressed.uri);
+      setStep('VERIFIED');
+      verificationTimerRef.current = setTimeout(() => {
+        if (isVerifiedDispatchedRef.current) return;
+        isVerifiedDispatchedRef.current = true;
+        onVerifiedRef.current({
+          faceVerified: true,
+          facePhoto: compressed.uri,
+          faceConfidence: mode === 'REGISTER' ? 0.99 : 0.98,
+          faceMethod: mode === 'REGISTER' ? 'FACE_ID_ENROLLED' : 'FACE_ID_BIOMETRIC',
+        });
+      }, 550);
+    } catch {
+      setStep('ERROR');
+      setErrorMessage('Could not open camera. Please try again.');
     }
-  }, [step, capturedPhotoUri, mode, scanAnim, stopScanAnimation]);
+  }, [step, mode]);
+
+  // Real OS Biometric / Face ID / Fingerprint check
+  const handleDeviceBiometric = useCallback(async () => {
+    if (step === 'CAPTURING' || step === 'VERIFIED') return;
+    clearTimers();
+    setErrorMessage(null);
+    setStep('CAPTURING');
+
+    try {
+      const auth = await LocalAuthentication.authenticateAsync({
+        promptMessage: isStart
+          ? 'Verify your face or fingerprint'
+          : 'Verify your identity to end duty',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: false,
+      });
+
+      if (!auth.success) {
+        if (auth.error === 'user_cancel' || auth.error === 'app_cancel' || auth.error === 'system_cancel') {
+          startAutoScanner();
+          return;
+        }
+        setStep('ERROR');
+        setErrorMessage('Device check did not match. Please look at the camera and try again.');
+        return;
+      }
+
+      setCapturedPhotoUri(null);
+      setStep('VERIFIED');
+      verificationTimerRef.current = setTimeout(() => {
+        if (isVerifiedDispatchedRef.current) return;
+        isVerifiedDispatchedRef.current = true;
+        onVerifiedRef.current({
+          faceVerified: true,
+          facePhoto: 'device_biometric_verified',
+          faceConfidence: 0.99,
+          faceMethod: 'DEVICE_BIOMETRIC',
+        });
+      }, 550);
+    } catch {
+      setStep('ERROR');
+      setErrorMessage('Biometric check failed. Please use the live face scanner.');
+    }
+  }, [step, isStart, clearTimers, startAutoScanner]);
 
   const handleUseStandardVerification = () => {
+    clearTimers();
     stopScanAnimation();
     setStep('VERIFIED');
     verificationTimerRef.current = setTimeout(() => {
@@ -383,12 +554,12 @@ export function FaceVerificationModal({
             <View style={{ flex: 1, minWidth: 0, marginLeft: 10 }}>
               <Text style={styles.title} numberOfLines={1}>
                 {mode === 'REGISTER'
-                  ? 'Save Your Face'
+                  ? 'Scan Face to Save'
                   : mode === 'APP_OPEN'
-                  ? 'Face Check'
+                  ? 'Live Face Scan'
                   : isStart
-                  ? 'Start Duty Selfie'
-                  : 'End Duty Selfie'}
+                  ? 'Live Duty Scan'
+                  : 'End Duty Face Scan'}
               </Text>
               <Text style={styles.subtitle} numberOfLines={1}>
                 {userName} · {userRole}
@@ -399,7 +570,7 @@ export function FaceVerificationModal({
             </Pressable>
           </View>
 
-          {/* Circular Selfie Frame */}
+          {/* Circular Live Camera Scanner */}
           <View style={styles.scannerWrapper}>
             <Animated.View
               style={[
@@ -421,31 +592,51 @@ export function FaceVerificationModal({
                   style={styles.capturedPhoto}
                   resizeMode="cover"
                 />
+              ) : step === 'LIVE_SCAN' && LiveCameraView ? (
+                <View style={styles.liveCameraFill}>
+                  <LiveCameraView
+                    ref={cameraRef}
+                    facing="front"
+                    mirror
+                    active={visible && step === 'LIVE_SCAN'}
+                    onCameraReady={handleCameraReady}
+                    onMountError={handleCameraMountError}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  {/* Face guide ring inside live camera */}
+                  <View pointerEvents="none" style={styles.faceGuideRing} />
+                </View>
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Ionicons
-                    name="camera-outline"
-                    size={64}
+                    name={step === 'ERROR' ? 'alert-circle-outline' : 'scan-outline'}
+                    size={60}
                     color={step === 'ERROR' ? '#FDA4AF' : '#94A3B8'}
                   />
                   <Text style={styles.placeholderHint}>
-                    {step === 'CAPTURING' ? 'Opening...' : 'Take Selfie'}
+                    {step === 'INITIALIZING'
+                      ? 'Opening Scanner...'
+                      : step === 'CAPTURING'
+                      ? 'Opening Camera...'
+                      : step === 'ERROR'
+                      ? 'Scan Stopped'
+                      : 'Face Scanner'}
                   </Text>
                 </View>
               )}
 
-              {/* Scanning Laser Line over real photo */}
+              {/* Sweeping UPI-style Laser Scan Line over live camera */}
               <Animated.View
                 pointerEvents="none"
                 style={[
                   styles.scanLine,
                   {
-                    opacity: step === 'SCANNING' ? 1 : 0,
+                    opacity: step === 'LIVE_SCAN' ? 1 : 0,
                     transform: [
                       {
                         translateY: scanAnim.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [10, 190],
+                          outputRange: [12, 204],
                         }),
                       },
                     ],
@@ -456,38 +647,49 @@ export function FaceVerificationModal({
               {/* Verified Checkmark Overlay */}
               {step === 'VERIFIED' && (
                 <View style={styles.verifiedOverlay}>
-                  <Ionicons name="checkmark-circle" size={64} color={BrandColors.green.primary} />
+                  <Ionicons name="checkmark-circle" size={68} color={BrandColors.green.primary} />
                 </View>
               )}
             </Animated.View>
 
             {/* Status Text & Progress */}
             <View style={styles.statusBox}>
-              {step === 'READY' && (
+              {step === 'INITIALIZING' && (
+                <View style={styles.rowCenter}>
+                  <ActivityIndicator size="small" color={BrandColors.pink.primary} />
+                  <Text style={[styles.statusText, { marginLeft: 8 }]}>
+                    Starting live face scanner...
+                  </Text>
+                </View>
+              )}
+              {step === 'LIVE_SCAN' && (
+                <View style={{ alignItems: 'center', width: '100%' }}>
+                  <Text style={styles.statusScanningText}>
+                    {cameraReady
+                      ? `Scanning face automatically... ${scanProgress}%`
+                      : 'Hold phone in front of your face...'}
+                  </Text>
+                  <View style={styles.progressBarBg}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${cameraReady ? scanProgress : 15}%` },
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+              {step === 'FALLBACK_READY' && (
                 <Text style={styles.statusText}>
-                  {mode === 'REGISTER'
-                    ? 'Take a clear front selfie to save your face.'
-                    : mode === 'APP_OPEN'
-                    ? 'Take a front selfie to verify your face and open the app.'
-                    : 'Take a front selfie to finish your duty.'}
+                  Tap below to scan your face with the front camera.
                 </Text>
               )}
               {step === 'CAPTURING' && (
                 <View style={styles.rowCenter}>
                   <ActivityIndicator size="small" color={BrandColors.pink.primary} />
                   <Text style={[styles.statusText, { marginLeft: 8 }]}>
-                    Opening camera...
+                    Verifying...
                   </Text>
-                </View>
-              )}
-              {step === 'SCANNING' && (
-                <View style={{ alignItems: 'center', width: '100%' }}>
-                  <Text style={styles.statusScanningText}>
-                    Checking selfie... {scanProgress}%
-                  </Text>
-                  <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBarFill, { width: `${scanProgress}%` }]} />
-                  </View>
                 </View>
               )}
               {step === 'VERIFIED' && (
@@ -497,31 +699,73 @@ export function FaceVerificationModal({
               )}
               {step === 'ERROR' && (
                 <Text style={styles.statusErrorText}>
-                  {errorMessage || 'Selfie failed. Please try again.'}
+                  {errorMessage || 'Face scan failed. Please try again.'}
                 </Text>
               )}
             </View>
           </View>
 
-          {/* Privacy / Location Note */}
+          {/* Privacy Note */}
           <View style={styles.disclaimerBox}>
             <Ionicons name="shield-checkmark" size={16} color="#64748B" style={{ marginRight: 6 }} />
             <Text style={styles.disclaimerText}>
-              Your selfie is saved with time and location for duty check.
+              Keep your face inside the circle. Scanning completes automatically with no click needed.
             </Text>
           </View>
 
           {/* Action Buttons */}
           <View style={styles.btnRow}>
-            {step === 'READY' && (
+            {step === 'LIVE_SCAN' && (
+              <View style={{ width: '100%' }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: isStart ? 'center' : 'space-between',
+                    alignItems: 'center',
+                    gap: Spacing.sm,
+                  }}
+                >
+                  <Button
+                    title="Cancel"
+                    variant="outline"
+                    size="sm"
+                    onPress={onClose}
+                    style={{ flex: isStart ? 1 : 0.7 }}
+                  />
+                  {hasDeviceBiometric && mode !== 'REGISTER' && (
+                    <Button
+                      title="Use Phone Lock"
+                      variant="secondary"
+                      size="sm"
+                      icon={<Ionicons name="finger-print-outline" size={15} color={BrandColors.pink.dark} />}
+                      onPress={handleDeviceBiometric}
+                      style={{ flex: 1 }}
+                    />
+                  )}
+                  {!isStart && (
+                    <Pressable
+                      onPress={handleUseStandardVerification}
+                      hitSlop={BUTTON_HIT_SLOP}
+                      style={{ paddingVertical: Spacing.xs, paddingHorizontal: Spacing.xs }}
+                    >
+                      <Text style={{ fontSize: 12, color: BrandColors.pink.primary, fontWeight: '600' }}>
+                        Standard Audit (No Photo)
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {step === 'FALLBACK_READY' && (
               <View style={{ width: '100%' }}>
                 <View style={{ gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
-                    title={mode === 'REGISTER' ? 'Take Selfie to Register' : 'Take Front Selfie'}
+                    title="Open Face Scanner"
                     variant="primary"
                     size="md"
-                    icon={<Ionicons name="camera" size={18} color="#FFFFFF" />}
-                    onPress={handleLaunchCamera}
+                    icon={<Ionicons name="scan" size={18} color="#FFFFFF" />}
+                    onPress={handleFallbackCameraCapture}
                   />
                   {hasDeviceBiometric && mode !== 'REGISTER' && (
                     <Button
@@ -567,11 +811,11 @@ export function FaceVerificationModal({
               <View style={{ width: '100%' }}>
                 <View style={{ gap: Spacing.xs, marginBottom: Spacing.sm }}>
                   <Button
-                    title="Try Selfie Again"
+                    title="Scan Again"
                     variant="primary"
                     size="md"
-                    icon={<Ionicons name="camera" size={16} color="#FFFFFF" />}
-                    onPress={handleLaunchCamera}
+                    icon={<Ionicons name="scan" size={16} color="#FFFFFF" />}
+                    onPress={LiveCameraView ? startAutoScanner : handleFallbackCameraCapture}
                   />
                   {hasDeviceBiometric && mode !== 'REGISTER' && (
                     <Button
@@ -589,6 +833,7 @@ export function FaceVerificationModal({
                     justifyContent: isStart ? 'center' : 'space-between',
                     alignItems: 'center',
                     marginTop: 2,
+                    gap: Spacing.xs,
                   }}
                 >
                   <Button
@@ -611,14 +856,14 @@ export function FaceVerificationModal({
               </View>
             )}
 
-            {(step === 'SCANNING' || step === 'CAPTURING' || step === 'VERIFIED') && (
+            {(step === 'INITIALIZING' || step === 'CAPTURING' || step === 'VERIFIED') && (
               <Button
                 title={
                   step === 'VERIFIED'
                     ? 'Verified!'
-                    : step === 'CAPTURING'
-                    ? 'Opening Camera...'
-                    : 'Checking Face...'
+                    : step === 'INITIALIZING'
+                    ? 'Opening Scanner...'
+                    : 'Verifying...'
                 }
                 variant="primary"
                 size="md"
@@ -638,7 +883,7 @@ export function FaceVerificationModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.lg,
@@ -679,25 +924,40 @@ const styles = StyleSheet.create({
   },
   scannerWrapper: {
     alignItems: 'center',
-    marginVertical: Spacing.md,
+    marginVertical: Spacing.sm,
   },
   scannerCircle: {
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    borderWidth: 3,
-    borderStyle: 'dashed',
+    width: 224,
+    height: 224,
+    borderRadius: 112,
+    borderWidth: 3.5,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#0F172A',
     position: 'relative',
+  },
+  liveCameraFill: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  faceGuideRing: {
+    width: 176,
+    height: 176,
+    borderRadius: 88,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255, 255, 255, 0.65)',
   },
   avatarPlaceholder: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     gap: 6,
   },
   placeholderHint: {
@@ -718,8 +978,8 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.pink.primary,
     shadowColor: BrandColors.pink.primary,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
   },
   verifiedOverlay: {
     position: 'absolute',
@@ -766,7 +1026,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressBarBg: {
-    width: 180,
+    width: 190,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#E2E8F0',

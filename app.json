@@ -77,6 +77,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow FemmeFlo to scan your face automatically for duty verification."
+        }
+      ],
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "Allow FemmeFlo to record spoken Hindi/Hinglish customer feedback.",

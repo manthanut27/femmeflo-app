@@ -2,7 +2,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import {
-  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -10,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
-import { BrandColors, Colors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { BrandColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { FaceVerificationModal, type FaceVerificationResult } from './FaceVerificationModal';
 
@@ -111,13 +110,13 @@ export function FaceVerificationGate({ children }: FaceVerificationGateProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Face Verification Modal (requires explicit selfie or device biometric) */}
+      {/* Face Verification Modal (auto-opens live camera scanner like UPI scan) */}
       <FaceVerificationModal
         visible={modalVisible}
         mode="APP_OPEN"
         userName={user?.name || 'Officer'}
         userRole={roleLabel}
-        autoLaunch={false}
+        autoLaunch={true}
         onClose={() => setModalVisible(false)}
         onVerified={handleVerified}
       />
