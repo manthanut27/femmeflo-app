@@ -624,8 +624,8 @@ export default function AdminInventoryMainScreen() {
       style={styles.container}
     >
       <Header
-        title="Stock Movement Hub"
-        subtitle="Transfer stock, add factory inward, and view history"
+        title="Inventory"
+        subtitle="Manage stock and movements"
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
         showMenu={params?.from !== 'actions'}
@@ -637,7 +637,7 @@ export default function AdminInventoryMainScreen() {
             accessibilityRole="button"
             accessibilityLabel="Add Warehouse Depot"
           >
-            <Ionicons name="add" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Ionicons name="add" size={15} color="#FFFFFF" style={{ marginRight: 3 }} />
             <Text style={styles.addWarehouseHeaderBtnText}>Depot</Text>
           </TouchableOpacity>
         }
@@ -688,14 +688,14 @@ export default function AdminInventoryMainScreen() {
           <View style={styles.statsSection}>
             <View style={styles.statCardsRow}>
               {/* Card 1: Central HQ Stock */}
-              <Card style={[styles.statCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
+              <Card style={styles.statCard}>
                 <View style={styles.statCardHeader}>
-                  <Text style={styles.statCardLabel}>CENTRAL HQ</Text>
+                  <Text style={styles.statCardLabel}>Central HQ</Text>
                   <View style={[styles.statIconBadge, { backgroundColor: BrandColors.green.surface }]}>
-                    <Ionicons name="cube" size={14} color={BrandColors.green.primary} />
+                    <Ionicons name="cube-outline" size={14} color={BrandColors.green.primary} />
                   </View>
                 </View>
-                <Text style={[styles.statCardValue, { color: BrandColors.green.primary }]}>
+                <Text style={[styles.statCardValue, { color: '#172033' }]}>
                   {(inventorySummary?.hqStock ?? 0).toLocaleString('en-IN')}
                   <Text style={styles.statCardUnit}> pkts</Text>
                 </Text>
@@ -703,50 +703,54 @@ export default function AdminInventoryMainScreen() {
               </Card>
 
               {/* Card 2: Regional Depots */}
-              <Card style={[styles.statCard, { borderLeftColor: '#0284C7', borderLeftWidth: 4 }]}>
+              <Card style={styles.statCard}>
                 <View style={styles.statCardHeader}>
-                  <Text style={styles.statCardLabel}>DEPOTS</Text>
+                  <Text style={styles.statCardLabel}>Depots</Text>
                   <View style={[styles.statIconBadge, { backgroundColor: '#F0F9FF' }]}>
-                    <Ionicons name="business" size={14} color="#0284C7" />
+                    <Ionicons name="business-outline" size={14} color="#0284C7" />
                   </View>
                 </View>
-                <Text style={[styles.statCardValue, { color: '#0284C7' }]}>
+                <Text style={[styles.statCardValue, { color: '#172033' }]}>
                   {(inventorySummary?.warehouseStock ?? 0).toLocaleString('en-IN')}
                   <Text style={styles.statCardUnit}> pkts</Text>
                 </Text>
-                <Text style={styles.statCardSub}>{warehouses.length} active facilities</Text>
+                <Text style={styles.statCardSub}>
+                  {warehouses.length} {warehouses.length === 1 ? 'facility' : 'facilities'}
+                </Text>
               </Card>
             </View>
 
             <View style={styles.statCardsRow}>
               {/* Card 3: Field Seller Stock */}
-              <Card style={[styles.statCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>
+              <Card style={styles.statCard}>
                 <View style={styles.statCardHeader}>
-                  <Text style={styles.statCardLabel}>SELLER STOCK</Text>
+                  <Text style={styles.statCardLabel}>Seller Stock</Text>
                   <View style={[styles.statIconBadge, { backgroundColor: BrandColors.pink.surface }]}>
-                    <Ionicons name="cube" size={14} color={BrandColors.pink.primary} />
+                    <Ionicons name="people-outline" size={14} color={BrandColors.pink.primary} />
                   </View>
                 </View>
-                <Text style={[styles.statCardValue, { color: BrandColors.pink.primary }]}>
+                <Text style={[styles.statCardValue, { color: '#172033' }]}>
                   {(inventorySummary?.sellerStock ?? 0).toLocaleString('en-IN')}
                   <Text style={styles.statCardUnit}> pkts</Text>
                 </Text>
-                <Text style={styles.statCardSub}>{sellers.length} field sellers</Text>
+                <Text style={styles.statCardSub}>
+                  {sellers.length} {sellers.length === 1 ? 'seller' : 'sellers'}
+                </Text>
               </Card>
 
               {/* Card 4: Total System Stock */}
-              <Card style={[styles.statCard, { borderLeftColor: '#7C3AED', borderLeftWidth: 4 }]}>
+              <Card style={[styles.statCard, { borderColor: '#BBF7D0', backgroundColor: '#F0FDF4' }]}>
                 <View style={styles.statCardHeader}>
-                  <Text style={styles.statCardLabel}>TOTAL STOCK</Text>
-                  <View style={[styles.statIconBadge, { backgroundColor: '#F5F3FF' }]}>
-                    <Ionicons name="layers" size={14} color="#7C3AED" />
+                  <Text style={[styles.statCardLabel, { color: BrandColors.green.dark }]}>Total Stock</Text>
+                  <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
+                    <Ionicons name="layers-outline" size={14} color={BrandColors.green.primary} />
                   </View>
                 </View>
-                <Text style={[styles.statCardValue, { color: '#7C3AED' }]}>
+                <Text style={[styles.statCardValue, { color: BrandColors.green.dark }]}>
                   {(inventorySummary?.totalStock ?? 0).toLocaleString('en-IN')}
                   <Text style={styles.statCardUnit}> pkts</Text>
                 </Text>
-                <Text style={styles.statCardSub}>Entire network</Text>
+                <Text style={[styles.statCardSub, { color: BrandColors.green.primary }]}>Entire Network</Text>
               </Card>
             </View>
           </View>
@@ -1103,20 +1107,13 @@ export default function AdminInventoryMainScreen() {
           {/* ==================================================== */}
           <View style={styles.historySection}>
             <View style={styles.historySectionHeaderRow}>
-              <View>
-                <Text style={styles.sectionHeaderTitle}>
-                  {activeSection === 'HISTORY'
-                    ? 'Recent History & Audit Ledger'
-                    : activeSection === 'TRANSFER'
-                    ? 'Recent Stock Transfers'
-                    : 'Recent Inward Receipts'}
-                </Text>
-                <Text style={styles.historySectionSubtitle}>
-                  {activeSection === 'HISTORY'
-                    ? 'All transfers, factory receipts, and retail deliveries'
-                    : 'Latest recorded stock movements in the ledger'}
-                </Text>
-              </View>
+              <Text style={styles.sectionHeaderTitle}>
+                {activeSection === 'HISTORY'
+                  ? 'Recent Movements'
+                  : activeSection === 'TRANSFER'
+                  ? 'Recent Transfers'
+                  : 'Recent Inward'}
+              </Text>
 
               {activeSection !== 'HISTORY' && (
                 <TouchableOpacity
@@ -1147,7 +1144,7 @@ export default function AdminInventoryMainScreen() {
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.historyFilterText, isActive && styles.historyFilterTextActive]}>
-                        {tab === 'All' ? 'All Movements' : tab}
+                        {tab === 'All' ? 'All' : tab === 'Transfer' ? 'Transfers' : tab}
                       </Text>
                     </TouchableOpacity>
                   );

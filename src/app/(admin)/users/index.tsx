@@ -660,90 +660,38 @@ export default function AdminUsersScreen() {
                 {item.name?.slice(0, 2).toUpperCase() || 'U'}
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.email}>{item.email || 'No email registered'}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.phone} numberOfLines={1}>{item.phone || 'No phone registered'}</Text>
+              <Text style={styles.email} numberOfLines={1}>{item.email || 'No email registered'}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-              <Badge
-                label={item.active ? 'ACTIVE' : 'INACTIVE'}
-                variant={item.active ? 'ACTIVE' : 'INACTIVE'}
-                size="sm"
-              />
-              {isDualRole && (
-                <Badge
-                  label="CAN ALSO SELL"
-                  variant="ACTIVE"
-                  size="sm"
-                  pulse={true}
-                />
-              )}
-            </View>
+            <Badge
+              label={item.active ? 'Active' : 'Inactive'}
+              variant={item.active ? 'ACTIVE' : 'INACTIVE'}
+              size="sm"
+            />
             <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
           </View>
         </View>
 
-        {isDualRole && (
-          <View style={styles.dualRoleBadgeRow}>
-            <Ionicons name="cube-outline" size={13} color={BrandColors.pink.dark} />
-            <Text style={styles.dualRoleBadgeText}>Can take orders & carry field stock</Text>
-          </View>
-        )}
-
         <View style={styles.footer}>
-          <View style={styles.contactRow}>
-            <Ionicons name="call-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
-            <Text style={styles.phone}>{item.phone || 'No phone registered'}</Text>
-          </View>
-          <View style={styles.territoryRow}>
+          <View style={[styles.territoryRow, { flex: 1, minWidth: 0, marginRight: 8 }]}>
             <Ionicons name="location-outline" size={13} color={Colors.light.textSecondary} style={{ marginRight: 4 }} />
-            <Text style={styles.territory}>
+            <Text style={styles.territory} numberOfLines={1}>
               {[item.district, item.state].filter(Boolean).join(', ') || 'All Regions'}
             </Text>
           </View>
+          <Pressable
+            style={styles.configurePersonaBtn}
+            onPress={() => (tab === 'MANAGERS' ? handleOpenEditModal(item) : handleOpenEditSellerModal(item))}
+            accessibilityRole="button"
+            accessibilityLabel={`View details for ${item.name}`}
+          >
+            <Text style={styles.configurePersonaBtnText}>View Details</Text>
+          </Pressable>
         </View>
-
-        {tab === 'MANAGERS' && (
-          <View style={styles.managerCardActionRow}>
-            <Pressable
-              style={styles.configurePersonaBtn}
-              onPress={() => handleOpenEditModal(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`Configure persona and edit ${item.name}`}
-            >
-              <Ionicons
-                name="create-outline"
-                size={14}
-                color={BrandColors.green.primary}
-              />
-              <Text style={styles.configurePersonaBtnText}>
-                View & Edit Details
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {tab === 'SELLERS' && (
-          <View style={styles.managerCardActionRow}>
-            <Pressable
-              style={styles.configurePersonaBtn}
-              onPress={() => handleOpenEditSellerModal(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`Edit details for ${item.name}`}
-            >
-              <Ionicons
-                name="create-outline"
-                size={14}
-                color={BrandColors.pink.dark}
-              />
-              <Text style={[styles.configurePersonaBtnText, { color: BrandColors.pink.dark }]}>
-                Edit Officer Details
-              </Text>
-            </Pressable>
-          </View>
-        )}
       </Card>
     );
   };
@@ -752,7 +700,7 @@ export default function AdminUsersScreen() {
     <View style={styles.container}>
       <Header
         title="User Management"
-        subtitle="Managers & Field Sales Team"
+        subtitle="Manage your team"
         showBack={Boolean(params?.from === 'actions')}
         onBack={handleBack}
         showMenu={params?.from !== 'actions'}
@@ -771,8 +719,8 @@ export default function AdminUsersScreen() {
             }}
             hitSlop={HitSlop.md}
           >
-            <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.headerAddBtnText}>+ Add User</Text>
+            <Ionicons name="add" size={16} color="#FFFFFF" />
+            <Text style={styles.headerAddBtnText}>Add User</Text>
           </Pressable>
         }
       />
@@ -808,8 +756,8 @@ export default function AdminUsersScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add New Manager"
             >
-              <Ionicons name="add-circle" size={16} color={BrandColors.green.primary} />
-              <Text style={styles.actionPillTextManager}>+ Add Manager</Text>
+              <Ionicons name="add" size={15} color={BrandColors.green.primary} />
+              <Text style={styles.actionPillTextManager}>Add Manager</Text>
             </Pressable>
 
             <Pressable
@@ -818,8 +766,8 @@ export default function AdminUsersScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add New Seller"
             >
-              <Ionicons name="add-circle" size={16} color={BrandColors.pink.dark} />
-              <Text style={styles.actionPillTextSeller}>+ Add Seller</Text>
+              <Ionicons name="add" size={15} color={BrandColors.pink.dark} />
+              <Text style={styles.actionPillTextSeller}>Add Seller</Text>
             </Pressable>
           </View>
         </View>
@@ -830,7 +778,7 @@ export default function AdminUsersScreen() {
             <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
             <TextInput
               style={styles.searchInput}
-              placeholder={tab === 'MANAGERS' ? 'Search managers by name, phone, or district...' : 'Search sales officers by name, phone, or district...'}
+              placeholder="Search by name or phone..."
               placeholderTextColor={Colors.light.textTertiary}
               value={search}
               onChangeText={setSearch}

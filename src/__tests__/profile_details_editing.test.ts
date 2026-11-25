@@ -115,7 +115,7 @@ describe('Profile & Details Editing Suite for Seller, Manager, and Admin', () =>
       'utf8'
     );
 
-    assert.ok(adminUsersFile.includes('Edit Officer Details'), 'Admin users page must allow editing sellers');
+    assert.ok(adminUsersFile.includes('View Details'), 'Admin users page must allow editing sellers');
     assert.ok(adminUsersFile.includes('handleOpenEditSellerModal'), 'Admin users page must include seller edit trigger');
     assert.ok(adminUsersFile.includes('handleSaveSeller'), 'Admin users page must include handleSaveSeller');
     assert.ok(adminUsersFile.includes('adminApi.updateSeller'), 'Admin users page must call adminApi.updateSeller');

@@ -304,30 +304,29 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
             },
           ]}
         >
-          {/* Header (Managers & Sellers only) */}
-          {!isSuperAdmin ? (
-            <View style={styles.header}>
-              <View style={styles.brandRow}>
-                <View style={styles.brandBadge}>
-                  <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
-                </View>
-                <View>
-                  <Text style={styles.brandTitle}>FemmeFlo</Text>
-                  <Text style={styles.brandSubtitle}>Mobile Operations Hub</Text>
-                </View>
+          {/* Header */}
+          <View style={isSuperAdmin ? styles.saHeader : styles.header}>
+            <View style={styles.brandRow}>
+              <View style={[styles.brandBadge, isSuperAdmin && { backgroundColor: '#006B35' }]}>
+                <Ionicons name="shield-checkmark" size={16} color="#FFFFFF" />
               </View>
-
-              <Pressable
-                onPress={onClose}
-                hitSlop={HitSlop.md}
-                style={styles.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Close navigation menu"
-              >
-                <Ionicons name="close" size={20} color="#8491A3" />
-              </Pressable>
+              <View>
+                <Text style={isSuperAdmin ? styles.saBrandSubtitle : styles.brandSubtitle}>
+                  {isSuperAdmin ? 'Admin Panel' : 'Mobile Operations Hub'}
+                </Text>
+              </View>
             </View>
-          ) : null}
+
+            <Pressable
+              onPress={onClose}
+              hitSlop={HitSlop.md}
+              style={styles.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close navigation menu"
+            >
+              <Ionicons name="close" size={20} color="#8491A3" />
+            </Pressable>
+          </View>
 
           {/* User Profile Card */}
           {isSuperAdmin ? (
@@ -348,15 +347,6 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                   National Headquarters
                 </Text>
               </View>
-              <Pressable
-                onPress={onClose}
-                hitSlop={HitSlop.md}
-                style={styles.closeBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Close navigation menu"
-              >
-                <Ionicons name="close" size={20} color="#8491A3" />
-              </Pressable>
             </View>
           ) : (
             <View style={styles.userCard}>

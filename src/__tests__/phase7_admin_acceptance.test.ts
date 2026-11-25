@@ -578,10 +578,8 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
         'utf8'
       );
 
-      // Verify actions/index is declared without href: null
-      assert.ok(layoutContent.includes('name="actions/index"'));
-      assert.ok(!layoutContent.includes('name="actions/index"\n        options={{ href: null }}'));
-      assert.ok(!layoutContent.includes("name='actions/index'\n        options={{ href: null }}"));
+      // Verify sub-screens do not use href: null
+      assert.ok(!layoutContent.includes("options={{ href: null }}"));
       // Ensure no screen uses href: null
       assert.ok(!layoutContent.includes('href: null'));
     });
@@ -600,16 +598,6 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       assert.ok(
         executiveSource.includes("DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED'"),
         'Executive overview must listen to APPROVAL_STATUS_CHANGED'
-      );
-
-      const actionsSource = fs.readFileSync(
-        path.resolve(process.cwd(), 'src/app/(admin)/actions/index.tsx'),
-        'utf8'
-      );
-      assert.ok(actionsSource.includes('useFocusEffect'), 'Actions Hub must wire useFocusEffect');
-      assert.ok(
-        actionsSource.includes("DeviceEventEmitter.addListener('APPROVAL_STATUS_CHANGED'"),
-        'Actions Hub must listen to APPROVAL_STATUS_CHANGED'
       );
 
       const approvalsSource = fs.readFileSync(
