@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type {
   AdminInventoryTransactionItem,
   InventorySummaryData,
@@ -196,6 +197,11 @@ export default function AdminInventoryMainScreen() {
   useEffect(() => {
     fetchMasterData();
   }, [fetchMasterData]);
+
+  useRealtimeSync(['INVENTORY_UPDATE'], () => {
+    fetchMasterData();
+    fetchTransactions(historyFilter, 1, true);
+  });
 
   // Load Transactions for History Section
   const fetchTransactions = useCallback(

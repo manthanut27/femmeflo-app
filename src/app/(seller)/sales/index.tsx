@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -179,6 +180,8 @@ export default function SalesListScreen() {
     setRefreshing(true);
     loadSales(1, false);
   }, [loadSales]);
+
+  useRealtimeSync(['SALE_STATUS_UPDATE', 'APPROVAL_UPDATE'], () => loadSales(1, false));
 
   const onEndReached = () => {
     if (loadingMore || pagination.page >= pagination.totalPages) return;

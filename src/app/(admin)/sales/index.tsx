@@ -31,6 +31,7 @@ import { Header } from '@/components/ui/Header';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { SalesOrderCard } from '@/components/sales/SalesOrderCard';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -150,6 +151,8 @@ export default function AdminSalesScreen() {
   useEffect(() => {
     fetchSales();
   }, [fetchSales]);
+
+  useRealtimeSync(['SALE_STATUS_UPDATE', 'APPROVAL_UPDATE', 'INVENTORY_UPDATE'], fetchSales);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

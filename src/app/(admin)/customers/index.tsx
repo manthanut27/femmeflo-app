@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta } from '@/api/types';
 import { CustomerCard } from '@/components/customers/CustomerCard';
 import { Badge } from '@/components/ui/Badge';
@@ -204,6 +205,8 @@ export default function AdminCustomersScreen() {
   useEffect(() => {
     loadCustomers();
   }, [loadCustomers]);
+
+  useRealtimeSync(['CUSTOMER_UPDATE'], loadCustomers);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

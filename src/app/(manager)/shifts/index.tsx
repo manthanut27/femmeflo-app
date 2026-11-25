@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { Shift, ShiftStatus } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -93,6 +94,8 @@ export default function ManagerShiftsScreen() {
     setLoading(true);
     loadShifts();
   }, [loadShifts]);
+
+  useRealtimeSync(['SHIFT_UPDATE'], loadShifts);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

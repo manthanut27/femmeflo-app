@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type {
   AdminDashboardData,
   InventorySummaryData,
@@ -162,6 +163,11 @@ export default function AdminReportsScreen() {
     setLoading(true);
     loadData();
   }, [loadData]);
+
+  useRealtimeSync(
+    ['SALE_STATUS_UPDATE', 'APPROVAL_UPDATE', 'INVENTORY_UPDATE', 'CUSTOMER_UPDATE'],
+    loadData
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

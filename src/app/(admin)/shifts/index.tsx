@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { Shift, ShiftStatus, ShiftVisit } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -135,6 +136,8 @@ export default function AdminShiftsScreen() {
   useEffect(() => {
     fetchShifts();
   }, [fetchShifts]);
+
+  useRealtimeSync(['SHIFT_UPDATE'], fetchShifts);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

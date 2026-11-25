@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { tokenStorage } from '@/api/client';
 import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
@@ -217,6 +218,8 @@ export default function ManagerSalesScreen() {
     setRefreshing(true);
     loadData();
   }, [loadData]);
+
+  useRealtimeSync(['SALE_STATUS_UPDATE', 'APPROVAL_UPDATE'], loadData);
 
   const toggleDateExpand = (dateKey: string) => {
     setExpandedDates((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));

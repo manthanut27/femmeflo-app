@@ -1,4 +1,5 @@
 import { sellerApi } from '@/api/seller';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { SellerDashboardData, Shift } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
 import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
@@ -137,6 +138,11 @@ export default function SellerDashboardScreen() {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useRealtimeSync(
+    ['SALE_STATUS_UPDATE', 'APPROVAL_UPDATE', 'INVENTORY_UPDATE', 'SHIFT_UPDATE', 'CUSTOMER_UPDATE'],
+    loadDashboard
+  );
 
   // First-time login registration check: prompt user to register Face ID if not enrolled
   useEffect(() => {

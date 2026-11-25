@@ -44,6 +44,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { parseDateInputToISO } from '@/utils/dateUtils';
 
 export default function AdminDashboardScreen() {
@@ -330,6 +331,11 @@ export default function AdminDashboardScreen() {
     useCallback(() => {
       loadData();
     }, [loadData])
+  );
+
+  useRealtimeSync(
+    ['APPROVAL_UPDATE', 'SALE_STATUS_UPDATE', 'INVENTORY_UPDATE', 'SHIFT_UPDATE', 'CUSTOMER_UPDATE'],
+    loadData
   );
 
   // Real-time synchronization when approvals/rejections happen across admin screens

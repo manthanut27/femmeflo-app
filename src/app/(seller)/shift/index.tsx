@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaymentMode, ProductItem, Shift, ShiftVisit } from '@/api/types';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
 import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
@@ -249,6 +250,8 @@ export default function ShiftScreen() {
     setRefreshing(true);
     loadShiftData();
   }, [loadShiftData]);
+
+  useRealtimeSync(['SHIFT_UPDATE'], loadShiftData);
 
   // Helper to acquire live GPS coordinates with high accuracy and Google Maps / backend reverse geocoding
   async function acquireCoordinates(): Promise<{ latitude: number; longitude: number }> {

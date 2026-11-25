@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -75,6 +76,8 @@ export default function ManagerCustomersScreen() {
   useEffect(() => {
     loadCustomers();
   }, [loadCustomers]);
+
+  useRealtimeSync(['CUSTOMER_UPDATE'], loadCustomers);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

@@ -2,15 +2,17 @@ import { AppState, type AppStateStatus, DeviceEventEmitter } from 'react-native'
 import { getApiBaseUrl, tokenStorage } from '../api/client';
 import { cacheManager } from '../utils/cacheManager';
 
+export type RealtimeEventType =
+  | 'INVENTORY_UPDATE'
+  | 'SALE_STATUS_UPDATE'
+  | 'APPROVAL_UPDATE'
+  | 'SHIFT_UPDATE'
+  | 'CUSTOMER_UPDATE'
+  | 'HEARTBEAT';
+
 export interface RealtimeEventPayload {
   id: string;
-  type:
-    | 'INVENTORY_UPDATE'
-    | 'SALE_STATUS_UPDATE'
-    | 'APPROVAL_UPDATE'
-    | 'SHIFT_UPDATE'
-    | 'CUSTOMER_UPDATE'
-    | 'HEARTBEAT';
+  type: RealtimeEventType;
   timestamp: number;
   actorId?: string;
   role?: string;
@@ -19,21 +21,31 @@ export interface RealtimeEventPayload {
   data?: Record<string, unknown>;
 }
 
+export type RealtimeConnectionState = 'connected' | 'reconnecting' | 'offline';
+
 class MobileRealtimeSyncService {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private lastPollTimestamp = Date.now() - 30000;
   private isPolling = false;
   private isRunning = false;
+  private wasOffline = false;
+  private connectionState: RealtimeConnectionState = 'offline';
+  private seenEventIds = new Set<string>();
   private appStateSubscription: { remove: () => void } | null = null;
+
+  public getConnectionState(): RealtimeConnectionState {
+    return this.connectionState;
+  }
 
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
+    this.connectionState = 'reconnecting';
 
-    // Poll every 7 seconds when foregrounded
+    // Poll every 3 seconds when foregrounded for snappy multi-device sync
     this.pollTimer = setInterval(() => {
       this.pollUpdates();
-    }, 7000);
+    }, 3000);
 
     // Initial sync
     this.pollUpdates();
@@ -47,6 +59,7 @@ class MobileRealtimeSyncService {
 
   public stop(): void {
     this.isRunning = false;
+    this.connectionState = 'offline';
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
@@ -55,10 +68,11 @@ class MobileRealtimeSyncService {
       this.appStateSubscription.remove();
       this.appStateSubscription = null;
     }
+    this.seenEventIds.clear();
   }
 
   public async pollUpdates(): Promise<void> {
-    if (this.isPolling) return;
+    if (this.isPolling || !this.isRunning) return;
     try {
       const token = await tokenStorage.getToken();
       if (!token) return;
@@ -74,26 +88,54 @@ class MobileRealtimeSyncService {
         },
       });
 
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (this.connectionState === 'connected') {
+          this.wasOffline = true;
+          this.connectionState = 'reconnecting';
+        }
+        return;
+      }
+
       const json = await res.json();
       const events: RealtimeEventPayload[] = json?.data?.events ?? [];
       const serverTime: number = json?.data?.serverTime ?? Date.now();
 
-      this.lastPollTimestamp = serverTime;
+      if (this.wasOffline) {
+        this.wasOffline = false;
+        DeviceEventEmitter.emit('REALTIME_RECONNECTED', { timestamp: serverTime });
+      }
+      this.connectionState = 'connected';
+      this.lastPollTimestamp = Math.max(this.lastPollTimestamp, serverTime);
 
       if (events.length > 0) {
-        for (const evt of events) {
+        const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp);
+        for (const evt of sorted) {
           this.handleEvent(evt);
         }
       }
     } catch {
-      // Ignore background network blips
+      if (this.connectionState === 'connected') {
+        this.wasOffline = true;
+      }
+      this.connectionState = 'offline';
     } finally {
       this.isPolling = false;
     }
   }
 
   public handleEvent(evt: RealtimeEventPayload): void {
+    if (!evt || !evt.id) return;
+    if (this.seenEventIds.has(evt.id)) return;
+
+    this.seenEventIds.add(evt.id);
+    if (this.seenEventIds.size > 200) {
+      const oldest = this.seenEventIds.values().next().value;
+      if (oldest) this.seenEventIds.delete(oldest);
+    }
+
+    // Emit canonical event name matching backend RealtimeEventType
+    DeviceEventEmitter.emit(evt.type, evt);
+
     switch (evt.type) {
       case 'INVENTORY_UPDATE':
         cacheManager.invalidateByTags(['inventory', 'dashboard']).catch(() => {});

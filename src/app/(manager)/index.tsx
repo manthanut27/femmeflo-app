@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { ManagerDashboardData } from '@/api/types';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { useAuth } from '@/context/AuthContext';
@@ -62,6 +63,11 @@ export default function ManagerDashboardScreen() {
     setRefreshing(true);
     loadData();
   }, [loadData]);
+
+  useRealtimeSync(
+    ['APPROVAL_UPDATE', 'SALE_STATUS_UPDATE', 'INVENTORY_UPDATE', 'SHIFT_UPDATE', 'CUSTOMER_UPDATE'],
+    loadData
+  );
 
   const handleChangeLocation = async () => {
     setIsLocating(true);

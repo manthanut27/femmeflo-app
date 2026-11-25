@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isMockMode, tokenStorage } from '@/api/client';
 import { sellerApi } from '@/api/seller';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { SaleItem } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -124,6 +125,12 @@ export default function SaleDetailScreen() {
   useEffect(() => {
     loadSale();
   }, [loadSale]);
+
+  useRealtimeSync(['SALE_STATUS_UPDATE', 'APPROVAL_UPDATE'], (evt) => {
+    if (!evt?.entityId || evt.entityId === id) {
+      loadSale();
+    }
+  });
 
   async function handleCollectPayment() {
     if (isCollecting || !id) return;

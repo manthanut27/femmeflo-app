@@ -1,5 +1,6 @@
 import { categoriesApi } from '@/api/categories';
 import { sellerApi } from '@/api/seller';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CategoryItem, CustomerItem, PaginationMeta } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -95,6 +96,8 @@ export default function CustomerListScreen() {
   useEffect(() => {
     loadCustomers(1, false);
   }, [loadCustomers]);
+
+  useRealtimeSync(['CUSTOMER_UPDATE'], () => loadCustomers(1, false));
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
