@@ -111,13 +111,13 @@ export function FaceVerificationGate({ children }: FaceVerificationGateProps) {
         </TouchableOpacity>
       </View>
 
-      {/* Auto-Launching Live Camera Face Verification Modal */}
+      {/* Face Verification Modal (requires explicit selfie or device biometric) */}
       <FaceVerificationModal
         visible={modalVisible}
         mode="APP_OPEN"
         userName={user?.name || 'Officer'}
         userRole={roleLabel}
-        autoLaunch={true}
+        autoLaunch={false}
         onClose={() => setModalVisible(false)}
         onVerified={handleVerified}
       />

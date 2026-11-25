@@ -217,6 +217,21 @@ export default function SellerAttendanceScreen() {
       <Header
         title="Attendance"
         subtitle={user?.name ? `${user.name} · Daily record` : 'Daily duty record'}
+        rightAction={
+          <Button
+            title={isOnDutyToday ? 'Open Shift' : 'New Shift'}
+            size="sm"
+            variant="primary"
+            icon={
+              <Ionicons
+                name={isOnDutyToday ? 'time-outline' : 'add'}
+                size={16}
+                color="#FFFFFF"
+              />
+            }
+            onPress={() => router.push('/(seller)/shift' as any)}
+          />
+        }
       />
 
       <FlatList
@@ -237,38 +252,6 @@ export default function SellerAttendanceScreen() {
         }
         ListHeaderComponent={
           <View style={styles.headerContent}>
-            {/* Today's Attendance Status Card */}
-            <Card style={[styles.todayCard, isOnDutyToday ? styles.todayCardActive : styles.todayCardOff]}>
-              <View style={styles.todayLeft}>
-                <View style={[styles.todayIconCircle, isOnDutyToday && { backgroundColor: '#DCFCE7' }]}>
-                  <Ionicons
-                    name={isOnDutyToday ? 'checkmark-circle' : 'time-outline'}
-                    size={22}
-                    color={isOnDutyToday ? '#16A34A' : BrandColors.pink.primary}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.todayTitle}>
-                    {isOnDutyToday ? 'Present Today (On Duty)' : 'Duty Not Started Today'}
-                  </Text>
-                  <Text style={styles.todaySub} numberOfLines={1}>
-                    {isOnDutyToday && currentShift?.startTime
-                      ? `Started at ${new Date(currentShift.startTime).toLocaleTimeString('en-IN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}`
-                      : 'Start your duty to mark attendance'}
-                  </Text>
-                </View>
-              </View>
-              <Button
-                title={isOnDutyToday ? 'Open Shift' : 'Start Duty'}
-                variant={isOnDutyToday ? 'secondary' : 'primary'}
-                size="sm"
-                onPress={() => router.push('/(seller)/shift' as any)}
-              />
-            </Card>
-
             {/* Summary KPIs */}
             <View style={styles.statsGrid}>
               <View style={styles.statsRow}>
@@ -328,7 +311,7 @@ export default function SellerAttendanceScreen() {
                 icon="calendar-outline"
                 title="No attendance yet"
                 description="Your daily duty attendance records will appear here."
-                actionTitle="Go to Daily Duty"
+                actionTitle="Start New Shift"
                 onAction={() => router.push('/(seller)/shift' as any)}
               />
             </View>
@@ -353,49 +336,6 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     marginBottom: Spacing.sm,
-  },
-  todayCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
-    borderWidth: 1,
-  },
-  todayCardActive: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  todayCardOff: {
-    backgroundColor: '#FFFFFF',
-    borderColor: Colors.light.border,
-  },
-  todayLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
-    gap: Spacing.sm,
-  },
-  todayIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: BrandColors.pink.subtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  todayTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.light.textPrimary,
-  },
-  todaySub: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
   },
   statsGrid: {
     gap: Spacing.sm,

@@ -17,6 +17,7 @@ import { managerApi } from '@/api/manager';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { Shift, ShiftStatus } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
@@ -144,9 +145,18 @@ export default function ManagerShiftsScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Field Shift Supervision"
-        subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
+        title="Attendance"
+        subtitle={`${user?.district || 'My Area'}${user?.name ? ` • ${user.name}` : ''}`}
         showBack
+        rightAction={
+          <Button
+            title="New Shift"
+            size="sm"
+            variant="primary"
+            icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
+            onPress={() => router.push('/(seller)/shift' as any)}
+          />
+        }
       />
 
       <ScrollView
@@ -164,22 +174,6 @@ export default function ManagerShiftsScreen() {
         }
       >
         <View style={styles.contentWrapper}>
-          {/* Banner Card */}
-          <Card style={styles.bannerCard}>
-            <View style={styles.bannerRow}>
-              <View style={styles.bannerIconBox}>
-                <Ionicons name="time" size={20} color={BrandColors.green.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>Shift Attendance & Route Tracking</Text>
-                <Text style={styles.bannerSub}>
-                  Live GPS, odometer reading, and face-verified duty audits.
-                </Text>
-              </View>
-              <Badge label="SHIFTS" variant="ACTIVE" />
-            </View>
-          </Card>
-
           {/* Metric Cards */}
           {loading ? (
             <View style={styles.kpiContainer}>
@@ -205,9 +199,9 @@ export default function ManagerShiftsScreen() {
               <View style={styles.kpiRow}>
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Active Duty Now"
+                    title="On Duty Now"
                     value={String(metrics.activeCount)}
-                    subtitle="Officers on the road"
+                    subtitle="Working today"
                     icon="navigate-outline"
                     iconColor={BrandColors.green.primary}
                     iconBg="#DCFCE7"
@@ -217,9 +211,9 @@ export default function ManagerShiftsScreen() {
 
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Completed Shifts"
+                    title="Done Shifts"
                     value={String(metrics.completedCount)}
-                    subtitle="Past duty logs"
+                    subtitle="Finished duties"
                     icon="checkmark-done-circle-outline"
                     iconColor="#0284C7"
                     iconBg="#F0F9FF"
@@ -230,9 +224,9 @@ export default function ManagerShiftsScreen() {
               <View style={styles.kpiRow}>
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Store Visits Logged"
+                    title="Shops Visited"
                     value={String(metrics.totalVisits)}
-                    subtitle="Retail touchpoints"
+                    subtitle="Total shop stops"
                     icon="storefront-outline"
                     iconColor={BrandColors.pink.primary}
                     iconBg={BrandColors.pink.subtle}
@@ -241,9 +235,9 @@ export default function ManagerShiftsScreen() {
 
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="Total Kilometers"
+                    title="Distance"
                     value={`${metrics.totalDistance} km`}
-                    subtitle="Combined route distance"
+                    subtitle="Total travel km"
                     icon="speedometer-outline"
                     iconColor="#F59E0B"
                     iconBg="#FEF3C7"
@@ -266,7 +260,7 @@ export default function ManagerShiftsScreen() {
                   periodFilter === 'all' && styles.filterChipTextActive,
                 ]}
               >
-                All Time
+                All
               </Text>
             </Pressable>
 
@@ -281,7 +275,7 @@ export default function ManagerShiftsScreen() {
                   periodFilter === 'today' && styles.filterChipTextActive,
                 ]}
               >
-                Today Only
+                Today
               </Text>
             </Pressable>
 
@@ -327,7 +321,7 @@ export default function ManagerShiftsScreen() {
                   statusFilter === 'ACTIVE' && styles.statusBtnTextActive,
                 ]}
               >
-                Active Duty ({metrics.activeCount})
+                On Duty ({metrics.activeCount})
               </Text>
             </Pressable>
 
@@ -341,7 +335,7 @@ export default function ManagerShiftsScreen() {
                   statusFilter === 'COMPLETED' && styles.statusBtnTextActive,
                 ]}
               >
-                Completed
+                Done
               </Text>
             </Pressable>
           </View>
@@ -350,7 +344,7 @@ export default function ManagerShiftsScreen() {
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
             <TextInput
-              placeholder="Search officer by name or employee code..."
+              placeholder="Search seller name or phone..."
               value={searchQuery}
               onChangeText={setSearchQuery}
               style={styles.searchInput}
@@ -370,9 +364,11 @@ export default function ManagerShiftsScreen() {
             </View>
           ) : filteredShifts.length === 0 ? (
             <EmptyState
-              title="No shift records"
-              description="No shifts match the current filter criteria in your area."
+              title="No attendance records"
+              description="No shift records found for this filter."
               icon="calendar-outline"
+              actionTitle="Start New Shift"
+              onAction={() => router.push('/(seller)/shift' as any)}
             />
           ) : (
             <View style={styles.shiftList}>
@@ -525,36 +521,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
-  },
-  bannerCard: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-    borderWidth: 1,
-    marginBottom: Spacing.md,
-    padding: Spacing.md,
-  },
-  bannerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bannerIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.sm,
-  },
-  bannerTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '800',
-    color: BrandColors.green.dark,
-  },
-  bannerSub: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
   },
   kpiContainer: {
     gap: Spacing.md,
