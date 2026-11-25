@@ -43,6 +43,9 @@ export interface VoiceFeedbackTranslatorProps {
   placeholder?: string;
   required?: boolean;
   quickChips?: string[];
+  quickChipsHeading?: string;
+  micLabel?: string;
+  directApplyChips?: boolean;
   style?: ViewStyle;
 }
 
@@ -61,6 +64,9 @@ export function VoiceFeedbackTranslator({
     'Competitor sample offered at lower rate',
     'Payment promised via UPI in 2 days',
   ],
+  quickChipsHeading = 'Quick Retail Observations:',
+  micLabel,
+  directApplyChips = false,
   style,
 }: VoiceFeedbackTranslatorProps) {
   const [isListening, setIsListening] = useState(false);
@@ -218,6 +224,16 @@ export function VoiceFeedbackTranslator({
 
   // User taps a quick-select chip
   const handleChipPress = async (chipText: string) => {
+    if (directApplyChips) {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        onChange(chipText);
+      } else if (!trimmed.includes(chipText)) {
+        onChange(`${trimmed}. ${chipText}`);
+      }
+      return;
+    }
+
     // If chip is in Hindi/Hinglish, run through translation
     if (chipText.includes('thi') || chipText.includes('aayega') || chipText.includes('bacha')) {
       setTranscript(chipText);
@@ -281,7 +297,7 @@ export function VoiceFeedbackTranslator({
       {/* Main Feedback Text Area */}
       <View style={styles.textAreaContainer}>
         <TextInput
-          style={styles.textArea}
+          style={[styles.textArea, micLabel ? styles.textAreaFullWidth : null]}
           value={value}
           onChangeText={onChange}
           placeholder={placeholder}
@@ -291,24 +307,47 @@ export function VoiceFeedbackTranslator({
           textAlignVertical="top"
         />
 
-        {/* Floating Voice Microphone Trigger Button */}
-        <View style={styles.micButtonContainer}>
-          <Pressable
-            style={[styles.micButton, isListening && styles.micButtonListening]}
-            onPress={isListening ? handleStopListening : handleStartListening}
-            accessibilityRole="button"
-            accessibilityLabel={isListening ? 'Stop recording voice' : 'Start speaking voice feedback'}
-          >
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <Ionicons
-                name={isListening ? 'stop' : 'mic'}
-                size={22}
-                color={isListening ? '#FFFFFF' : BrandColors.pink.primary}
-              />
-            </Animated.View>
-          </Pressable>
-        </View>
+        {/* Floating Voice Microphone Trigger Button (when no explicit micLabel pill is used) */}
+        {!micLabel && (
+          <View style={styles.micButtonContainer}>
+            <Pressable
+              style={[styles.micButton, isListening && styles.micButtonListening]}
+              onPress={isListening ? handleStopListening : handleStartListening}
+              accessibilityRole="button"
+              accessibilityLabel={isListening ? 'Stop recording voice' : 'Start speaking voice feedback'}
+            >
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <Ionicons
+                  name={isListening ? 'stop' : 'mic'}
+                  size={22}
+                  color={isListening ? '#FFFFFF' : BrandColors.pink.primary}
+                />
+              </Animated.View>
+            </Pressable>
+          </View>
+        )}
       </View>
+
+      {/* Dedicated Clear Microphone Button when micLabel is provided */}
+      {micLabel && (
+        <Pressable
+          style={[styles.micActionPill, isListening && styles.micActionPillListening]}
+          onPress={isListening ? handleStopListening : handleStartListening}
+          accessibilityRole="button"
+          accessibilityLabel={isListening ? 'Stop recording voice' : micLabel}
+        >
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <Ionicons
+              name={isListening ? 'stop-circle' : 'mic'}
+              size={20}
+              color={isListening ? '#FFFFFF' : BrandColors.pink.primary}
+            />
+          </Animated.View>
+          <Text style={[styles.micActionPillText, isListening && styles.micActionPillTextListening]}>
+            {isListening ? 'Sun raha hoon... Stop karein' : micLabel}
+          </Text>
+        </Pressable>
+      )}
 
       {/* Recording Status Banner */}
       {isListening && (
@@ -413,7 +452,7 @@ export function VoiceFeedbackTranslator({
       {/* Quick Select Retail Feedback Chips */}
       {quickChips && quickChips.length > 0 && (
         <View style={styles.chipsSection}>
-          <Text style={styles.chipsHeading}>Quick Retail Observations:</Text>
+          <Text style={styles.chipsHeading}>{quickChipsHeading}</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -553,6 +592,35 @@ const styles = StyleSheet.create({
     fontSize: Typography.bodySmall.fontSize,
     color: '#1E293B',
     lineHeight: 20,
+  },
+  textAreaFullWidth: {
+    paddingRight: Spacing.sm,
+  },
+  micActionPill: {
+    marginTop: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: BrandColors.pink.tint,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 11,
+    paddingHorizontal: Spacing.md,
+    minHeight: 44,
+  },
+  micActionPillListening: {
+    backgroundColor: BrandColors.pink.primary,
+    borderColor: BrandColors.pink.dark,
+  },
+  micActionPillText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  micActionPillTextListening: {
+    color: '#FFFFFF',
   },
   micButtonContainer: {
     position: 'absolute',

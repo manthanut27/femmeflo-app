@@ -150,8 +150,8 @@ export default function ManagerIncentivesScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Team Incentives"
-        subtitle={`Territory: ${user?.district || 'Field Operations'} • ${user?.name}`}
+        title="Team Bonus"
+        subtitle={`Area: ${user?.district || 'My Area'}${user?.name ? ` • ${user.name}` : ''}`}
         showBack
       />
 
@@ -166,22 +166,6 @@ export default function ManagerIncentivesScreen() {
         }
       >
         <View style={styles.contentWrapper}>
-          {/* Banner Card */}
-          <Card style={styles.bannerCard}>
-            <View style={styles.bannerRow}>
-              <View style={styles.bannerIconBox}>
-                <Ionicons name="gift-outline" size={20} color={BrandColors.green.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>Performance Incentive Audit</Text>
-                <Text style={styles.bannerSub}>
-                  Independent auditing for team seller delivery bonuses and personal earnings.
-                </Text>
-              </View>
-              <Badge label="INCENTIVES" variant="ACTIVE" />
-            </View>
-          </Card>
-
           {/* Mode Tabs */}
           <View style={styles.tabContainer}>
             <Pressable
@@ -193,8 +177,11 @@ export default function ManagerIncentivesScreen() {
                 size={16}
                 color={activeTab === 'TEAM' ? BrandColors.green.dark : Colors.light.textSecondary}
               />
-              <Text style={[styles.tabBtnText, activeTab === 'TEAM' && styles.tabBtnTextActive]}>
-                Team Delivery Bonus ({teamMembers.length})
+              <Text
+                style={[styles.tabBtnText, activeTab === 'TEAM' && styles.tabBtnTextActive]}
+                numberOfLines={1}
+              >
+                Team Bonus ({teamMembers.length})
               </Text>
             </Pressable>
 
@@ -207,13 +194,16 @@ export default function ManagerIncentivesScreen() {
                 size={16}
                 color={activeTab === 'PERSONAL' ? BrandColors.green.dark : Colors.light.textSecondary}
               />
-              <Text style={[styles.tabBtnText, activeTab === 'PERSONAL' && styles.tabBtnTextActive]}>
-                Personal Earnings
+              <Text
+                style={[styles.tabBtnText, activeTab === 'PERSONAL' && styles.tabBtnTextActive]}
+                numberOfLines={1}
+              >
+                My Bonus
               </Text>
             </Pressable>
           </View>
 
-          {/* TAB 1: TEAM DELIVERY INCENTIVES */}
+          {/* TAB 1: TEAM BONUS */}
           {activeTab === 'TEAM' && (
             <View>
               {/* KPI Summary Grid */}
@@ -241,9 +231,9 @@ export default function ManagerIncentivesScreen() {
                   <View style={styles.kpiRow}>
                     <View style={styles.kpiCardWrapper}>
                       <StatCard
-                        title="Total Delivered"
+                        title="Packets Sold"
                         value={`${(teamSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
-                        subtitle="Confirmed sold by team"
+                        subtitle="Sold by team"
                         icon="cube-outline"
                         iconColor="#0284C7"
                         iconBg="#F0F9FF"
@@ -252,13 +242,13 @@ export default function ManagerIncentivesScreen() {
 
                     <View style={styles.kpiCardWrapper}>
                       <StatCard
-                        title="Total Earned"
+                        title="Total Bonus"
                         value={formatCurrencyINR(
                           teamSummary.totalIncentiveEarnedPaise ||
                             teamSummary.totalIncentiveEarnedRupees * 100 ||
                             0
                         )}
-                        subtitle="Gross entitlement"
+                        subtitle="Earned by team"
                         icon="wallet-outline"
                         iconColor={BrandColors.pink.primary}
                         iconBg={BrandColors.pink.subtle}
@@ -269,13 +259,13 @@ export default function ManagerIncentivesScreen() {
                   <View style={styles.kpiRow}>
                     <View style={styles.kpiCardWrapper}>
                       <StatCard
-                        title="Disbursed Paid"
+                        title="Paid"
                         value={formatCurrencyINR(
                           teamSummary.totalPaidPaise ||
                             teamSummary.totalPaidRupees * 100 ||
                             0
                         )}
-                        subtitle="Bank payouts cleared"
+                        subtitle="Money sent"
                         icon="checkmark-done-circle-outline"
                         iconColor={BrandColors.green.primary}
                         iconBg={BrandColors.green.subtle}
@@ -285,13 +275,13 @@ export default function ManagerIncentivesScreen() {
 
                     <View style={styles.kpiCardWrapper}>
                       <StatCard
-                        title="Pending Payout"
+                        title="Pending"
                         value={formatCurrencyINR(
                           teamSummary.totalPendingPaise ||
                             teamSummary.totalPendingRupees * 100 ||
                             0
                         )}
-                        subtitle="Outstanding balance"
+                        subtitle="Money left"
                         icon="hourglass-outline"
                         iconColor={Colors.light.warning}
                         iconBg={Colors.light.warningBg}
@@ -306,7 +296,7 @@ export default function ManagerIncentivesScreen() {
               <View style={styles.searchBar}>
                 <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
                 <TextInput
-                  placeholder="Search field officer by name or phone..."
+                  placeholder="Search name or phone..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   style={styles.searchInput}
@@ -326,11 +316,11 @@ export default function ManagerIncentivesScreen() {
                 </View>
               ) : filteredMembers.length === 0 ? (
                 <EmptyState
-                  title="No team incentives recorded"
+                  title="No bonus yet"
                   description={
                     searchQuery
-                      ? 'No field officers match your search query.'
-                      : 'No confirmed sales incentives found for sellers in your territory.'
+                      ? 'No seller matches your search.'
+                      : 'Bonus shows here after sales are confirmed.'
                   }
                   icon="gift-outline"
                 />
@@ -339,30 +329,32 @@ export default function ManagerIncentivesScreen() {
                   {filteredMembers.map((member) => {
                     const status = member.status || 'PENDING';
                     let statusVariant: 'ACTIVE' | 'PENDING' | 'REJECTED' = 'PENDING';
-                    let statusLabel = 'PENDING PAYOUT';
+                    let statusLabel = 'PENDING';
 
                     if (status === 'PAID') {
                       statusVariant = 'ACTIVE';
-                      statusLabel = 'DISBURSED';
+                      statusLabel = 'PAID';
                     } else if (status === 'PARTIALLY_PAID') {
                       statusVariant = 'PENDING';
-                      statusLabel = 'PARTIALLY PAID';
+                      statusLabel = 'PART PAID';
                     }
 
                     const sellerObj = member.seller || {
                       id: member.sellerId || '',
-                      name: member.sellerName || 'Field Officer',
+                      name: member.sellerName || 'Seller',
                       phone: member.phone || '',
                     };
 
                     return (
                       <Card key={sellerObj.id || member.sellerId || String(Math.random())} style={styles.memberCard}>
                         <View style={styles.memberTop}>
-                          <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                            <Text style={styles.memberName}>{sellerObj.name}</Text>
-                            <Text style={styles.memberSub}>
-                              {sellerObj.phone ? `${sellerObj.phone} • ` : ''}
-                              {(member.confirmedPackets || 0).toLocaleString('en-IN')} pkts delivered
+                          <View style={{ flex: 1, minWidth: 0, marginRight: Spacing.sm }}>
+                            <Text style={styles.memberName} numberOfLines={1}>
+                              {sellerObj.name}
+                            </Text>
+                            <Text style={styles.memberSub} numberOfLines={1}>
+                              {sellerObj.phone ? `${sellerObj.phone} · ` : ''}
+                              {(member.confirmedPackets || 0).toLocaleString('en-IN')} pkts sold
                             </Text>
                           </View>
                           <Badge label={statusLabel} variant={statusVariant} />
@@ -371,14 +363,14 @@ export default function ManagerIncentivesScreen() {
                         {/* Breakdown Box */}
                         <View style={styles.figuresGrid}>
                           <View style={styles.figCol}>
-                            <Text style={styles.figLabel}>Total Earned</Text>
+                            <Text style={styles.figLabel}>Total Bonus</Text>
                             <Text style={styles.figValuePink}>
                               {formatCurrencyINR(member.earnedPaise || 0)}
                             </Text>
                           </View>
 
                           <View style={styles.figCol}>
-                            <Text style={styles.figLabel}>Paid Out</Text>
+                            <Text style={styles.figLabel}>Paid</Text>
                             <Text style={styles.figValueGreen}>
                               {formatCurrencyINR(member.totalPaidPaise || 0)}
                             </Text>
@@ -399,16 +391,16 @@ export default function ManagerIncentivesScreen() {
             </View>
           )}
 
-          {/* TAB 2: PERSONAL FIELD EARNINGS */}
+          {/* TAB 2: PERSONAL BONUS */}
           {activeTab === 'PERSONAL' && (
             <View>
               <View style={styles.kpiContainer}>
                 <View style={styles.kpiRow}>
                   <View style={styles.kpiCardWrapper}>
                     <StatCard
-                      title="Personal Packets"
+                      title="My Packets"
                       value={`${(personalSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
-                      subtitle="Confirmed self sales"
+                      subtitle="My sales"
                       icon="cube-outline"
                       iconColor="#0284C7"
                       iconBg="#F0F9FF"
@@ -417,9 +409,9 @@ export default function ManagerIncentivesScreen() {
 
                   <View style={styles.kpiCardWrapper}>
                     <StatCard
-                      title="Personal Earned"
+                      title="My Bonus"
                       value={formatCurrencyINR(personalSummary.totalIncentivePaise || 0)}
-                      subtitle="Field earnings balance"
+                      subtitle="Total earned"
                       icon="wallet-outline"
                       iconColor={BrandColors.pink.primary}
                       iconBg={BrandColors.pink.subtle}
@@ -429,21 +421,20 @@ export default function ManagerIncentivesScreen() {
               </View>
 
               <Card style={styles.personalDetailCard}>
-                <Text style={styles.personalTitle}>Personal Field Compensation Account</Text>
+                <Text style={styles.personalTitle}>My Bonus Account</Text>
                 <Text style={styles.personalDesc}>
-                  Field sales conducted directly by managers are tracked in a dedicated personal
-                  account to maintain complete ledger transparency from company disbursements.
+                  Bonus earned from your own direct sales.
                 </Text>
 
                 <View style={styles.personalSummaryRow}>
-                  <Text style={styles.personalSummaryLabel}>Total Paid to Date:</Text>
+                  <Text style={styles.personalSummaryLabel}>Paid so far:</Text>
                   <Text style={styles.personalSummaryValGreen}>
                     {formatCurrencyINR(personalSummary.totalPaidPaise || 0)}
                   </Text>
                 </View>
 
                 <View style={styles.personalSummaryRow}>
-                  <Text style={styles.personalSummaryLabel}>Current Outstanding:</Text>
+                  <Text style={styles.personalSummaryLabel}>Pending:</Text>
                   <Text style={styles.personalSummaryValAmber}>
                     {formatCurrencyINR(personalSummary.outstandingPaise || 0)}
                   </Text>

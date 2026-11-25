@@ -2,7 +2,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -24,13 +23,10 @@ import { Card } from '@/components/ui/Card';
 import { FeedbackBanner, type FeedbackType } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { PageTransition } from '@/components/ui/PageTransition';
 import {
   DropdownOption,
-  DropdownTrigger,
   SearchableDropdownModal,
 } from '@/components/ui/SearchableDropdownModal';
-import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
   BrandColors,
   Colors,
@@ -49,6 +45,7 @@ import {
   shouldRotateIdempotencyKey,
   type OrderDraftLineItem,
 } from '@/utils/draftStorage';
+import { useResponsiveLayout } from '@/utils/responsive';
 import { checkHasActiveShift } from '@/utils/shiftGuard';
 
 interface CartLineItem {
@@ -58,12 +55,327 @@ interface CartLineItem {
   unitPriceRupees: number;
 }
 
+type POSLanguage = 'hi' | 'en' | 'mr';
+
+interface POSCopy {
+  headerTitle: string;
+  headerSubtitle: string;
+  loadingText: string;
+  shiftActive: string;
+  shiftInactive: string;
+  startDutyBtn: string;
+  restoredBill: string;
+  shopHeading: string;
+  assignedBadge: string;
+  changeShop: string;
+  noShopSelected: string;
+  selectShopBtn: string;
+  shopModalTitle: string;
+  shopSearchPlaceholder: string;
+  shopEmptyMessage: string;
+  productHeading: string;
+  addProductBtn: string;
+  productItemLabel: string;
+  removeBtn: string;
+  chooseProductPlaceholder: string;
+  selectBtn: string;
+  availableLabel: string;
+  packetsUnit: string;
+  packetsLabel: string;
+  pricePerPacketLabel: string;
+  amountLabel: string;
+  productModalTitle: string;
+  productSearchPlaceholder: string;
+  productEmptyMessage: string;
+  totalBillHeading: string;
+  totalPacketsLabel: string;
+  totalAmountLabel: string;
+  stockConfirmNote: string;
+  stockApprovalNote: string;
+  paymentHeading: string;
+  cashTitle: string;
+  cashSub: string;
+  upiTitle: string;
+  upiSub: string;
+  udhaarTitle: string;
+  udhaarSub: string;
+  upiRefLabel: string;
+  upiRefPlaceholder: string;
+  messageHeading: string;
+  messageSublabel: string;
+  messagePlaceholder: string;
+  micLabel: string;
+  quickChipsHeading: string;
+  quickChips: string[];
+  saveSaleBtn: string;
+  savingSaleBtn: string;
+  saleSuccessTitle: string;
+  saleApprovalTitle: string;
+  viewSalesBtn: string;
+  checkFormTitle: string;
+  checkFormMsg: string;
+  lowStockTitle: string;
+  lowStockMsg: string;
+  cartLimitTitle: string;
+  cartLimitMsg: string;
+  errorTitle: string;
+  genericSaveError: string;
+  networkSaveError: string;
+  selectShopError: string;
+  selectProductError: string;
+  qtyError: string;
+  priceError: string;
+}
+
+const POS_TRANSLATIONS: Record<POSLanguage, POSCopy> = {
+  hi: {
+    headerTitle: 'New Sale',
+    headerSubtitle: 'Shop se order lo',
+    loadingText: 'Products aur dukaan load ho rahe hain...',
+    shiftActive: 'Aaj ki duty chalu hai',
+    shiftInactive: 'Pehle apni duty start karein',
+    startDutyBtn: 'Start Duty',
+    restoredBill: 'Purana adhoora bill wapas aa gaya.',
+    shopHeading: '1. Dukaan Chune',
+    assignedBadge: 'Assigned',
+    changeShop: 'Change Shop',
+    noShopSelected: 'Abhi dukaan nahi chuni hai',
+    selectShopBtn: 'Select Shop',
+    shopModalTitle: 'Dukaan Chune',
+    shopSearchPlaceholder: 'Dukaan, owner, area ya phone likhein...',
+    shopEmptyMessage: 'Koi dukaan nahi mili',
+    productHeading: '2. Product Jodein',
+    addProductBtn: '+ Product Jodein',
+    productItemLabel: 'Product',
+    removeBtn: 'Hataein',
+    chooseProductPlaceholder: 'Product chune...',
+    selectBtn: 'Select',
+    availableLabel: 'Available',
+    packetsUnit: 'packets',
+    packetsLabel: 'Packets',
+    pricePerPacketLabel: 'Price per packet',
+    amountLabel: 'Amount',
+    productModalTitle: 'Product Chune',
+    productSearchPlaceholder: 'Product ka naam likhein...',
+    productEmptyMessage: 'Koi product nahi mila',
+    totalBillHeading: 'Total Bill',
+    totalPacketsLabel: 'Total Packets',
+    totalAmountLabel: 'Total Amount',
+    stockConfirmNote: 'Sale confirm hone par stock kam hoga.',
+    stockApprovalNote: 'Kam rate hai — Admin approve karne ke baad stock kam hoga.',
+    paymentHeading: '3. Payment',
+    cashTitle: 'Cash',
+    cashSub: 'Cash mila',
+    upiTitle: 'UPI / Bank',
+    upiSub: 'Online payment',
+    udhaarTitle: 'Udhaar',
+    udhaarSub: 'Baad mein payment',
+    upiRefLabel: 'UPI / Bank Number (Zaroori nahi)',
+    upiRefPlaceholder: 'Transaction number likhein...',
+    messageHeading: '4. Dukaan wale ka message',
+    messageSublabel: 'Koi baat batani ho to likhein.',
+    messagePlaceholder: 'Jaise: "Kal maal bhejna" ya "15 packet aur chahiye"',
+    micLabel: 'Bolkar likhein',
+    quickChipsHeading: 'Ek tap mein jodein:',
+    quickChips: ['Kal aana', 'Aur maal chahiye', 'Dukaan band thi', 'Payment baaki hai'],
+    saveSaleBtn: 'Sale Save Karein',
+    savingSaleBtn: 'Save ho raha hai...',
+    saleSuccessTitle: 'Sale ho gayi!',
+    saleApprovalTitle: 'Approval ke liye bheja!',
+    viewSalesBtn: 'Sales Dekhein',
+    checkFormTitle: 'Check Karein',
+    checkFormMsg: 'Dukaan, product aur packet sahi se bharein.',
+    lowStockTitle: 'Stock Kam Hai',
+    lowStockMsg: 'Aapke paas itne packets available nahi hain.',
+    cartLimitTitle: 'Kam se kam 1 Product',
+    cartLimitMsg: 'Bill mein kam se kam ek product hona zaroori hai.',
+    errorTitle: 'Sale Save Nahi Hui',
+    genericSaveError: 'Bill save nahi ho paya. Kripya dubara koshish karein.',
+    networkSaveError: 'Internet slow ya band hai. Network check karke dubara save karein.',
+    selectShopError: 'Kripya pehle dukaan chune.',
+    selectProductError: 'Kripya product chune.',
+    qtyError: 'Kam se kam 1 packet dalein.',
+    priceError: 'Sahi price dalein.',
+  },
+  en: {
+    headerTitle: 'New Sale',
+    headerSubtitle: 'Create a shop bill',
+    loadingText: 'Loading shops and products...',
+    shiftActive: "Today's duty is active",
+    shiftInactive: 'Start your duty first',
+    startDutyBtn: 'Start Duty',
+    restoredBill: 'Previous bill restored.',
+    shopHeading: '1. Select Shop',
+    assignedBadge: 'Assigned',
+    changeShop: 'Change Shop',
+    noShopSelected: 'No shop selected yet',
+    selectShopBtn: 'Select Shop',
+    shopModalTitle: 'Select Shop',
+    shopSearchPlaceholder: 'Search shop, owner, area or phone...',
+    shopEmptyMessage: 'No shop found',
+    productHeading: '2. Add Products',
+    addProductBtn: '+ Add Product',
+    productItemLabel: 'Product',
+    removeBtn: 'Remove',
+    chooseProductPlaceholder: 'Select product...',
+    selectBtn: 'Select',
+    availableLabel: 'Available',
+    packetsUnit: 'packets',
+    packetsLabel: 'Packets',
+    pricePerPacketLabel: 'Price per Packet',
+    amountLabel: 'Amount',
+    productModalTitle: 'Select Product',
+    productSearchPlaceholder: 'Search product name...',
+    productEmptyMessage: 'No product found',
+    totalBillHeading: 'Total Bill',
+    totalPacketsLabel: 'Total Packets',
+    totalAmountLabel: 'Total Amount',
+    stockConfirmNote: 'Stock will be reduced after sale confirmation.',
+    stockApprovalNote: 'Low price — needs Admin approval before stock updates.',
+    paymentHeading: '3. Payment',
+    cashTitle: 'Cash',
+    cashSub: 'Cash received',
+    upiTitle: 'UPI / Bank',
+    upiSub: 'Online payment',
+    udhaarTitle: 'Udhaar',
+    udhaarSub: 'Pay later',
+    upiRefLabel: 'UPI / Bank Reference (Optional)',
+    upiRefPlaceholder: 'Enter transaction ID...',
+    messageHeading: "4. Shopkeeper's Message",
+    messageSublabel: 'Optional — write or speak a short note.',
+    messagePlaceholder: 'e.g. "Send stock tomorrow" or "Need 15 more packets"',
+    micLabel: 'Speak to write',
+    quickChipsHeading: 'Quick messages:',
+    quickChips: ['Kal aana', 'Aur maal chahiye', 'Dukaan band thi', 'Payment baaki hai'],
+    saveSaleBtn: 'Save Sale',
+    savingSaleBtn: 'Saving...',
+    saleSuccessTitle: 'Sale Done!',
+    saleApprovalTitle: 'Sent for Approval!',
+    viewSalesBtn: 'View Sales',
+    checkFormTitle: 'Please Check',
+    checkFormMsg: 'Check shop, product, packets and price.',
+    lowStockTitle: 'Not Enough Stock',
+    lowStockMsg: 'Entered packets exceed available stock.',
+    cartLimitTitle: 'At Least 1 Product',
+    cartLimitMsg: 'A sale must have at least one product.',
+    errorTitle: 'Could Not Save Sale',
+    genericSaveError: 'Sale could not be saved. Please try again.',
+    networkSaveError: 'Connection issue. Please check internet and tap Save Sale again.',
+    selectShopError: 'Please select a shop.',
+    selectProductError: 'Please select a product.',
+    qtyError: 'Enter at least 1 packet.',
+    priceError: 'Enter a valid price.',
+  },
+  mr: {
+    headerTitle: 'New Sale',
+    headerSubtitle: 'दुकानातून ऑर्डर घ्या',
+    loadingText: 'दुकाने आणि प्रॉडक्ट लोड होत आहेत...',
+    shiftActive: 'आजची ड्युटी चालू आहे',
+    shiftInactive: 'आधी तुमची ड्युटी सुरू करा',
+    startDutyBtn: 'Start Duty',
+    restoredBill: 'मागील अपूर्ण बिल परत आले आहे.',
+    shopHeading: '1. दुकान निवडा',
+    assignedBadge: 'नेमलेले',
+    changeShop: 'Change Shop',
+    noShopSelected: 'अजून दुकान निवडलेले नाही',
+    selectShopBtn: 'Select Shop',
+    shopModalTitle: 'दुकान निवडा',
+    shopSearchPlaceholder: 'दुकान, मालक, परिसर किंवा फोन शोधा...',
+    shopEmptyMessage: 'कोणतेही दुकान सापडले नाही',
+    productHeading: '2. प्रॉडक्ट जोडा',
+    addProductBtn: '+ प्रॉडक्ट जोडा',
+    productItemLabel: 'प्रॉडक्ट',
+    removeBtn: 'काढा',
+    chooseProductPlaceholder: 'प्रॉडक्ट निवडा...',
+    selectBtn: 'निवडा',
+    availableLabel: 'उपलब्ध',
+    packetsUnit: 'पॅकेट्स',
+    packetsLabel: 'पॅकेट्स',
+    pricePerPacketLabel: 'प्रति पॅकेट दर',
+    amountLabel: 'रक्कम',
+    productModalTitle: 'प्रॉडक्ट निवडा',
+    productSearchPlaceholder: 'प्रॉडक्टचे नाव शोधा...',
+    productEmptyMessage: 'प्रॉडक्ट सापडले नाही',
+    totalBillHeading: 'Total Bill',
+    totalPacketsLabel: 'एकूण पॅकेट्स',
+    totalAmountLabel: 'एकूण रक्कम',
+    stockConfirmNote: 'विक्री पक्की झाल्यावर स्टॉक कमी होईल.',
+    stockApprovalNote: 'कमी दर आहे — ॲडमिन मंजुरीनंतर स्टॉक कमी होईल.',
+    paymentHeading: '3. Payment',
+    cashTitle: 'Cash',
+    cashSub: 'रोख मिळाले',
+    upiTitle: 'UPI / Bank',
+    upiSub: 'ऑनलाईन पेमेंट',
+    udhaarTitle: 'Udhaar',
+    udhaarSub: 'नंतर पेमेंट',
+    upiRefLabel: 'UPI / बँक नंबर (ऐच्छिक)',
+    upiRefPlaceholder: 'ट्रान्झॅक्शन नंबर लिहा...',
+    messageHeading: '4. दुकानदाराचा संदेश',
+    messageSublabel: 'काही सांगायचे असल्यास लिहा किंवा बोला.',
+    messagePlaceholder: 'उदा. "उद्या माल पाठवा" किंवा "१५ पॅकेट अजून हवे"',
+    micLabel: 'बोलून लिहा',
+    quickChipsHeading: 'झटपट संदेश:',
+    quickChips: ['Kal aana', 'Aur maal chahiye', 'Dukaan band thi', 'Payment baaki hai'],
+    saveSaleBtn: 'Sale Save Karein',
+    savingSaleBtn: 'सेव्ह होत आहे...',
+    saleSuccessTitle: 'Sale ho gayi!',
+    saleApprovalTitle: 'मंजुरीसाठी पाठवले!',
+    viewSalesBtn: 'विक्री पहा',
+    checkFormTitle: 'तपासून पहा',
+    checkFormMsg: 'कृपया दुकान, प्रॉडक्ट आणि पॅकेट तपासा.',
+    lowStockTitle: 'स्टॉक कमी आहे',
+    lowStockMsg: 'उपलब्ध स्टॉकपेक्षा जास्त पॅकेट्स निवडले आहेत.',
+    cartLimitTitle: 'किमान १ प्रॉडक्ट',
+    cartLimitMsg: 'बिलात किमान एक प्रॉडक्ट असणे आवश्यक आहे.',
+    errorTitle: 'विक्री सेव्ह झाली नाही',
+    genericSaveError: 'बिल सेव्ह होऊ शकले नाही. कृपया पुन्हा प्रयत्न करा.',
+    networkSaveError: 'इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.',
+    selectShopError: 'कृपया आधी दुकान निवडा.',
+    selectProductError: 'कृपया प्रॉडक्ट निवडा.',
+    qtyError: 'किमान १ पॅकेट टाका.',
+    priceError: 'योग्य दर टाका.',
+  },
+};
+
+function formatRupeeDisplay(amount: number): string {
+  if (!Number.isFinite(amount)) return '0';
+  return Number.isInteger(amount)
+    ? amount.toLocaleString('en-IN')
+    : amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function toFriendlySaveError(err: any, copy: POSCopy): string {
+  const raw = String(err?.message || '').toLowerCase();
+  if (!raw || raw.includes('internal server') || raw.includes('prisma') || raw.includes('sql')) {
+    return copy.genericSaveError;
+  }
+  if (raw.includes('network') || raw.includes('timeout') || raw.includes('fetch')) {
+    return copy.networkSaveError;
+  }
+  if (raw.includes('insufficient') || raw.includes('stock')) {
+    return copy.lowStockMsg;
+  }
+  if (raw.includes('shift')) {
+    return copy.shiftInactive;
+  }
+  // If backend already gave a short readable validation sentence, keep it concise
+  if (err?.message && String(err.message).length <= 90 && !String(err.message).includes('{')) {
+    return String(err.message);
+  }
+  return copy.genericSaveError;
+}
+
 export default function NewSaleScreen() {
   const insets = useSafeAreaInsets();
+  const { width } = useResponsiveLayout();
+  const isCompactScreen = width < 400;
   const params = useLocalSearchParams<{ customerId?: string; customerName?: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id || 'anonymous';
+
+  const [lang, setLang] = useState<POSLanguage>('hi');
+  const t = POS_TRANSLATIONS[lang];
 
   // Catalog & Inventory Data
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
@@ -308,12 +620,16 @@ export default function NewSaleScreen() {
     for (const [prodId, reqQty] of Object.entries(productRequestedMap)) {
       const avail = stockMap[prodId] ?? 0;
       if (reqQty > avail) {
-        const prod = products.find((p) => p.id === prodId);
-        errorsMap[prodId] = `Available stock has ${avail} pkts, but ${reqQty} pkts in cart.`;
+        errorsMap[prodId] =
+          lang === 'hi'
+            ? `Sirf ${avail} packets available hain (${reqQty} dale hain).`
+            : lang === 'mr'
+              ? `फक्त ${avail} पॅकेट्स शिल्लक आहेत (${reqQty} टाकले आहेत).`
+              : `Only ${avail} packets available (${reqQty} entered).`;
       }
     }
     return errorsMap;
-  }, [cartItems, stockMap, products]);
+  }, [cartItems, stockMap, lang]);
 
   const hasStockError = Object.keys(stockErrors).length > 0;
 
@@ -321,16 +637,19 @@ export default function NewSaleScreen() {
   // Cart Actions
   // ----------------------------------------------------
   const handleAddLineItem = () => {
-    // Find first product not yet in cart, or first product
     const unusedProduct =
       products.find((p) => !cartItems.some((item) => item.productId === p.id)) || products[0];
+
+    const prodId = unusedProduct?.id || '';
+    const avail = prodId ? stockMap[prodId] ?? 0 : 0;
+    const defaultQty = avail > 0 ? Math.min(5, avail) : 5;
 
     setCartItems((prev) => [
       ...prev,
       {
         key: `line_${Date.now()}_${prev.length + 1}`,
-        productId: unusedProduct?.id || '',
-        quantity: 5,
+        productId: prodId,
+        quantity: defaultQty,
         unitPriceRupees: (unusedProduct?.basePricePaise || 3500) / 100,
       },
     ]);
@@ -338,7 +657,7 @@ export default function NewSaleScreen() {
 
   const handleRemoveLineItem = (key: string) => {
     if (cartItems.length <= 1) {
-      Alert.alert('Cart Limit', 'A sale must have at least one product.');
+      Alert.alert(t.cartLimitTitle, t.cartLimitMsg);
       return;
     }
     setCartItems((prev) => prev.filter((item) => item.key !== key));
@@ -346,40 +665,58 @@ export default function NewSaleScreen() {
 
   const handleUpdateProduct = (key: string, newProductId: string) => {
     const prod = products.find((p) => p.id === newProductId);
+    const avail = stockMap[newProductId] ?? 0;
     setCartItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
+        const clampedQty = avail > 0 && item.quantity > avail ? avail : item.quantity;
         return {
           ...item,
           productId: newProductId,
+          quantity: clampedQty,
           unitPriceRupees: prod ? (prod.basePricePaise || 3500) / 100 : item.unitPriceRupees,
         };
       })
     );
   };
 
-  const handleUpdateQuantity = (key: string, delta: number) => {
+  const handleUpdateQuantity = (key: string, delta: number, maxStock: number) => {
     setCartItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
-        const newQty = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQty };
+        const candidate = Math.max(1, item.quantity + delta);
+        const bounded = maxStock > 0 ? Math.min(candidate, maxStock) : candidate;
+        return { ...item, quantity: bounded };
       })
     );
   };
 
   const handleSetQuantity = (key: string, val: string) => {
-    const parsed = parseInt(val, 10);
+    const cleaned = val.replace(/[^0-9]/g, '');
+    if (!cleaned) {
+      setCartItems((prev) =>
+        prev.map((item) => (item.key === key ? { ...item, quantity: 0 } : item))
+      );
+      return;
+    }
+    const parsed = parseInt(cleaned, 10);
     setCartItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
-        return { ...item, quantity: isNaN(parsed) || parsed < 1 ? 1 : parsed };
+        return { ...item, quantity: isNaN(parsed) || parsed < 0 ? 0 : parsed };
       })
     );
   };
 
   const handleSetUnitPrice = (key: string, val: string) => {
-    const parsed = parseFloat(val);
+    const cleaned = val.replace(/[^0-9.]/g, '');
+    if (!cleaned) {
+      setCartItems((prev) =>
+        prev.map((item) => (item.key === key ? { ...item, unitPriceRupees: 0 } : item))
+      );
+      return;
+    }
+    const parsed = parseFloat(cleaned);
     setCartItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
@@ -393,22 +730,22 @@ export default function NewSaleScreen() {
   // ----------------------------------------------------
   function validate() {
     const errs: Record<string, string> = {};
-    if (!selectedCustomerId) errs.customer = 'Please select a customer.';
+    if (!selectedCustomerId) errs.customer = t.selectShopError;
 
     const validLines = cartItems.filter((i) => i.productId && i.quantity > 0);
     if (validLines.length === 0) {
-      errs.cart = 'Please add at least one product with quantity.';
+      errs.cart = t.qtyError;
     }
 
     cartItems.forEach((item, idx) => {
       if (!item.productId) {
-        errs[`line_${idx}_product`] = 'Product selection is required.';
+        errs[`line_${idx}_product`] = t.selectProductError;
       }
       if (item.quantity <= 0) {
-        errs[`line_${idx}_qty`] = 'Quantity must be > 0.';
+        errs[`line_${idx}_qty`] = t.qtyError;
       }
       if (item.unitPriceRupees <= 0) {
-        errs[`line_${idx}_price`] = 'Price must be > 0.';
+        errs[`line_${idx}_price`] = t.priceError;
       }
     });
 
@@ -420,15 +757,12 @@ export default function NewSaleScreen() {
     if (isSubmitting) return;
 
     if (!validate()) {
-      Alert.alert('Please Check', 'Please check the items in your cart.');
+      Alert.alert(t.checkFormTitle, t.checkFormMsg);
       return;
     }
 
     if (hasStockError) {
-      Alert.alert(
-        'Not Enough Stock',
-        'You do not have enough stock in your van for this order.'
-      );
+      Alert.alert(t.lowStockTitle, t.lowStockMsg);
       return;
     }
 
@@ -456,27 +790,38 @@ export default function NewSaleScreen() {
       await draftStorage.clearOrderDraft(userId).catch(() => {});
 
       const isPendingApproval = res.sale.status === 'PENDING_APPROVAL';
+      const salesTargetRoute = user?.role === 'MANAGER' ? '/(manager)/sales' : '/(seller)/sales';
+      const billNo = res.sale.saleNumber ? `#${res.sale.saleNumber} ` : '';
+      const totalFormatted = formatRupeeDisplay(grandTotalRupees);
 
       Alert.alert(
-        isPendingApproval ? 'Sent for Office Approval' : 'Sale Done!',
+        isPendingApproval ? t.saleApprovalTitle : t.saleSuccessTitle,
         isPendingApproval
-          ? `Bill #${res.sale.saleNumber || ''} has special price. Sent to office for approval.`
-          : `Bill #${res.sale.saleNumber || ''} saved. Total: ₹${grandTotalRupees.toFixed(2)} (${totalPackets} packets).`,
+          ? lang === 'hi'
+            ? `Bill ${billNo}kam rate par hai. Admin approval ke liye bhej diya hai.`
+            : lang === 'mr'
+              ? `बिल ${billNo}कमी दरावर आहे. ॲडमिन मंजुरीसाठी पाठवले आहे.`
+              : `Bill ${billNo}has a special price and was sent for approval.`
+          : lang === 'hi'
+            ? `Bill ${billNo}save ho gaya! Total: ₹${totalFormatted} (${totalPackets} packets).`
+            : lang === 'mr'
+              ? `बिल ${billNo}सेव्ह झाले! एकूण: ₹${totalFormatted} (${totalPackets} पॅकेट्स).`
+              : `Bill ${billNo}saved. Total: ₹${totalFormatted} (${totalPackets} packets).`,
         [
           {
-            text: 'View Sales',
-            onPress: () => router.replace('/(seller)/sales' as any),
+            text: t.viewSalesBtn,
+            onPress: () => router.replace(salesTargetRoute as any),
           },
         ]
       );
     } catch (err: any) {
-      const msg = err.message || 'Failed to submit sale. Please retry.';
+      const friendlyMsg = toFriendlySaveError(err, t);
       setFeedback({
         type: 'error',
-        title: 'Error',
-        message: msg,
+        title: t.errorTitle,
+        message: friendlyMsg,
       });
-      Alert.alert('Error', msg);
+      Alert.alert(t.errorTitle, friendlyMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -485,15 +830,21 @@ export default function NewSaleScreen() {
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
   const customerDropdownOptions = useMemo<DropdownOption[]>(() => {
-    return customers.map((c) => ({
-      id: c.id,
-      title: c.shopName,
-      subtitle: `Owner: ${c.ownerName || (c as any).contactName || '—'} • ${c.village || c.district || 'Territory'} • 📞 ${c.phone}`,
-      badge: c.category?.name || 'RETAIL',
-      icon: 'storefront-outline',
-      metadata: `${c.phone || ''} ${c.address || ''} ${c.pincode || ''}`,
-    }));
-  }, [customers]);
+    return customers.map((c) => {
+      const owner = c.ownerName || (c as any).contactName || '—';
+      const area = c.village || c.district || 'Area';
+      const phonePart = c.phone ? ` · ${c.phone}` : '';
+      return {
+        id: c.id,
+        title: c.shopName,
+        subtitle: `Owner: ${owner} · ${area}${phonePart}`,
+        badge: t.assignedBadge,
+        badgeVariant: 'ACTIVE',
+        icon: 'storefront-outline',
+        metadata: `${c.phone || ''} ${c.address || ''} ${c.pincode || ''} ${c.district || ''} ${c.village || ''}`,
+      };
+    });
+  }, [customers, t.assignedBadge]);
 
   const productDropdownOptions = useMemo<DropdownOption[]>(() => {
     return products.map((p) => {
@@ -502,63 +853,123 @@ export default function NewSaleScreen() {
       return {
         id: p.id,
         title: p.name,
-        subtitle: `SKU: ${p.sku || p.id} • Stock: ${stock} pkts • Price: ₹${priceRupees.toFixed(2)}`,
-        badge: stock > 0 ? `${stock} in stock` : '0 in stock',
+        subtitle: `${t.availableLabel}: ${stock} ${t.packetsUnit} · ₹${formatRupeeDisplay(priceRupees)}`,
+        badge: stock > 0 ? `${stock} pkts` : '0 pkts',
         badgeVariant: stock > 0 ? 'success' : 'neutral',
         icon: 'cube-outline',
-        metadata: `${p.name} ${p.sku || ''}`,
+        metadata: `${p.name}`,
       };
     });
-  }, [products, stockMap]);
+  }, [products, stockMap, t.availableLabel, t.packetsUnit]);
+
+  const handleOpenShift = useCallback(() => {
+    router.push('/(seller)/shift' as any);
+  }, [router]);
+
+  const paymentOptions = useMemo(
+    () => [
+      {
+        value: 'CASH' as PaymentMode,
+        title: t.cashTitle,
+        subtitle: t.cashSub,
+        icon: 'cash-outline' as const,
+      },
+      {
+        value: 'BANK' as PaymentMode,
+        title: t.upiTitle,
+        subtitle: t.upiSub,
+        icon: 'qr-code-outline' as const,
+      },
+      {
+        value: 'PENDING' as PaymentMode,
+        title: t.udhaarTitle,
+        subtitle: t.udhaarSub,
+        icon: 'time-outline' as const,
+      },
+    ],
+    [t]
+  );
 
   if (loading) {
-    return <LoadingState message="Loading POS catalog & inventory..." />;
+    return <LoadingState message={t.loadingText} />;
   }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.keyboardContainer}
     >
       <Header
-        title="Point of Sale (POS)"
-        subtitle="Multi-SKU Cart • In-Field Delivery"
+        title={t.headerTitle}
+        subtitle={t.headerSubtitle}
         showBack
       />
 
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom + 95, 130) },
+          { paddingBottom: Spacing.xl },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentWrapper}>
-          {/* Sale Flow Mode Indicator (On-Duty vs Direct Sale) */}
-          <View
-            style={[
-              styles.modeBadgeBanner,
-              hasActiveShift ? styles.modeBadgeOnDuty : styles.modeBadgeDirect,
-            ]}
-          >
-            <Ionicons
-              name={hasActiveShift ? 'shield-checkmark' : 'flash'}
-              size={15}
-              color={hasActiveShift ? '#16A34A' : '#881337'}
-              style={{ marginRight: 6 }}
-            />
-            <Text
-              style={[
-                styles.modeBadgeText,
-                hasActiveShift ? styles.modeBadgeTextOnDuty : styles.modeBadgeTextDirect,
-              ]}
-            >
-              {hasActiveShift
-                ? 'On-Duty Shift Active • Linked to Shift Route'
-                : 'Direct Sale Mode • Ad-hoc Order Entry'}
-            </Text>
+          {/* Language Selector (Hinglish default / English / Marathi) */}
+          <View style={styles.langRow}>
+            {(
+              [
+                { code: 'hi', label: 'Hinglish' },
+                { code: 'en', label: 'English' },
+                { code: 'mr', label: 'मराठी' },
+              ] as const
+            ).map((opt) => {
+              const active = lang === opt.code;
+              return (
+                <Pressable
+                  key={opt.code}
+                  onPress={() => setLang(opt.code)}
+                  style={[styles.langPill, active && styles.langPillActive]}
+                  hitSlop={HitSlop.sm}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.langPillText, active && styles.langPillTextActive]} numberOfLines={1}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
+
+          {/* Shift Status Strip */}
+          {hasActiveShift ? (
+            <View style={[styles.shiftStrip, styles.shiftStripActive]}>
+              <Ionicons name="checkmark-circle" size={18} color="#15803D" />
+              <Text style={styles.shiftTextActive} numberOfLines={1}>
+                {t.shiftActive}
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.shiftStrip, styles.shiftStripInactive]}>
+              <View style={styles.shiftInactiveLeft}>
+                <Ionicons name="alert-circle" size={18} color="#9F1239" />
+                <Text style={styles.shiftTextInactive} numberOfLines={2}>
+                  {t.shiftInactive}
+                </Text>
+              </View>
+              <Pressable
+                onPress={handleOpenShift}
+                style={styles.startDutyBtn}
+                hitSlop={HitSlop.sm}
+                accessibilityRole="button"
+              >
+                <Text style={styles.startDutyBtnText} numberOfLines={1}>
+                  {t.startDutyBtn}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
           {feedback && (
             <FeedbackBanner
               type={feedback.type}
@@ -569,122 +980,94 @@ export default function NewSaleScreen() {
             />
           )}
 
+          {/* Restored Unfinished Bill Notice with Close Button */}
           {isDraftRestored && (
             <View style={styles.draftRestoredNotice}>
-              <Ionicons name="cloud-done-outline" size={16} color={BrandColors.green.dark} />
-              <Text style={styles.draftRestoredText}>
-                Restored unfinished order draft from device storage.
-              </Text>
+              <Ionicons name="receipt-outline" size={17} color={BrandColors.green.dark} />
+              <Text style={styles.draftRestoredText}>{t.restoredBill}</Text>
+              <Pressable
+                onPress={() => setIsDraftRestored(false)}
+                hitSlop={HitSlop.md}
+                accessibilityRole="button"
+                accessibilityLabel="Close restored bill notice"
+                style={styles.draftCloseBtn}
+              >
+                <Ionicons name="close" size={16} color={BrandColors.green.dark} />
+              </Pressable>
             </View>
           )}
 
-          {/* CUSTOMER SELECTION CARD */}
+          {/* 1. SHOP SELECTION */}
           <Card style={styles.sectionCard}>
-            <View style={styles.customerHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sectionTitle}>1. Select Retail Customer</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Customer must be assigned to your field route.
-                </Text>
-              </View>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{t.shopHeading}</Text>
               {selectedCustomer && (
                 <Pressable
                   onPress={() => setCustomerPickerOpen(true)}
                   hitSlop={HitSlop.md}
-                  style={styles.searchCustomerPill}
+                  style={styles.changePillBtn}
+                  accessibilityRole="button"
                 >
-                  <Ionicons name="search-outline" size={13} color={BrandColors.pink.primary} />
-                  <Text style={styles.searchCustomerPillText}>Change / Search</Text>
+                  <Ionicons name="swap-horizontal" size={14} color={BrandColors.pink.primary} />
+                  <Text style={styles.changePillText} numberOfLines={1}>
+                    {t.changeShop}
+                  </Text>
                 </Pressable>
               )}
             </View>
 
-            {/* Searchable Dropdown Trigger */}
-            <DropdownTrigger
-              label="Assigned Retail Outlet"
-              required
-              value={selectedCustomer?.shopName}
-              subtitle={
-                selectedCustomer
-                  ? `Owner: ${selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'} • ${selectedCustomer.village || selectedCustomer.district || 'Territory'}`
-                  : 'Tap to search & select retail customer'
-              }
-              placeholder="Tap to search & select retail customer..."
-              badge={selectedCustomer ? 'ASSIGNED' : undefined}
-              icon="storefront"
-              onPress={() => setCustomerPickerOpen(true)}
-              error={errors.customer}
-            />
-
-            {/* Quick Pick Chips */}
-            {customers.length > 0 && (
-              <View style={styles.quickChipsWrapper}>
-                <Text style={styles.quickChipsTitle}>Quick Pick Outlet:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                  {customers.map((c) => {
-                    const isSelected = c.id === selectedCustomerId;
-                    return (
-                      <Pressable
-                        key={c.id}
-                        onPress={() => {
-                          setSelectedCustomerId(c.id);
-                          setErrors((prev) => {
-                            const next = { ...prev };
-                            delete next.customer;
-                            return next;
-                          });
-                        }}
-                        style={[styles.customerChip, isSelected && styles.customerChipActive]}
-                        hitSlop={HitSlop.sm}
-                      >
-                        <Ionicons
-                          name="storefront-outline"
-                          size={14}
-                          color={isSelected ? '#FFFFFF' : Colors.light.textSecondary}
-                        />
-                        <Text
-                          style={[
-                            styles.customerChipText,
-                            isSelected && styles.customerChipTextActive,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {c.shopName}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
-            {selectedCustomer && (
-              <View style={styles.selectedCustomerDetail}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.customerName}>{selectedCustomer.shopName}</Text>
-                  <Text style={styles.customerSub}>
-                    Owner: {selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'} •{' '}
-                    {selectedCustomer.district || selectedCustomer.village || 'Area'}
-                  </Text>
-                  {selectedCustomer.phone ? (
-                    <Text style={styles.customerPhone}>📞 {selectedCustomer.phone}</Text>
-                  ) : null}
+            {selectedCustomer ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setCustomerPickerOpen(true)}
+                style={styles.selectedShopCard}
+                accessibilityRole="button"
+                accessibilityLabel={`${selectedCustomer.shopName}. ${t.changeShop}`}
+              >
+                <View style={styles.shopIconBox}>
+                  <Ionicons name="storefront" size={22} color={BrandColors.pink.primary} />
                 </View>
-                <Badge label="ASSIGNED" variant="ACTIVE" />
+                <View style={styles.shopDetailsCol}>
+                  <View style={styles.shopTopRow}>
+                    <Text style={styles.shopNameText} numberOfLines={1}>
+                      {selectedCustomer.shopName}
+                    </Text>
+                    <Badge label={t.assignedBadge} variant="ACTIVE" size="sm" />
+                  </View>
+                  <Text style={styles.shopOwnerText} numberOfLines={1}>
+                    Owner: {selectedCustomer.ownerName || (selectedCustomer as any).contactName || '—'}
+                  </Text>
+                  <Text style={styles.shopAreaText} numberOfLines={1}>
+                    {selectedCustomer.village || selectedCustomer.district || 'Area'}
+                    {selectedCustomer.phone ? ` · ${selectedCustomer.phone}` : ''}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.noShopBox}>
+                <View style={styles.noShopTop}>
+                  <Ionicons name="storefront-outline" size={24} color={Colors.light.textTertiary} />
+                  <Text style={styles.noShopText}>{t.noShopSelected}</Text>
+                </View>
+                <Button
+                  title={t.selectShopBtn}
+                  variant="primary"
+                  size="md"
+                  onPress={() => setCustomerPickerOpen(true)}
+                  icon={<Ionicons name="search" size={17} color="#FFFFFF" />}
+                />
               </View>
             )}
-            {errors.customer && <Text style={styles.errorText}>{errors.customer}</Text>}
+
+            {errors.customer ? <Text style={styles.errorText}>{errors.customer}</Text> : null}
           </Card>
 
-          {/* MULTI-SKU CART CARD */}
+          {/* 2. PRODUCT SELECTION */}
           <Card style={styles.sectionCard}>
-            <View style={styles.cartHeaderRow}>
-              <View>
-                <Text style={styles.sectionTitle}>2. Multi-SKU Cart</Text>
-                <Text style={styles.sectionSubtitle}>Add products and adjust quantities.</Text>
-              </View>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{t.productHeading}</Text>
               <Button
-                title="+ Add SKU"
+                title={t.addProductBtn}
                 variant="outline"
                 size="sm"
                 onPress={handleAddLineItem}
@@ -696,139 +1079,139 @@ export default function NewSaleScreen() {
               const availStock = item.productId ? stockMap[item.productId] ?? 0 : 0;
               const minPricePaise = prod?.minimumPricePaise ?? 2500;
               const isBelowFloor = Math.round(item.unitPriceRupees * 100) < minPricePaise;
-              const lineTotal = (item.quantity * item.unitPriceRupees).toFixed(2);
+              const lineTotal = item.quantity * item.unitPriceRupees;
               const isExceedingStock = item.quantity > availStock;
 
               return (
                 <View key={item.key} style={styles.lineItemBox}>
-                  {/* Line Item Header: Product Picker & Delete */}
+                  {/* Item Number + Remove */}
                   <View style={styles.lineItemHeader}>
-                    <Text style={styles.itemNumberBadge}>Item #{index + 1}</Text>
+                    <Text style={styles.itemNumberText}>
+                      {t.productItemLabel} #{index + 1}
+                    </Text>
                     {cartItems.length > 1 && (
                       <Pressable
                         onPress={() => handleRemoveLineItem(item.key)}
                         hitSlop={HitSlop.md}
-                        style={styles.deleteButton}
+                        style={styles.removeBtn}
+                        accessibilityRole="button"
                       >
                         <Ionicons name="trash-outline" size={16} color={Colors.light.danger} />
-                        <Text style={styles.deleteText}>Remove</Text>
+                        <Text style={styles.removeBtnText}>{t.removeBtn}</Text>
                       </Pressable>
                     )}
                   </View>
 
-                  {/* SKU Selector Dropdown Trigger */}
-                  <View style={styles.productPickerSection}>
-                    <Text style={styles.inputLabelSmall}>Product / SKU</Text>
-                    <TouchableOpacity
-                      style={styles.productDropdownTrigger}
-                      onPress={() => setActiveProductPickerItemKey(item.key)}
-                      activeOpacity={0.8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Select Product SKU"
-                    >
-                      <View style={styles.productDropdownLeft}>
-                        <View style={styles.productDropdownIconBox}>
-                          <Ionicons name="cube" size={18} color={BrandColors.pink.primary} />
-                        </View>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={styles.productDropdownTitle} numberOfLines={1}>
-                            {prod ? prod.name : 'Select product from catalog...'}
-                          </Text>
-                          <Text style={styles.productDropdownSku} numberOfLines={1}>
-                            {prod
-                              ? `SKU: ${prod.sku || prod.id} • Base: ₹${((prod.basePricePaise || 3500) / 100).toFixed(2)}`
-                              : 'Tap to choose product'}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.productDropdownRight}>
-                        <View style={styles.selectPill}>
-                          <Text style={styles.selectPillText}>Select</Text>
-                          <Ionicons name="chevron-down" size={13} color={BrandColors.pink.primary} />
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                    {errors[`line_${index}_product`] && (
-                      <Text style={styles.errorText}>{errors[`line_${index}_product`]}</Text>
-                    )}
-                  </View>
-
-                  {/* Product Metadata & Van Stock */}
-                  <View style={styles.productMetaRow}>
-                    <View style={styles.stockBadgeContainer}>
-                      <Ionicons
-                        name="cube-outline"
-                        size={14}
-                        color={isExceedingStock ? Colors.light.danger : BrandColors.green.dark}
-                      />
+                  {/* Product Selector Trigger */}
+                  <TouchableOpacity
+                    style={styles.productTrigger}
+                    onPress={() => setActiveProductPickerItemKey(item.key)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={prod ? prod.name : t.chooseProductPlaceholder}
+                  >
+                    <View style={styles.productTriggerIcon}>
+                      <Ionicons name="cube" size={20} color={BrandColors.pink.primary} />
+                    </View>
+                    <View style={styles.productTriggerTextCol}>
+                      <Text style={styles.productTitleText} numberOfLines={2}>
+                        {prod ? prod.name : t.chooseProductPlaceholder}
+                      </Text>
                       <Text
                         style={[
-                          styles.stockBadgeText,
+                          styles.productStockText,
                           isExceedingStock && { color: Colors.light.danger },
                         ]}
+                        numberOfLines={1}
                       >
-                        Available Stock: {availStock} pkts available
+                        {t.availableLabel}: {availStock.toLocaleString('en-IN')} {t.packetsUnit}
                       </Text>
                     </View>
+                    <View style={styles.selectPill}>
+                      <Text style={styles.selectPillText}>{t.selectBtn}</Text>
+                      <Ionicons name="chevron-down" size={14} color={BrandColors.pink.primary} />
+                    </View>
+                  </TouchableOpacity>
+                  {errors[`line_${index}_product`] ? (
+                    <Text style={styles.errorText}>{errors[`line_${index}_product`]}</Text>
+                  ) : null}
 
-                    <Text style={styles.lineTotalText}>
-                      Subtotal: <Text style={{ fontWeight: '800' }}>₹{lineTotal}</Text>
-                    </Text>
-                  </View>
-
-                  {/* Quantity and Price Inputs */}
-                  <View style={styles.controlsRow}>
-                    {/* Quantity Stepper */}
-                    <View style={styles.qtyContainer}>
-                      <Text style={styles.inputLabel}>Quantity (Packets)</Text>
+                  {/* Packets & Price per Packet */}
+                  <View style={[styles.controlsRow, isCompactScreen && styles.controlsRowStacked]}>
+                    {/* Packets Stepper */}
+                    <View style={styles.controlCol}>
+                      <Text style={styles.controlLabel}>{t.packetsLabel}</Text>
                       <View style={styles.stepperBox}>
                         <Pressable
-                          onPress={() => handleUpdateQuantity(item.key, -5)}
+                          onPress={() => handleUpdateQuantity(item.key, -1, availStock)}
                           style={styles.stepperBtn}
                           hitSlop={HitSlop.sm}
+                          accessibilityRole="button"
+                          accessibilityLabel="Decrease packets"
                         >
-                          <Ionicons name="remove" size={16} color={BrandColors.pink.dark} />
+                          <Ionicons name="remove" size={20} color={BrandColors.pink.dark} />
                         </Pressable>
 
                         <TextInput
                           keyboardType="numeric"
-                          value={String(item.quantity)}
+                          value={item.quantity === 0 ? '' : String(item.quantity)}
                           onChangeText={(val) => handleSetQuantity(item.key, val)}
                           style={styles.qtyInput}
+                          placeholder="0"
+                          placeholderTextColor={Colors.light.textPlaceholder}
                         />
 
                         <Pressable
-                          onPress={() => handleUpdateQuantity(item.key, 5)}
+                          onPress={() => handleUpdateQuantity(item.key, 1, availStock)}
                           style={styles.stepperBtn}
                           hitSlop={HitSlop.sm}
+                          accessibilityRole="button"
+                          accessibilityLabel="Increase packets"
                         >
-                          <Ionicons name="add" size={16} color={BrandColors.pink.dark} />
+                          <Ionicons name="add" size={20} color={BrandColors.pink.dark} />
                         </Pressable>
                       </View>
+                      {errors[`line_${index}_qty`] ? (
+                        <Text style={styles.errorText}>{errors[`line_${index}_qty`]}</Text>
+                      ) : null}
                     </View>
 
-                    {/* Unit Price */}
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.inputLabel}>Unit Price (₹)</Text>
+                    {/* Price per Packet */}
+                    <View style={styles.controlCol}>
+                      <Text style={styles.controlLabel}>{t.pricePerPacketLabel}</Text>
                       <View style={styles.priceInputBox}>
                         <Text style={styles.rupeePrefix}>₹</Text>
                         <TextInput
                           keyboardType="numeric"
-                          value={String(item.unitPriceRupees)}
+                          value={item.unitPriceRupees === 0 ? '' : String(item.unitPriceRupees)}
                           onChangeText={(val) => handleSetUnitPrice(item.key, val)}
                           style={styles.priceInput}
+                          placeholder="0"
+                          placeholderTextColor={Colors.light.textPlaceholder}
                         />
                       </View>
+                      {errors[`line_${index}_price`] ? (
+                        <Text style={styles.errorText}>{errors[`line_${index}_price`]}</Text>
+                      ) : null}
                     </View>
                   </View>
 
-                  {/* Below Minimum Price Warning */}
+                  {/* Line Amount Row */}
+                  <View style={styles.lineAmountRow}>
+                    <Text style={styles.lineAmountLabel}>{t.amountLabel}</Text>
+                    <Text style={styles.lineAmountValue}>₹{formatRupeeDisplay(lineTotal)}</Text>
+                  </View>
+
+                  {/* Low Price Notice */}
                   {isBelowFloor && (
                     <View style={styles.warningBox}>
                       <Ionicons name="warning-outline" size={16} color="#D97706" />
                       <Text style={styles.warningText}>
-                        Below ₹{(minPricePaise / 100).toFixed(2)} price floor. Sale will require
-                        Super Admin approval.
+                        {lang === 'hi'
+                          ? `Minimum ₹${formatRupeeDisplay(minPricePaise / 100)} se kam price hai. Admin approval lagega.`
+                          : lang === 'mr'
+                            ? `किमान ₹${formatRupeeDisplay(minPricePaise / 100)} पेक्षा कमी दर आहे. ॲडमिन मंजुरी लागेल.`
+                            : `Below minimum price ₹${formatRupeeDisplay(minPricePaise / 100)}. Needs Admin approval.`}
                       </Text>
                     </View>
                   )}
@@ -836,7 +1219,8 @@ export default function NewSaleScreen() {
                   {/* Stock Exceeded Error */}
                   {isExceedingStock && (
                     <Text style={styles.errorText}>
-                      Quantity ({item.quantity} pkts) exceeds available stock ({availStock} pkts).
+                      {stockErrors[item.productId] ||
+                        `${t.availableLabel}: ${availStock} ${t.packetsUnit}`}
                     </Text>
                   )}
                 </View>
@@ -844,99 +1228,166 @@ export default function NewSaleScreen() {
             })}
           </Card>
 
-          {/* ORDER FINANCIAL SUMMARY */}
+          {/* TOTAL BILL SUMMARY */}
           <Card style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Order Summary</Text>
+            <Text style={styles.summaryTitle}>{t.totalBillHeading}</Text>
+
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Packets:</Text>
-              <Text style={styles.summaryValue}>{totalPackets.toLocaleString('en-IN')} pkts</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Order Value:</Text>
-              <Text style={styles.summaryGrandTotal}>₹{grandTotalRupees.toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>{t.totalPacketsLabel}</Text>
+              <Text style={styles.summaryPacketsValue}>
+                {totalPackets.toLocaleString('en-IN')} {t.packetsUnit}
+              </Text>
             </View>
 
-            <View style={styles.approvalStatusRow}>
-              <Badge
-                label={
-                  hasLowPriceWarning
-                    ? 'PRICE APPROVAL REQUIRED'
-                    : 'CONFIRMED DIRECT STOCK DEDUCTION'
-                }
-                variant={hasLowPriceWarning ? 'PENDING' : 'CONFIRMED'}
+            <View style={styles.summaryTotalRow}>
+              <Text style={styles.summaryAmountLabel}>{t.totalAmountLabel}</Text>
+              <Text style={styles.summaryGrandTotal}>₹{formatRupeeDisplay(grandTotalRupees)}</Text>
+            </View>
+
+            <View
+              style={[
+                styles.stockNoteBox,
+                hasLowPriceWarning ? styles.stockNoteWarning : styles.stockNoteNormal,
+              ]}
+            >
+              <Ionicons
+                name={hasLowPriceWarning ? 'time-outline' : 'checkmark-circle-outline'}
+                size={16}
+                color={hasLowPriceWarning ? '#92400E' : BrandColors.green.dark}
               />
+              <Text
+                style={[
+                  styles.stockNoteText,
+                  { color: hasLowPriceWarning ? '#92400E' : BrandColors.green.dark },
+                ]}
+              >
+                {hasLowPriceWarning ? t.stockApprovalNote : t.stockConfirmNote}
+              </Text>
             </View>
           </Card>
 
-          {/* PAYMENT MODE SELECTION */}
+          {/* 3. PAYMENT */}
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>3. Payment Mode</Text>
-            <SegmentedTabs
-              tabs={[
-                { label: 'Cash', value: 'CASH' },
-                { label: 'Bank / UPI', value: 'BANK' },
-                { label: 'Pending Credit', value: 'PENDING' },
-              ]}
-              selectedTab={paymentMode}
-              onSelect={(val) => setPaymentMode(val as PaymentMode)}
-            />
+            <Text style={[styles.sectionTitle, { marginBottom: Spacing.sm }]}>
+              {t.paymentHeading}
+            </Text>
+
+            <View style={[styles.paymentGrid, isCompactScreen && styles.paymentGridStacked]}>
+              {paymentOptions.map((opt) => {
+                const selected = paymentMode === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setPaymentMode(opt.value)}
+                    style={[
+                      styles.paymentOptionCard,
+                      !isCompactScreen && styles.paymentOptionCardRow,
+                      selected && styles.paymentOptionCardSelected,
+                    ]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <View
+                      style={[
+                        styles.paymentIconCircle,
+                        selected && styles.paymentIconCircleSelected,
+                      ]}
+                    >
+                      <Ionicons
+                        name={opt.icon}
+                        size={19}
+                        color={selected ? '#FFFFFF' : Colors.light.textSecondary}
+                      />
+                    </View>
+                    <View style={styles.paymentTextCol}>
+                      <Text
+                        style={[
+                          styles.paymentOptionTitle,
+                          selected && styles.paymentOptionTitleSelected,
+                        ]}
+                      >
+                        {opt.title}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.paymentOptionSub,
+                          selected && styles.paymentOptionSubSelected,
+                        ]}
+                      >
+                        {opt.subtitle}
+                      </Text>
+                    </View>
+                    {selected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color={BrandColors.pink.primary}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
 
             {paymentMode === 'BANK' && (
               <View style={styles.bankInputBox}>
-                <Text style={styles.inputLabel}>UPI / Bank Transaction Reference</Text>
+                <Text style={styles.controlLabel}>{t.upiRefLabel}</Text>
                 <TextInput
                   value={paymentReference}
                   onChangeText={setPaymentReference}
+                  placeholder={t.upiRefPlaceholder}
+                  placeholderTextColor={Colors.light.textPlaceholder}
                   style={styles.textInput}
                 />
               </View>
             )}
           </Card>
 
-          {/* CUSTOMER FEEDBACK & VOICE TRANSLATOR */}
+          {/* 4. SHOPKEEPER'S MESSAGE (VOICE + QUICK CHIPS) */}
           <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>4. Customer Feedback Observation</Text>
-            <Text style={styles.sectionSubtitle}>
-              Record verbal feedback in Hindi, Hinglish, or English.
-            </Text>
-
-            <TextInput
-              value={customerFeedback}
-              onChangeText={setCustomerFeedback}
-              multiline
-              numberOfLines={3}
-              style={styles.feedbackInput}
-            />
-
             <VoiceFeedbackTranslator
               value={customerFeedback}
               onChange={setCustomerFeedback}
+              label={t.messageHeading}
+              sublabel={t.messageSublabel}
+              placeholder={t.messagePlaceholder}
+              micLabel={t.micLabel}
+              quickChipsHeading={t.quickChipsHeading}
+              quickChips={t.quickChips}
+              directApplyChips
             />
           </Card>
-
-          {/* SUBMIT BUTTON */}
-          <View style={styles.submitSection}>
-            <Button
-              title={
-                isSubmitting
-                  ? 'Submitting Sale...'
-                  : `Submit Sale • ₹${grandTotalRupees.toFixed(2)}`
-              }
-              variant="primary"
-              size="lg"
-              loading={isSubmitting}
-              disabled={isSubmitting || hasStockError}
-              onPress={handleConfirmSale}
-            />
-          </View>
         </View>
       </ScrollView>
 
-      {/* Searchable Retail Customer Dropdown Modal */}
+      {/* STICKY SAVE SALE FOOTER */}
+      <View
+        style={[
+          styles.stickyFooter,
+          { paddingBottom: Math.max(insets.bottom, Spacing.md) },
+        ]}
+      >
+        <View style={styles.stickyFooterInner}>
+          <Button
+            title={
+              isSubmitting
+                ? t.savingSaleBtn
+                : `${t.saveSaleBtn} • ₹${formatRupeeDisplay(grandTotalRupees)}`
+            }
+            variant="primary"
+            size="lg"
+            loading={isSubmitting}
+            disabled={isSubmitting || hasStockError}
+            onPress={handleConfirmSale}
+          />
+        </View>
+      </View>
+
+      {/* Searchable Shop Picker Modal */}
       <SearchableDropdownModal
         visible={customerPickerOpen}
-        title="Select Retail Customer"
-        searchPlaceholder="Search customer by shop, owner, phone, district..."
+        title={t.shopModalTitle}
+        searchPlaceholder={t.shopSearchPlaceholder}
         options={customerDropdownOptions}
         selectedId={selectedCustomerId}
         onSelect={(opt) => {
@@ -949,14 +1400,14 @@ export default function NewSaleScreen() {
           });
         }}
         onClose={() => setCustomerPickerOpen(false)}
-        emptyMessage="No retail customers matching your query"
+        emptyMessage={t.shopEmptyMessage}
       />
 
-      {/* Searchable Product SKU Dropdown Modal */}
+      {/* Searchable Product Picker Modal */}
       <SearchableDropdownModal
         visible={Boolean(activeProductPickerItemKey)}
-        title="Select Product / SKU"
-        searchPlaceholder="Search product by name or SKU..."
+        title={t.productModalTitle}
+        searchPlaceholder={t.productSearchPlaceholder}
         options={productDropdownOptions}
         selectedId={
           activeProductPickerItemKey
@@ -970,7 +1421,7 @@ export default function NewSaleScreen() {
           }
         }}
         onClose={() => setActiveProductPickerItemKey(null)}
-        emptyMessage="No matching products found in catalog"
+        emptyMessage={t.productEmptyMessage}
       />
     </KeyboardAvoidingView>
   );
@@ -982,25 +1433,92 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   scrollContent: {
-    paddingBottom: Spacing.huge,
+    paddingTop: Spacing.sm,
   },
   contentWrapper: {
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
   },
-  centerContainer: {
-    flex: 1,
+  langRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.light.background,
+    justifyContent: 'flex-end',
+    gap: 6,
+    marginBottom: Spacing.sm,
   },
-  loadingText: {
-    ...Typography.bodyMedium,
+  langPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  langPillActive: {
+    backgroundColor: BrandColors.pink.tint,
+    borderColor: BrandColors.pink.primary,
+  },
+  langPillText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.light.textSecondary,
-    marginTop: Spacing.md,
+  },
+  langPillTextActive: {
+    color: BrandColors.pink.dark,
+    fontWeight: '800',
+  },
+  shiftStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  shiftStripActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+    justifyContent: 'flex-start',
+  },
+  shiftStripInactive: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FECDD3',
+  },
+  shiftInactiveLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    gap: 8,
+  },
+  shiftTextActive: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#15803D',
+    flex: 1,
+  },
+  shiftTextInactive: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9F1239',
+    flex: 1,
+  },
+  startDutyBtn: {
+    backgroundColor: BrandColors.pink.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    flexShrink: 0,
+  },
+  startDutyBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   draftRestoredNotice: {
     flexDirection: 'row',
@@ -1010,125 +1528,117 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 9,
     marginBottom: Spacing.md,
     gap: 8,
   },
   draftRestoredText: {
-    ...Typography.caption,
+    fontSize: 13,
     fontWeight: '600',
     color: BrandColors.green.dark,
     flex: 1,
+  },
+  draftCloseBtn: {
+    padding: 4,
   },
   sectionCard: {
     marginBottom: Spacing.md,
     padding: Spacing.md,
   },
-  sectionTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '800',
-    color: Colors.light.textPrimary,
-  },
-  sectionSubtitle: {
-    ...Typography.caption,
-    color: Colors.light.textTertiary,
-    marginTop: 2,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  chipRow: {
-    flexDirection: 'row',
-    marginVertical: Spacing.xs,
+  sectionTitle: {
+    ...Typography.titleSmall,
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.light.textPrimary,
+    flexShrink: 1,
   },
-  customerChip: {
+  changePillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
+    backgroundColor: BrandColors.pink.tint,
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: Radius.full,
-    backgroundColor: Colors.light.surface,
-    borderColor: Colors.light.border,
-    borderWidth: 1,
-    marginRight: Spacing.xs,
-    gap: 6,
+    gap: 5,
+    flexShrink: 0,
   },
-  customerChipActive: {
-    backgroundColor: BrandColors.pink.dark,
-    borderColor: BrandColors.pink.dark,
-  },
-  customerChipText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  customerChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  selectedCustomerDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF5F8',
-    borderColor: '#FCE7F3',
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  customerName: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: BrandColors.pink.dark,
-  },
-  customerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
-  },
-  searchCustomerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FCE7F3',
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    gap: 4,
-  },
-  searchCustomerPillText: {
-    ...Typography.caption,
-    fontSize: 11,
+  changePillText: {
+    fontSize: 12,
     fontWeight: '700',
     color: BrandColors.pink.primary,
   },
-  quickChipsWrapper: {
-    marginTop: Spacing.sm,
+  selectedShopCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8FA',
+    borderWidth: 1.5,
+    borderColor: BrandColors.pink.border,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
-  quickChipsTitle: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.light.textTertiary,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  shopIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: BrandColors.pink.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  customerSub: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    marginTop: 1,
+  shopDetailsCol: {
+    flex: 1,
+    minWidth: 0,
   },
-  customerPhone: {
-    ...Typography.caption,
-    color: BrandColors.pink.dark,
+  shopTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 3,
+  },
+  shopNameText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.light.textPrimary,
+    flex: 1,
+    minWidth: 0,
+  },
+  shopOwnerText: {
+    fontSize: 13,
     fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  shopAreaText: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
     marginTop: 2,
   },
-  cartHeaderRow: {
+  noShopBox: {
+    backgroundColor: Colors.light.surfaceMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  noShopTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  noShopText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    flex: 1,
   },
   lineItemBox: {
     backgroundColor: '#F8FAFC',
@@ -1136,164 +1646,100 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.md,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   lineItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
-  itemNumberBadge: {
-    ...Typography.caption,
+  itemNumberText: {
+    fontSize: 13,
     fontWeight: '800',
     color: BrandColors.pink.dark,
-    textTransform: 'uppercase',
   },
-  deleteButton: {
+  removeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
-  deleteText: {
-    ...Typography.caption,
+  removeBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.light.danger,
   },
-  productPickerSection: {
-    marginVertical: Spacing.xs + 2,
-  },
-  inputLabelSmall: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 5,
-  },
-  productDropdownTrigger: {
+  productTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#FCE7F3',
+    borderColor: BrandColors.pink.border,
     borderRadius: Radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 52,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    minHeight: 56,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  productDropdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
-    marginRight: 8,
-  },
-  productDropdownIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#FFF1F4',
+  productTriggerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.sm,
+    backgroundColor: BrandColors.pink.subtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    flexShrink: 0,
   },
-  productDropdownTitle: {
-    fontSize: 14,
+  productTriggerTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  productTitleText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
+    color: Colors.light.textPrimary,
   },
-  productDropdownSku: {
+  productStockText: {
     fontSize: 12,
-    color: '#64748B',
+    fontWeight: '700',
+    color: BrandColors.green.dark,
     marginTop: 2,
-  },
-  productDropdownRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   selectPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF1F4',
+    backgroundColor: BrandColors.pink.subtle,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
     gap: 4,
+    flexShrink: 0,
   },
   selectPillText: {
     fontSize: 12,
     fontWeight: '700',
     color: BrandColors.pink.primary,
   },
-  skuScroll: {
-    marginVertical: Spacing.xs,
-  },
-  skuChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: '#FFFFFF',
-    borderColor: Colors.light.border,
-    borderWidth: 1,
-    marginRight: Spacing.xs,
-  },
-  skuChipActive: {
-    backgroundColor: '#FCE7F3',
-    borderColor: BrandColors.pink.primary,
-  },
-  skuChipText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textPrimary,
-  },
-  skuChipTextActive: {
-    color: BrandColors.pink.dark,
-    fontWeight: '800',
-  },
-  productMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: Spacing.xs,
-  },
-  stockBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  stockBadgeText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: BrandColors.green.dark,
-  },
-  lineTotalText: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-  },
   controlsRow: {
-    flexWrap: 'wrap',
     flexDirection: 'row',
     gap: Spacing.md,
-    marginTop: Spacing.xs,
   },
-  qtyContainer: {
-    minWidth: 120,
+  controlsRowStacked: {
+    flexDirection: 'column',
+    gap: Spacing.sm,
+  },
+  controlCol: {
     flex: 1,
+    minWidth: 0,
   },
-  priceContainer: {
-    minWidth: 120,
-    flex: 1,
-  },
-  inputLabel: {
-    ...Typography.caption,
+  controlLabel: {
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.light.textSecondary,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   stepperBox: {
     flexDirection: 'row',
@@ -1302,11 +1748,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderColor: Colors.light.border,
     borderWidth: 1,
+    minHeight: 46,
     overflow: 'hidden',
   },
   stepperBtn: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 10,
+    width: 44,
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
@@ -1314,10 +1761,11 @@ const styles = StyleSheet.create({
   qtyInput: {
     flex: 1,
     textAlign: 'center',
-    ...Typography.bodyMedium,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: Colors.light.textPrimary,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minWidth: 44,
   },
   priceInputBox: {
     flexDirection: 'row',
@@ -1326,20 +1774,40 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderColor: Colors.light.border,
     borderWidth: 1,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    minHeight: 46,
   },
   rupeePrefix: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: Colors.light.textSecondary,
     marginRight: 4,
   },
   priceInput: {
     flex: 1,
-    ...Typography.bodyMedium,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: Colors.light.textPrimary,
     paddingVertical: 8,
+  },
+  lineAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.md,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  lineAmountLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+  },
+  lineAmountValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: BrandColors.green.dark,
   },
   warningBox: {
     flexDirection: 'row',
@@ -1348,26 +1816,25 @@ const styles = StyleSheet.create({
     borderColor: '#FDE68A',
     borderWidth: 1,
     borderRadius: Radius.sm,
-    padding: Spacing.xs,
+    padding: Spacing.sm,
     marginTop: Spacing.sm,
     gap: 6,
   },
   warningText: {
-    ...Typography.caption,
-    fontSize: 11,
+    fontSize: 12,
     color: '#92400E',
     fontWeight: '600',
     flex: 1,
   },
   summaryCard: {
-    backgroundColor: '#F8FAFC',
-    borderColor: Colors.light.border,
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    borderColor: BrandColors.green.border,
+    borderWidth: 1.5,
     padding: Spacing.md,
     marginBottom: Spacing.md,
   },
   summaryTitle: {
-    ...Typography.bodyMedium,
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.light.textPrimary,
     marginBottom: Spacing.sm,
@@ -1378,27 +1845,112 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
   },
-  summaryLabel: {
-    ...Typography.bodySmall,
-    color: Colors.light.textSecondary,
+  summaryTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.sm,
   },
-  summaryValue: {
-    ...Typography.bodyMedium,
+  summaryLabel: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    fontWeight: '600',
+  },
+  summaryPacketsValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.light.textPrimary,
+  },
+  summaryAmountLabel: {
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.light.textPrimary,
   },
   summaryGrandTotal: {
-    ...Typography.h3,
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '900',
     color: BrandColors.green.dark,
   },
-  approvalStatusRow: {
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.borderSubtle,
-    alignItems: 'flex-start',
+  stockNoteBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+    gap: 6,
+  },
+  stockNoteNormal: {
+    backgroundColor: '#F0FDF4',
+  },
+  stockNoteWarning: {
+    backgroundColor: '#FFFBEB',
+  },
+  stockNoteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+  paymentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  paymentGridStacked: {
+    flexDirection: 'column',
+  },
+  paymentOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.surfaceMuted,
+    borderWidth: 1.5,
+    borderColor: Colors.light.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 12,
+    gap: Spacing.sm,
+    minHeight: 58,
+  },
+  paymentOptionCardRow: {
+    flex: 1,
+    minWidth: 150,
+  },
+  paymentOptionCardSelected: {
+    backgroundColor: '#FFF5F8',
+    borderColor: BrandColors.pink.primary,
+  },
+  paymentIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  paymentIconCircleSelected: {
+    backgroundColor: BrandColors.pink.primary,
+  },
+  paymentTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  paymentOptionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.light.textPrimary,
+  },
+  paymentOptionTitleSelected: {
+    color: BrandColors.pink.dark,
+  },
+  paymentOptionSub: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 1,
+  },
+  paymentOptionSubSelected: {
+    color: BrandColors.pink.dark,
+    fontWeight: '600',
   },
   bankInputBox: {
     marginTop: Spacing.md,
@@ -1409,57 +1961,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    ...Typography.bodyMedium,
+    paddingVertical: 11,
+    fontSize: 14,
     color: Colors.light.textPrimary,
   },
-  feedbackInput: {
-    backgroundColor: '#FAFAFA',
-    borderColor: Colors.light.border,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    ...Typography.bodyMedium,
-    color: Colors.light.textPrimary,
-    minHeight: 70,
-    textAlignVertical: 'top',
-    marginBottom: Spacing.sm,
+  stickyFooter: {
+    backgroundColor: Colors.light.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    ...Shadows.md,
   },
-  submitSection: {
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xl,
+  stickyFooterInner: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
   },
   errorText: {
-    ...Typography.caption,
-    color: Colors.light.danger,
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  modeBadgeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-    marginBottom: 12,
-    borderWidth: 1,
-  },
-  modeBadgeOnDuty: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#DCFCE7',
-  },
-  modeBadgeDirect: {
-    backgroundColor: '#FFF1F4',
-    borderColor: '#FCE7F3',
-  },
-  modeBadgeText: {
     fontSize: 12,
-    fontWeight: '600',
-  },
-  modeBadgeTextOnDuty: {
-    color: '#15803D',
-  },
-  modeBadgeTextDirect: {
-    color: '#881337',
+    color: Colors.light.danger,
+    marginTop: 6,
+    fontWeight: '700',
   },
 });
