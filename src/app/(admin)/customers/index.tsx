@@ -11,13 +11,16 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
 import type { CustomerItem, PaginationMeta } from '@/api/types';
+import { CustomerCard } from '@/components/customers/CustomerCard';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -62,6 +65,8 @@ export default function AdminCustomersScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
+  const { width } = useWindowDimensions();
+  const isMultiColumn = width >= 768;
 
   const handleBack = useCallback(() => {
     try {
@@ -86,6 +91,7 @@ export default function AdminCustomersScreen() {
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE' | 'HAS_PHOTO' | 'NO_PHOTO' | 'HAS_GPS'>('ALL');
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
     pageSize: 50,
@@ -204,92 +210,39 @@ export default function AdminCustomersScreen() {
     loadCustomers();
   }, [loadCustomers]);
 
-  const renderItem = ({ item }: { item: CustomerItem }) => {
-    const hasPhoto = Boolean(item.photoUrl || (item as any).photoPath);
-    const photoReason = (item as any).noPhotoReason || (item as any).photoSkipReason;
-    const hasGps = item.latitude != null && item.longitude != null;
-    const onboardedDate = formatISTDate(item.createdAt || (item as any).createdDate);
+  const filteredCustomers = React.useMemo(() => {
+    if (statusFilter === 'ALL') return customers;
+    return customers.filter((c) => {
+      const hasPhoto = Boolean(c.photoUrl || (c as any).photoPath);
+      const hasGps = c.latitude != null && c.longitude != null;
+      if (statusFilter === 'ACTIVE') return c.active;
+      if (statusFilter === 'INACTIVE') return !c.active;
+      if (statusFilter === 'HAS_PHOTO') return hasPhoto;
+      if (statusFilter === 'NO_PHOTO') return !hasPhoto;
+      if (statusFilter === 'HAS_GPS') return hasGps;
+      return true;
+    });
+  }, [customers, statusFilter]);
 
-    return (
-      <Card
-        style={styles.card}
+  const renderItem = ({ item }: { item: CustomerItem }) => (
+    <View style={isMultiColumn ? { flex: 1 } : undefined}>
+      <CustomerCard
+        item={item}
+        onboardedDate={formatISTDate(item.createdAt || (item as any).createdDate)}
         onPress={() => router.push(`/(admin)/customers/${item.id}` as any)}
-        accessibilityLabel={`Store ${item.shopName}, Owner ${item.ownerName || item.contactName || 'Owner'}, Category ${item.category?.name || 'Retail'}`}
-        accessibilityHint="Tap to view and edit store details"
-      >
-        <View style={styles.header}>
-          <View style={{ flex: 1, marginRight: Spacing.sm }}>
-            <Text style={styles.shopName}>{item.shopName}</Text>
-            <Text style={styles.owner}>
-              Contact: {item.contactName || item.ownerName || 'Owner'} • Phone: {item.phone}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ alignItems: 'flex-end', gap: 4 }}>
-              <Badge label={item.category?.name || 'Retail'} variant="info" size="sm" />
-              <Badge label={item.active ? 'Active' : 'Inactive'} variant={item.active ? 'ACTIVE' : 'INACTIVE'} size="sm" />
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-          </View>
-        </View>
-
-        {/* Location & Onboarding */}
-        <View style={styles.detailsRow}>
-          <View style={styles.detailCol}>
-            <Ionicons name="location-outline" size={13} color="#64748B" />
-            <Text style={styles.detailText}>
-              {[item.village, item.district, item.state].filter(Boolean).join(', ') || 'Area'}
-            </Text>
-          </View>
-          <View style={styles.detailCol}>
-            <Ionicons name="calendar-outline" size={13} color="#64748B" />
-            <Text style={styles.detailText}>Onboarded: {onboardedDate}</Text>
-          </View>
-        </View>
-
-        {/* GPS & Photo Badges */}
-        <View style={styles.badgeRow}>
-          {hasPhoto ? (
-            <View style={styles.verifiedPhotoBadge}>
-              <Ionicons name="camera" size={12} color={BrandColors.green.primary} />
-              <Text style={styles.verifiedPhotoText}>Photo Verified</Text>
-            </View>
-          ) : (
-            <View style={styles.exemptPhotoBadge}>
-              <Ionicons name="alert-circle-outline" size={12} color="#D97706" />
-              <Text style={styles.exemptPhotoText}>
-                Exempt: {photoReason || 'No Photo'}
-              </Text>
-            </View>
-          )}
-
-          {hasGps ? (
-            <View style={styles.gpsBadge}>
-              <Ionicons name="navigate-outline" size={12} color="#0284C7" />
-              <Text style={styles.gpsText}>
-                GPS: {item.latitude!.toFixed(4)}, {item.longitude!.toFixed(4)}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.noGpsBadge}>
-              <Ionicons name="location-outline" size={12} color="#94A3B8" />
-              <Text style={styles.noGpsText}>No GPS</Text>
-            </View>
-          )}
-        </View>
-      </Card>
-    );
-  };
+      />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       <Header
         title="Customer Directory"
-        subtitle={`${pagination.total} registered retail outlets across nation`}
+        subtitle={`${pagination.total} retail outlets`}
         leftAction={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back to administrative actions"
+            accessibilityLabel="Back to previous screen"
             onPress={handleBack}
             style={styles.headerBackBtn}
           >
@@ -316,19 +269,11 @@ export default function AdminCustomersScreen() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Batch onboard customers"
-              style={styles.batchBtn}
-              onPress={() => router.push('/(admin)/customers/bulk' as any)}
-            >
-              <Ionicons name="layers-outline" size={18} color="#FFFFFF" />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
               accessibilityLabel="Onboard new customer"
               style={styles.addBtn}
               onPress={() => router.push('/(admin)/customers/new' as any)}
             >
-              <Ionicons name="add" size={24} color="#FFFFFF" />
+              <Ionicons name="add" size={22} color="#FFFFFF" />
             </Pressable>
           </View>
         }
@@ -337,12 +282,57 @@ export default function AdminCustomersScreen() {
       <View style={styles.searchBarOuter}>
         <View style={styles.searchBar}>
           <Input
-            placeholder="Search customers across all territories..."
+            placeholder="Search name, contact, or phone..."
             value={search}
             onChangeText={setSearch}
             leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}
+            rightIcon={
+              search.length > 0 ? (
+                <Pressable
+                  onPress={() => {
+                    setSearch('');
+                    setDebouncedSearch('');
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                >
+                  <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+                </Pressable>
+              ) : undefined
+            }
           />
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipsScroll}
+          style={styles.filterChipsBar}
+        >
+          {([
+            { key: 'ALL', label: 'All' },
+            { key: 'ACTIVE', label: 'Active' },
+            { key: 'INACTIVE', label: 'Inactive' },
+            { key: 'HAS_PHOTO', label: 'Photo Verified' },
+            { key: 'NO_PHOTO', label: 'Exempt / No Photo' },
+            { key: 'HAS_GPS', label: 'Has GPS' },
+          ] as const).map((f) => {
+            const active = statusFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setStatusFilter(f.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Bulk Action Shortcut Banner */}
@@ -372,17 +362,28 @@ export default function AdminCustomersScreen() {
           <CardSkeleton />
           <CardSkeleton />
         </View>
-      ) : customers.length === 0 ? (
+      ) : filteredCustomers.length === 0 ? (
         <EmptyState
           icon="people-outline"
           title="No Customers Found"
-          description={search ? 'No outlets matching your filter.' : 'No customers have been registered yet.'}
-          actionTitle="Onboard Customer"
-          onAction={() => router.push('/(admin)/customers/new' as any)}
+          description={search || statusFilter !== 'ALL' ? 'No outlets matching your filter.' : 'No customers have been registered yet.'}
+          actionTitle={search || statusFilter !== 'ALL' ? 'Clear Filters' : 'Onboard Customer'}
+          onAction={() => {
+            if (search || statusFilter !== 'ALL') {
+              setSearch('');
+              setDebouncedSearch('');
+              setStatusFilter('ALL');
+            } else {
+              router.push('/(admin)/customers/new' as any);
+            }
+          }}
         />
       ) : (
         <FlatList
-          data={customers}
+          key={isMultiColumn ? 'grid-2' : 'list-1'}
+          numColumns={isMultiColumn ? 2 : 1}
+          columnWrapperStyle={isMultiColumn ? { gap: Spacing.md } : undefined}
+          data={filteredCustomers}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
@@ -452,10 +453,43 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.light.borderSubtle,
   },
   searchBar: {
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.xs,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  filterChipsBar: {
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+    paddingBottom: Spacing.sm,
+  },
+  filterChipsScroll: {
+    paddingHorizontal: Spacing.md,
+    gap: 8,
+    alignItems: 'center',
+  },
+  filterChip: {
+    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: BrandColors.pink.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
   },
   bulkBannerWrapper: {
     paddingHorizontal: Spacing.md,

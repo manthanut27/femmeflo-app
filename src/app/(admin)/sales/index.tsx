@@ -17,6 +17,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { adminApi, isSaleResubmitted } from '@/api/admin';
@@ -29,6 +30,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
+import { SalesOrderCard } from '@/components/sales/SalesOrderCard';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -63,6 +65,9 @@ export default function AdminSalesScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
+  const { width } = useWindowDimensions();
+  const isMultiColumn = width >= 768;
+  const isCompactWidth = width < 360;
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleBack = useCallback(() => {
@@ -89,18 +94,28 @@ export default function AdminSalesScreen() {
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Filters
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'PENDING_APPROVAL' | 'RESUBMITTED' | 'REJECTED'>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<PaymentMode | 'ALL'>('ALL');
   const [periodFilter, setPeriodFilter] = useState<'all' | 'this_month' | 'last_month'>('all');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Selected Sale for Detailed Modal
   const [selectedSale, setSelectedSale] = useState<SaleItem | null>(null);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string; title: string } | null>(null);
 
   const fetchSales = useCallback(async () => {
+    setLoadError(null);
     try {
       const backendStatus =
         statusFilter === 'RESUBMITTED'
@@ -115,7 +130,7 @@ export default function AdminSalesScreen() {
         status: backendStatus,
         paymentMode: paymentFilter !== 'ALL' ? paymentFilter : undefined,
         period: periodFilter,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
       });
       let fetched = res?.items || res?.sales || [];
       if (statusFilter === 'RESUBMITTED') {
@@ -124,12 +139,13 @@ export default function AdminSalesScreen() {
       setSales(fetched);
     } catch (err: any) {
       console.warn('Failed to load sales list', err);
+      setLoadError('Unable to load sales records. Please try again.');
       setSales([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, paymentFilter, periodFilter, search]);
+  }, [statusFilter, paymentFilter, periodFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchSales();
@@ -151,87 +167,33 @@ export default function AdminSalesScreen() {
     });
   };
 
-  const renderSaleItem = ({ item }: { item: SaleItem }) => {
-    const totalRupees = ((item.totalAmountPaise || item.totalPaise || 0) / 100).toFixed(2);
-    const packetCount = item.packetCount || item.quantity || 0;
-    const customerName = item.customer?.shopName || 'Retail Customer';
-    const sellerName = item.seller?.name || 'Field Officer';
-    const createdAt = formatISTDateTime(item.createdAt || (item as any).requestedAt);
-    const isResubmitted = isSaleResubmitted(item);
+  const hasActiveFilters =
+    statusFilter !== 'ALL' || paymentFilter !== 'ALL' || search.trim().length > 0;
 
-    return (
-      <Card style={styles.saleCard}>
-        <View style={styles.cardHeaderRow}>
-          <View style={{ flex: 1, marginRight: Spacing.sm }}>
-            <Text style={styles.shopName}>{customerName}</Text>
-            <Text style={styles.saleMeta}>
-              Sold by {sellerName} • {createdAt}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            {isResubmitted ? (
-              <Badge label="RESUBMITTED FOR APPROVAL" variant="purple" size="sm" />
-            ) : (
-              <Badge label={item.status} variant={item.status as BadgeVariant} size="sm" />
-            )}
-            <Badge label={item.paymentMode} variant={item.paymentMode as BadgeVariant} size="sm" />
-          </View>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCol}>
-            <Text style={styles.summaryLabel}>Packets</Text>
-            <Text style={styles.summaryVal}>{packetCount} pkts</Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryCol}>
-            <Text style={styles.summaryLabel}>Order Total</Text>
-            <Text style={[styles.summaryVal, { color: BrandColors.pink.dark }]}>₹{totalRupees}</Text>
-          </View>
-        </View>
-
-        {item.customerFeedback ? (
-          <View style={styles.feedbackBox}>
-            <Ionicons name="chatbox-outline" size={13} color="#64748B" />
-            <Text style={styles.feedbackText} numberOfLines={2}>
-              "{item.customerFeedback}"
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.cardActionsRow}>
-          <TouchableOpacity
-            style={styles.detailsBtn}
-            onPress={() => setSelectedSale(item)}
-            accessibilityRole="button"
-            accessibilityLabel="View sale details"
-          >
-            <Ionicons name="receipt-outline" size={15} color="#0F172A" />
-            <Text style={styles.detailsBtnText}>Order Details</Text>
-          </TouchableOpacity>
-
-          {item.status === 'CONFIRMED' || item.status === 'APPROVED' ? (
-            <TouchableOpacity
-              style={styles.pdfBtn}
-              onPress={() => handleOpenInvoice(item)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Download invoice PDF"
-            >
-              <Ionicons name="document-text-outline" size={15} color={BrandColors.pink.dark} />
-              <Text style={styles.pdfBtnText}>Invoice PDF</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </Card>
-    );
+  const clearAllFilters = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setStatusFilter('ALL');
+    setPaymentFilter('ALL');
   };
+
+  const renderSaleItem = ({ item }: { item: SaleItem }) => (
+    <View style={isMultiColumn ? styles.gridItemWrap : undefined}>
+      <SalesOrderCard
+        item={item}
+        formattedDate={formatISTDateTime(item.createdAt || (item as any).requestedAt)}
+        onViewDetails={setSelectedSale}
+        onOpenInvoice={handleOpenInvoice}
+        isCompactWidth={isCompactWidth}
+      />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       <Header
         title="Sales Directory"
-        subtitle="National transaction ledger, POS orders and invoices"
+        subtitle="Orders & Invoices"
         leftAction={
           params?.from === 'actions' ? (
             <Pressable
@@ -262,41 +224,108 @@ export default function AdminSalesScreen() {
             value={search}
             onChangeText={setSearch}
             leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}
+            rightIcon={
+              search.length > 0 ? (
+                <Pressable
+                  onPress={() => {
+                    setSearch('');
+                    setDebouncedSearch('');
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                >
+                  <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+                </Pressable>
+              ) : undefined
+            }
           />
         </View>
 
         {/* Status filters */}
-        <View style={styles.filterTabsRow}>
-          {(['ALL', 'CONFIRMED', 'PENDING_APPROVAL', 'RESUBMITTED', 'REJECTED'] as const).map((st) => (
-            <TouchableOpacity
-              key={st}
-              style={[
-                styles.filterTab,
-                statusFilter === st && (st === 'RESUBMITTED' ? styles.filterTabActivePurple : styles.filterTabActive),
-              ]}
-              onPress={() => setStatusFilter(st)}
-            >
-              <Text style={[styles.filterTabText, statusFilter === st && styles.filterTabTextActive]}>
-                {st === 'PENDING_APPROVAL' ? 'PENDING' : st === 'RESUBMITTED' ? 'RESUBMITTED' : st}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+          style={styles.filterScroll}
+        >
+          {(['ALL', 'CONFIRMED', 'PENDING_APPROVAL', 'RESUBMITTED', 'REJECTED'] as const).map((st) => {
+            const active = statusFilter === st;
+            const label =
+              st === 'ALL'
+                ? 'All'
+                : st === 'CONFIRMED'
+                ? 'Confirmed'
+                : st === 'PENDING_APPROVAL'
+                ? 'Pending'
+                : st === 'RESUBMITTED'
+                ? 'Resubmitted'
+                : 'Rejected';
+            return (
+              <TouchableOpacity
+                key={st}
+                style={[
+                  styles.filterChip,
+                  active && (st === 'RESUBMITTED' ? styles.filterChipActivePurple : styles.filterChipActive),
+                ]}
+                onPress={() => setStatusFilter(st)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {/* Payment mode filters */}
-        <View style={styles.filterTabsRow}>
-          {(['ALL', 'CASH', 'BANK', 'PENDING'] as const).map((pm) => (
-            <TouchableOpacity
-              key={pm}
-              style={[styles.filterTab, paymentFilter === pm && styles.filterTabActive]}
-              onPress={() => setPaymentFilter(pm)}
-            >
-              <Text style={[styles.filterTabText, paymentFilter === pm && styles.filterTabTextActive]}>
-                {pm === 'ALL' ? 'ALL MODES' : pm}
-              </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+          style={styles.filterScroll}
+        >
+          {(['ALL', 'CASH', 'BANK', 'PENDING'] as const).map((pm) => {
+            const active = paymentFilter === pm;
+            const label =
+              pm === 'ALL'
+                ? 'All Modes'
+                : pm === 'CASH'
+                ? 'Cash'
+                : pm === 'BANK'
+                ? 'Bank'
+                : 'Pending';
+            return (
+              <TouchableOpacity
+                key={pm}
+                style={[styles.paymentChip, active && styles.paymentChipActive]}
+                onPress={() => setPaymentFilter(pm)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.paymentChipText, active && styles.paymentChipTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Active Filter Summary */}
+        {hasActiveFilters ? (
+          <View style={styles.activeSummaryBar}>
+            <Text style={styles.activeSummaryText}>
+              {sales.length} {sales.length === 1 ? 'result' : 'results'}
+            </Text>
+            <TouchableOpacity onPress={clearAllFilters} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.clearAllText}>Clear All</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
+        ) : null}
       </View>
 
       {loading ? (
@@ -305,18 +334,34 @@ export default function AdminSalesScreen() {
           <CardSkeleton />
           <CardSkeleton />
         </View>
+      ) : loadError ? (
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Could Not Load Sales"
+          description={loadError}
+          actionTitle="Retry"
+          onAction={() => {
+            setLoading(true);
+            fetchSales();
+          }}
+        />
       ) : sales.length === 0 ? (
         <EmptyState
           icon="cart-outline"
           title="No Sales Found"
           description={
-            search
-              ? 'No sales records matching your search.'
-              : 'No transactions recorded matching the selected filter.'
+            hasActiveFilters
+              ? 'No sales records match your current search or filters.'
+              : 'No transactions recorded yet.'
           }
+          actionTitle={hasActiveFilters ? 'Clear Filters' : undefined}
+          onAction={hasActiveFilters ? clearAllFilters : undefined}
         />
       ) : (
         <FlatList
+          key={isMultiColumn ? 'grid-2' : 'list-1'}
+          numColumns={isMultiColumn ? 2 : 1}
+          columnWrapperStyle={isMultiColumn ? styles.columnWrapper : undefined}
           data={sales}
           keyExtractor={(item) => item.id}
           renderItem={renderSaleItem}
@@ -491,8 +536,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.borderSubtle,
-    gap: 6,
-    paddingBottom: Spacing.xs,
+    gap: 8,
+    paddingBottom: Spacing.sm,
   },
   searchInner: {
     paddingHorizontal: Spacing.md,
@@ -501,34 +546,87 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  filterTabsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    gap: 6,
+  filterScroll: {
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  filterTab: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.light.surfaceSecondary,
+  filterScrollContent: {
+    paddingHorizontal: Spacing.md,
+    gap: 8,
+    alignItems: 'center',
   },
-  filterTabActive: {
+  filterChip: {
+    minHeight: 34,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterChipActive: {
     backgroundColor: BrandColors.pink.primary,
   },
-  filterTabActivePurple: {
+  filterChipActivePurple: {
     backgroundColor: '#7C3AED',
   },
-  filterTabText: {
-    ...Typography.caption,
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.light.textSecondary,
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
-  filterTabTextActive: {
+  filterChipTextActive: {
     color: '#FFFFFF',
+  },
+  paymentChip: {
+    minHeight: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paymentChipActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#006B35',
+  },
+  paymentChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  paymentChipTextActive: {
+    color: '#006B35',
+    fontWeight: '700',
+  },
+  activeSummaryBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  activeSummaryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  clearAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  columnWrapper: {
+    gap: Spacing.md,
+  },
+  gridItemWrap: {
+    flex: 1,
   },
   loadingPadding: {
     padding: Spacing.md,
