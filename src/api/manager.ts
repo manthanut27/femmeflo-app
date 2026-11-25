@@ -1,4 +1,4 @@
-import { apiRequest, uploadFileMultipart, API_BASE_URL } from './client';
+import { apiRequest, uploadFileMultipart, API_BASE_URL, isMockMode } from './client';
 import { handleMockRequest } from './mockService';
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
@@ -322,26 +322,30 @@ export const managerApi = {
         }
       }
 
-      // Backend 500/404 or connection failure fallback to local mock engine
-      try {
-        const mockRaw = await handleMockRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination?: PaginationMeta }>(
-          'manager/sales',
-          {
-            method: 'GET',
-            params,
-          }
-        );
-        const list = mockRaw?.sales ?? mockRaw?.items ?? [];
-        return {
-          items: list,
-          pagination: mockRaw?.pagination ?? { page: 1, pageSize: params?.pageSize || 20, total: list.length, totalPages: 1 },
-        };
-      } catch {
-        return {
-          items: [],
-          pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
-        };
+      // Never inject hardcoded mock sales (e.g. Pooja Sharma / 28 Oct) into live backend views
+      if (isMockMode()) {
+        try {
+          const mockRaw = await handleMockRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination?: PaginationMeta }>(
+            'manager/sales',
+            {
+              method: 'GET',
+              params,
+            }
+          );
+          const list = mockRaw?.sales ?? mockRaw?.items ?? [];
+          return {
+            items: list,
+            pagination: mockRaw?.pagination ?? { page: 1, pageSize: params?.pageSize || 20, total: list.length, totalPages: 1 },
+          };
+        } catch {
+          return {
+            items: [],
+            pagination: { page: 1, pageSize: params?.pageSize || 20, total: 0, totalPages: 1 },
+          };
+        }
       }
+
+      throw err;
     }
   },
 

@@ -114,10 +114,10 @@ export default function AdminApprovalsScreen() {
       loadApprovals();
     });
 
-    // Continuous live ticker while screen is active
+    // Slow background fallback ticker (primary instant updates come via realtime sync)
     const liveTicker = setInterval(() => {
       loadApprovals();
-    }, 6000);
+    }, 45000);
 
     return () => {
       sub.remove();

@@ -65,6 +65,8 @@ export default function CustomerListScreen() {
       .catch(() => { });
   }, []);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const loadCustomers = useCallback(
     async (page = 1, append = false) => {
       try {
@@ -82,8 +84,10 @@ export default function CustomerListScreen() {
           setCustomers(res.items);
         }
         setPagination(res.pagination);
-      } catch (err) {
+        setLoadError(null);
+      } catch (err: any) {
         console.warn('Failed to load customers', err);
+        setLoadError(err?.message || 'Unable to load stores right now.');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -297,15 +301,17 @@ export default function CustomerListScreen() {
         </View>
       ) : customers.length === 0 ? (
         <EmptyState
-          icon="storefront-outline"
-          title="No Stores Found"
+          icon={loadError ? 'cloud-offline-outline' : 'storefront-outline'}
+          title={loadError ? "Couldn't Load Stores" : 'No Stores Found'}
           description={
-            debouncedSearch || selectedCategory
+            loadError
+              ? loadError
+              : debouncedSearch || selectedCategory
               ? 'No retail stores match your filter criteria. Try resetting your search.'
               : 'You have not onboarded any retail customers yet.'
           }
-          actionTitle="Onboard Store Now"
-          onAction={() => router.push('/(seller)/customers/new' as any)}
+          actionTitle={loadError ? 'Retry' : 'Onboard Store Now'}
+          onAction={loadError ? onRefresh : () => router.push('/(seller)/customers/new' as any)}
         />
       ) : (
         <FlatList

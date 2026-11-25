@@ -20,16 +20,16 @@ export interface RateLimitResult {
 
 // Default categorized rate limits
 export const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig> = {
-  // Global overall requests: 120 requests per minute
-  global: { maxRequests: 120, windowMs: 60 * 1000 },
-  // Auth operations (login, password reset): 10 requests per minute
-  auth: { maxRequests: 10, windowMs: 60 * 1000 },
-  // Financial/inventory mutations (POST, PUT, PATCH, DELETE): 30 requests per minute
-  mutation: { maxRequests: 30, windowMs: 60 * 1000 },
-  // Read operations (GET): 90 requests per minute
-  read: { maxRequests: 90, windowMs: 60 * 1000 },
-  // Search / geocoding lookup: 40 requests per minute
-  search: { maxRequests: 40, windowMs: 60 * 1000 },
+  // Global overall requests: 300 requests per minute
+  global: { maxRequests: 300, windowMs: 60 * 1000 },
+  // Auth operations (login, password reset): 15 requests per minute
+  auth: { maxRequests: 15, windowMs: 60 * 1000 },
+  // Financial/inventory mutations (POST, PUT, PATCH, DELETE): 60 requests per minute
+  mutation: { maxRequests: 60, windowMs: 60 * 1000 },
+  // Read operations (GET): 240 requests per minute
+  read: { maxRequests: 240, windowMs: 60 * 1000 },
+  // Search / geocoding lookup: 60 requests per minute
+  search: { maxRequests: 60, windowMs: 60 * 1000 },
 };
 
 export class RequestRateLimiter {

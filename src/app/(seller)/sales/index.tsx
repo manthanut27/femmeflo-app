@@ -140,7 +140,7 @@ export default function SalesListScreen() {
 
     const liveTicker = setInterval(() => {
       loadSales(1, false);
-    }, 7000);
+    }, 45000);
 
     return () => {
       sub1.remove();

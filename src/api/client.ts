@@ -250,7 +250,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
   const {
     params,
     skipAuth = false,
-    timeoutMs = 8000,
+    timeoutMs = 20000,
     headers: customHeaders,
     responseType,
     retries = 0,
@@ -375,12 +375,23 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
 
       if (response.status === 429) {
         const retryHeader = response.headers.get('Retry-After');
-        const retrySeconds = retryHeader ? parseInt(retryHeader, 10) || 10 : 10;
-        requestRateLimiter.setLockout(cleanEndpoint, retrySeconds);
+        const parsedRetry = retryHeader ? parseInt(retryHeader, 10) || 10 : 10;
+        const lockoutSeconds = Math.min(Math.max(parsedRetry, 1), 60);
+        requestRateLimiter.setLockout(cleanEndpoint, lockoutSeconds);
+
+        // Serve real cached GET data rather than showing empty screens or fake data
+        if (method === 'GET' && !skipCache) {
+          const cachedOnRateLimit = await cacheManager.get<T>(cacheKey, { allowStale: true });
+          if (cachedOnRateLimit) {
+            console.warn(`[Client] HTTP 429 on '${cacheKey}'. Serving cached real data.`);
+            return cachedOnRateLimit.data;
+          }
+        }
+
         throw new ApiError(
-          `Server is currently busy. Please wait ${retrySeconds} seconds before trying again.`,
+          `Server is currently busy. Please wait ${parsedRetry} seconds before trying again.`,
           429,
-          { retryAfterSeconds: retrySeconds }
+          { retryAfterSeconds: parsedRetry }
         );
       }
 
@@ -507,17 +518,19 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
           );
         }
 
-        console.warn(`[Client] Backend unavailable (${error.message || 'offline'}). Serving request '${endpoint}' from resilient mock engine.`);
-        try {
+        // Only serve mock responses when mock mode is explicitly enabled.
+        // Never inject fake demo data (e.g. Pooja Sharma / Indore) into live production screens.
+        if (isMockMode()) {
+          console.warn(`[Client] Mock mode active. Serving '${endpoint}' from mock engine.`);
           return await handleMockRequest<T>(endpoint, options);
-        } catch (mockErr: any) {
-          throw new ApiError(
-            `Unable to reach backend server at ${API_BASE_URL} and mock fallback failed: ${mockErr.message}`,
-            0,
-            null,
-            true
-          );
         }
+
+        throw new ApiError(
+          `Unable to reach backend server at ${API_BASE_URL}. Please check your internet connection and retry.`,
+          0,
+          null,
+          true
+        );
       }
 
       throw new ApiError(

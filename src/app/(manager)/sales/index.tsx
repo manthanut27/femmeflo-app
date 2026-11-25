@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -94,24 +95,32 @@ export default function ManagerSalesScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
+      let salesErrMsg: string | null = null;
       const [salesRes, dashRes, sellersRes] = await Promise.all([
-        managerApi.listSales({ page: 1, pageSize: 100 }).catch(() => ({
-          items: [],
-          pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 },
-        })),
+        managerApi.listSales({ page: 1, pageSize: 100 }).catch((err: any) => {
+          salesErrMsg = err?.message || 'Unable to load sales right now.';
+          return null;
+        }),
         managerApi.getDashboard().catch(() => null),
-        managerApi.listSellers({ pageSize: 50 }).catch(() => ({ items: [] })),
+        managerApi.listSellers({ pageSize: 50 }).catch(() => null),
       ]);
 
-      setSales(salesRes?.items || []);
-      setPagination(salesRes?.pagination || { page: 1, pageSize: 50, total: 0, totalPages: 1 });
+      if (salesRes) {
+        setSales(salesRes.items || []);
+        setPagination(salesRes.pagination || { page: 1, pageSize: 50, total: 0, totalPages: 1 });
+        setLoadError(null);
+      } else if (salesErrMsg) {
+        setLoadError(salesErrMsg);
+      }
       if (dashRes) setDashboardData(dashRes);
-      setSellers(sellersRes?.items || []);
-    } catch (err) {
+      if (sellersRes) setSellers(sellersRes.items || []);
+    } catch (err: any) {
       console.warn('Failed to load manager sales and dashboard', err);
+      setLoadError(err?.message || 'Unable to connect to server.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -135,7 +144,7 @@ export default function ManagerSalesScreen() {
 
     const liveTicker = setInterval(() => {
       loadData();
-    }, 7000);
+    }, 45000);
 
     return () => {
       sub.remove();
@@ -549,6 +558,19 @@ export default function ManagerSalesScreen() {
         </Pressable>
       </View>
 
+      {loadError ? (
+        <View style={{ paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, maxWidth: MaxContentWidth, width: '100%', alignSelf: 'center' }}>
+          <FeedbackBanner
+            type="warning"
+            title="Live sync delayed"
+            message={loadError}
+            actionLabel="Retry"
+            onAction={onRefresh}
+            onDismiss={() => setLoadError(null)}
+          />
+        </View>
+      ) : null}
+
       {/* ==================================================== */}
       {/* 1. DAILY AREA REPORT VIEW */}
       {/* ==================================================== */}
@@ -627,9 +649,15 @@ export default function ManagerSalesScreen() {
               </View>
             ) : dailyGroups.length === 0 ? (
               <EmptyState
-                icon="calendar-outline"
-                title="No Sales Recorded"
-                description="No sales have been recorded across the area for the selected filter."
+                icon={loadError ? 'cloud-offline-outline' : 'calendar-outline'}
+                title={loadError ? "Couldn't Load Sales" : 'No Sales Recorded'}
+                description={
+                  loadError
+                    ? loadError
+                    : 'No sales have been recorded across the area for the selected filter.'
+                }
+                actionTitle={loadError ? 'Retry' : undefined}
+                onAction={loadError ? onRefresh : undefined}
               />
             ) : (
               dailyGroups.map((group) => {
@@ -830,13 +858,17 @@ export default function ManagerSalesScreen() {
             </View>
           ) : filteredSales.length === 0 ? (
             <EmptyState
-              icon="receipt-outline"
-              title="No Sales Found"
+              icon={loadError ? 'cloud-offline-outline' : 'receipt-outline'}
+              title={loadError ? "Couldn't Load Sales" : 'No Sales Found'}
               description={
-                searchQuery
+                loadError
+                  ? loadError
+                  : searchQuery
                   ? 'No sales orders matched your search criteria.'
                   : 'No sales recorded for this status.'
               }
+              actionTitle={loadError ? 'Retry' : undefined}
+              onAction={loadError ? onRefresh : undefined}
             />
           ) : (
             <FlatList

@@ -152,10 +152,10 @@ export default function ManagerInventoryScreen() {
       loadData();
     });
 
-    // Continuous live ticker while on screen
+    // Slow background fallback ticker (primary instant updates come via realtime sync)
     const liveTicker = setInterval(() => {
       loadData();
-    }, 6000);
+    }, 45000);
 
     return () => {
       sub1.remove();

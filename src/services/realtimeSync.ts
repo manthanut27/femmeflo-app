@@ -42,10 +42,11 @@ class MobileRealtimeSyncService {
     this.isRunning = true;
     this.connectionState = 'reconnecting';
 
-    // Poll every 3 seconds when foregrounded for snappy multi-device sync
+    // Poll every 10 seconds when foregrounded to avoid triggering server rate limits
     this.pollTimer = setInterval(() => {
+      if (AppState.currentState && AppState.currentState !== 'active') return;
       this.pollUpdates();
-    }, 3000);
+    }, 10000);
 
     // Initial sync
     this.pollUpdates();

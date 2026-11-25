@@ -43,6 +43,7 @@ export default function ManagerCustomersScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -65,8 +66,10 @@ export default function ManagerCustomersScreen() {
       });
       setCustomers(res.items);
       setPagination(res.pagination);
-    } catch (err) {
+      setLoadError(null);
+    } catch (err: any) {
       console.warn('Failed to load customers', err);
+      setLoadError(err?.message || 'Unable to load shops right now.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -257,12 +260,14 @@ export default function ManagerCustomersScreen() {
         </View>
       ) : customers.length === 0 ? (
         <EmptyState
-          icon="storefront-outline"
-          title="No Shops Found"
-          description="No shops added in your area yet."
-          iconColor={BrandColors.green.primary}
-          iconBgColor={BrandColors.green.surface}
-          iconBorderColor={BrandColors.green.light}
+          icon={loadError ? 'cloud-offline-outline' : 'storefront-outline'}
+          title={loadError ? "Couldn't Load Shops" : 'No Shops Found'}
+          description={loadError || 'No shops added in your area yet.'}
+          iconColor={loadError ? Colors.light.warning : BrandColors.green.primary}
+          iconBgColor={loadError ? '#FFFBEB' : BrandColors.green.surface}
+          iconBorderColor={loadError ? '#FDE68A' : BrandColors.green.light}
+          actionTitle={loadError ? 'Retry' : undefined}
+          onAction={loadError ? onRefresh : undefined}
         />
       ) : (
         <FlatList

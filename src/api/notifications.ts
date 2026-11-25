@@ -3,14 +3,17 @@ import type { NotificationItem } from './types.ts';
 
 // Safe dynamic resolution for apiRequest & handleMockRequest to prevent ExpoSecureStore native crash in Node tests
 let apiRequestFn: (<T>(endpoint: string, options?: any) => Promise<T>) | null = null;
+let isMockModeFn: (() => boolean) | null = null;
 let handleMockRequestFn: (<T>(endpoint: string, options?: any) => Promise<T>) | null = null;
 
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const clientMod = require('./client');
   apiRequestFn = clientMod?.apiRequest ?? null;
+  isMockModeFn = clientMod?.isMockMode ?? null;
 } catch {
   apiRequestFn = null;
+  isMockModeFn = null;
 }
 
 try {
@@ -36,8 +39,10 @@ export const notificationsApi = {
         const unreadCount = raw?.unreadCount ?? items.filter((n: any) => !n.read).length;
         return { items, unreadCount };
       } catch {
-        // If remote backend returns 404 Route not found or connection fails,
-        // gracefully fall back to the live operational notification feed
+        // In live mode, return empty notifications instead of hardcoded mock alerts
+        if (!isMockModeFn || !isMockModeFn()) {
+          return { items: [], unreadCount: 0 };
+        }
       }
     }
 

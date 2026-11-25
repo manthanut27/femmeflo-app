@@ -191,7 +191,12 @@ export function groupSalesByDay<T extends { createdAt?: string; requestedAt?: st
     }
 
     const group = map[dateKey]!;
-    const q = s.quantity || 0;
+    const q =
+      s.quantity ??
+      (s as any).packetCount ??
+      (Array.isArray((s as any).lineItems)
+        ? (s as any).lineItems.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0), 0)
+        : 0);
     const total = s.totalAmountPaise ?? s.totalPaise ?? 0;
 
     group.salesCount += 1;

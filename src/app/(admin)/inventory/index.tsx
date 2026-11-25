@@ -257,7 +257,7 @@ export default function AdminInventoryMainScreen() {
     const liveTicker = setInterval(() => {
       fetchMasterData();
       fetchTransactions(historyFilter, 1);
-    }, 7000);
+    }, 45000);
 
     return () => {
       sub1.remove();

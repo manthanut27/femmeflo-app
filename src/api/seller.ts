@@ -401,23 +401,26 @@ export const sellerApi = {
         items: list,
         pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
       };
-    } catch {
-      try {
-        const mockRaw = await handleMockRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination?: PaginationMeta }>('seller/sales', {
-          method: 'GET',
-          params,
-        });
-        const list = mockRaw?.sales ?? mockRaw?.items ?? [];
-        return {
-          items: list,
-          pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-        };
-      } catch {
-        return {
-          items: [],
-          pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
-        };
+    } catch (err) {
+      if (isMockMode()) {
+        try {
+          const mockRaw = await handleMockRequest<{ sales?: SaleItem[]; items?: SaleItem[]; pagination?: PaginationMeta }>('seller/sales', {
+            method: 'GET',
+            params,
+          });
+          const list = mockRaw?.sales ?? mockRaw?.items ?? [];
+          return {
+            items: list,
+            pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+          };
+        } catch {
+          return {
+            items: [],
+            pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+          };
+        }
       }
+      throw err;
     }
   },
 
@@ -426,10 +429,13 @@ export const sellerApi = {
       return await apiRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
         method: 'GET',
       });
-    } catch {
-      return await handleMockRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
-        method: 'GET',
-      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sale: SaleItem }>(`seller/sales/${id}`, {
+          method: 'GET',
+        });
+      }
+      throw err;
     }
   },
 

@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, uploadFileMultipart } from './client';
+import { apiRequest, API_BASE_URL, isMockMode, uploadFileMultipart } from './client';
 import { handleMockRequest } from './mockService';
 import { sanitizeBackendPermissions } from '../utils/permissions';
 import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
@@ -240,35 +240,36 @@ export const adminApi = {
         items: list,
         pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
       };
-    } catch (_err) {
-      // Backend error (500 Internal server error / 404 Route not found / offline)
-      // Fall back seamlessly to local mock engine
-      try {
-        const mockRaw = await handleMockRequest<{ items?: any[]; pendingSales?: any[]; pagination?: PaginationMeta }>(
-          'admin/approvals',
-          {
-            method: 'GET',
-            params,
-          }
-        );
-        const mockList = (mockRaw?.items ?? mockRaw?.pendingSales ?? []).map(normalizeApprovalItem);
-        mockList.sort((a, b) => {
-          if (a.isResubmitted && !b.isResubmitted) return -1;
-          if (!a.isResubmitted && b.isResubmitted) return 1;
-          const timeA = new Date(a.resubmittedAt || a.updatedAt || a.createdAt || 0).getTime();
-          const timeB = new Date(b.resubmittedAt || b.updatedAt || b.createdAt || 0).getTime();
-          return timeB - timeA;
-        });
-        return {
-          items: mockList,
-          pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: mockList.length, totalPages: 1 },
-        };
-      } catch {
-        return {
-          items: [],
-          pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
-        };
+    } catch (err) {
+      if (isMockMode()) {
+        try {
+          const mockRaw = await handleMockRequest<{ items?: any[]; pendingSales?: any[]; pagination?: PaginationMeta }>(
+            'admin/approvals',
+            {
+              method: 'GET',
+              params,
+            }
+          );
+          const mockList = (mockRaw?.items ?? mockRaw?.pendingSales ?? []).map(normalizeApprovalItem);
+          mockList.sort((a, b) => {
+            if (a.isResubmitted && !b.isResubmitted) return -1;
+            if (!a.isResubmitted && b.isResubmitted) return 1;
+            const timeA = new Date(a.resubmittedAt || a.updatedAt || a.createdAt || 0).getTime();
+            const timeB = new Date(b.resubmittedAt || b.updatedAt || b.createdAt || 0).getTime();
+            return timeB - timeA;
+          });
+          return {
+            items: mockList,
+            pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: mockList.length, totalPages: 1 },
+          };
+        } catch {
+          return {
+            items: [],
+            pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+          };
+        }
       }
+      throw err;
     }
   },
 
@@ -278,11 +279,14 @@ export const adminApi = {
         method: 'POST',
         body: JSON.stringify({ notes }),
       });
-    } catch {
-      return await handleMockRequest<{ sale: SaleItem }>(`admin/approvals/${saleId}/approve`, {
-        method: 'POST',
-        body: JSON.stringify({ notes }),
-      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sale: SaleItem }>(`admin/approvals/${saleId}/approve`, {
+          method: 'POST',
+          body: JSON.stringify({ notes }),
+        });
+      }
+      throw err;
     }
   },
 
@@ -292,11 +296,14 @@ export const adminApi = {
         method: 'POST',
         body: JSON.stringify({ reason }),
       });
-    } catch {
-      return await handleMockRequest<{ sale: SaleItem }>(`admin/approvals/${saleId}/reject`, {
-        method: 'POST',
-        body: JSON.stringify({ reason }),
-      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sale: SaleItem }>(`admin/approvals/${saleId}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+        });
+      }
+      throw err;
     }
   },
 
@@ -1123,31 +1130,32 @@ export const adminApi = {
         sales: list,
         pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
       };
-    } catch (_err) {
-      // Backend error (500 Internal server error / 404 Route not found / offline)
-      // Transparently fall back to resilient mock engine
-      try {
-        const mockRaw = await handleMockRequest<{
-          items?: SaleItem[];
-          sales?: SaleItem[];
-          pagination?: PaginationMeta;
-        }>('admin/sales', {
-          method: 'GET',
-          params: params as Record<string, string | number | boolean | undefined | null>,
-        });
-        const list = mockRaw?.items ?? mockRaw?.sales ?? [];
-        return {
-          items: list,
-          sales: list,
-          pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-        };
-      } catch {
-        return {
-          items: [],
-          sales: [],
-          pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
-        };
+    } catch (err) {
+      if (isMockMode()) {
+        try {
+          const mockRaw = await handleMockRequest<{
+            items?: SaleItem[];
+            sales?: SaleItem[];
+            pagination?: PaginationMeta;
+          }>('admin/sales', {
+            method: 'GET',
+            params: params as Record<string, string | number | boolean | undefined | null>,
+          });
+          const list = mockRaw?.items ?? mockRaw?.sales ?? [];
+          return {
+            items: list,
+            sales: list,
+            pagination: mockRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+          };
+        } catch {
+          return {
+            items: [],
+            sales: [],
+            pagination: { page: 1, pageSize: 20, total: 0, totalPages: 1 },
+          };
+        }
       }
+      throw err;
     }
   },
 
@@ -1156,10 +1164,13 @@ export const adminApi = {
       return await apiRequest<{ sale: SaleItem }>(`admin/sales/${id}`, {
         method: 'GET',
       });
-    } catch {
-      return await handleMockRequest<{ sale: SaleItem }>(`admin/sales/${id}`, {
-        method: 'GET',
-      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sale: SaleItem }>(`admin/sales/${id}`, {
+          method: 'GET',
+        });
+      }
+      throw err;
     }
   },
 
@@ -1169,11 +1180,14 @@ export const adminApi = {
         method: 'PATCH',
         body: JSON.stringify(payload),
       });
-    } catch {
-      return await handleMockRequest<{ sale: SaleItem }>(`admin/sales/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sale: SaleItem }>(`admin/sales/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+      }
+      throw err;
     }
   },
 };
