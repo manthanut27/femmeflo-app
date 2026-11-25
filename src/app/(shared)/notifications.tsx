@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { MOCK_NOTIFICATIONS } from '@/api/mockData';
+import { isMockMode } from '@/api/client';
 import { notificationsApi } from '@/api/notifications';
 import type { NotificationItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
@@ -167,9 +168,14 @@ export default function NotificationsScreen() {
       setNotifications(res.items);
       setUnreadCount(res.unreadCount);
     } catch (err) {
-      console.warn('Live notifications endpoint unavailable, serving offline feed', err);
-      setNotifications(MOCK_NOTIFICATIONS);
-      setUnreadCount(MOCK_NOTIFICATIONS.filter((n) => !n.read).length);
+      console.warn('Live notifications endpoint unavailable:', err);
+      if (isMockMode()) {
+        setNotifications(MOCK_NOTIFICATIONS);
+        setUnreadCount(MOCK_NOTIFICATIONS.filter((n) => !n.read).length);
+      } else {
+        setNotifications([]);
+        setUnreadCount(0);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -268,7 +268,8 @@ export default function ManagerSalesScreen() {
 
     for (const s of sales) {
       const sellerId = s.sellerId || s.seller?.id || 'unknown';
-      const sellerName = s.seller?.name || 'Assigned Officer';
+      const isCurrentUserSale = Boolean(user?.id && (s.sellerId === user.id || s.seller?.id === user.id));
+      const sellerName = s.seller?.name || (isCurrentUserSale ? user?.name : undefined) || 'Assigned Officer';
 
       if (!perfMap[sellerId]) {
         perfMap[sellerId] = { name: sellerName, packets: 0, totalPaise: 0, count: 0 };
@@ -279,7 +280,7 @@ export default function ManagerSalesScreen() {
     }
 
     return Object.values(perfMap).sort((a, b) => b.totalPaise - a.totalPaise);
-  }, [sales]);
+  }, [sales, user?.id, user?.name]);
 
   const filteredSales = useMemo(() => {
     let result = sales;
@@ -466,7 +467,9 @@ export default function ManagerSalesScreen() {
           <View style={styles.sellerInfo}>
             <View style={styles.infoRow}>
               <Ionicons name="person-outline" size={13} color={Colors.light.textSecondary} />
-              <Text style={styles.sellerName}>{item.seller?.name || 'Assigned Officer'}</Text>
+              <Text style={styles.sellerName}>
+                {item.seller?.name || (user?.id && (item.sellerId === user.id || item.seller?.id === user.id) ? user.name : undefined) || 'Assigned Officer'}
+              </Text>
             </View>
             <View style={[styles.infoRow, { marginTop: 4 }]}>
               <Ionicons name="cube-outline" size={13} color={Colors.light.textSecondary} />
@@ -603,7 +606,9 @@ export default function ManagerSalesScreen() {
               <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.green.primary, borderLeftWidth: 4 }]}>
                 <Text style={styles.kpiLabel}>Total Sales</Text>
                 <Text style={styles.kpiValueGreen}>{formatCurrencyINR(territoryMetrics.revenuePaise)}</Text>
-                <Text style={styles.kpiSub}>{territoryMetrics.confirmedCount} bills</Text>
+                <Text style={styles.kpiSub}>
+                  {territoryMetrics.confirmedCount} {territoryMetrics.confirmedCount === 1 ? 'bill' : 'bills'}
+                </Text>
               </Card>
 
               <Card style={[styles.kpiCard, { borderLeftColor: BrandColors.pink.primary, borderLeftWidth: 4 }]}>

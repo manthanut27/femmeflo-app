@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authApi } from '../api/auth';
-import { setSessionExpiredHandler, tokenStorage } from '../api/client';
+import { cacheManager, requestRateLimiter, setSessionExpiredHandler, tokenStorage } from '../api/client';
 import { syncMockServiceUser } from '../api/mockService';
 import type { AuthRole, PublicUser } from '../api/types';
-import { draftStorage } from '../utils/draftStorage';
+import { draftStorage, resolveDefaultStorage } from '../utils/draftStorage';
 import { mobileRealtimeSync } from '../services/realtimeSync';
+
+const CACHE_SCHEMA_VERSION_KEY = '@femmeflo_cache_schema_version';
+const CURRENT_CACHE_SCHEMA_VERSION = 'v2';
 
 export type AuthState =
   | 'INITIALIZING'
@@ -39,8 +42,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthState('INITIALIZING');
       setIsActionLoading(true);
 
+      // One-time purge of stale/mock cache entries left by older app builds
+      try {
+        const storage = resolveDefaultStorage();
+        const ver = await storage.getItem(CACHE_SCHEMA_VERSION_KEY);
+        if (ver !== CURRENT_CACHE_SCHEMA_VERSION) {
+          await cacheManager.clearAll();
+          requestRateLimiter.reset();
+          await storage.setItem(CACHE_SCHEMA_VERSION_KEY, CURRENT_CACHE_SCHEMA_VERSION);
+        }
+      } catch {
+        // Ignore version migration errors
+      }
+
       const storedToken = await tokenStorage.getToken();
       if (!storedToken) {
+        await cacheManager.clearAll().catch(() => {});
         setToken(null);
         setUser(null);
         setAuthState('UNAUTHENTICATED');
@@ -50,6 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Purge any legacy mock test tokens from storage
       if (storedToken.startsWith('mock_jwt_token_')) {
         await tokenStorage.clearToken();
+        await cacheManager.clearAll().catch(() => {});
         setToken(null);
         setUser(null);
         setAuthState('UNAUTHENTICATED');
@@ -68,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthState('AUTHENTICATED');
         } else {
           await tokenStorage.clearToken();
+          await cacheManager.clearAll().catch(() => {});
           setToken(null);
           setUser(null);
           setAuthState('UNAUTHENTICATED');
@@ -81,6 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Token is explicitly expired or revoked by backend
           console.warn('[AuthContext] Backend session revoked or expired (401/403). Clearing session.');
           await tokenStorage.clearToken();
+          await cacheManager.clearAll().catch(() => {});
           setToken(null);
           setUser(null);
           setAuthState('SESSION_EXPIRED');
@@ -125,6 +145,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up session expiry hook to wipe local state and update state machine
     setSessionExpiredHandler(() => {
       tokenStorage.clearToken().catch(() => {});
+      cacheManager.clearAll().catch(() => {});
+      requestRateLimiter.reset();
       setUser(null);
       setToken(null);
       setAuthState('SESSION_EXPIRED');
@@ -151,6 +173,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!res.user || !res.user.role || !res.token) {
         throw new Error('Authentication succeeded but returned invalid user data.');
       }
+      // Always wipe cached data from any prior user session before entering the new workspace
+      await cacheManager.clearAll().catch(() => {});
+      requestRateLimiter.reset();
       await tokenStorage.setToken(res.token);
       await tokenStorage.setCachedUser(res.user);
       setToken(res.token);
@@ -174,6 +199,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.warn('Failed to clear user draft storage on logout:', storageErr);
         }
       }
+      await cacheManager.clearAll().catch(() => {});
+      requestRateLimiter.reset();
       await tokenStorage.clearToken();
       setToken(null);
       setUser(null);

@@ -86,4 +86,15 @@ describe('Live Data Integrity, Packet Totals & Rate-Limit Protection Suite', () 
     assert.ok(sellerSaleDetailCode.includes('documentDirectory'), '(seller)/sales/[id] must fallback to FileSystem.documentDirectory');
     assert.ok(sellerSaleDetailCode.includes('sale.invoice?.id || sale.id'), '(seller)/sales/[id] must prefer invoice id when present');
   });
+
+  it('auth clears cross-account/stale cache on login, logout, and schema migration and handles manager dual-role fallbacks', () => {
+    const authCode = readSource('src/context/AuthContext.tsx');
+    const managerApiCode = readSource('src/api/manager.ts');
+    const notificationsScreenCode = readSource('src/app/(shared)/notifications.tsx');
+
+    assert.ok(authCode.includes('cacheManager.clearAll()'), 'AuthContext must clear cache across login/logout/migration');
+    assert.ok(authCode.includes('CACHE_SCHEMA_VERSION_KEY'), 'AuthContext must invalidate legacy APK cache once');
+    assert.ok(managerApiCode.includes("seller/customers'"), 'managerApi.listCustomers must fall back to seller/customers on 403');
+    assert.ok(notificationsScreenCode.includes('if (isMockMode())'), 'notifications screen must not inject MOCK_NOTIFICATIONS in live mode');
+  });
 });

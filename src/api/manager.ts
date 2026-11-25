@@ -161,21 +161,54 @@ export const managerApi = {
     state?: string;
     district?: string;
   }): Promise<{ items: CustomerItem[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ customers?: CustomerItem[]; items?: CustomerItem[]; pagination: PaginationMeta }>(
-      'manager/customers',
-      {
-        method: 'GET',
-        params,
+    try {
+      const raw = await apiRequest<{ customers?: CustomerItem[]; items?: CustomerItem[]; pagination: PaginationMeta }>(
+        'manager/customers',
+        {
+          method: 'GET',
+          params,
+        }
+      );
+      const list = (raw?.customers ?? raw?.items ?? []).map((c) => ({
+        ...c,
+        photoUrl: c.photoUrl || (c as any).photoPath || null,
+      }));
+      return {
+        items: list,
+        pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+      };
+    } catch (err: any) {
+      if (
+        err?.status === 403 ||
+        err?.status === 401 ||
+        err?.message?.toLowerCase().includes('permission denied')
+      ) {
+        const sellerRaw = await apiRequest<{ customers?: CustomerItem[]; items?: CustomerItem[]; pagination: PaginationMeta }>(
+          'seller/customers',
+          {
+            method: 'GET',
+            params: {
+              page: params?.page,
+              pageSize: params?.pageSize,
+              search: params?.search,
+              categoryId: params?.categoryId,
+              active: params?.active,
+              state: params?.state,
+              district: params?.district,
+            },
+          }
+        );
+        const list = (sellerRaw?.customers ?? sellerRaw?.items ?? []).map((c) => ({
+          ...c,
+          photoUrl: c.photoUrl || (c as any).photoPath || null,
+        }));
+        return {
+          items: list,
+          pagination: sellerRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
+        };
       }
-    );
-    const list = (raw?.customers ?? raw?.items ?? []).map((c) => ({
-      ...c,
-      photoUrl: c.photoUrl || (c as any).photoPath || null,
-    }));
-    return {
-      items: list,
-      pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
-    };
+      throw err;
+    }
   },
 
   async getCustomer(id: string): Promise<{ customer: CustomerItem }> {
