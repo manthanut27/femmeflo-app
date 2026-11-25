@@ -344,7 +344,7 @@ export function VoiceFeedbackTranslator({
             />
           </Animated.View>
           <Text style={[styles.micActionPillText, isListening && styles.micActionPillTextListening]}>
-            {isListening ? 'Sun raha hoon... Stop karein' : micLabel}
+            {isListening ? 'Listening... Tap to stop' : micLabel}
           </Text>
         </Pressable>
       )}
