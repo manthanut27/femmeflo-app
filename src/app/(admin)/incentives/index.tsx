@@ -81,12 +81,14 @@ export default function AdminIncentivesScreen() {
 
   // Modals
   const [globalRuleModal, setGlobalRuleModal] = useState(false);
-  const [newGlobalRate, setNewGlobalRate] = useState('15.00');
+  const [newGlobalRate, setNewGlobalRate] = useState('1.00');
+  const [applyGlobalToUnpaid, setApplyGlobalToUnpaid] = useState(true);
   const [savingGlobalRule, setSavingGlobalRule] = useState(false);
 
   const [rateModalUser, setRateModalUser] = useState<IncentiveSummaryItem | null>(null);
   const [customRateInput, setCustomRateInput] = useState('');
   const [customRateReason, setCustomRateReason] = useState('');
+  const [applyUserRateToUnpaid, setApplyUserRateToUnpaid] = useState(true);
   const [savingUserRate, setSavingUserRate] = useState(false);
 
   const [adjModalUser, setAdjModalUser] = useState<IncentiveSummaryItem | null>(null);
@@ -126,9 +128,8 @@ export default function AdminIncentivesScreen() {
       }
       if (setRes?.settings) {
         setSettings(setRes.settings);
-        if (setRes.settings.incentiveRatePaise) {
-          setNewGlobalRate((setRes.settings.incentiveRatePaise / 100).toFixed(2));
-        }
+        const resolvedDefaultPaise = setRes.settings.incentiveRatePaise ?? 100;
+        setNewGlobalRate((resolvedDefaultPaise / 100).toFixed(2));
       }
     } catch (err: any) {
       console.warn('Failed loading incentive data', err);
@@ -150,11 +151,24 @@ export default function AdminIncentivesScreen() {
   const allEmployees = useMemo(() => {
     if (!data) return [];
     let list: IncentiveSummaryItem[] = [];
+    const seen = new Set<string>();
+    const addUnique = (items?: IncentiveSummaryItem[]) => {
+      for (const emp of items || []) {
+        const key = emp.sellerId || emp.id;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        list.push(emp);
+      }
+    };
+
     if (roleFilter === 'ALL' || roleFilter === 'SELLER') {
-      list = list.concat(data.sellers || []);
+      addUnique(data.sellers);
     }
     if (roleFilter === 'ALL' || roleFilter === 'MANAGER') {
-      list = list.concat(data.managers || []);
+      addUnique(data.managers);
+    }
+    if (list.length === 0 && (data.items || data.users)) {
+      addUnique(data.items || data.users);
     }
 
     if (search.trim()) {
@@ -188,8 +202,14 @@ export default function AdminIncentivesScreen() {
             setSavingGlobalRule(true);
             try {
               const ratePaise = Math.round(rateNum * 100);
-              await adminApi.updateIncentiveSettings({ incentiveRatePaise: ratePaise });
-              Alert.alert('Success', `Default incentive rate updated to ₹${rateNum.toFixed(2)}/pkt.`);
+              const res = await adminApi.updateIncentiveSettings({
+                incentiveRatePaise: ratePaise,
+                applyToUnpaid: applyGlobalToUnpaid,
+              });
+              const extraMsg = res?.recalculatedCount
+                ? ` Updated ${res.recalculatedCount} unpaid sale(s).`
+                : '';
+              Alert.alert('Success', `Default incentive rate updated to ₹${rateNum.toFixed(2)}/pkt.${extraMsg}`);
               setGlobalRuleModal(false);
               await loadData();
             } catch (err: any) {
@@ -230,6 +250,7 @@ export default function AdminIncentivesScreen() {
                 ratePaise,
                 effectiveDate: new Date().toISOString(),
                 reason: customRateReason.trim() || undefined,
+                applyToUnpaid: applyUserRateToUnpaid,
               });
               Alert.alert('Success', `Rate for ${userName} updated to ₹${rateNum.toFixed(2)}/pkt.`);
               setRateModalUser(null);
@@ -370,12 +391,24 @@ export default function AdminIncentivesScreen() {
 
   const renderEmployeeCard = ({ item }: { item: IncentiveSummaryItem }) => {
     const name = item.sellerName || (item as any).name || 'Employee';
-    const rateRupees = item.ratePerPacketRupees || ((item.effectiveRatePaise || 0) / 100) || 15;
-    const earnedRupees = ((item.totalEarnedPaise || 0) / 100).toFixed(2);
-    const paidRupees = ((item.totalPaidPaise || 0) / 100).toFixed(2);
-    const outstandingRupees = (((item.outstandingPaise ?? (item as any).netPayablePaise) || 0) / 100).toFixed(2);
+    const defaultRatePaise = settings?.incentiveRatePaise ?? 100;
+    const rateRupees =
+      item.ratePerPacketRupees ??
+      ((item.effectiveRatePaise ?? item.incentiveRatePaise ?? defaultRatePaise) / 100);
+    const totalEarnedPaise =
+      item.adjustedEntitlementPaise ??
+      item.earnedPaise ??
+      item.totalEarnedPaise ??
+      (item as any).totalIncentivePaise ??
+      (item as any).salesIncentivePaise ??
+      0;
+    const totalPaidPaise = item.totalPaidPaise ?? (item as any).paidPaise ?? 0;
+    const outstandingPaise = item.outstandingPaise ?? item.netPayablePaise ?? 0;
+    const earnedRupees = (totalEarnedPaise / 100).toFixed(2);
+    const paidRupees = (totalPaidPaise / 100).toFixed(2);
+    const outstandingRupees = (outstandingPaise / 100).toFixed(2);
     const role = (item as any).role || (item.id.includes('mgr') ? 'MANAGER' : 'SELLER');
-    const isPaid = (item.outstandingPaise ?? (item as any).netPayablePaise ?? 0) <= 0;
+    const isPaid = outstandingPaise <= 0;
 
     return (
       <Card style={styles.empCard}>
@@ -423,8 +456,9 @@ export default function AdminIncentivesScreen() {
             style={styles.actionBtn}
             onPress={() => {
               setRateModalUser(item);
-              setCustomRateInput(rateRupees.toString());
+              setCustomRateInput(rateRupees.toFixed(2));
               setCustomRateReason('');
+              setApplyUserRateToUnpaid(totalPaidPaise === 0);
             }}
             accessibilityRole="button"
             accessibilityLabel={`Override rate for ${name}`}
@@ -514,7 +548,7 @@ export default function AdminIncentivesScreen() {
                 <Text style={styles.bannerDesc}>
                   Field sellers receive{' '}
                   <Text style={{ fontWeight: '700', color: BrandColors.pink.dark }}>
-                    ₹{((settings?.incentiveRatePaise || 1500) / 100).toFixed(2)}
+                    ₹{((settings?.incentiveRatePaise ?? 100) / 100).toFixed(2)}
                   </Text>{' '}
                   per packet sold.
                 </Text>
@@ -523,7 +557,10 @@ export default function AdminIncentivesScreen() {
                 title="Configure"
                 size="sm"
                 variant="outline-admin"
-                onPress={() => setGlobalRuleModal(true)}
+                onPress={() => {
+                  setApplyGlobalToUnpaid((summary?.totalPaidPaise ?? 0) === 0);
+                  setGlobalRuleModal(true);
+                }}
               />
             </View>
           </Card>
@@ -670,8 +707,26 @@ export default function AdminIncentivesScreen() {
                 value={newGlobalRate}
                 onChangeText={setNewGlobalRate}
                 keyboardType="numeric"
-                placeholder="15.00"
+                placeholder="1.00"
               />
+              <Pressable
+                style={styles.toggleCheckRow}
+                onPress={() => setApplyGlobalToUnpaid((prev) => !prev)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: applyGlobalToUnpaid }}
+              >
+                <Ionicons
+                  name={applyGlobalToUnpaid ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={applyGlobalToUnpaid ? BrandColors.pink.dark : Colors.light.textSecondary}
+                />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.toggleCheckLabel}>Recalculate existing unpaid sales</Text>
+                  <Text style={styles.toggleCheckHint}>
+                    Updates past confirmed sales for employees with ₹0 paid so far (before payouts).
+                  </Text>
+                </View>
+              </Pressable>
               <View style={styles.modalBtnRow}>
                 <Button
                   title="Cancel"
@@ -725,7 +780,7 @@ export default function AdminIncentivesScreen() {
                 value={customRateInput}
                 onChangeText={setCustomRateInput}
                 keyboardType="numeric"
-                placeholder="e.g. 18.00"
+                placeholder="e.g. 2.00"
               />
               <Text style={styles.inputLabel}>Justification / Reason</Text>
               <TextInput
@@ -734,6 +789,24 @@ export default function AdminIncentivesScreen() {
                 onChangeText={setCustomRateReason}
                 placeholder="e.g. Rural area promotion incentive"
               />
+              <Pressable
+                style={styles.toggleCheckRow}
+                onPress={() => setApplyUserRateToUnpaid((prev) => !prev)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: applyUserRateToUnpaid }}
+              >
+                <Ionicons
+                  name={applyUserRateToUnpaid ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={applyUserRateToUnpaid ? BrandColors.pink.dark : Colors.light.textSecondary}
+                />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.toggleCheckLabel}>Apply new rate to existing unpaid sales</Text>
+                  <Text style={styles.toggleCheckHint}>
+                    Applies to all confirmed sales if no payouts have been recorded yet.
+                  </Text>
+                </View>
+              </Pressable>
               <View style={styles.modalBtnRow}>
                 <Button
                   title="Cancel"
@@ -963,13 +1036,13 @@ export default function AdminIncentivesScreen() {
                     <View style={styles.ledgerSummaryCol}>
                       <Text style={styles.ledgerSummaryLabel}>Lifetime Earned</Text>
                       <Text style={styles.ledgerSummaryVal}>
-                        ₹{((detailsData.summary?.earnedPaise || 0) / 100).toFixed(2)}
+                        ₹{(((detailsData.summary?.adjustedEntitlementPaise ?? detailsData.summary?.earnedPaise ?? detailsData.summary?.salesIncentivePaise ?? detailsData.summary?.totalEarnedPaise) || 0) / 100).toFixed(2)}
                       </Text>
                     </View>
                     <View style={styles.ledgerSummaryCol}>
                       <Text style={styles.ledgerSummaryLabel}>Lifetime Paid</Text>
                       <Text style={[styles.ledgerSummaryVal, { color: BrandColors.green.primary }]}>
-                        ₹{((detailsData.summary?.paidPaise || 0) / 100).toFixed(2)}
+                        ₹{(((detailsData.summary?.totalPaidPaise ?? detailsData.summary?.paidPaise) || 0) / 100).toFixed(2)}
                       </Text>
                     </View>
                     <View style={styles.ledgerSummaryCol}>
@@ -979,6 +1052,33 @@ export default function AdminIncentivesScreen() {
                       </Text>
                     </View>
                   </View>
+
+                  {/* Confirmed Sales Contributing to Ledger */}
+                  <Text style={styles.ledgerSectionTitle}>
+                    Confirmed Sales ({detailsData.summary?.confirmedPackets ?? 0} pkts)
+                  </Text>
+                  {detailsData.sales && detailsData.sales.length > 0 ? (
+                    detailsData.sales.slice(0, 10).map((s: any) => {
+                      const effPaise = s.incentiveAmountPaise ?? ((s.quantity || 0) * (s.incentiveRatePaise ?? detailsData.user.effectiveRatePaise ?? 100));
+                      return (
+                        <View key={s.id} style={styles.ledgerRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.ledgerRowTitle}>
+                              {s.customer?.shopName || s.invoiceNumber || 'Confirmed Sale'}
+                            </Text>
+                            <Text style={styles.ledgerRowSub}>
+                              {s.quantity} pkts • {new Date(s.confirmedAt || s.createdAt).toLocaleDateString('en-IN')}
+                            </Text>
+                          </View>
+                          <Text style={[styles.ledgerRowVal, { color: BrandColors.pink.dark }]}>
+                            ₹{(effPaise / 100).toFixed(2)}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.emptyLedgerText}>No confirmed sales recorded yet.</Text>
+                  )}
 
                   {/* Adjustments */}
                   <Text style={styles.ledgerSectionTitle}>Recent Manual Adjustments</Text>
@@ -1388,6 +1488,27 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textMuted,
     fontStyle: 'italic',
+  },
+  toggleCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    marginBottom: Spacing.md,
+  },
+  toggleCheckLabel: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  toggleCheckHint: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
   },
 });
 

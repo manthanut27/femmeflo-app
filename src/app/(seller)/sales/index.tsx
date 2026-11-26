@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   DeviceEventEmitter,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -16,6 +17,7 @@ import {
 import { sellerApi } from '@/api/seller';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
+import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -68,6 +70,28 @@ export default function SalesListScreen() {
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({
     [getISTDateKey(new Date())]: true,
   });
+  const [pdfPreview, setPdfPreview] = useState<{
+    url: string;
+    filename: string;
+    title: string;
+  } | null>(null);
+
+  const handleOpenInvoice = (sale: SaleItem) => {
+    const targetInvoiceId = sale.invoice?.id || sale.id;
+    const pdfUrl = sellerApi.getInvoicePdfUrl(targetInvoiceId, false);
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.open(pdfUrl, '_blank');
+      }
+      return;
+    }
+    const safeNum = String(sale.saleNumber || sale.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '_');
+    setPdfPreview({
+      url: pdfUrl,
+      filename: `Invoice_${safeNum}.pdf`,
+      title: `Tax Invoice ${sale.saleNumber ? `#${sale.saleNumber}` : ''}`.trim(),
+    });
+  };
 
   const loadCustomers = useCallback(async () => {
     try {
@@ -276,6 +300,21 @@ export default function SalesListScreen() {
               <View style={styles.revisePricePill}>
                 <Text style={styles.revisePricePillText}>Revise Price ›</Text>
               </View>
+            )}
+            {(item.status === 'CONFIRMED' || (item.status as string) === 'APPROVED') && (
+              <Pressable
+                style={styles.invoiceChipBtn}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleOpenInvoice(item);
+                }}
+                hitSlop={HitSlop.sm}
+                accessibilityRole="button"
+                accessibilityLabel={`Preview and share tax invoice for ${item.customer?.shopName || 'order'}`}
+              >
+                <Ionicons name="document-text-outline" size={12} color={BrandColors.pink.primary} />
+                <Text style={styles.invoiceChipBtnText}>Tax Invoice</Text>
+              </Pressable>
             )}
           </View>
           <Text style={styles.amountText}>{formatCurrencyINR(totalAmount)}</Text>
@@ -621,6 +660,21 @@ export default function SalesListScreen() {
                 <Text style={styles.revisePricePillText}>Revise Price ›</Text>
               </View>
             )}
+            {(item.status === 'CONFIRMED' || (item.status as string) === 'APPROVED') && (
+              <Pressable
+                style={[styles.invoiceChipBtn, { marginTop: 4 }]}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleOpenInvoice(item);
+                }}
+                hitSlop={HitSlop.sm}
+                accessibilityRole="button"
+                accessibilityLabel={`Preview and share tax invoice for ${item.customer?.shopName || 'order'}`}
+              >
+                <Ionicons name="document-text-outline" size={12} color={BrandColors.pink.primary} />
+                <Text style={styles.invoiceChipBtnText}>Tax Invoice</Text>
+              </Pressable>
+            )}
                                 </View>
                               </View>
 
@@ -727,6 +781,15 @@ export default function SalesListScreen() {
         }}
         onClose={() => setCustomerPickerOpen(false)}
         emptyMessage="No customers found matching search"
+      />
+
+      {/* In-App Tax Invoice PDF Preview + Share Modal */}
+      <PdfPreviewModal
+        visible={pdfPreview !== null}
+        pdfUrl={pdfPreview?.url || null}
+        filename={pdfPreview?.filename}
+        title={pdfPreview?.title}
+        onClose={() => setPdfPreview(null)}
       />
     </View>
   );
@@ -1196,5 +1259,21 @@ const styles = StyleSheet.create({
   loadMoreText: {
     ...Typography.caption,
     color: Colors.light.textSecondary,
+  },
+  invoiceChipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  invoiceChipBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
   },
 });

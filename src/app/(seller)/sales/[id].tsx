@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   DeviceEventEmitter,
   KeyboardAvoidingView,
@@ -27,7 +26,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { PageTransition } from '@/components/ui/PageTransition';
+import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
@@ -94,8 +93,13 @@ export default function SaleDetailScreen() {
   const [paymentRef, setPaymentRef] = useState('');
   const [isCollecting, setIsCollecting] = useState(false);
 
-  // Invoice Download State
+  // Invoice Download / In-App Preview State
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{
+    url: string;
+    filename: string;
+    title: string;
+  } | null>(null);
 
   // Customer Feedback Voice Modal State
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
@@ -261,30 +265,13 @@ Generated in FemmeFlo Standalone Test Mode.`;
       }
 
       const targetInvoiceId = sale.invoice?.id || sale.id;
-      const url = sellerApi.getInvoicePdfUrl(targetInvoiceId, true);
       const safeNum = String(sale.saleNumber || sale.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '_');
       const filename = `Invoice_${safeNum}.pdf`;
-      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
-      const fileUri = `${dir}${filename}`;
-      const token = await tokenStorage.getToken();
-
-      const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      setPdfPreview({
+        url: sellerApi.getInvoicePdfUrl(targetInvoiceId, false),
+        filename,
+        title: `Tax Invoice ${sale.saleNumber ? `#${sale.saleNumber}` : ''}`.trim(),
       });
-
-      if (downloadResult.status === 200) {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(downloadResult.uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: `Tax Invoice ${sale.saleNumber || ''}`,
-          });
-        } else {
-          Alert.alert('Invoice Downloaded', `Saved to ${downloadResult.uri}`);
-        }
-      } else {
-        throw new Error(`Server returned HTTP ${downloadResult.status} while downloading invoice PDF.`);
-      }
     } catch (err: any) {
       Alert.alert('Download Error', err.message || 'Failed to download invoice PDF.');
     } finally {
@@ -586,9 +573,9 @@ Generated in FemmeFlo Standalone Test Mode.`;
             )}
           </Card>
 
-          {/* Tax Invoice Download & Share */}
+          {/* Tax Invoice In-App Preview & Share */}
           <Button
-            title={isDownloadingInvoice ? 'Downloading Tax Invoice...' : 'Download & Share Tax Invoice (PDF)'}
+            title={isDownloadingInvoice ? 'Opening Tax Invoice...' : 'View & Share Tax Invoice (PDF)'}
             variant="outline"
             size="lg"
             onPress={handleDownloadInvoice}
@@ -882,6 +869,14 @@ Generated in FemmeFlo Standalone Test Mode.`;
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <PdfPreviewModal
+        visible={pdfPreview !== null}
+        pdfUrl={pdfPreview?.url || null}
+        filename={pdfPreview?.filename}
+        title={pdfPreview?.title}
+        onClose={() => setPdfPreview(null)}
+      />
     </View>
   );
 }

@@ -894,9 +894,32 @@ export const adminApi = {
     return { settings };
   },
 
-  async updateIncentiveSettings(payload: Partial<BusinessSettings>): Promise<{ settings: BusinessSettings }> {
-    const settings = await this.updateBusinessSettings(payload);
-    return { settings };
+  async updateIncentiveSettings(
+    payload: Partial<BusinessSettings> & { applyToUnpaid?: boolean }
+  ): Promise<{ settings: BusinessSettings; recalculatedCount?: number }> {
+    const body: Record<string, any> = {};
+    if (payload.incentiveRatePaise !== undefined) body.incentiveRatePaise = payload.incentiveRatePaise;
+    if (payload.applyToUnpaid !== undefined) body.applyToUnpaid = payload.applyToUnpaid;
+    const minPrice = payload.minimumPricePaise ?? payload.minimumSalePricePaise;
+    if (minPrice !== undefined) body.minimumPricePaise = minPrice;
+
+    try {
+      const res = await apiRequest<{ settings?: BusinessSettings; recalculatedCount?: number } | BusinessSettings>(
+        'admin/incentives/settings',
+        {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        }
+      );
+      const settings = ((res as any)?.settings ?? res) as BusinessSettings;
+      if (settings && settings.minimumPricePaise && !settings.minimumSalePricePaise) {
+        settings.minimumSalePricePaise = settings.minimumPricePaise;
+      }
+      return { settings, recalculatedCount: (res as any)?.recalculatedCount };
+    } catch {
+      const settings = await this.updateBusinessSettings(payload);
+      return { settings };
+    }
   },
 
   // ----------------------------------------------------

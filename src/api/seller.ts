@@ -468,33 +468,79 @@ export const sellerApi = {
       method: 'GET',
     });
     const summary = raw?.summary || raw;
-    const currentMonth = summary?.currentMonth;
-    const currentMonthEarnedPaise = currentMonth?.earnedPaise ?? summary?.totalIncentivePaise ?? raw?.currentMonthEarnedPaise ?? 0;
-    const totalPacketsSoldMonth = currentMonth?.confirmedPackets ?? summary?.totalPacketsSold ?? raw?.totalPacketsSoldMonth ?? 0;
+    const currentMonth = summary?.currentMonth ?? raw?.months?.[0];
+    const resolvedRatePaise =
+      raw?.effectiveRatePaise ??
+      raw?.ratePerPacketPaise ??
+      summary?.effectiveRatePaise ??
+      summary?.ratePerPacketPaise ??
+      100;
+    const totalEarnedPaise =
+      summary?.adjustedEntitlementPaise ??
+      summary?.earnedPaise ??
+      summary?.salesIncentivePaise ??
+      summary?.totalIncentivePaise ??
+      raw?.totalEarnedPaise ??
+      0;
+    const currentMonthEarnedPaise =
+      currentMonth?.earnedPaise ??
+      currentMonth?.salesIncentivePaise ??
+      currentMonth?.adjustedEntitlementPaise ??
+      0;
+    const totalPacketsSold =
+      summary?.confirmedPackets ??
+      summary?.totalPacketsSold ??
+      summary?.totalConfirmedPackets ??
+      raw?.totalPacketsSold ??
+      0;
+    const totalPacketsSoldMonth =
+      currentMonth?.confirmedPackets ??
+      0;
     const pendingPayoutPaise = summary?.outstandingPaise ?? raw?.pendingPayoutPaise ?? 0;
-    const totalPaidPaise = summary?.totalPaidPaise ?? raw?.totalPaidPaise ?? 0;
+    const totalPaidPaise = summary?.totalPaidPaise ?? summary?.paidPaise ?? raw?.totalPaidPaise ?? 0;
     const status = summary?.status ?? (totalPaidPaise > 0 && pendingPayoutPaise === 0 ? 'PAID' : pendingPayoutPaise > 0 ? 'PENDING' : 'UNPAID');
 
     const history = (raw?.months && Array.isArray(raw.months) && raw.months.length > 0)
-      ? raw.months.map((m: any) => ({
-          month: `${m.month}/${m.year}`,
-          packetsSold: m.confirmedPackets || 0,
-          earnedPaise: m.salesIncentivePaise || m.earnedPaise || 0,
-          ratePerPacketPaise: m.ratePerPacketPaise || (m.confirmedPackets > 0 ? Math.round(m.salesIncentivePaise / m.confirmedPackets) : 500),
-          status: m.outstandingPaise === 0 && (m.salesIncentivePaise || 0) > 0 ? 'PAID' : (m.paidPaise || 0) > 0 ? 'PARTIALLY_PAID' : 'PENDING',
-        }))
+      ? raw.months.map((m: any) => {
+          const monthEarned = m.adjustedEntitlementPaise ?? m.salesIncentivePaise ?? m.earnedPaise ?? 0;
+          const monthPaid = m.allocatedPaidPaise ?? m.paidPaise ?? 0;
+          return {
+            month: m.label || `${m.month}/${m.year}`,
+            packetsSold: m.confirmedPackets || 0,
+            earnedPaise: monthEarned,
+            ratePerPacketPaise:
+              m.ratePerPacketPaise ??
+              (m.confirmedPackets > 0 ? Math.round(monthEarned / m.confirmedPackets) : resolvedRatePaise),
+            status:
+              m.outstandingPaise === 0 && monthEarned > 0
+                ? 'PAID'
+                : monthPaid > 0
+                  ? 'PARTIALLY_PAID'
+                  : 'PENDING',
+          };
+        })
       : (raw?.history || []);
 
     return {
+      ...raw,
+      totalEarnedPaise,
+      totalPacketsSold,
+      salesIncentivePaise: summary?.salesIncentivePaise ?? totalEarnedPaise,
+      adjustedEntitlementPaise: summary?.adjustedEntitlementPaise ?? totalEarnedPaise,
+      additionsPaise: summary?.additionsPaise ?? 0,
+      deductionsPaise: summary?.deductionsPaise ?? 0,
       currentMonthEarnedPaise,
       totalPacketsSoldMonth,
-      ratePerPacketPaise: raw?.ratePerPacketPaise ?? 500,
+      ratePerPacketPaise: resolvedRatePaise,
+      effectiveRatePaise: resolvedRatePaise,
       pendingPayoutPaise,
       totalPaidPaise,
       status,
       history,
+      items: raw?.items || [],
+      adjustments: raw?.adjustments || [],
       payouts: raw?.payouts || [],
-      ...raw,
+      months: raw?.months || [],
     };
   },
 

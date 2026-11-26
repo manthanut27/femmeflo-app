@@ -26,6 +26,7 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { tokenStorage } from '@/api/client';
 import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
+import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -280,7 +281,7 @@ export default function ManagerSalesScreen() {
     }
 
     return Object.values(perfMap).sort((a, b) => b.totalPaise - a.totalPaise);
-  }, [sales, user?.id, user?.name]);
+  }, [sales, user]);
 
   const filteredSales = useMemo(() => {
     let result = sales;
@@ -301,6 +302,11 @@ export default function ManagerSalesScreen() {
   }, [sales, statusFilter, searchQuery]);
 
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{
+    url: string;
+    filename: string;
+    title: string;
+  } | null>(null);
 
   const filterTabs = [
     { key: 'ALL' as const, label: 'All', badge: sales.length },
@@ -310,16 +316,21 @@ export default function ManagerSalesScreen() {
   ];
 
   async function handleViewInvoice(sale: SaleItem) {
+    const invoiceId = sale.invoice?.id || sale.id;
+    const pdfUrl = managerApi.getInvoicePdfUrl(invoiceId, false);
     if (Platform.OS === 'web') {
-      const invoiceId = sale.invoice?.id || sale.id;
-      const pdfUrl = managerApi.getInvoicePdfUrl(invoiceId, false);
       if (typeof window !== 'undefined') {
         window.open(pdfUrl, '_blank');
       }
       return;
     }
 
-    await handleShareInvoicePdf(sale);
+    const safeNum = String(sale.saleNumber || sale.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '_');
+    setPdfPreview({
+      url: pdfUrl,
+      filename: `Invoice_${safeNum}.pdf`,
+      title: `Tax Invoice ${sale.saleNumber ? `#${sale.saleNumber}` : ''}`.trim(),
+    });
   }
 
   async function handleShareInvoicePdf(sale: SaleItem) {
@@ -1031,6 +1042,15 @@ export default function ManagerSalesScreen() {
           </KeyboardAvoidingView>
         </Modal>
       )}
+
+      {/* In-App Tax Invoice PDF Preview + Share Modal */}
+      <PdfPreviewModal
+        visible={pdfPreview !== null}
+        pdfUrl={pdfPreview?.url || null}
+        filename={pdfPreview?.filename}
+        title={pdfPreview?.title}
+        onClose={() => setPdfPreview(null)}
+      />
 
       {/* Mobile Navigation Drawer */}
       <MobileNavigationDrawer

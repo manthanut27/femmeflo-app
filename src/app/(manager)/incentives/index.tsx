@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { managerApi } from '@/api/manager';
-import type { ManagerIncentiveData } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -26,7 +24,6 @@ import {
   HitSlop,
   MaxContentWidth,
   Radius,
-  Shadows,
   Spacing,
   Typography,
 } from '@/constants/theme';
@@ -56,6 +53,7 @@ export default function ManagerIncentivesScreen() {
 
   const [data, setData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'TEAM' | 'PERSONAL'>('TEAM');
+  const [autoSelectedPersonal, setAutoSelectedPersonal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,13 +62,27 @@ export default function ManagerIncentivesScreen() {
     try {
       const res = await managerApi.getIncentives();
       setData(res);
+      const membersList = res?.team?.members || [];
+      const pSum = res?.personal?.summary;
+      const pPackets = Number(pSum?.totalPacketsSold ?? pSum?.confirmedPackets ?? 0);
+      const pEarned = Number(
+        pSum?.adjustedEntitlementPaise ?? pSum?.earnedPaise ?? pSum?.salesIncentivePaise ?? pSum?.totalIncentivePaise ?? 0
+      );
+      if (
+        !autoSelectedPersonal &&
+        membersList.length === 0 &&
+        ((user as any)?.isSeller || pPackets > 0 || pEarned > 0)
+      ) {
+        setActiveTab('PERSONAL');
+        setAutoSelectedPersonal(true);
+      }
     } catch (err) {
       console.warn('Failed to load manager incentives', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [autoSelectedPersonal, user]);
 
   useEffect(() => {
     loadIncentives();
@@ -146,6 +158,30 @@ export default function ManagerIncentivesScreen() {
     outstandingPaise: 0,
     status: 'PENDING',
   };
+
+  const personalPackets = Number(
+    personalSummary.totalPacketsSold ?? personalSummary.confirmedPackets ?? 0
+  );
+  const personalRatePaise = Number(
+    personalSummary.effectiveRatePaise ??
+      personalSummary.ratePerPacketPaise ??
+      data?.effectiveRatePaise ??
+      data?.ratePerPacketPaise ??
+      100
+  );
+  const personalEarnedPaise = Number(
+    personalSummary.adjustedEntitlementPaise ??
+      personalSummary.earnedPaise ??
+      personalSummary.salesIncentivePaise ??
+      personalSummary.totalIncentivePaise ??
+      0
+  );
+  const personalPaidPaise = Number(
+    personalSummary.totalPaidPaise ?? personalSummary.paidPaise ?? 0
+  );
+  const personalOutstandingPaise = Number(
+    personalSummary.outstandingPaise ?? Math.max(0, personalEarnedPaise - personalPaidPaise)
+  );
 
   return (
     <View style={styles.container}>
@@ -315,15 +351,51 @@ export default function ManagerIncentivesScreen() {
                   <ActivityIndicator size="small" color={BrandColors.green.primary} />
                 </View>
               ) : filteredMembers.length === 0 ? (
-                <EmptyState
-                  title="No bonus yet"
-                  description={
-                    searchQuery
-                      ? 'No seller matches your search.'
-                      : 'Bonus shows here after sales are confirmed.'
-                  }
-                  icon="gift-outline"
-                />
+                !searchQuery && ((user as any)?.isSeller || personalPackets > 0 || personalEarnedPaise > 0) ? (
+                  <Card style={styles.personalDetailCard}>
+                    <View style={styles.memberTop}>
+                      <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                        <Text style={styles.personalTitle}>Dual Role: Direct Field Sales Bonus</Text>
+                        <Text style={styles.memberSub}>
+                          No separate team sellers assigned yet. Your own confirmed direct sales appear under My Bonus.
+                        </Text>
+                      </View>
+                      <Badge label={`₹${(personalRatePaise / 100).toFixed(2)}/pkt`} variant="ACTIVE" />
+                    </View>
+                    <View style={styles.figuresGrid}>
+                      <View style={styles.figCol}>
+                        <Text style={styles.figLabel}>My Packets</Text>
+                        <Text style={styles.figValueGreen}>{personalPackets.toLocaleString('en-IN')} pkts</Text>
+                      </View>
+                      <View style={styles.figCol}>
+                        <Text style={styles.figLabel}>My Earned</Text>
+                        <Text style={styles.figValuePink}>{formatCurrencyINR(personalEarnedPaise)}</Text>
+                      </View>
+                      <View style={styles.figCol}>
+                        <Text style={styles.figLabel}>Pending</Text>
+                        <Text style={styles.figValueAmber}>{formatCurrencyINR(personalOutstandingPaise)}</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      onPress={() => setActiveTab('PERSONAL')}
+                      style={styles.switchPersonalBtn}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons name="person-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.switchPersonalBtnText}>View My Bonus Breakdown</Text>
+                    </Pressable>
+                  </Card>
+                ) : (
+                  <EmptyState
+                    title="No bonus yet"
+                    description={
+                      searchQuery
+                        ? 'No seller matches your search.'
+                        : 'Bonus shows here after sales are confirmed.'
+                    }
+                    icon="gift-outline"
+                  />
+                )
               ) : (
                 <View style={styles.membersList}>
                   {filteredMembers.map((member) => {
@@ -399,8 +471,8 @@ export default function ManagerIncentivesScreen() {
                   <View style={styles.kpiCardWrapper}>
                     <StatCard
                       title="My Packets"
-                      value={`${(personalSummary.totalPacketsSold || 0).toLocaleString('en-IN')} pkts`}
-                      subtitle="My sales"
+                      value={`${personalPackets.toLocaleString('en-IN')} pkts`}
+                      subtitle={`Rate: ₹${(personalRatePaise / 100).toFixed(2)}/pkt`}
                       icon="cube-outline"
                       iconColor="#0284C7"
                       iconBg="#F0F9FF"
@@ -410,7 +482,7 @@ export default function ManagerIncentivesScreen() {
                   <View style={styles.kpiCardWrapper}>
                     <StatCard
                       title="My Bonus"
-                      value={formatCurrencyINR(personalSummary.totalIncentivePaise || 0)}
+                      value={formatCurrencyINR(personalEarnedPaise)}
                       subtitle="Total earned"
                       icon="wallet-outline"
                       iconColor={BrandColors.pink.primary}
@@ -421,25 +493,87 @@ export default function ManagerIncentivesScreen() {
               </View>
 
               <Card style={styles.personalDetailCard}>
-                <Text style={styles.personalTitle}>My Bonus Account</Text>
-                <Text style={styles.personalDesc}>
-                  Bonus earned from your own direct sales.
-                </Text>
+                <View style={styles.memberTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.personalTitle}>My Bonus Account</Text>
+                    <Text style={styles.personalDesc}>
+                      Bonus earned from your own direct sales at ₹{(personalRatePaise / 100).toFixed(2)} per packet.
+                    </Text>
+                  </View>
+                  <Badge
+                    label={personalSummary.status || (personalOutstandingPaise <= 0 && personalPaidPaise > 0 ? 'PAID' : personalOutstandingPaise > 0 ? 'UNPAID' : 'PENDING')}
+                    variant={personalOutstandingPaise <= 0 && personalPaidPaise > 0 ? 'ACTIVE' : 'PENDING'}
+                  />
+                </View>
+
+                <View style={styles.personalSummaryRow}>
+                  <Text style={styles.personalSummaryLabel}>Commission Rate:</Text>
+                  <Text style={styles.figValuePink}>
+                    ₹{(personalRatePaise / 100).toFixed(2)} / pkt
+                  </Text>
+                </View>
 
                 <View style={styles.personalSummaryRow}>
                   <Text style={styles.personalSummaryLabel}>Paid so far:</Text>
                   <Text style={styles.personalSummaryValGreen}>
-                    {formatCurrencyINR(personalSummary.totalPaidPaise || 0)}
+                    {formatCurrencyINR(personalPaidPaise)}
                   </Text>
                 </View>
 
                 <View style={styles.personalSummaryRow}>
                   <Text style={styles.personalSummaryLabel}>Pending:</Text>
                   <Text style={styles.personalSummaryValAmber}>
-                    {formatCurrencyINR(personalSummary.outstandingPaise || 0)}
+                    {formatCurrencyINR(personalOutstandingPaise)}
                   </Text>
                 </View>
               </Card>
+
+              {Array.isArray(personal?.items) && personal.items.length > 0 && (
+                <Card style={[styles.personalDetailCard, { marginTop: Spacing.md }]}>
+                  <Text style={styles.personalTitle}>Confirmed Sales Breakdown ({personal.items.length})</Text>
+                  {personal.items.slice(0, 20).map((item: any, idx: number) => {
+                    const qty = Number(item.quantity ?? item.packetsSold ?? 0);
+                    const effRate = item.incentiveRatePaise ?? personalRatePaise;
+                    const effAmt = item.incentiveAmountPaise ?? qty * effRate;
+                    const dateStr = item.date || item.confirmedAt || item.createdAt;
+                    return (
+                      <View key={item.saleId || item.id || idx} style={styles.personalSummaryRow}>
+                        <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                          <Text style={styles.personalSummaryLabel}>
+                            {item.customer?.shopName || item.invoice?.invoiceNumber || 'Confirmed Sale'}
+                          </Text>
+                          <Text style={styles.memberSub}>
+                            {qty.toLocaleString('en-IN')} pkts × ₹{(effRate / 100).toFixed(2)}/pkt
+                            {dateStr ? ` • ${formatDateIST(dateStr, 'short')}` : ''}
+                          </Text>
+                        </View>
+                        <Text style={styles.figValuePink}>{formatCurrencyINR(effAmt)}</Text>
+                      </View>
+                    );
+                  })}
+                </Card>
+              )}
+
+              {Array.isArray(personal?.payouts) && personal.payouts.length > 0 && (
+                <Card style={[styles.personalDetailCard, { marginTop: Spacing.md }]}>
+                  <Text style={styles.personalTitle}>Payout History</Text>
+                  {personal.payouts.map((p: any, idx: number) => (
+                    <View key={p.id || idx} style={styles.personalSummaryRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.personalSummaryLabel}>
+                          {p.paymentMethod || 'Bank Transfer'} {p.referenceId ? `• ${p.referenceId}` : ''}
+                        </Text>
+                        <Text style={styles.memberSub}>
+                          {p.paymentDate ? formatDateIST(p.paymentDate, 'short') : 'Paid'}
+                        </Text>
+                      </View>
+                      <Text style={styles.personalSummaryValGreen}>
+                        {formatCurrencyINR(p.amountPaise || 0)}
+                      </Text>
+                    </View>
+                  ))}
+                </Card>
+              )}
             </View>
           )}
         </View>
@@ -646,5 +780,21 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     fontWeight: '800',
     color: '#D97706',
+  },
+  switchPersonalBtn: {
+    marginTop: Spacing.md,
+    backgroundColor: BrandColors.green.primary,
+    borderRadius: Radius.md,
+    paddingVertical: 11,
+    paddingHorizontal: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  switchPersonalBtnText: {
+    ...Typography.bodySmall,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

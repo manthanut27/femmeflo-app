@@ -732,8 +732,13 @@ export interface IncentiveSummaryItem {
   name?: string;
   phone?: string | null;
   role?: string;
+  isSeller?: boolean;
   ratePerPacketRupees?: number;
   effectiveRatePaise?: number;
+  incentiveRatePaise?: number | null;
+  confirmedPackets?: number;
+  earnedPaise?: number;
+  adjustedEntitlementPaise?: number;
   totalEarnedPaise: number;
   totalPaidPaise: number;
   outstandingPaise: number;
@@ -760,17 +765,19 @@ export interface AdminIncentiveListResponse {
   sellers?: IncentiveSummaryItem[];
   managers?: IncentiveSummaryItem[];
   items?: IncentiveSummaryItem[];
+  users?: IncentiveSummaryItem[];
+  currentRatePaise?: number;
   pagination?: PaginationMeta;
 }
 
 export interface ManagerIncentiveData {
-  summary: {
+  summary?: {
     totalEarnedPaise: number;
     totalPaidPaise: number;
     totalPendingPaise: number;
     sellerCount: number;
   };
-  sellers: Array<{
+  sellers?: Array<{
     id: string;
     name: string;
     phone?: string;
@@ -779,12 +786,27 @@ export interface ManagerIncentiveData {
     netPayablePaise: number;
     status: string;
   }>;
+  ratePerPacketPaise?: number;
+  effectiveRatePaise?: number;
+  ratePerPacketRupees?: number;
+  team?: {
+    summary: Record<string, any>;
+    members: Array<Record<string, any>>;
+  };
+  personal?: {
+    summary: Record<string, any>;
+    items?: Array<Record<string, any>>;
+    adjustments?: Array<Record<string, any>>;
+    payouts?: Array<Record<string, any>>;
+    months?: Array<Record<string, any>>;
+  };
 }
 
 export interface UpdateUserRatePayload {
   ratePaise: number;
   effectiveDate?: string;
   reason?: string;
+  applyToUnpaid?: boolean;
 }
 
 export interface CreateAdjustmentPayload {
