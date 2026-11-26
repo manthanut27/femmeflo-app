@@ -82,15 +82,20 @@ export default function AddCustomerScreen() {
       .catch(() => {})
       .finally(() => setCategoryLoading(false));
 
-    startGps();
+    startGps(false);
 
     draftStorage.clearCustomerDraft().catch(() => {});
   }, []);
 
-  async function startGps() {
+  async function startGps(overwriteAddress = false) {
     setGpsStatus('acquiring_high');
     try {
-      const locWithAddr = await getCurrentLocationWithAddress();
+      const locWithAddr = await getCurrentLocationWithAddress({
+        highAccuracyTimeoutMs: 7000,
+        fallbackTimeoutMs: 4000,
+        maxAgeMs: overwriteAddress ? 10000 : 30000,
+        accuracyThresholdMeters: 50,
+      });
       if (locWithAddr && locWithAddr.latitude !== null && locWithAddr.longitude !== null) {
         setGpsStatus('acquired');
         let lat = locWithAddr.latitude;
@@ -104,11 +109,11 @@ export default function AddCustomerScreen() {
         setLongitude(lng);
         setGpsAccuracy(locWithAddr.accuracy || 10);
 
-        if (locWithAddr.address && !address) {
+        if (locWithAddr.address && (overwriteAddress || !address)) {
           setAddress(locWithAddr.address);
           setErrors((prev) => ({ ...prev, address: '' }));
         }
-        if (locWithAddr.village && !village) {
+        if (locWithAddr.village && (overwriteAddress || !village)) {
           setVillage(locWithAddr.village);
           setErrors((prev) => ({ ...prev, village: '' }));
         }
@@ -120,7 +125,7 @@ export default function AddCustomerScreen() {
           setStateName(locWithAddr.state);
           setErrors((prev) => ({ ...prev, stateName: '' }));
         }
-        if (locWithAddr.pincode && !pincode) {
+        if (locWithAddr.pincode && (overwriteAddress || !pincode)) {
           setPincode(locWithAddr.pincode);
           setPincodeStatus('found');
           setErrors((prev) => ({ ...prev, pincode: '' }));
@@ -376,7 +381,7 @@ export default function AddCustomerScreen() {
       onBack={() => router.back()}
       onOpenBatchEntry={() => router.push('/(seller)/customers/bulk' as any)}
       gpsStatus={gpsStatus}
-      onRefreshLocation={startGps}
+      onRefreshLocation={() => startGps(true)}
       latitude={latitude}
       longitude={longitude}
       photoUri={photoUri}
@@ -473,7 +478,7 @@ export default function AddCustomerScreen() {
         setNoPhotoReason('');
         setPhotoUri(null);
         setErrors({});
-        startGps();
+        startGps(false);
       }}
       onDoneAfterSave={() => router.replace('/(seller)/customers' as any)}
     />

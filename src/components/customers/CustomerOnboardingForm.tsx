@@ -36,6 +36,8 @@ export interface CustomerOnboardingFormProps {
   role: Extract<AuthRole, 'MANAGER' | 'SELLER'>;
   onBack: () => void;
   onOpenBatchEntry: () => void;
+  showBatchEntry?: boolean;
+  locationButtonLabel?: string;
 
   // GPS / Location
   gpsStatus: GpsAcquisitionStatus;
@@ -120,6 +122,8 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
     role,
     onBack,
     onOpenBatchEntry,
+    showBatchEntry = true,
+    locationButtonLabel = 'Use Current Location',
     gpsStatus,
     onRefreshLocation,
     latitude,
@@ -235,13 +239,15 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
       : 'Location Not Found';
 
   const areaSummary = [village.trim(), district.trim(), stateName.trim()].filter(Boolean).join(', ');
+  const coordsText =
+    latitude != null && longitude != null ? `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°` : '';
   const locationSubtitleText = isAcquiringGps
-    ? 'Checking GPS...'
+    ? 'Fetching live GPS & address...'
     : isGpsFound
-      ? areaSummary || 'GPS ready'
+      ? [areaSummary || 'GPS ready', coordsText].filter(Boolean).join(' · ')
       : gpsStatus === 'denied'
         ? 'Turn on GPS or type address below'
-        : areaSummary || 'Tap Retry or enter address below';
+        : areaSummary || 'Tap Use Current Location or enter address below';
 
   return (
     <KeyboardAvoidingView
@@ -266,18 +272,20 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.batchBtn}
-          onPress={onOpenBatchEntry}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Batch Entry"
-        >
-          <Ionicons name="layers-outline" size={16} color={BrandColors.pink.deep} style={{ marginRight: 5 }} />
-          <Text style={styles.batchBtnText} numberOfLines={1}>
-            Batch Entry
-          </Text>
-        </TouchableOpacity>
+        {showBatchEntry ? (
+          <TouchableOpacity
+            style={styles.batchBtn}
+            onPress={onOpenBatchEntry}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Batch Entry"
+          >
+            <Ionicons name="layers-outline" size={16} color={BrandColors.pink.deep} style={{ marginRight: 5 }} />
+            <Text style={styles.batchBtnText} numberOfLines={1}>
+              Batch Entry
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <ScrollView
@@ -300,7 +308,7 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
           )}
 
           {/* 1. CURRENT LOCATION CARD */}
-          <View style={styles.locationCard}>
+          <View style={[styles.locationCard, isCompactScreen && styles.locationCardStacked]}>
             <View style={styles.locationLeft}>
               <View
                 style={[
@@ -330,23 +338,23 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
                 >
                   {gpsStatusLabel}
                 </Text>
-                <Text style={styles.locationSubtitle} numberOfLines={1}>
+                <Text style={styles.locationSubtitle} numberOfLines={2}>
                   {locationSubtitleText}
                 </Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={styles.changeBtn}
+              style={[styles.changeBtn, isCompactScreen && styles.changeBtnFull]}
               onPress={onRefreshLocation}
               activeOpacity={0.8}
               disabled={isAcquiringGps}
               accessibilityRole="button"
-              accessibilityLabel="Change or retry location"
+              accessibilityLabel="Use Current Location"
             >
-              <Ionicons name="locate-outline" size={15} color={BrandColors.pink.deep} style={{ marginRight: 4 }} />
+              <Ionicons name="locate-outline" size={15} color={BrandColors.pink.deep} style={{ marginRight: 5 }} />
               <Text style={styles.changeBtnText}>
-                {isGpsFound ? 'Change' : 'Retry'}
+                {isAcquiringGps ? 'Locating...' : locationButtonLabel}
               </Text>
             </TouchableOpacity>
           </View>
@@ -761,10 +769,10 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
               {errors.pincode ? <Text style={styles.errorSubText}>{errors.pincode}</Text> : null}
             </View>
 
-            {/* Shop Address * */}
+            {/* Full Shop Address * */}
             <View style={styles.fieldSection}>
               <Text style={styles.inputLabel}>
-                Shop Address <Text style={styles.reqAsterisk}>*</Text>
+                Full Shop Address <Text style={styles.reqAsterisk}>*</Text>
               </Text>
               <View style={[styles.inputBox, Boolean(errors.address) && styles.inputErrorBorder]}>
                 <Ionicons name="business-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
@@ -774,7 +782,7 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
                   onChangeText={onChangeAddress}
                   autoComplete="off"
                   importantForAutofill="no"
-                  placeholder="Shop number, street, landmark"
+                  placeholder="Shop number, street, landmark (editable)"
                   placeholderTextColor="#94A3B8"
                 />
               </View>
@@ -972,6 +980,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     gap: Spacing.sm,
     ...Shadows.sm,
+  },
+  locationCardStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  changeBtnFull: {
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    paddingVertical: 9,
   },
   locationLeft: {
     flexDirection: 'row',

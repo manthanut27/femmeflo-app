@@ -27,6 +27,7 @@ import type {
 } from './types';
 
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
+import { buildCustomerUpdateBody, normalizeCustomerItem } from '../utils/customerSanitizer';
 import { draftStorage } from '../utils/draftStorage';
 import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
 
@@ -115,10 +116,7 @@ export const sellerApi = {
         params,
       }
     );
-    const list = (raw?.customers ?? raw?.items ?? []).map((c) => ({
-      ...c,
-      photoUrl: c.photoUrl || (c as any).photoPath || null,
-    }));
+    const list = (raw?.customers ?? raw?.items ?? []).map((c) => normalizeCustomerItem(c));
     return {
       items: list,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
@@ -131,7 +129,7 @@ export const sellerApi = {
     });
     if (res?.customer) {
       res.customer = {
-        ...res.customer,
+        ...normalizeCustomerItem(res.customer),
         photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
       };
     }
@@ -171,7 +169,7 @@ export const sellerApi = {
   },
 
   async updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<{ customer: CustomerItem }> {
-    const body: Record<string, any> = { ...payload };
+    const body = buildCustomerUpdateBody(payload);
     if (payload.latitude != null || payload.longitude != null) {
       const coords = sanitizeIndiaCoordinates(payload.latitude, payload.longitude);
       body.latitude = coords.latitude;
@@ -183,7 +181,7 @@ export const sellerApi = {
     });
     if (res?.customer) {
       res.customer = {
-        ...res.customer,
+        ...normalizeCustomerItem(res.customer),
         photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
       };
     }

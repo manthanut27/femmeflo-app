@@ -1,6 +1,7 @@
 import { apiRequest, uploadFileMultipart, API_BASE_URL, isMockMode } from './client';
 import { handleMockRequest } from './mockService';
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
+import { buildCustomerUpdateBody, normalizeCustomerItem } from '../utils/customerSanitizer';
 import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
 import type {
   BulkCustomerResponse,
@@ -169,10 +170,7 @@ export const managerApi = {
           params,
         }
       );
-      const list = (raw?.customers ?? raw?.items ?? []).map((c) => ({
-        ...c,
-        photoUrl: c.photoUrl || (c as any).photoPath || null,
-      }));
+      const list = (raw?.customers ?? raw?.items ?? []).map((c) => normalizeCustomerItem(c));
       return {
         items: list,
         pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
@@ -198,10 +196,7 @@ export const managerApi = {
             },
           }
         );
-        const list = (sellerRaw?.customers ?? sellerRaw?.items ?? []).map((c) => ({
-          ...c,
-          photoUrl: c.photoUrl || (c as any).photoPath || null,
-        }));
+        const list = (sellerRaw?.customers ?? sellerRaw?.items ?? []).map((c) => normalizeCustomerItem(c));
         return {
           items: list,
           pagination: sellerRaw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
@@ -217,7 +212,7 @@ export const managerApi = {
     });
     if (res?.customer) {
       res.customer = {
-        ...res.customer,
+        ...normalizeCustomerItem(res.customer),
         photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
       };
     }
@@ -258,7 +253,7 @@ export const managerApi = {
   },
 
   async updateCustomer(id: string, payload: UpdateCustomerPayload): Promise<{ customer: CustomerItem }> {
-    const body: Record<string, any> = { ...payload };
+    const body = buildCustomerUpdateBody(payload);
     if (payload.latitude != null || payload.longitude != null) {
       const coords = sanitizeIndiaCoordinates(payload.latitude, payload.longitude);
       body.latitude = coords.latitude;
@@ -270,7 +265,7 @@ export const managerApi = {
     });
     if (res?.customer) {
       res.customer = {
-        ...res.customer,
+        ...normalizeCustomerItem(res.customer),
         photoUrl: res.customer.photoUrl || (res.customer as any).photoPath || null,
       };
     }

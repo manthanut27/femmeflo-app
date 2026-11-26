@@ -11,6 +11,7 @@ import {
   getVisitDurationSeconds,
 } from '../utils/distanceUtils.ts';
 import { validateCapturedFaceFrame } from '../utils/faceFrameValidation.ts';
+import { buildCustomerUpdateBody, normalizeCustomerItem } from '../utils/customerSanitizer.ts';
 
 describe('Shift Check-in/out, GPS Accuracy & Route Distance Suite', () => {
   const rootDir = process.cwd();
@@ -124,9 +125,57 @@ describe('Shift Check-in/out, GPS Accuracy & Route Distance Suite', () => {
     const attendanceCode = readSource('src/app/(seller)/attendance/index.tsx');
     assert.ok(attendanceCode.includes('getCustomerSavedCoords'), 'Must reuse selected shop saved coordinates');
     assert.ok(attendanceCode.includes('openQuickAddShopModal'), 'Must provide inline Add New Shop flow');
+    assert.ok(attendanceCode.includes('<CustomerOnboardingForm'), 'Check-in Add New Shop must reuse full CustomerOnboardingForm');
+    assert.ok(attendanceCode.includes('uploadCustomerPhoto'), 'Check-in Add New Shop must support photo upload');
     assert.ok(attendanceCode.includes('sellerApi.getInventory()'), 'Must fetch product stock availability for checkout');
     assert.ok(attendanceCode.includes('saleQuantityStr'), 'Must support typing quantity in addition to +/- steppers');
     assert.ok(attendanceCode.includes('isBelowMinPrice'), 'Must warn & apply low-price Admin approval notice');
+
+    const onboardingFormCode = readSource('src/components/customers/CustomerOnboardingForm.tsx');
+    assert.ok(onboardingFormCode.includes('Use Current Location'), 'Onboarding form must label Use Current Location clearly');
+    assert.ok(onboardingFormCode.includes('Full Shop Address'), 'Onboarding form must show editable Full Shop Address');
+  });
+
+  it('customer update sanitizer maps ownerName to contactName and drops unrecognized keys', () => {
+    const body = buildCustomerUpdateBody({
+      shopName: '  Guru krupa store  ',
+      ownerName: '  Suresh Patil  ',
+      phone: '9876543210',
+      email: '   ',
+      address: '  Main Bazar  ',
+      pincode: '400612',
+      state: 'Maharashtra',
+      district: 'Thane',
+      village: '',
+      photoUrl: 'file:///local/tmp.jpg',
+      active: true,
+    });
+
+    assert.equal(body.shopName, 'Guru krupa store');
+    assert.equal(body.contactName, 'Suresh Patil');
+    assert.equal(body.phone, '+919876543210');
+    assert.equal('ownerName' in body, false, 'Must never send ownerName to strict backend updateCustomerSchema');
+    assert.equal('email' in body, false, 'Blank optional email must be omitted');
+    assert.equal('village' in body, false, 'Blank optional village must be omitted');
+    assert.equal('photoUrl' in body, false, 'Local file:// URIs must not be sent as JSON photoUrl');
+
+    const normalized = normalizeCustomerItem({
+      id: 'c1',
+      shopName: 'Guru krupa store',
+      ownerName: '',
+      contactName: 'Suresh Patil',
+      phone: '+919876543210',
+      state: 'Maharashtra',
+      district: 'Thane',
+      village: 'Diva',
+      categoryId: 'cat1',
+      sellerId: 'sel1',
+      active: true,
+      createdAt: '',
+      photoPath: 'https://cdn.example.com/shop.jpg',
+    } as any);
+    assert.equal(normalized.ownerName, 'Suresh Patil');
+    assert.equal(normalized.photoUrl, 'https://cdn.example.com/shop.jpg');
   });
 
   it('sellerApi.checkIn omits forbidden shiftId from HTTP payload and uses no-cache on shift reads', () => {

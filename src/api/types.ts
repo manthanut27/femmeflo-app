@@ -121,6 +121,7 @@ export interface CreateCustomerPayload {
 export interface UpdateCustomerPayload {
   shopName?: string;
   ownerName?: string;
+  contactName?: string;
   email?: string;
   phone?: string;
   categoryId?: string;
