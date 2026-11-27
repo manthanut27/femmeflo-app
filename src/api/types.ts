@@ -306,7 +306,7 @@ export interface WarehouseItem {
 // ----------------------------------------------------
 // Sale & POS Types
 // ----------------------------------------------------
-export type SaleStatus = 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'CONFIRMED' | 'REJECTED';
+export type SaleStatus = 'PENDING' | 'PENDING_APPROVAL' | 'APPROVED' | 'CONFIRMED' | 'COMPLETED' | 'REJECTED';
 export type PaymentMode = 'CASH' | 'BANK' | 'PENDING';
 
 export interface InvoiceSummary {
@@ -356,6 +356,12 @@ export interface SaleItem {
   resubmittedAt?: string | null;
   isResubmitted?: boolean;
   resubmitForApproval?: boolean;
+  paymentSentAt?: string | null;
+  paymentSentRemark?: string | null;
+  paymentSentBy?: { id: string; name: string } | null;
+  paymentReceivedAt?: string | null;
+  paymentReceivedRemark?: string | null;
+  paymentReceivedBy?: { id: string; name: string } | null;
   updatedAt?: string;
 }
 
@@ -968,7 +974,7 @@ export interface ManagerItem extends PublicUser {
 export interface ListSalesParams {
   page?: number;
   pageSize?: number;
-  status?: 'PENDING_APPROVAL' | 'CONFIRMED' | 'REJECTED';
+  status?: 'PENDING_APPROVAL' | 'CONFIRMED' | 'COMPLETED' | 'REJECTED';
   paymentMode?: 'CASH' | 'BANK' | 'PENDING';
   period?: 'all' | 'this_month' | 'last_month';
   customerId?: string;

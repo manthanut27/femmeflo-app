@@ -13,12 +13,17 @@ import { isSaleResubmitted } from '@/api/admin';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { BorderRadius, BrandColors, Colors, Spacing, Typography } from '@/constants/theme';
+import { formatDateTimeIST } from '@/utils/dateUtils';
 
 interface SalesOrderCardProps {
   item: SaleItem;
   formattedDate: string;
   onViewDetails: (sale: SaleItem) => void;
   onOpenInvoice: (sale: SaleItem) => void;
+  onReceivePayment?: (sale: SaleItem) => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (sale: SaleItem) => void;
   isCompactWidth?: boolean;
 }
 
@@ -27,6 +32,10 @@ export function SalesOrderCard({
   formattedDate,
   onViewDetails,
   onOpenInvoice,
+  onReceivePayment,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
   isCompactWidth = false,
 }: SalesOrderCardProps) {
   const [copied, setCopied] = useState(false);
@@ -40,11 +49,14 @@ export function SalesOrderCard({
   const customerName = item.customer?.shopName || 'Retail Customer';
   const sellerName = item.seller?.name || 'Field Officer';
   const isResubmitted = isSaleResubmitted(item);
-  const displayOrderId = item.saleNumber || `#${item.id.slice(0, 8).toUpperCase()}`;
-  const canDownloadInvoice = item.status === 'CONFIRMED' || item.status === 'APPROVED';
+  const displayOrderId = item.invoice?.number || item.saleNumber || `#${item.id.slice(0, 8).toUpperCase()}`;
+  const canDownloadInvoice = item.status === 'CONFIRMED' || item.status === 'COMPLETED' || item.status === 'APPROVED';
+  const canReceiveCompanyPayment =
+    item.status === 'CONFIRMED' && (item.paymentMode === 'CASH' || item.paymentMode === 'BANK');
+  const isSentToCompany = Boolean(item.paymentSentAt) && item.status === 'CONFIRMED';
 
   const handleCopyId = async () => {
-    const valueToCopy = item.saleNumber || item.id;
+    const valueToCopy = item.invoice?.number || item.saleNumber || item.id;
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(valueToCopy);
@@ -57,9 +69,27 @@ export function SalesOrderCard({
   };
 
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, selected && styles.cardSelected]}>
       {/* Header: Shop Name + Status & Payment Badges */}
       <View style={styles.headerRow}>
+        {selectable ? (
+          <Pressable
+            onPress={() => canReceiveCompanyPayment && onToggleSelect?.(item)}
+            disabled={!canReceiveCompanyPayment}
+            hitSlop={8}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selected, disabled: !canReceiveCompanyPayment }}
+            accessibilityLabel={`Select order for ${customerName}`}
+            style={[
+              styles.checkbox,
+              selected && styles.checkboxChecked,
+              !canReceiveCompanyPayment && styles.checkboxDisabled,
+            ]}
+          >
+            {selected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
+          </Pressable>
+        ) : null}
+
         <View style={{ flex: 1, minWidth: 0, marginRight: Spacing.sm }}>
           <Text style={styles.shopName} numberOfLines={1}>
             {customerName}
@@ -69,7 +99,7 @@ export function SalesOrderCard({
             style={styles.orderIdRow}
             hitSlop={6}
             accessibilityRole="button"
-            accessibilityLabel={`Copy order ID ${valueOrFallback(item.saleNumber, item.id)}`}
+            accessibilityLabel={`Copy order ID ${valueOrFallback(item.invoice?.number || item.saleNumber, item.id)}`}
           >
             <Text style={styles.orderIdText} numberOfLines={1}>
               {displayOrderId}
@@ -126,6 +156,37 @@ export function SalesOrderCard({
         </View>
       </View>
 
+      {/* Company Payment Remittance Indicator */}
+      {item.status === 'COMPLETED' ? (
+        <View style={styles.completedRemitBox}>
+          <Ionicons name="checkmark-done-circle" size={15} color="#0F766E" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.completedRemitTitle}>
+              Received by FemmeFlo {item.paymentReceivedAt ? `• ${formatDateTimeIST(item.paymentReceivedAt)}` : ''}
+            </Text>
+            {item.paymentReceivedRemark ? (
+              <Text style={styles.remitSubText} numberOfLines={2}>
+                Admin note: "{item.paymentReceivedRemark}"
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : isSentToCompany ? (
+        <View style={styles.sentRemitBox}>
+          <Ionicons name="send" size={14} color="#1D4ED8" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sentRemitTitle}>
+              Seller Sent to Co. {item.paymentSentAt ? `• ${formatDateTimeIST(item.paymentSentAt)}` : ''}
+            </Text>
+            {item.paymentSentRemark ? (
+              <Text style={styles.remitSubText} numberOfLines={2}>
+                "{item.paymentSentRemark}"
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
       {/* Customer Remarks (only when present) */}
       {item.customerFeedback ? (
         <View style={styles.remarksBox}>
@@ -146,7 +207,7 @@ export function SalesOrderCard({
           accessibilityLabel={`View order details for ${customerName}`}
         >
           <Ionicons name="receipt-outline" size={16} color="#0F172A" />
-          <Text style={styles.detailsBtnText}>Order Details</Text>
+          <Text style={styles.detailsBtnText}>Details</Text>
         </TouchableOpacity>
 
         {canDownloadInvoice ? (
@@ -158,7 +219,20 @@ export function SalesOrderCard({
             accessibilityLabel={`Open invoice PDF for ${customerName}`}
           >
             <Ionicons name="document-text-outline" size={16} color={BrandColors.pink.dark} />
-            <Text style={styles.pdfBtnText}>Invoice PDF</Text>
+            <Text style={styles.pdfBtnText}>Invoice</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {canReceiveCompanyPayment && onReceivePayment ? (
+          <TouchableOpacity
+            style={styles.receiveBtn}
+            onPress={() => onReceivePayment(item)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark amount received for ${customerName}`}
+          >
+            <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.receiveBtnText}>Received</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -177,6 +251,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
+  },
+  cardSelected: {
+    borderColor: '#0F766E',
+    backgroundColor: '#F0FDFA',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#94A3B8',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
+  },
+  checkboxDisabled: {
+    opacity: 0.3,
+    backgroundColor: '#F1F5F9',
   },
   headerRow: {
     flexDirection: 'row',
@@ -265,6 +363,45 @@ const styles = StyleSheet.create({
     color: BrandColors.pink.dark,
     marginTop: 2,
   },
+  sentRemitBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.xs,
+  },
+  sentRemitTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E40AF',
+  },
+  completedRemitBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    backgroundColor: '#CCFBF1',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.xs,
+  },
+  completedRemitTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  remitSubText: {
+    fontSize: 11,
+    color: '#334155',
+    marginTop: 2,
+  },
   remarksBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -299,16 +436,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    minHeight: 40,
-    paddingHorizontal: 12,
+    gap: 5,
+    minHeight: 38,
+    paddingHorizontal: 10,
     borderRadius: BorderRadius.md,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   detailsBtnText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#0F172A',
   },
@@ -317,17 +454,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    minHeight: 40,
-    paddingHorizontal: 12,
+    gap: 5,
+    minHeight: 38,
+    paddingHorizontal: 10,
     borderRadius: BorderRadius.md,
     backgroundColor: '#FDF2F8',
     borderWidth: 1,
     borderColor: '#FBCFE8',
   },
   pdfBtnText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BrandColors.pink.dark,
+  },
+  receiveBtn: {
+    flex: 1.15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: 38,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.md,
+    backgroundColor: '#0F766E',
+  },
+  receiveBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

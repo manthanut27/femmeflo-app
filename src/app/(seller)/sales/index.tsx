@@ -34,6 +34,7 @@ import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTod
 const STATUS_FILTERS: Array<{ label: string; value: string | null }> = [
   { label: 'All Orders', value: null },
   { label: 'Confirmed', value: 'CONFIRMED' },
+  { label: 'Completed', value: 'COMPLETED' },
   { label: 'Unpaid Bills', value: 'PAYMENT_PENDING' },
   { label: 'Waiting for Approval', value: 'PENDING_APPROVAL' },
   { label: 'Rejected', value: 'REJECTED' },
@@ -302,7 +303,7 @@ export default function SalesListScreen() {
                 <Text style={styles.revisePricePillText}>Revise Price ›</Text>
               </View>
             )}
-            {(item.status === 'CONFIRMED' || (item.status as string) === 'APPROVED') && (
+            {(item.status === 'CONFIRMED' || item.status === 'COMPLETED' || (item.status as string) === 'APPROVED') && (
               <Pressable
                 style={styles.invoiceChipBtn}
                 onPress={(e) => {
@@ -317,6 +318,18 @@ export default function SalesListScreen() {
                 <Text style={styles.invoiceChipBtnText}>Tax Invoice</Text>
               </Pressable>
             )}
+            {item.status === 'CONFIRMED' && (item.paymentMode === 'CASH' || item.paymentMode === 'BANK') ? (
+              <View style={{
+                paddingHorizontal: 7,
+                paddingVertical: 3,
+                borderRadius: 999,
+                backgroundColor: item.paymentSentAt ? '#DBEAFE' : '#FFF7ED',
+              }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: item.paymentSentAt ? '#1D4ED8' : '#C2410C' }}>
+                  {item.paymentSentAt ? 'Sent to Co. ›' : 'Send to Co. ›'}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <Text style={styles.amountText}>{formatCurrencyINR(totalAmount)}</Text>
         </View>
@@ -661,7 +674,7 @@ export default function SalesListScreen() {
                 <Text style={styles.revisePricePillText}>Revise Price ›</Text>
               </View>
             )}
-            {(item.status === 'CONFIRMED' || (item.status as string) === 'APPROVED') && (
+            {(item.status === 'CONFIRMED' || item.status === 'COMPLETED' || (item.status as string) === 'APPROVED') && (
               <Pressable
                 style={[styles.invoiceChipBtn, { marginTop: 4 }]}
                 onPress={(e) => {
@@ -676,6 +689,13 @@ export default function SalesListScreen() {
                 <Text style={styles.invoiceChipBtnText}>Tax Invoice</Text>
               </Pressable>
             )}
+            {item.status === 'COMPLETED' ? (
+              <Badge label="COMPLETED" variant="COMPLETED" size="sm" showDot={false} />
+            ) : item.status === 'CONFIRMED' && (item.paymentMode === 'CASH' || item.paymentMode === 'BANK') ? (
+              <Text style={{ fontSize: 10, fontWeight: '700', color: item.paymentSentAt ? '#1D4ED8' : '#C2410C', marginTop: 3 }}>
+                {item.paymentSentAt ? 'Sent to Co.' : 'Tap to Send Cash/Pay ›'}
+              </Text>
+            ) : null}
                                 </View>
                               </View>
 

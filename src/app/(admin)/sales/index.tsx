@@ -31,6 +31,7 @@ import { Header } from '@/components/ui/Header';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { SalesOrderCard } from '@/components/sales/SalesOrderCard';
+import { RemittanceActionModal } from '@/components/sales/RemittanceActionModal';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -100,9 +101,17 @@ export default function AdminSalesScreen() {
   // Filters
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'PENDING_APPROVAL' | 'RESUBMITTED' | 'REJECTED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<
+    'ALL' | 'CONFIRMED' | 'SENT_TO_COMPANY' | 'COMPLETED' | 'PENDING_APPROVAL' | 'RESUBMITTED' | 'REJECTED'
+  >('ALL');
   const [paymentFilter, setPaymentFilter] = useState<PaymentMode | 'ALL'>('ALL');
   const [periodFilter, setPeriodFilter] = useState<'all' | 'this_month' | 'last_month'>('all');
+
+  // Selection & Company Payment Receipt state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
+  const [remittanceTargets, setRemittanceTargets] = useState<SaleItem[]>([]);
+  const [isCompletingRemittance, setIsCompletingRemittance] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -121,6 +130,8 @@ export default function AdminSalesScreen() {
       const backendStatus =
         statusFilter === 'RESUBMITTED'
           ? 'PENDING_APPROVAL'
+          : statusFilter === 'SENT_TO_COMPANY'
+          ? 'CONFIRMED'
           : statusFilter !== 'ALL'
           ? statusFilter
           : undefined;
@@ -136,8 +147,16 @@ export default function AdminSalesScreen() {
       let fetched = res?.items || res?.sales || [];
       if (statusFilter === 'RESUBMITTED') {
         fetched = fetched.filter((s) => isSaleResubmitted(s));
+      } else if (statusFilter === 'SENT_TO_COMPANY') {
+        fetched = fetched.filter((s) => s.status === 'CONFIRMED' && Boolean(s.paymentSentAt));
       }
       setSales(fetched);
+      const validSet = new Set(
+        fetched
+          .filter((s) => s.status === 'CONFIRMED' && (s.paymentMode === 'CASH' || s.paymentMode === 'BANK'))
+          .map((s) => s.id)
+      );
+      setSelectedSaleIds((prev) => prev.filter((id) => validSet.has(id)));
     } catch (err: any) {
       console.warn('Failed to load sales list', err);
       setLoadError('Unable to load sales records. Please try again.');
@@ -159,10 +178,79 @@ export default function AdminSalesScreen() {
     fetchSales();
   }, [fetchSales]);
 
+  const readyToCompleteSales = useMemo(
+    () =>
+      sales.filter(
+        (s) => s.status === 'CONFIRMED' && (s.paymentMode === 'CASH' || s.paymentMode === 'BANK')
+      ),
+    [sales]
+  );
+
+  const selectedSalesList = useMemo(
+    () => sales.filter((s) => selectedSaleIds.includes(s.id)),
+    [sales, selectedSaleIds]
+  );
+
+  const selectedTotalPaise = useMemo(
+    () => selectedSalesList.reduce((acc, s) => acc + Number(s.totalAmountPaise || s.totalPaise || 0), 0),
+    [selectedSalesList]
+  );
+
+  const toggleSelectSale = useCallback((sale: SaleItem) => {
+    setSelectedSaleIds((prev) =>
+      prev.includes(sale.id) ? prev.filter((id) => id !== sale.id) : [...prev, sale.id]
+    );
+  }, []);
+
+  const handleSelectAllReady = useCallback(() => {
+    const ids = readyToCompleteSales.map((s) => s.id);
+    if (ids.length === 0) return;
+    setSelectionMode(true);
+    setSelectedSaleIds((prev) => (prev.length === ids.length ? [] : ids));
+  }, [readyToCompleteSales]);
+
+  const handleSubmitReceivePayment = useCallback(
+    async ({ remark, dateStr }: { remark?: string; dateStr: string }) => {
+      if (remittanceTargets.length === 0 || isCompletingRemittance) return;
+      setIsCompletingRemittance(true);
+      try {
+        if (remittanceTargets.length === 1) {
+          const target = remittanceTargets[0]!;
+          await adminApi.receiveSalePayment(target.id, {
+            remark,
+            receivedAt: dateStr,
+          });
+        } else {
+          await adminApi.bulkCompleteSales({
+            saleIds: remittanceTargets.map((s) => s.id),
+            remark,
+            receivedAt: dateStr,
+          });
+        }
+
+        const count = remittanceTargets.length;
+        setRemittanceTargets([]);
+        setSelectedSaleIds([]);
+        setSelectionMode(false);
+        setSelectedSale(null);
+        await fetchSales();
+        Alert.alert(
+          'Payment Received & Completed',
+          `${count} ${count === 1 ? 'sale' : 'sales'} marked received in FemmeFlo account and moved to COMPLETED.`
+        );
+      } catch (err: any) {
+        Alert.alert('Completion Error', err?.message || 'Could not mark sale payment as received.');
+      } finally {
+        setIsCompletingRemittance(false);
+      }
+    },
+    [remittanceTargets, isCompletingRemittance, fetchSales]
+  );
+
   const handleOpenInvoice = (sale: SaleItem) => {
     const invoiceId = sale.invoice?.id || sale.id;
     const url = adminApi.getInvoicePdfUrl(invoiceId);
-    const filename = `Invoice_${sale.saleNumber || invoiceId.slice(0, 8)}.pdf`;
+    const filename = `Invoice_${sale.invoice?.number || sale.saleNumber || invoiceId.slice(0, 8)}.pdf`;
     setPdfPreview({
       url,
       filename,
@@ -187,6 +275,10 @@ export default function AdminSalesScreen() {
         formattedDate={formatISTDateTime(item.createdAt || (item as any).requestedAt)}
         onViewDetails={setSelectedSale}
         onOpenInvoice={handleOpenInvoice}
+        onReceivePayment={(sale) => setRemittanceTargets([sale])}
+        selectable={selectionMode}
+        selected={selectedSaleIds.includes(item.id)}
+        onToggleSelect={toggleSelectSale}
         isCompactWidth={isCompactWidth}
       />
     </View>
@@ -252,13 +344,19 @@ export default function AdminSalesScreen() {
           contentContainerStyle={styles.filterScrollContent}
           style={styles.filterScroll}
         >
-          {(['ALL', 'CONFIRMED', 'PENDING_APPROVAL', 'RESUBMITTED', 'REJECTED'] as const).map((st) => {
+          {(
+            ['ALL', 'CONFIRMED', 'SENT_TO_COMPANY', 'COMPLETED', 'PENDING_APPROVAL', 'RESUBMITTED', 'REJECTED'] as const
+          ).map((st) => {
             const active = statusFilter === st;
             const label =
               st === 'ALL'
                 ? 'All'
                 : st === 'CONFIRMED'
                 ? 'Confirmed'
+                : st === 'SENT_TO_COMPANY'
+                ? 'Cash Sent'
+                : st === 'COMPLETED'
+                ? 'Completed'
                 : st === 'PENDING_APPROVAL'
                 ? 'Pending'
                 : st === 'RESUBMITTED'
@@ -269,7 +367,14 @@ export default function AdminSalesScreen() {
                 key={st}
                 style={[
                   styles.filterChip,
-                  active && (st === 'RESUBMITTED' ? styles.filterChipActivePurple : styles.filterChipActive),
+                  active &&
+                    (st === 'RESUBMITTED'
+                      ? styles.filterChipActivePurple
+                      : st === 'COMPLETED'
+                      ? { backgroundColor: '#0F766E' }
+                      : st === 'SENT_TO_COMPANY'
+                      ? { backgroundColor: '#1D4ED8' }
+                      : styles.filterChipActive),
                 ]}
                 onPress={() => setStatusFilter(st)}
                 activeOpacity={0.75}
@@ -317,6 +422,53 @@ export default function AdminSalesScreen() {
             );
           })}
         </ScrollView>
+
+        {/* Bulk Selection Toolbar */}
+        {readyToCompleteSales.length > 0 ? (
+          <View style={styles.activeSummaryBar}>
+            <TouchableOpacity
+              onPress={() => {
+                if (selectionMode) {
+                  setSelectionMode(false);
+                  setSelectedSaleIds([]);
+                } else {
+                  setSelectionMode(true);
+                }
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 999,
+                backgroundColor: selectionMode ? '#0F766E' : '#F1F5F9',
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={selectionMode ? 'checkbox' : 'checkbox-outline'}
+                size={15}
+                color={selectionMode ? '#FFFFFF' : '#334155'}
+              />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: selectionMode ? '#FFFFFF' : '#334155' }}>
+                {selectionMode ? 'Cancel Select' : 'Select for Bulk Complete'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleSelectAllReady}
+              hitSlop={8}
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F766E' }}>
+                {selectedSaleIds.length === readyToCompleteSales.length && readyToCompleteSales.length > 0
+                  ? 'Deselect All'
+                  : `Select All Ready (${readyToCompleteSales.length})`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Active Filter Summary */}
         {hasActiveFilters ? (
@@ -368,7 +520,10 @@ export default function AdminSalesScreen() {
           data={sales}
           keyExtractor={(item) => item.id}
           renderItem={renderSaleItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            selectionMode && selectedSaleIds.length > 0 && { paddingBottom: 110 },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -378,6 +533,42 @@ export default function AdminSalesScreen() {
           }
         />
       )}
+
+      {/* Sticky Bulk Complete Action Bar */}
+      {selectionMode && selectedSaleIds.length > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: Spacing.md,
+            right: Spacing.md,
+            bottom: Spacing.md,
+            backgroundColor: '#0F172A',
+            borderRadius: 16,
+            paddingHorizontal: Spacing.md,
+            paddingVertical: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            ...Elevation.medium,
+          }}
+        >
+          <View>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8' }}>
+              {selectedSaleIds.length} {selectedSaleIds.length === 1 ? 'sale' : 'sales'} selected
+            </Text>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: '#FFFFFF' }}>
+              ₹{(selectedTotalPaise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+          </View>
+          <Button
+            title="Amount Received & Complete"
+            variant="admin"
+            size="sm"
+            icon={<Ionicons name="checkmark-done-outline" size={16} color="#FFFFFF" />}
+            onPress={() => setRemittanceTargets(selectedSalesList)}
+          />
+        </View>
+      ) : null}
 
       {/* Sale Detail Modal */}
       <Modal
@@ -393,7 +584,8 @@ export default function AdminSalesScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Order Breakdown</Text>
                 <Text style={styles.modalSub}>
-                  ID: {selectedSale?.id} • {formatISTDateTime(selectedSale?.createdAt)}
+                  {selectedSale?.invoice?.number ? `${selectedSale.invoice.number} • ` : ''}
+                  {formatISTDateTime(selectedSale?.createdAt)}
                 </Text>
               </View>
               <Pressable onPress={() => setSelectedSale(null)} style={styles.modalCloseBtn}>
@@ -427,6 +619,43 @@ export default function AdminSalesScreen() {
                   <Text style={[styles.metaVal, { fontWeight: '700' }]}>{selectedSale?.status}</Text>
                 </View>
               </Card>
+
+              {/* Company Remittance Details */}
+              {selectedSale?.paymentSentAt || selectedSale?.paymentReceivedAt ? (
+                <Card
+                  style={{
+                    padding: Spacing.sm,
+                    backgroundColor: selectedSale.status === 'COMPLETED' ? '#F0FDFA' : '#EFF6FF',
+                    borderWidth: 1,
+                    borderColor: selectedSale.status === 'COMPLETED' ? '#99F6E4' : '#BFDBFE',
+                    gap: 6,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '800',
+                      color: selectedSale.status === 'COMPLETED' ? '#0F766E' : '#1E40AF',
+                    }}
+                  >
+                    {selectedSale.status === 'COMPLETED'
+                      ? 'Company Account Remittance — COMPLETED'
+                      : 'Seller Payment Sent to Company'}
+                  </Text>
+                  {selectedSale.paymentSentAt ? (
+                    <Text style={{ fontSize: 12, color: '#334155' }}>
+                      Sent on {formatISTDateTime(selectedSale.paymentSentAt)}
+                      {selectedSale.paymentSentRemark ? ` — "${selectedSale.paymentSentRemark}"` : ''}
+                    </Text>
+                  ) : null}
+                  {selectedSale.paymentReceivedAt ? (
+                    <Text style={{ fontSize: 12, color: '#0F766E', fontWeight: '600' }}>
+                      Received on {formatISTDateTime(selectedSale.paymentReceivedAt)}
+                      {selectedSale.paymentReceivedRemark ? ` — "${selectedSale.paymentReceivedRemark}"` : ''}
+                    </Text>
+                  ) : null}
+                </Card>
+              ) : null}
 
               {/* Line Items */}
               <Text style={styles.sectionHeading}>Items & SKU Breakdown</Text>
@@ -478,7 +707,18 @@ export default function AdminSalesScreen() {
                 </View>
               ) : null}
 
-              {/* Invoice Action */}
+              {/* Actions */}
+              {selectedSale?.status === 'CONFIRMED' &&
+              (selectedSale.paymentMode === 'CASH' || selectedSale.paymentMode === 'BANK') ? (
+                <Button
+                  title="Confirm Amount Received in FemmeFlo & Complete"
+                  variant="primary"
+                  icon={<Ionicons name="checkmark-done-circle-outline" size={18} color="#FFFFFF" />}
+                  onPress={() => setRemittanceTargets([selectedSale])}
+                  style={{ backgroundColor: '#0F766E' }}
+                />
+              ) : null}
+
               <View style={styles.modalBtnRow}>
                 <Button
                   title="Close"
@@ -486,7 +726,8 @@ export default function AdminSalesScreen() {
                   onPress={() => setSelectedSale(null)}
                   style={{ flex: 1, marginRight: Spacing.sm }}
                 />
-                {selectedSale?.id ? (
+                {selectedSale?.id &&
+                (selectedSale.status === 'CONFIRMED' || selectedSale.status === 'COMPLETED') ? (
                   <Button
                     title="Open Tax Invoice"
                     variant="admin"
@@ -504,6 +745,35 @@ export default function AdminSalesScreen() {
           </View>
         </View>
       </Modal>
+
+      <RemittanceActionModal
+        visible={remittanceTargets.length > 0}
+        mode="ADMIN_RECEIVE"
+        title={
+          remittanceTargets.length > 1
+            ? `Complete ${remittanceTargets.length} Sales`
+            : 'Confirm Amount Received'
+        }
+        subtitle={
+          remittanceTargets.length > 1
+            ? 'Mark selected sales as received in FemmeFlo account and COMPLETED'
+            : `Order for ${remittanceTargets[0]?.customer?.shopName || 'Retail Store'} (${remittanceTargets[0]?.seller?.name || 'Seller'})`
+        }
+        selectedCount={remittanceTargets.length}
+        totalAmountPaise={remittanceTargets.reduce(
+          (sum, s) => sum + Number(s.totalAmountPaise || s.totalPaise || 0),
+          0
+        )}
+        packetCount={remittanceTargets.reduce((sum, s) => sum + (s.packetCount || s.quantity || 0), 0)}
+        paymentModeLabel={remittanceTargets.length === 1 ? remittanceTargets[0]?.paymentMode : undefined}
+        sellerSentAt={remittanceTargets.length === 1 ? remittanceTargets[0]?.paymentSentAt : undefined}
+        sellerSentRemark={
+          remittanceTargets.length === 1 ? remittanceTargets[0]?.paymentSentRemark : undefined
+        }
+        loading={isCompletingRemittance}
+        onClose={() => setRemittanceTargets([])}
+        onSubmit={handleSubmitReceivePayment}
+      />
 
       <PdfPreviewModal
         visible={pdfPreview !== null}

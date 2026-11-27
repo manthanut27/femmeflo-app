@@ -27,10 +27,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
+import { RemittanceActionModal } from '@/components/sales/RemittanceActionModal';
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { formatDateTimeIST } from '@/utils/dateUtils';
 
 function normalizeSale(raw: any): SaleItem {
   if (!raw || typeof raw !== 'object') return raw;
@@ -86,6 +88,10 @@ export default function SaleDetailScreen() {
 
   const [sale, setSale] = useState<SaleItem | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Company Payment Remittance Modal State
+  const [remittanceModalVisible, setRemittanceModalVisible] = useState(false);
+  const [isSendingRemittance, setIsSendingRemittance] = useState(false);
 
   // Payment Collection State
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
@@ -161,6 +167,29 @@ export default function SaleDetailScreen() {
     }
   }
 
+  async function handleMarkPaymentSent({ remark, dateStr }: { remark?: string; dateStr: string }) {
+    if (isSendingRemittance || !id) return;
+    setIsSendingRemittance(true);
+    try {
+      const res = await sellerApi.markPaymentSent(id, {
+        remark,
+        sentAt: dateStr,
+      });
+      const updatedSale = (res as any)?.sale || (res as any)?.data?.sale || (res as any)?.data || res;
+      setSale(normalizeSale(updatedSale));
+      setRemittanceModalVisible(false);
+      DeviceEventEmitter.emit('SALES_SYNC', { saleId: id, action: 'PAYMENT_SENT' });
+      Alert.alert(
+        'Sent to Company Recorded',
+        `FemmeFlo Super Admin has been notified that payment for ${sale?.customer?.shopName || 'this order'} was sent.`
+      );
+    } catch (err: any) {
+      Alert.alert('Remittance Error', err.message || 'Could not record payment sent.');
+    } finally {
+      setIsSendingRemittance(false);
+    }
+  }
+
   async function handleUpdateFeedback() {
     if (isUpdatingFeedback || !id) return;
     setIsUpdatingFeedback(true);
@@ -182,7 +211,7 @@ export default function SaleDetailScreen() {
   async function handleDownloadInvoice() {
     if (!sale) return;
 
-    if (sale.status !== 'CONFIRMED' && sale.status !== 'APPROVED') {
+    if (sale.status !== 'CONFIRMED' && sale.status !== 'COMPLETED' && sale.status !== 'APPROVED') {
       Alert.alert(
         'Invoice Unavailable',
         'Tax invoices are issued exclusively for confirmed sales. Pending sales require Super Admin approval.'
@@ -377,15 +406,17 @@ Generated in FemmeFlo Standalone Test Mode.`;
     );
   }
 
-  const isConfirmed = sale.status === 'CONFIRMED' || sale.status === 'APPROVED';
+  const isCompleted = sale.status === 'COMPLETED';
+  const isConfirmed = sale.status === 'CONFIRMED' || isCompleted || sale.status === 'APPROVED';
   const isPendingApproval = sale.status === 'PENDING' || sale.status === 'PENDING_APPROVAL';
   const isRejected = sale.status === 'REJECTED';
   const isPendingPayment = sale.paymentMode === 'PENDING';
+  const canSendToCompany = sale.status === 'CONFIRMED' && !isPendingPayment;
 
   return (
     <View style={styles.container}>
       <Header
-        title={sale.saleNumber || `Order #${sale.id.slice(0, 8)}`}
+        title={sale.invoice?.number || sale.saleNumber || `Order #${sale.id.slice(0, 8)}`}
         subtitle="Sales Order Details & Tax Invoice"
         showBack
       />
@@ -508,6 +539,92 @@ Generated in FemmeFlo Standalone Test Mode.`;
                   onPress={() => setPaymentModalVisible(true)}
                   icon={<Ionicons name="cash-outline" size={16} color="#FFFFFF" />}
                 />
+              </View>
+            </Card>
+          ) : null}
+
+          {/* Company Payment Remittance / Completion Status */}
+          {isCompleted ? (
+            <Card
+              variant="outlined"
+              style={{
+                borderColor: '#5EEAD4',
+                backgroundColor: '#F0FDFA',
+                marginBottom: Spacing.md,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <Ionicons name="checkmark-done-circle" size={22} color="#0F766E" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F766E' }}>
+                    Amount Received in FemmeFlo Account • Completed
+                  </Text>
+                  {sale.paymentReceivedAt ? (
+                    <Text style={{ fontSize: 12.5, color: '#115E59', marginTop: 4 }}>
+                      Received on {formatDateTimeIST(sale.paymentReceivedAt)}
+                    </Text>
+                  ) : null}
+                  {sale.paymentReceivedRemark ? (
+                    <Text style={{ fontSize: 12.5, color: '#134E4A', marginTop: 3, fontStyle: 'italic' }}>
+                      Admin Remark: "{sale.paymentReceivedRemark}"
+                    </Text>
+                  ) : null}
+                  {sale.paymentSentAt ? (
+                    <Text style={{ fontSize: 12, color: '#475569', marginTop: 6 }}>
+                      Sent by you on {formatDateTimeIST(sale.paymentSentAt)}
+                      {sale.paymentSentRemark ? ` ("${sale.paymentSentRemark}")` : ''}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            </Card>
+          ) : canSendToCompany ? (
+            <Card
+              variant="outlined"
+              style={{
+                borderColor: sale.paymentSentAt ? '#BFDBFE' : '#FBCFE8',
+                backgroundColor: sale.paymentSentAt ? '#EFF6FF' : '#FFF1F2',
+                marginBottom: Spacing.md,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <Ionicons
+                  name={sale.paymentSentAt ? 'send' : 'wallet-outline'}
+                  size={20}
+                  color={sale.paymentSentAt ? '#1D4ED8' : BrandColors.pink.dark}
+                  style={{ marginTop: 2 }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 14.5,
+                      fontWeight: '700',
+                      color: sale.paymentSentAt ? '#1E40AF' : '#9F1239',
+                    }}
+                  >
+                    {sale.paymentSentAt
+                      ? 'Sent to FemmeFlo — Awaiting Admin Confirmation'
+                      : `Send Collected ${sale.paymentMode} Payment to FemmeFlo`}
+                  </Text>
+                  {sale.paymentSentAt ? (
+                    <Text style={{ fontSize: 12.5, color: '#1E3A8A', marginTop: 4 }}>
+                      Marked sent on {formatDateTimeIST(sale.paymentSentAt)}
+                      {sale.paymentSentRemark ? ` — "${sale.paymentSentRemark}"` : ''}
+                    </Text>
+                  ) : (
+                    <Text style={{ fontSize: 12.5, color: '#881337', marginTop: 3, lineHeight: 18 }}>
+                      Add a remark & date when you hand over or transfer this sale&apos;s amount to FemmeFlo account.
+                    </Text>
+                  )}
+                  <Button
+                    title={sale.paymentSentAt ? 'Update Sent Note & Date' : 'Mark Payment Sent to Company'}
+                    variant={sale.paymentSentAt ? 'outline' : 'primary'}
+                    size="sm"
+                    onPress={() => setRemittanceModalVisible(true)}
+                    icon={<Ionicons name="send-outline" size={15} color={sale.paymentSentAt ? BrandColors.pink.primary : '#FFFFFF'} />}
+                    style={{ marginTop: Spacing.sm, alignSelf: 'flex-start' }}
+                  />
+                </View>
               </View>
             </Card>
           ) : null}
@@ -869,6 +986,20 @@ Generated in FemmeFlo Standalone Test Mode.`;
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <RemittanceActionModal
+        visible={remittanceModalVisible}
+        mode="SELLER_SEND"
+        title="Send Payment to FemmeFlo"
+        subtitle={`Order for ${sale.customer?.shopName || 'Retail Store'} (${sale.paymentMode})`}
+        totalAmountPaise={sale.totalAmountPaise || 0}
+        packetCount={sale.packetCount || sale.quantity || 0}
+        paymentModeLabel={sale.paymentMode}
+        initialRemark={sale.paymentSentRemark || ''}
+        loading={isSendingRemittance}
+        onClose={() => setRemittanceModalVisible(false)}
+        onSubmit={handleMarkPaymentSent}
+      />
 
       <PdfPreviewModal
         visible={pdfPreview !== null}

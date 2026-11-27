@@ -639,10 +639,22 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return { sale: mockDb.sales[0] } as unknown as T;
   }
 
+  if (cleanEndpoint.startsWith('seller/sales/') && cleanEndpoint.endsWith('/payment-sent') && method === 'PATCH') {
+    const id = cleanEndpoint.replace('seller/sales/', '').replace('/payment-sent', '');
+    const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
+    if (sale) {
+      sale.paymentSentAt = body.sentAt || new Date().toISOString();
+      sale.paymentSentRemark = body.remark || null;
+      return { sale } as unknown as T;
+    }
+    return { sale: mockDb.sales[0] } as unknown as T;
+  }
+
   // Seller / Manager: Update Sale Price & Resubmit for Reapproval
   if (
     (cleanEndpoint.startsWith('seller/sales/') || cleanEndpoint.startsWith('manager/sales/')) &&
     !cleanEndpoint.endsWith('/payment') &&
+    !cleanEndpoint.endsWith('/payment-sent') &&
     method === 'PATCH'
   ) {
     const segments = cleanEndpoint.split('/');
@@ -1661,13 +1673,44 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     } as unknown as T;
   }
 
+  if (cleanEndpoint === 'admin/sales/bulk-complete' && method === 'POST') {
+    const ids = Array.isArray(body?.saleIds) ? body.saleIds : [];
+    const nowIso = body?.receivedAt || new Date().toISOString();
+    const updatedList: SaleItem[] = [];
+    for (const sid of ids) {
+      const target = mockDb.sales.find((s) => s.id === sid);
+      if (target) {
+        target.status = 'COMPLETED';
+        target.paymentReceivedAt = nowIso;
+        target.paymentReceivedRemark = body?.remark || null;
+        updatedList.push(target);
+      }
+    }
+    return { sales: updatedList, completedCount: updatedList.length } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/sales/') && cleanEndpoint.endsWith('/receive-payment') && method === 'PATCH') {
+    const id = cleanEndpoint.replace('admin/sales/', '').replace('/receive-payment', '');
+    const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
+    if (sale) {
+      sale.status = 'COMPLETED';
+      sale.paymentReceivedAt = body?.receivedAt || new Date().toISOString();
+      sale.paymentReceivedRemark = body?.remark || null;
+    }
+    return { sale } as unknown as T;
+  }
+
   if (cleanEndpoint.startsWith('admin/sales/') && method === 'GET') {
     const id = cleanEndpoint.replace('admin/sales/', '');
     const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
     return { sale } as unknown as T;
   }
 
-  if (cleanEndpoint.startsWith('admin/sales/') && method === 'PATCH') {
+  if (
+    cleanEndpoint.startsWith('admin/sales/') &&
+    !cleanEndpoint.endsWith('/receive-payment') &&
+    method === 'PATCH'
+  ) {
     const id = cleanEndpoint.replace('admin/sales/', '');
     const sale = mockDb.sales.find((s) => s.id === id) || mockDb.sales[0];
     Object.assign(sale, body);

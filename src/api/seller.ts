@@ -456,6 +456,19 @@ export const sellerApi = {
     });
   },
 
+  async markPaymentSent(
+    saleId: string,
+    payload: { remark?: string; sentAt?: string }
+  ): Promise<{ sale: SaleItem }> {
+    const body: Record<string, string> = {};
+    if (payload.remark?.trim()) body.remark = payload.remark.trim();
+    if (payload.sentAt?.trim()) body.sentAt = payload.sentAt.trim();
+    return apiRequest<{ sale: SaleItem }>(`seller/sales/${saleId}/payment-sent`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
   getInvoicePdfUrl(id: string, download = true): string {
     return `${API_BASE_URL}/invoices/${id}/pdf?download=${download ? 'true' : 'false'}`;
   },

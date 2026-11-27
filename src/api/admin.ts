@@ -1217,4 +1217,56 @@ export const adminApi = {
       throw err;
     }
   },
+
+  async receiveSalePayment(
+    saleId: string,
+    payload: { remark?: string; receivedAt?: string }
+  ): Promise<{ sale: SaleItem }> {
+    const body: Record<string, string> = {};
+    if (payload.remark?.trim()) body.remark = payload.remark.trim();
+    if (payload.receivedAt?.trim()) body.receivedAt = payload.receivedAt.trim();
+    try {
+      return await apiRequest<{ sale: SaleItem }>(`admin/sales/${saleId}/receive-payment`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sale: SaleItem }>(`admin/sales/${saleId}/receive-payment`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+      }
+      throw err;
+    }
+  },
+
+  async bulkCompleteSales(payload: {
+    saleIds: string[];
+    remark?: string;
+    receivedAt?: string;
+  }): Promise<{ sales: SaleItem[]; completedCount: number }> {
+    const body: { saleIds: string[]; remark?: string; receivedAt?: string } = {
+      saleIds: payload.saleIds,
+    };
+    if (payload.remark?.trim()) body.remark = payload.remark.trim();
+    if (payload.receivedAt?.trim()) body.receivedAt = payload.receivedAt.trim();
+    try {
+      return await apiRequest<{ sales: SaleItem[]; completedCount: number }>('admin/sales/bulk-complete', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      if (isMockMode()) {
+        return await handleMockRequest<{ sales: SaleItem[]; completedCount: number }>(
+          'admin/sales/bulk-complete',
+          {
+            method: 'POST',
+            body: JSON.stringify(body),
+          }
+        );
+      }
+      throw err;
+    }
+  },
 };

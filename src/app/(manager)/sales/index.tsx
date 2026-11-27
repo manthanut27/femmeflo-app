@@ -250,7 +250,7 @@ export default function ManagerSalesScreen() {
     const totalPaise = sales.reduce((sum, s) => sum + (s.totalAmountPaise ?? s.totalPaise ?? 0), 0);
     const totalPackets = sales.reduce((sum, s) => sum + (s.quantity || s.packetCount || 0), 0);
     const activeOfficersCount = sellers.filter((s) => s.active !== false).length || sellers.length;
-    const confirmedCount = sales.filter((s) => s.status === 'CONFIRMED').length;
+    const confirmedCount = sales.filter((s) => s.status === 'CONFIRMED' || s.status === 'COMPLETED').length;
     const pendingCount = sales.filter((s) => s.status === 'PENDING' || s.status === 'PENDING_APPROVAL').length;
 
     return {
@@ -295,6 +295,7 @@ export default function ManagerSalesScreen() {
           s.customer?.shopName?.toLowerCase().includes(q) ||
           s.seller?.name?.toLowerCase().includes(q) ||
           s.saleNumber?.toLowerCase().includes(q) ||
+          s.invoice?.number?.toLowerCase().includes(q) ||
           s.id.toLowerCase().includes(q)
       );
     }
@@ -311,6 +312,7 @@ export default function ManagerSalesScreen() {
   const filterTabs = [
     { key: 'ALL' as const, label: 'All', badge: sales.length },
     { key: 'CONFIRMED' as const, label: 'Confirmed', badge: sales.filter((s) => s.status === 'CONFIRMED').length },
+    { key: 'COMPLETED' as const, label: 'Completed', badge: sales.filter((s) => s.status === 'COMPLETED').length },
     { key: 'PENDING' as const, label: 'Pending', badge: sales.filter((s) => s.status === 'PENDING' || s.status === 'PENDING_APPROVAL').length },
     { key: 'REJECTED' as const, label: 'Rejected', badge: sales.filter((s) => s.status === 'REJECTED').length },
   ];
@@ -491,8 +493,8 @@ export default function ManagerSalesScreen() {
           <Text style={styles.amount}>{formatCurrencyINR(totalAmount)}</Text>
         </View>
 
-        {/* Confirmed Tax Invoice Actions */}
-        {item.status === 'CONFIRMED' && (
+        {/* Confirmed / Completed Tax Invoice Actions */}
+        {(item.status === 'CONFIRMED' || item.status === 'COMPLETED') && (
           <View style={styles.managerInvoiceRow}>
             <Pressable
               accessibilityRole="button"
@@ -530,6 +532,45 @@ export default function ManagerSalesScreen() {
                 </>
               )}
             </Pressable>
+
+            {item.status === 'CONFIRMED' &&
+            (item.paymentMode === 'CASH' || item.paymentMode === 'BANK') &&
+            (item.sellerId === user?.id || item.seller?.id === user?.id) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open sale details to send payment to FemmeFlo"
+                style={({ pressed }) => [
+                  {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: item.paymentSentAt ? '#EFF6FF' : '#FDF2F8',
+                    borderWidth: 1,
+                    borderColor: item.paymentSentAt ? '#BFDBFE' : '#FBCFE8',
+                  },
+                  pressed && styles.btnPressed,
+                ]}
+                onPress={() => router.push(`/(seller)/sales/${item.id}` as any)}
+              >
+                <Ionicons
+                  name={item.paymentSentAt ? 'checkmark-circle' : 'send-outline'}
+                  size={13}
+                  color={item.paymentSentAt ? '#1D4ED8' : BrandColors.pink.dark}
+                />
+                <Text
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: '700',
+                    color: item.paymentSentAt ? '#1D4ED8' : BrandColors.pink.dark,
+                  }}
+                >
+                  {item.paymentSentAt ? 'Sent to Co.' : 'Send Payment'}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
       </Card>

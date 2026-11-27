@@ -15,6 +15,7 @@ export type BadgeVariant =
   | 'PENDING_APPROVAL'
   | 'APPROVED'
   | 'CONFIRMED'
+  | 'COMPLETED'
   | 'REJECTED'
   | 'ACTIVE'
   | 'INACTIVE'
@@ -75,8 +76,10 @@ export function Badge({
   );
 }
 
-function getNormalizedVariant(v: BadgeVariant): 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' {
+function getNormalizedVariant(v: BadgeVariant): 'success' | 'completed' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' {
   switch (v) {
+    case 'COMPLETED':
+      return 'completed';
     case 'CONFIRMED':
     case 'APPROVED':
     case 'ACTIVE':
@@ -152,6 +155,18 @@ const styles = StyleSheet.create({
 });
 
 const badgeStyles = {
+  completed: StyleSheet.create({
+    container: {
+      backgroundColor: '#CCFBF1',
+      borderColor: '#5EEAD4',
+    },
+    dot: {
+      backgroundColor: '#0D9488',
+    },
+    text: {
+      color: '#0F766E',
+    },
+  }),
   success: StyleSheet.create({
     container: {
       backgroundColor: '#ECFDF5',
