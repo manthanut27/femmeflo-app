@@ -3,7 +3,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -32,17 +31,20 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { StatCard } from '@/components/ui/StatCard';
 import {
   BorderRadius,
   BrandColors,
   Colors,
-  Elevation,
   MaxContentWidth,
   Spacing,
   Typography,
 } from '@/constants/theme';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
+
+type SectionTab = 'INCENTIVES' | 'TARGETS';
+type TargetStatusFilter = 'ALL' | 'ASSIGNED' | 'ACHIEVED' | 'UNSET';
 
 export default function AdminIncentivesScreen() {
   const handleBack = useDashboardBackHandler('/(admin)');
@@ -52,10 +54,19 @@ export default function AdminIncentivesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Filters
+  // Page section & filters
+  const [activeSection, setActiveSection] = useState<SectionTab>('INCENTIVES');
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'SELLER' | 'MANAGER'>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNPAID' | 'PARTIALLY_PAID' | 'PAID'>('ALL');
+  const [targetStatusFilter, setTargetStatusFilter] = useState<TargetStatusFilter>('ALL');
+
+  // Accordion expand state per employee row
+  const [expandedIncentiveIds, setExpandedIncentiveIds] = useState<Record<string, boolean>>({});
+  const [expandedTargetIds, setExpandedTargetIds] = useState<Record<string, boolean>>({});
+
+  // Bulk Target selection state
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
 
   // Modals
   const [globalRuleModal, setGlobalRuleModal] = useState(false);
@@ -87,8 +98,9 @@ export default function AdminIncentivesScreen() {
   const [detailsData, setDetailsData] = useState<UserIncentiveDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  // Target Modal
+  // Single OR Bulk Target Modal
   const [targetModalUser, setTargetModalUser] = useState<IncentiveSummaryItem | null>(null);
+  const [targetBulkUsers, setTargetBulkUsers] = useState<IncentiveSummaryItem[]>([]);
   const [targetPeriodInput, setTargetPeriodInput] = useState<TargetPeriodType>('MONTHLY');
   const [targetPacketsInput, setTargetPacketsInput] = useState('');
   const [targetBonusRupeesInput, setTargetBonusRupeesInput] = useState('');
@@ -97,14 +109,15 @@ export default function AdminIncentivesScreen() {
   const loadData = useCallback(async () => {
     try {
       const [incRes, setRes] = await Promise.all([
-        adminApi.getIncentives({
-          role: roleFilter !== 'ALL' ? roleFilter : undefined,
-          status: statusFilter !== 'ALL' ? statusFilter : undefined,
-          search: search.trim() || undefined,
-        }).catch((err) => {
-          console.warn('Failed to fetch incentives', err);
-          return null;
-        }),
+        adminApi
+          .getIncentives({
+            role: roleFilter !== 'ALL' ? roleFilter : undefined,
+            search: search.trim() || undefined,
+          })
+          .catch((err) => {
+            console.warn('Failed to fetch incentives', err);
+            return null;
+          }),
         adminApi.getIncentiveSettings().catch(() => null),
       ]);
 
@@ -122,7 +135,7 @@ export default function AdminIncentivesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [roleFilter, statusFilter, search]);
+  }, [roleFilter, search]);
 
   useEffect(() => {
     loadData();
@@ -135,7 +148,7 @@ export default function AdminIncentivesScreen() {
 
   const allEmployees = useMemo(() => {
     if (!data) return [];
-    let list: IncentiveSummaryItem[] = [];
+    const list: IncentiveSummaryItem[] = [];
     const seen = new Set<string>();
     const addUnique = (items?: IncentiveSummaryItem[]) => {
       for (const emp of items || []) {
@@ -158,7 +171,7 @@ export default function AdminIncentivesScreen() {
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((emp) => {
+      return list.filter((emp) => {
         const name = (emp.sellerName || (emp as any).name || '').toLowerCase();
         const phone = (emp.phone || '').toLowerCase();
         return name.includes(q) || phone.includes(q);
@@ -167,6 +180,32 @@ export default function AdminIncentivesScreen() {
 
     return list;
   }, [data, roleFilter, search]);
+
+  const targetFilteredEmployees = useMemo(() => {
+    if (targetStatusFilter === 'ALL') return allEmployees;
+    return allEmployees.filter((emp) => {
+      const hasTarget = Boolean(emp.targetProgress?.hasTarget || (emp.salesTargetPackets ?? 0) > 0);
+      const isAchieved = Boolean(emp.targetProgress?.isAchieved);
+      if (targetStatusFilter === 'ASSIGNED') return hasTarget;
+      if (targetStatusFilter === 'ACHIEVED') return hasTarget && isAchieved;
+      return !hasTarget;
+    });
+  }, [allEmployees, targetStatusFilter]);
+
+  const targetStats = useMemo(() => {
+    let assigned = 0;
+    let achieved = 0;
+    let payoutDuePaise = 0;
+    for (const emp of allEmployees) {
+      const hasTarget = Boolean(emp.targetProgress?.hasTarget || (emp.salesTargetPackets ?? 0) > 0);
+      if (hasTarget) {
+        assigned += 1;
+        if (emp.targetProgress?.isAchieved) achieved += 1;
+      }
+      payoutDuePaise += Number(emp.outstandingPaise ?? emp.netPayablePaise ?? 0);
+    }
+    return { assigned, achieved, payoutDuePaise };
+  }, [allEmployees]);
 
   // Global Rule Save
   const handleSaveGlobalRule = () => {
@@ -194,7 +233,10 @@ export default function AdminIncentivesScreen() {
               const extraMsg = res?.recalculatedCount
                 ? ` Updated ${res.recalculatedCount} unpaid sale(s).`
                 : '';
-              Alert.alert('Success', `Default incentive rate updated to ₹${rateNum.toFixed(2)}/pkt.${extraMsg}`);
+              Alert.alert(
+                'Success',
+                `Default incentive rate updated to ₹${rateNum.toFixed(2)}/pkt.${extraMsg}`
+              );
               setGlobalRuleModal(false);
               await loadData();
             } catch (err: any) {
@@ -312,9 +354,13 @@ export default function AdminIncentivesScreen() {
       return;
     }
 
-    const outstandingRupees = (payModalUser.outstandingPaise || (payModalUser as any).netPayablePaise || 0) / 100;
+    const outstandingRupees =
+      (payModalUser.outstandingPaise || (payModalUser as any).netPayablePaise || 0) / 100;
     if (amountNum > outstandingRupees && outstandingRupees > 0) {
-      Alert.alert('Exceeds Balance', `Payout cannot exceed outstanding balance of ₹${outstandingRupees.toFixed(2)}.`);
+      Alert.alert(
+        'Exceeds Balance',
+        `Payout cannot exceed outstanding balance of ₹${outstandingRupees.toFixed(2)}.`
+      );
       return;
     }
 
@@ -357,6 +403,7 @@ export default function AdminIncentivesScreen() {
   };
 
   const openTargetModal = (emp: IncentiveSummaryItem) => {
+    setTargetBulkUsers([]);
     setTargetModalUser(emp);
     const period = emp.targetProgress?.period || emp.salesTargetPeriod || 'MONTHLY';
     const pkts = emp.targetProgress?.targetPackets ?? emp.salesTargetPackets;
@@ -366,9 +413,30 @@ export default function AdminIncentivesScreen() {
     setTargetBonusRupeesInput(bonusPaise > 0 ? String(Number((bonusPaise / 100).toFixed(2))) : '');
   };
 
+  const openBulkTargetModal = () => {
+    const selectedEmployees = allEmployees.filter((emp) =>
+      selectedBulkIds.includes(emp.sellerId || emp.id)
+    );
+    if (selectedEmployees.length === 0) {
+      Alert.alert('Select Employees', 'Tap checkboxes to select one or more employees first.');
+      return;
+    }
+    setTargetModalUser(null);
+    setTargetBulkUsers(selectedEmployees);
+    setTargetPeriodInput('MONTHLY');
+    setTargetPacketsInput('250');
+    setTargetBonusRupeesInput('');
+  };
+
+  const closeTargetModal = () => {
+    setTargetModalUser(null);
+    setTargetBulkUsers([]);
+  };
+
   const handleSaveTarget = async (clearTarget = false) => {
-    if (!targetModalUser) return;
-    const userId = targetModalUser.sellerId || targetModalUser.id;
+    const isBulk = targetBulkUsers.length > 0;
+    if (!targetModalUser && !isBulk) return;
+
     let packets: number | null = null;
     let bonusPaise: number | null = null;
 
@@ -392,12 +460,31 @@ export default function AdminIncentivesScreen() {
 
     setSavingTarget(true);
     try {
-      await adminApi.updateUserTarget(userId, {
-        salesTargetPackets: packets,
-        salesTargetPeriod: targetPeriodInput,
-        targetBonusPaise: bonusPaise,
-      });
-      setTargetModalUser(null);
+      if (isBulk) {
+        const userIds = targetBulkUsers.map((emp) => emp.sellerId || emp.id);
+        await adminApi.bulkUpdateUserTargets({
+          userIds,
+          salesTargetPackets: packets,
+          salesTargetPeriod: targetPeriodInput,
+          targetBonusPaise: bonusPaise,
+        });
+        Alert.alert(
+          'Bulk Target Updated',
+          packets !== null
+            ? `Assigned ${packets} packets (${targetPeriodInput.toLowerCase()}) target to ${userIds.length} employee(s).`
+            : `Removed sales targets for ${userIds.length} employee(s).`
+        );
+        setBulkSelectMode(false);
+        setSelectedBulkIds([]);
+      } else if (targetModalUser) {
+        const userId = targetModalUser.sellerId || targetModalUser.id;
+        await adminApi.updateUserTarget(userId, {
+          salesTargetPackets: packets,
+          salesTargetPeriod: targetPeriodInput,
+          targetBonusPaise: bonusPaise,
+        });
+      }
+      closeTargetModal();
       await loadData();
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to update sales target.');
@@ -422,14 +509,22 @@ export default function AdminIncentivesScreen() {
     }
   };
 
+  const toggleBulkId = (userId: string) => {
+    setSelectedBulkIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
   const summary = data?.summary;
 
-  const renderEmployeeCard = ({ item }: { item: IncentiveSummaryItem }) => {
+  const renderIncentiveAccordionCard = (item: IncentiveSummaryItem) => {
+    const key = item.sellerId || item.id;
+    const isExpanded = Boolean(expandedIncentiveIds[key]);
     const name = item.sellerName || (item as any).name || 'Employee';
     const defaultRatePaise = settings?.incentiveRatePaise ?? 100;
     const rateRupees =
       item.ratePerPacketRupees ??
-      ((item.effectiveRatePaise ?? item.incentiveRatePaise ?? defaultRatePaise) / 100);
+      (item.effectiveRatePaise ?? item.incentiveRatePaise ?? defaultRatePaise) / 100;
     const totalEarnedPaise =
       item.adjustedEntitlementPaise ??
       item.earnedPaise ??
@@ -442,116 +537,307 @@ export default function AdminIncentivesScreen() {
     const earnedRupees = (totalEarnedPaise / 100).toFixed(2);
     const paidRupees = (totalPaidPaise / 100).toFixed(2);
     const outstandingRupees = (outstandingPaise / 100).toFixed(2);
-    const role = (item as any).role || (item.id.includes('mgr') ? 'MANAGER' : 'SELLER');
-    const isPaid = outstandingPaise <= 0;
+    const paidStatusLabel =
+      outstandingPaise <= 0
+        ? 'FULLY PAID'
+        : totalPaidPaise > 0
+          ? 'PARTIAL'
+          : 'UNPAID';
 
     return (
       <Card style={styles.empCard}>
-        <View style={styles.empHeaderRow}>
+        {/* Compact Header: ONLY Name, Rate, Phone Number, Paid Status + Dropdown */}
+        <Pressable
+          onPress={() =>
+            setExpandedIncentiveIds((prev) => ({ ...prev, [key]: !prev[key] }))
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Toggle incentive actions for ${name}`}
+          style={styles.compactHeaderRow}
+        >
           <View style={{ flex: 1, marginRight: Spacing.sm }}>
-            <Text style={styles.empName}>{name}</Text>
-            <Text style={styles.empMeta}>
-              Rate: ₹{rateRupees.toFixed(2)}/pkt • {item.phone || 'Field Force'}
+            <Text style={styles.empName} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={styles.empMeta} numberOfLines={1}>
+              ₹{rateRupees.toFixed(2)}/pkt • {item.phone || 'Field Force'}
             </Text>
           </View>
-          <Badge
-            label={isPaid ? 'FULLY PAID' : 'OUTSTANDING'}
-            variant={isPaid ? 'ACTIVE' : 'warning'}
-            size="sm"
-          />
-        </View>
-
-        <TargetProgressStrip
-          targetProgress={item.targetProgress}
-          ratePerPacketPaise={item.effectiveRatePaise ?? item.incentiveRatePaise ?? defaultRatePaise}
-          mode="compact"
-          showWhenUnset
-          onAssignPress={() => openTargetModal(item)}
-          assignButtonLabel="Set Target"
-        />
-
-        <View style={styles.empMetricsRow}>
-          <View style={styles.empMetricCol}>
-            <Text style={styles.empMetricLabel}>Earned</Text>
-            <Text style={styles.empMetricValue}>₹{earnedRupees}</Text>
+          <View style={styles.compactRightRow}>
+            <Badge
+              label={paidStatusLabel}
+              variant={
+                outstandingPaise <= 0
+                  ? 'ACTIVE'
+                  : totalPaidPaise > 0
+                    ? 'warning'
+                    : 'danger'
+              }
+              size="sm"
+            />
+            <Ionicons
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={Colors.light.textMuted}
+            />
           </View>
-          <View style={styles.empMetricCol}>
-            <Text style={styles.empMetricLabel}>Paid</Text>
-            <Text style={[styles.empMetricValue, { color: BrandColors.green.primary }]}>₹{paidRupees}</Text>
+        </Pressable>
+
+        {/* Expandable Details + Actions */}
+        {isExpanded ? (
+          <View style={styles.expandedDrawer}>
+            <View style={styles.empMetricsRow}>
+              <View style={styles.empMetricCol}>
+                <Text style={styles.empMetricLabel}>Earned</Text>
+                <Text style={styles.empMetricValue}>₹{earnedRupees}</Text>
+              </View>
+              <View style={styles.empMetricCol}>
+                <Text style={styles.empMetricLabel}>Paid</Text>
+                <Text style={[styles.empMetricValue, { color: BrandColors.green.primary }]}>
+                  ₹{paidRupees}
+                </Text>
+              </View>
+              <View style={styles.empMetricCol}>
+                <Text style={styles.empMetricLabel}>Pending</Text>
+                <Text style={[styles.empMetricValue, { color: BrandColors.pink.dark }]}>
+                  ₹{outstandingRupees}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.empActionsRow}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleViewDetails(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${name} incentive ledger`}
+              >
+                <Ionicons name="eye-outline" size={14} color="#0F172A" />
+                <Text style={styles.actionBtnText}>Ledger</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  setRateModalUser(item);
+                  setCustomRateInput(rateRupees.toFixed(2));
+                  setCustomRateReason('');
+                  setApplyUserRateToUnpaid(totalPaidPaise === 0);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Override rate for ${name}`}
+              >
+                <Ionicons name="pricetag-outline" size={14} color="#0F172A" />
+                <Text style={styles.actionBtnText}>Rate</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  setAdjModalUser(item);
+                  setAdjType('ADD');
+                  setAdjAmount('');
+                  setAdjReason('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Manual adjustment for ${name}`}
+              >
+                <Ionicons name="swap-vertical-outline" size={14} color="#0F172A" />
+                <Text style={styles.actionBtnText}>Adjust</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnPrimary]}
+                onPress={() => {
+                  setPayModalUser(item);
+                  setPayAmount(outstandingRupees);
+                  setPayMethod('BANK');
+                  setPayRef('');
+                  setPayRemarks('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Record payout for ${name}`}
+              >
+                <Ionicons name="card-outline" size={14} color="#FFFFFF" />
+                <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Pay</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.empMetricCol}>
-            <Text style={styles.empMetricLabel}>Pending</Text>
-            <Text style={[styles.empMetricValue, { color: BrandColors.pink.dark }]}>₹{outstandingRupees}</Text>
+        ) : null}
+      </Card>
+    );
+  };
+
+  const renderTargetAccordionCard = (item: IncentiveSummaryItem) => {
+    const key = item.sellerId || item.id;
+    const isExpanded = Boolean(expandedTargetIds[key]);
+    const isSelected = selectedBulkIds.includes(key);
+    const name = item.sellerName || (item as any).name || 'Employee';
+    const defaultRatePaise = settings?.incentiveRatePaise ?? 100;
+    const effectiveRatePaise =
+      item.effectiveRatePaise ?? item.incentiveRatePaise ?? defaultRatePaise;
+    const hasTarget = Boolean(
+      item.targetProgress?.hasTarget || (item.salesTargetPackets ?? 0) > 0
+    );
+    const isAchieved = Boolean(item.targetProgress?.isAchieved);
+    const totalEarnedPaise =
+      item.adjustedEntitlementPaise ??
+      item.earnedPaise ??
+      item.totalEarnedPaise ??
+      (item as any).salesIncentivePaise ??
+      0;
+    const totalPaidPaise = item.totalPaidPaise ?? (item as any).paidPaise ?? 0;
+    const outstandingPaise = item.outstandingPaise ?? item.netPayablePaise ?? 0;
+    const earnedRupees = (totalEarnedPaise / 100).toFixed(2);
+    const paidRupees = (totalPaidPaise / 100).toFixed(2);
+    const outstandingRupees = (outstandingPaise / 100).toFixed(2);
+
+    const compactTargetLine = hasTarget
+      ? `${item.targetProgress?.period === 'DAILY' ? 'Daily' : 'Monthly'}: ${
+          item.targetProgress?.completedPackets ?? 0
+        }/${item.targetProgress?.targetPackets ?? item.salesTargetPackets} pkts (${
+          item.targetProgress?.progressPercent ?? 0
+        }%)`
+      : `Rate: ₹${(effectiveRatePaise / 100).toFixed(2)}/pkt • ${item.phone || 'Field Force'}`;
+
+    const badgeLabel = !hasTarget
+      ? 'NO TARGET'
+      : isAchieved
+        ? outstandingPaise <= 0
+          ? 'MET • PAID'
+          : 'MET • PAY DUE'
+        : `${item.targetProgress?.progressPercent ?? 0}%`;
+
+    const badgeVariant = !hasTarget
+      ? 'neutral'
+      : isAchieved
+        ? outstandingPaise <= 0
+          ? 'ACTIVE'
+          : 'warning'
+        : 'info';
+
+    return (
+      <Card style={[styles.empCard, isSelected && styles.empCardSelected]}>
+        <Pressable
+          onPress={() => {
+            if (bulkSelectMode) {
+              toggleBulkId(key);
+            } else {
+              setExpandedTargetIds((prev) => ({ ...prev, [key]: !prev[key] }));
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            bulkSelectMode ? `Select ${name} for bulk target` : `Toggle target details for ${name}`
+          }
+          style={styles.compactHeaderRow}
+        >
+          {bulkSelectMode ? (
+            <View style={styles.checkboxBox}>
+              <Ionicons
+                name={isSelected ? 'checkbox' : 'square-outline'}
+                size={21}
+                color={isSelected ? BrandColors.pink.primary : Colors.light.textMuted}
+              />
+            </View>
+          ) : null}
+
+          <View style={{ flex: 1, marginRight: Spacing.sm }}>
+            <Text style={styles.empName} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text style={styles.empMeta} numberOfLines={1}>
+              {compactTargetLine}
+            </Text>
           </View>
-        </View>
 
-        <View style={styles.empActionsRow}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleViewDetails(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`View ${name} incentive ledger`}
-          >
-            <Ionicons name="eye-outline" size={14} color="#0F172A" />
-            <Text style={styles.actionBtnText}>Ledger</Text>
-          </TouchableOpacity>
+          <View style={styles.compactRightRow}>
+            <Badge label={badgeLabel} variant={badgeVariant as any} size="sm" />
+            {!bulkSelectMode ? (
+              <Ionicons
+                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={Colors.light.textMuted}
+              />
+            ) : null}
+          </View>
+        </Pressable>
 
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => {
-              setRateModalUser(item);
-              setCustomRateInput(rateRupees.toFixed(2));
-              setCustomRateReason('');
-              setApplyUserRateToUnpaid(totalPaidPaise === 0);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Override rate for ${name}`}
-          >
-            <Ionicons name="pricetag-outline" size={14} color="#0F172A" />
-            <Text style={styles.actionBtnText}>Rate</Text>
-          </TouchableOpacity>
+        {isExpanded && !bulkSelectMode ? (
+          <View style={styles.expandedDrawer}>
+            <TargetProgressStrip
+              targetProgress={item.targetProgress}
+              ratePerPacketPaise={effectiveRatePaise}
+              mode="compact"
+              showWhenUnset
+              onAssignPress={() => openTargetModal(item)}
+              assignButtonLabel="Set Target"
+            />
 
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => openTargetModal(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`Set sales target for ${name}`}
-          >
-            <Ionicons name="flag-outline" size={14} color={BrandColors.pink.primary} />
-            <Text style={styles.actionBtnText}>Target</Text>
-          </TouchableOpacity>
+            <View style={styles.empMetricsRow}>
+              <View style={styles.empMetricCol}>
+                <Text style={styles.empMetricLabel}>Earned</Text>
+                <Text style={styles.empMetricValue}>₹{earnedRupees}</Text>
+              </View>
+              <View style={styles.empMetricCol}>
+                <Text style={styles.empMetricLabel}>Paid</Text>
+                <Text style={[styles.empMetricValue, { color: BrandColors.green.primary }]}>
+                  ₹{paidRupees}
+                </Text>
+              </View>
+              <View style={styles.empMetricCol}>
+                <Text style={styles.empMetricLabel}>Pending</Text>
+                <Text style={[styles.empMetricValue, { color: BrandColors.pink.dark }]}>
+                  ₹{outstandingRupees}
+                </Text>
+              </View>
+            </View>
 
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => {
-              setAdjModalUser(item);
-              setAdjType('ADD');
-              setAdjAmount('');
-              setAdjReason('');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Manual adjustment for ${name}`}
-          >
-            <Ionicons name="swap-vertical-outline" size={14} color="#0F172A" />
-            <Text style={styles.actionBtnText}>Adjust</Text>
-          </TouchableOpacity>
+            <View style={styles.empActionsRow}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => openTargetModal(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${hasTarget ? 'Edit' : 'Set'} sales target for ${name}`}
+              >
+                <Ionicons name="flag-outline" size={14} color={BrandColors.pink.primary} />
+                <Text style={styles.actionBtnText}>{hasTarget ? 'Edit Target' : 'Set Target'}</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnPrimary]}
-            onPress={() => {
-              setPayModalUser(item);
-              setPayAmount(outstandingRupees);
-              setPayMethod('BANK');
-              setPayRef('');
-              setPayRemarks('');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Record payout for ${name}`}
-          >
-            <Ionicons name="card-outline" size={14} color="#FFFFFF" />
-            <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Pay</Text>
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleViewDetails(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${name} ledger`}
+              >
+                <Ionicons name="eye-outline" size={14} color="#0F172A" />
+                <Text style={styles.actionBtnText}>Ledger</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnPrimary]}
+                onPress={() => {
+                  setPayModalUser(item);
+                  setPayAmount(outstandingRupees);
+                  setPayMethod('BANK');
+                  setPayRef('');
+                  setPayRemarks(
+                    isAchieved && item.targetProgress?.bonusPaise
+                      ? `Target bonus + commission (${item.targetProgress.periodLabel})`
+                      : ''
+                  );
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Pay balance to ${name}`}
+              >
+                <Ionicons name="card-outline" size={14} color="#FFFFFF" />
+                <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>
+                  {outstandingPaise > 0 ? `Pay ₹${outstandingRupees}` : 'Pay'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
       </Card>
     );
   };
@@ -559,8 +845,12 @@ export default function AdminIncentivesScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Incentives & Payouts"
-        subtitle="National sales commissions, rate overrides and disbursements"
+        title="Incentives & Targets"
+        subtitle={
+          activeSection === 'INCENTIVES'
+            ? 'Commissions, rates & payouts'
+            : 'Single & bulk target tracking'
+        }
         leftAction={
           <Pressable
             accessibilityRole="button"
@@ -583,6 +873,31 @@ export default function AdminIncentivesScreen() {
         }
       />
 
+      {/* Primary Page Section Tabs: Incentives vs Sales Target */}
+      <View style={styles.topSectionTabsWrap}>
+        <SegmentedTabs
+          tabs={[
+            { label: 'Incentives', value: 'INCENTIVES', icon: 'wallet-outline' },
+            {
+              label: 'Sales Target',
+              value: 'TARGETS',
+              icon: 'flag-outline',
+              badgeCount: targetStats.assigned > 0 ? targetStats.assigned : undefined,
+            },
+          ]}
+          selectedTab={activeSection}
+          onSelect={(val) => {
+            if (!val) return;
+            setActiveSection(val);
+            if (val === 'INCENTIVES') {
+              setBulkSelectMode(false);
+            }
+          }}
+          activeColor={BrandColors.pink.primary}
+          accessibilityLabel="Switch between Incentives and Sales Target"
+        />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -594,97 +909,173 @@ export default function AdminIncentivesScreen() {
         }
       >
         <View style={styles.contentWrapper}>
-          {/* Default Rate Banner */}
-          <Card style={styles.globalRuleBanner}>
-            <View style={styles.bannerRow}>
-              <View style={{ flex: 1, marginRight: Spacing.sm }}>
-                <Text style={styles.bannerTitle}>Default Commission Rule</Text>
-                <Text style={styles.bannerDesc}>
-                  Field sellers receive{' '}
-                  <Text style={{ fontWeight: '700', color: BrandColors.pink.dark }}>
-                    ₹{((settings?.incentiveRatePaise ?? 100) / 100).toFixed(2)}
-                  </Text>{' '}
-                  per packet sold.
-                  {summary && (summary.targetsAssignedCount ?? 0) > 0
-                    ? ` • Targets met: ${summary.targetsAchievedCount ?? 0}/${summary.targetsAssignedCount}`
-                    : ''}
-                </Text>
-              </View>
-              <Button
-                title="Configure"
-                size="sm"
-                variant="outline-admin"
-                onPress={() => {
-                  setApplyGlobalToUnpaid((summary?.totalPaidPaise ?? 0) === 0);
-                  setGlobalRuleModal(true);
-                }}
-              />
-            </View>
-          </Card>
+          {activeSection === 'INCENTIVES' ? (
+            <>
+              {/* Compact Default Rule + Summary */}
+              <Card style={styles.globalRuleBanner}>
+                <View style={styles.bannerRow}>
+                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                    <Text style={styles.bannerTitle}>Default Commission Rule</Text>
+                    <Text style={styles.bannerDesc}>
+                      Base rate:{' '}
+                      <Text style={{ fontWeight: '700', color: BrandColors.pink.dark }}>
+                        ₹{((settings?.incentiveRatePaise ?? 100) / 100).toFixed(2)}/pkt
+                      </Text>
+                    </Text>
+                  </View>
+                  <Button
+                    title="Configure"
+                    size="sm"
+                    variant="outline-admin"
+                    onPress={() => {
+                      setApplyGlobalToUnpaid((summary?.totalPaidPaise ?? 0) === 0);
+                      setGlobalRuleModal(true);
+                    }}
+                  />
+                </View>
+              </Card>
 
-          {/* National Summary Metrics */}
-          {summary ? (
-            <View style={styles.metricsContainer}>
-              <View style={styles.metricRow}>
-                <View style={styles.metricCardWrapper}>
-                  <StatCard
-                    title="Total Earned"
-                    value={`₹${((summary.totalEarnedPaise || 0) / 100).toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}`}
-                    subtitle="Gross commissions"
-                    icon="trophy-outline"
-                    iconColor={BrandColors.pink.primary}
-                    iconBg={BrandColors.pink.subtle}
-                  />
+              {summary ? (
+                <View style={styles.metricsContainer}>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricCardWrapper}>
+                      <StatCard
+                        title="Total Earned"
+                        value={`₹${((summary.totalEarnedPaise || 0) / 100).toLocaleString('en-IN', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`}
+                        subtitle="Gross commissions"
+                        icon="trophy-outline"
+                        iconColor={BrandColors.pink.primary}
+                        iconBg={BrandColors.pink.subtle}
+                      />
+                    </View>
+                    <View style={styles.metricCardWrapper}>
+                      <StatCard
+                        title="Pending Payable"
+                        value={`₹${((summary.totalPendingPaise || 0) / 100).toLocaleString('en-IN', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}`}
+                        subtitle={`${summary.pendingEmployeesCount || 0} unpaid`}
+                        icon="hourglass-outline"
+                        iconColor={Colors.light.warning}
+                        iconBg={Colors.light.warningBg}
+                        accentColor={Colors.light.warning}
+                      />
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.metricCardWrapper}>
-                  <StatCard
-                    title="Total Disbursed"
-                    value={`₹${((summary.totalPaidPaise || 0) / 100).toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}`}
-                    subtitle="Completed payouts"
-                    icon="checkmark-circle-outline"
-                    iconColor={BrandColors.green.primary}
-                    iconBg={BrandColors.green.subtle}
-                    accentColor={BrandColors.green.primary}
-                  />
+              ) : null}
+            </>
+          ) : (
+            <>
+              {/* Sales Target Top Summary & Bulk Controls */}
+              <View style={styles.metricsContainer}>
+                <View style={styles.metricRow}>
+                  <View style={styles.metricCardWrapper}>
+                    <StatCard
+                      title="Targets Active"
+                      value={`${targetStats.achieved} / ${targetStats.assigned}`}
+                      subtitle="Achieved / assigned"
+                      icon="flag-outline"
+                      iconColor={BrandColors.pink.primary}
+                      iconBg={BrandColors.pink.subtle}
+                    />
+                  </View>
+                  <View style={styles.metricCardWrapper}>
+                    <StatCard
+                      title="Pending Payout"
+                      value={`₹${(targetStats.payoutDuePaise / 100).toLocaleString('en-IN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`}
+                      subtitle="Includes earned bonuses"
+                      icon="card-outline"
+                      iconColor={BrandColors.green.primary}
+                      iconBg={BrandColors.green.subtle}
+                      accentColor={BrandColors.green.primary}
+                    />
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.metricRow}>
-                <View style={styles.metricCardWrapper}>
-                  <StatCard
-                    title="Pending Payable"
-                    value={`₹${((summary.totalPendingPaise || 0) / 100).toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}`}
-                    subtitle={`${summary.pendingEmployeesCount || 0} employees unpaid`}
-                    icon="hourglass-outline"
-                    iconColor={Colors.light.warning}
-                    iconBg={Colors.light.warningBg}
-                    accentColor={Colors.light.warning}
-                  />
+              <Card style={styles.bulkBarCard}>
+                <View style={styles.bulkBarTopRow}>
+                  <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                    <Text style={styles.bulkBarTitle}>Bulk Sales Target</Text>
+                    <Text style={styles.bulkBarSub}>
+                      {bulkSelectMode
+                        ? `${selectedBulkIds.length} employee(s) selected`
+                        : 'Select multiple employees to set targets at once'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setBulkSelectMode((prev) => {
+                        if (prev) setSelectedBulkIds([]);
+                        return !prev;
+                      });
+                    }}
+                    style={[styles.bulkToggleBtn, bulkSelectMode && styles.bulkToggleBtnActive]}
+                  >
+                    <Ionicons
+                      name={bulkSelectMode ? 'close-circle-outline' : 'checkbox-outline'}
+                      size={15}
+                      color={bulkSelectMode ? '#FFFFFF' : BrandColors.pink.dark}
+                    />
+                    <Text
+                      style={[
+                        styles.bulkToggleBtnText,
+                        bulkSelectMode && { color: '#FFFFFF' },
+                      ]}
+                    >
+                      {bulkSelectMode ? 'Cancel' : 'Select Users'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.metricCardWrapper}>
-                  <StatCard
-                    title="Adjustments"
-                    value={`+₹${(((summary.totalAdditionsPaise || 0) - (summary.totalDeductionsPaise || 0)) / 100).toFixed(2)}`}
-                    subtitle="Net manual corrections"
-                    icon="swap-vertical-outline"
-                    iconColor="#0284C7"
-                    iconBg="#F0F9FF"
-                  />
-                </View>
-              </View>
-            </View>
-          ) : null}
 
-          {/* Search & Filters */}
+                {bulkSelectMode ? (
+                  <View style={styles.bulkControlsRow}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setSelectedBulkIds(
+                          targetFilteredEmployees.map((emp) => emp.sellerId || emp.id)
+                        )
+                      }
+                      style={styles.bulkQuickChip}
+                    >
+                      <Text style={styles.bulkQuickChipText}>
+                        Select All ({targetFilteredEmployees.length})
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setSelectedBulkIds([])}
+                      style={styles.bulkQuickChip}
+                    >
+                      <Text style={styles.bulkQuickChipText}>Clear</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={openBulkTargetModal}
+                      disabled={selectedBulkIds.length === 0}
+                      style={[
+                        styles.bulkApplyCta,
+                        selectedBulkIds.length === 0 && { opacity: 0.45 },
+                      ]}
+                    >
+                      <Ionicons name="flag" size={14} color="#FFFFFF" />
+                      <Text style={styles.bulkApplyCtaText}>
+                        Set Target ({selectedBulkIds.length})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </Card>
+            </>
+          )}
+
+          {/* Shared Search & Role Filter */}
           <View style={styles.filterSection}>
             <Input
               placeholder="Search employee by name or phone..."
@@ -694,41 +1085,87 @@ export default function AdminIncentivesScreen() {
             />
 
             <View style={styles.roleTabsRow}>
-              {(['ALL', 'SELLER', 'MANAGER'] as const).map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.roleTab, roleFilter === r && styles.roleTabActive]}
-                  onPress={() => setRoleFilter(r)}
-                >
-                  <Text style={[styles.roleTabText, roleFilter === r && styles.roleTabTextActive]}>
-                    {r}S
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {(['ALL', 'SELLER', 'MANAGER'] as const).map((r) => {
+                const label = r === 'ALL' ? 'ALL' : r === 'SELLER' ? 'SELLERS' : 'MANAGERS';
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.roleTab, roleFilter === r && styles.roleTabActive]}
+                    onPress={() => setRoleFilter(r)}
+                  >
+                    <Text style={[styles.roleTabText, roleFilter === r && styles.roleTabTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
+
+            {activeSection === 'TARGETS' ? (
+              <View style={styles.targetStatusRow}>
+                {(
+                  [
+                    { id: 'ALL', label: 'All' },
+                    { id: 'ASSIGNED', label: 'With Target' },
+                    { id: 'ACHIEVED', label: 'Completed ✓' },
+                    { id: 'UNSET', label: 'No Target' },
+                  ] as const
+                ).map((st) => {
+                  const active = targetStatusFilter === st.id;
+                  return (
+                    <TouchableOpacity
+                      key={st.id}
+                      onPress={() => setTargetStatusFilter(st.id)}
+                      style={[styles.targetStatusChip, active && styles.targetStatusChipActive]}
+                    >
+                      <Text
+                        style={[
+                          styles.targetStatusText,
+                          active && styles.targetStatusTextActive,
+                        ]}
+                      >
+                        {st.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
 
-          {/* Employee List */}
-          <Text style={styles.sectionHeading}>Team Incentive Ledgers</Text>
+          {/* Employee Accordion List */}
+          <Text style={styles.sectionHeading}>
+            {activeSection === 'INCENTIVES'
+              ? `Employees (${allEmployees.length}) — Tap row for actions`
+              : `Target Tracking (${targetFilteredEmployees.length}) — ${
+                  bulkSelectMode ? 'Tap to select' : 'Tap row to view/pay'
+                }`}
+          </Text>
+
           {loading ? (
-            <View style={{ gap: Spacing.md }}>
+            <View style={{ gap: Spacing.sm }}>
               <CardSkeleton />
               <CardSkeleton />
               <CardSkeleton />
             </View>
-          ) : allEmployees.length === 0 ? (
+          ) : (activeSection === 'INCENTIVES' ? allEmployees : targetFilteredEmployees).length ===
+            0 ? (
             <EmptyState
-              icon="wallet-outline"
+              icon={activeSection === 'INCENTIVES' ? 'wallet-outline' : 'flag-outline'}
               title="No Records Found"
-              description="No incentive ledgers match your filter."
+              description="No employees match your current search or filter."
             />
           ) : (
-            <View style={{ gap: Spacing.md }}>
-              {allEmployees.map((emp) => (
-                <View key={emp.sellerId || emp.id}>
-                  {renderEmployeeCard({ item: emp })}
-                </View>
-              ))}
+            <View style={{ gap: Spacing.sm }}>
+              {(activeSection === 'INCENTIVES' ? allEmployees : targetFilteredEmployees).map(
+                (emp) => (
+                  <View key={emp.sellerId || emp.id}>
+                    {activeSection === 'INCENTIVES'
+                      ? renderIncentiveAccordionCard(emp)
+                      : renderTargetAccordionCard(emp)}
+                  </View>
+                )
+              )}
             </View>
           )}
         </View>
@@ -829,7 +1266,8 @@ export default function AdminIncentivesScreen() {
                 Override incentive rate for{' '}
                 <Text style={{ fontWeight: '700' }}>
                   {rateModalUser?.sellerName || (rateModalUser as any)?.name}
-                </Text>.
+                </Text>
+                .
               </Text>
               <Text style={styles.inputLabel}>Custom Rate Per Packet (₹) *</Text>
               <TextInput
@@ -909,7 +1347,8 @@ export default function AdminIncentivesScreen() {
                 Apply manual addition or deduction for{' '}
                 <Text style={{ fontWeight: '700' }}>
                   {adjModalUser?.sellerName || (adjModalUser as any)?.name}
-                </Text>.
+                </Text>
+                .
               </Text>
 
               <View style={styles.typeToggleRow}>
@@ -994,7 +1433,8 @@ export default function AdminIncentivesScreen() {
                 Disburse commissions to{' '}
                 <Text style={{ fontWeight: '700' }}>
                   {payModalUser?.sellerName || (payModalUser as any)?.name}
-                </Text>.
+                </Text>
+                .
               </Text>
 
               <Text style={styles.inputLabel}>Payout Amount (₹) *</Text>
@@ -1077,7 +1517,9 @@ export default function AdminIncentivesScreen() {
               {loadingDetails ? (
                 <View style={{ padding: Spacing.xl, alignItems: 'center' }}>
                   <ActivityIndicator size="large" color={BrandColors.pink.dark} />
-                  <Text style={{ marginTop: 8, color: Colors.light.textSecondary }}>Loading ledger...</Text>
+                  <Text style={{ marginTop: 8, color: Colors.light.textSecondary }}>
+                    Loading ledger...
+                  </Text>
                 </View>
               ) : detailsData ? (
                 <View style={{ gap: Spacing.md }}>
@@ -1093,13 +1535,24 @@ export default function AdminIncentivesScreen() {
                     <View style={styles.ledgerSummaryCol}>
                       <Text style={styles.ledgerSummaryLabel}>Lifetime Earned</Text>
                       <Text style={styles.ledgerSummaryVal}>
-                        ₹{(((detailsData.summary?.adjustedEntitlementPaise ?? detailsData.summary?.earnedPaise ?? detailsData.summary?.salesIncentivePaise ?? detailsData.summary?.totalEarnedPaise) || 0) / 100).toFixed(2)}
+                        ₹
+                        {(
+                          ((detailsData.summary?.adjustedEntitlementPaise ??
+                            detailsData.summary?.earnedPaise ??
+                            detailsData.summary?.salesIncentivePaise ??
+                            detailsData.summary?.totalEarnedPaise) ||
+                            0) / 100
+                        ).toFixed(2)}
                       </Text>
                     </View>
                     <View style={styles.ledgerSummaryCol}>
                       <Text style={styles.ledgerSummaryLabel}>Lifetime Paid</Text>
                       <Text style={[styles.ledgerSummaryVal, { color: BrandColors.green.primary }]}>
-                        ₹{(((detailsData.summary?.totalPaidPaise ?? detailsData.summary?.paidPaise) || 0) / 100).toFixed(2)}
+                        ₹
+                        {(
+                          ((detailsData.summary?.totalPaidPaise ?? detailsData.summary?.paidPaise) ||
+                            0) / 100
+                        ).toFixed(2)}
                       </Text>
                     </View>
                     <View style={styles.ledgerSummaryCol}>
@@ -1124,16 +1577,20 @@ export default function AdminIncentivesScreen() {
                           }
                         : undefined
                     }
-                    assignButtonLabel={detailsData.targetProgress?.hasTarget ? 'Edit Target' : 'Set Target'}
+                    assignButtonLabel={
+                      detailsData.targetProgress?.hasTarget ? 'Edit Target' : 'Set Target'
+                    }
                   />
 
-                  {/* Confirmed Sales Contributing to Ledger */}
                   <Text style={styles.ledgerSectionTitle}>
                     Confirmed Sales ({detailsData.summary?.confirmedPackets ?? 0} pkts)
                   </Text>
                   {detailsData.sales && detailsData.sales.length > 0 ? (
                     detailsData.sales.slice(0, 10).map((s: any) => {
-                      const effPaise = s.incentiveAmountPaise ?? ((s.quantity || 0) * (s.incentiveRatePaise ?? detailsData.user.effectiveRatePaise ?? 100));
+                      const effPaise =
+                        s.incentiveAmountPaise ??
+                        (s.quantity || 0) *
+                          (s.incentiveRatePaise ?? detailsData.user.effectiveRatePaise ?? 100);
                       return (
                         <View key={s.id} style={styles.ledgerRow}>
                           <View style={{ flex: 1 }}>
@@ -1141,7 +1598,8 @@ export default function AdminIncentivesScreen() {
                               {s.customer?.shopName || s.invoiceNumber || 'Confirmed Sale'}
                             </Text>
                             <Text style={styles.ledgerRowSub}>
-                              {s.quantity} pkts • {new Date(s.confirmedAt || s.createdAt).toLocaleDateString('en-IN')}
+                              {s.quantity} pkts •{' '}
+                              {new Date(s.confirmedAt || s.createdAt).toLocaleDateString('en-IN')}
                             </Text>
                           </View>
                           <Text style={[styles.ledgerRowVal, { color: BrandColors.pink.dark }]}>
@@ -1154,7 +1612,6 @@ export default function AdminIncentivesScreen() {
                     <Text style={styles.emptyLedgerText}>No confirmed sales recorded yet.</Text>
                   )}
 
-                  {/* Adjustments */}
                   <Text style={styles.ledgerSectionTitle}>Recent Manual Adjustments</Text>
                   {detailsData.adjustments && detailsData.adjustments.length > 0 ? (
                     detailsData.adjustments.map((a: any) => (
@@ -1179,7 +1636,6 @@ export default function AdminIncentivesScreen() {
                     <Text style={styles.emptyLedgerText}>No manual adjustments recorded.</Text>
                   )}
 
-                  {/* Payouts */}
                   <Text style={styles.ledgerSectionTitle}>Disbursement History</Text>
                   {detailsData.payouts && detailsData.payouts.length > 0 ? (
                     detailsData.payouts.map((p: any) => (
@@ -1209,160 +1665,176 @@ export default function AdminIncentivesScreen() {
         </View>
       </Modal>
 
-      {/* Modal 6: Set Sales Target */}
+      {/* Modal 6: Single OR Bulk Sales Target */}
       <Modal
-        visible={targetModalUser !== null}
+        visible={targetModalUser !== null || targetBulkUsers.length > 0}
         transparent
         animationType="slide"
-        onRequestClose={() => setTargetModalUser(null)}
+        statusBarTranslucent
+        onRequestClose={closeTargetModal}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <Pressable style={styles.backdropDismiss} onPress={() => setTargetModalUser(null)} />
+          <Pressable style={styles.backdropDismiss} onPress={closeTargetModal} />
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Sales Target</Text>
-              <Pressable onPress={() => setTargetModalUser(null)} style={styles.modalCloseBtn}>
+              <Text style={styles.modalTitle}>
+                {targetBulkUsers.length > 0 ? 'Bulk Assign Sales Target' : 'Assign Sales Target'}
+              </Text>
+              <Pressable onPress={closeTargetModal} style={styles.modalCloseBtn}>
                 <Ionicons name="close" size={22} color={Colors.light.text} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
-              {targetModalUser ? (
-                <>
-                  <Text style={styles.modalSub}>
-                    Target for{' '}
-                    <Text style={{ fontWeight: '700' }}>
-                      {targetModalUser.sellerName || (targetModalUser as any).name}
-                    </Text>{' '}
-                    ({targetModalUser.targetProgress?.completedPackets ?? 0} pkts completed this{' '}
-                    {targetPeriodInput === 'DAILY' ? 'day' : 'month'})
+              {targetBulkUsers.length > 0 ? (
+                <View style={styles.bulkSelectedBox}>
+                  <Text style={styles.bulkSelectedHeading}>
+                    Assigning to {targetBulkUsers.length} selected employee(s):
                   </Text>
+                  <Text style={styles.bulkSelectedNames} numberOfLines={3}>
+                    {targetBulkUsers
+                      .map((u) => u.sellerName || (u as any).name || 'Employee')
+                      .join(', ')}
+                  </Text>
+                </View>
+              ) : targetModalUser ? (
+                <Text style={styles.modalSub}>
+                  Target for{' '}
+                  <Text style={{ fontWeight: '700' }}>
+                    {targetModalUser.sellerName || (targetModalUser as any).name}
+                  </Text>{' '}
+                  ({targetModalUser.targetProgress?.completedPackets ?? 0} pkts completed this{' '}
+                  {targetPeriodInput === 'DAILY' ? 'day' : 'month'})
+                </Text>
+              ) : null}
 
-                  <Text style={styles.targetFieldLabel}>Target Period</Text>
-                  <View style={styles.targetPeriodRow}>
-                    {(['MONTHLY', 'DAILY'] as const).map((periodOpt) => {
-                      const active = targetPeriodInput === periodOpt;
-                      return (
-                        <Pressable
-                          key={periodOpt}
-                          onPress={() => setTargetPeriodInput(periodOpt)}
+              <Text style={styles.targetFieldLabel}>Target Period</Text>
+              <View style={styles.targetPeriodRow}>
+                {(['MONTHLY', 'DAILY'] as const).map((periodOpt) => {
+                  const active = targetPeriodInput === periodOpt;
+                  return (
+                    <Pressable
+                      key={periodOpt}
+                      onPress={() => setTargetPeriodInput(periodOpt)}
+                      style={[styles.targetPeriodBtn, active && styles.targetPeriodBtnActive]}
+                    >
+                      <Ionicons
+                        name={periodOpt === 'MONTHLY' ? 'calendar-outline' : 'today-outline'}
+                        size={15}
+                        color={active ? BrandColors.pink.dark : Colors.light.textSecondary}
+                      />
+                      <Text
+                        style={[styles.targetPeriodText, active && styles.targetPeriodTextActive]}
+                      >
+                        {periodOpt === 'MONTHLY' ? 'Monthly Target' : 'Daily Target'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.targetFieldLabel}>Quick Presets (Packets)</Text>
+              <View style={styles.targetPresetRow}>
+                {(targetPeriodInput === 'DAILY' ? [10, 20, 30, 50] : [100, 250, 500, 1000]).map(
+                  (preset) => {
+                    const selected = targetPacketsInput.trim() === String(preset);
+                    return (
+                      <Pressable
+                        key={preset}
+                        onPress={() => setTargetPacketsInput(String(preset))}
+                        style={[styles.targetPresetChip, selected && styles.targetPresetChipActive]}
+                      >
+                        <Text
                           style={[
-                            styles.targetPeriodBtn,
-                            active && styles.targetPeriodBtnActive,
+                            styles.targetPresetText,
+                            selected && styles.targetPresetTextActive,
                           ]}
                         >
-                          <Ionicons
-                            name={periodOpt === 'MONTHLY' ? 'calendar-outline' : 'today-outline'}
-                            size={15}
-                            color={active ? BrandColors.pink.dark : Colors.light.textSecondary}
-                          />
-                          <Text
-                            style={[
-                              styles.targetPeriodText,
-                              active && styles.targetPeriodTextActive,
-                            ]}
-                          >
-                            {periodOpt === 'MONTHLY' ? 'Monthly Target' : 'Daily Target'}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={styles.targetFieldLabel}>Quick Presets (Packets)</Text>
-                  <View style={styles.targetPresetRow}>
-                    {(targetPeriodInput === 'DAILY' ? [10, 20, 30, 50] : [100, 250, 500, 1000]).map(
-                      (preset) => {
-                        const selected = targetPacketsInput.trim() === String(preset);
-                        return (
-                          <Pressable
-                            key={preset}
-                            onPress={() => setTargetPacketsInput(String(preset))}
-                            style={[
-                              styles.targetPresetChip,
-                              selected && styles.targetPresetChipActive,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.targetPresetText,
-                                selected && styles.targetPresetTextActive,
-                              ]}
-                            >
-                              {preset} pkts
-                            </Text>
-                          </Pressable>
-                        );
-                      }
-                    )}
-                  </View>
-
-                  <Input
-                    label={`Target Packets (${targetPeriodInput === 'DAILY' ? 'Per Day' : 'Per Month'}) *`}
-                    keyboardType="number-pad"
-                    value={targetPacketsInput}
-                    onChangeText={setTargetPacketsInput}
-                    placeholder={targetPeriodInput === 'DAILY' ? 'e.g. 25' : 'e.g. 250'}
-                  />
-
-                  <Input
-                    label="Completion Bonus (₹ Optional)"
-                    keyboardType="decimal-pad"
-                    value={targetBonusRupeesInput}
-                    onChangeText={setTargetBonusRupeesInput}
-                    placeholder="e.g. 500 (unlocked at 100% completion)"
-                  />
-
-                  {(() => {
-                    const pkts = parseInt(targetPacketsInput.trim(), 10);
-                    const ratePaise =
-                      targetModalUser.effectiveRatePaise ??
-                      targetModalUser.incentiveRatePaise ??
-                      settings?.incentiveRatePaise ??
-                      100;
-                    const bonusRs = parseFloat(targetBonusRupeesInput.trim());
-                    const validPkts = Number.isFinite(pkts) && pkts > 0 ? pkts : 0;
-                    const validBonusRs = Number.isFinite(bonusRs) && bonusRs > 0 ? bonusRs : 0;
-                    const commissionRs = (validPkts * ratePaise) / 100;
-                    const totalRs = commissionRs + validBonusRs;
-
-                    return validPkts > 0 ? (
-                      <View style={styles.targetPreviewBox}>
-                        <Text style={styles.targetPreviewTitle}>Employee Earnings on Completion</Text>
-                        <Text style={styles.targetPreviewText}>
-                          {validPkts} pkts × ₹{(ratePaise / 100).toFixed(2)} = ₹{commissionRs.toFixed(2)}{' '}
-                          commission
-                          {validBonusRs > 0 ? ` + ₹${validBonusRs.toFixed(2)} bonus` : ''} ={' '}
-                          <Text style={{ fontWeight: '800', color: BrandColors.green.primary }}>
-                            ₹{totalRs.toFixed(2)}
-                          </Text>
+                          {preset} pkts
                         </Text>
-                      </View>
-                    ) : null;
-                  })()}
+                      </Pressable>
+                    );
+                  }
+                )}
+              </View>
 
-                  <Button
-                    title={savingTarget ? 'Saving...' : 'Save Sales Target'}
-                    variant="admin"
-                    onPress={() => handleSaveTarget(false)}
-                    disabled={savingTarget}
-                    style={{ marginTop: Spacing.sm }}
-                  />
+              <Input
+                label={`Target Packets (${targetPeriodInput === 'DAILY' ? 'Per Day' : 'Per Month'}) *`}
+                keyboardType="number-pad"
+                value={targetPacketsInput}
+                onChangeText={setTargetPacketsInput}
+                placeholder={targetPeriodInput === 'DAILY' ? 'e.g. 25' : 'e.g. 250'}
+              />
 
-                  {(targetModalUser.targetProgress?.hasTarget ||
-                    (targetModalUser.salesTargetPackets ?? 0) > 0) && (
-                    <Pressable
-                      onPress={() => handleSaveTarget(true)}
-                      disabled={savingTarget}
-                      style={styles.clearTargetBtn}
-                    >
-                      <Ionicons name="trash-outline" size={15} color={Colors.light.danger} />
-                      <Text style={styles.clearTargetText}>Remove Target</Text>
-                    </Pressable>
-                  )}
-                </>
+              <Input
+                label="Completion Bonus (₹ Optional)"
+                keyboardType="decimal-pad"
+                value={targetBonusRupeesInput}
+                onChangeText={setTargetBonusRupeesInput}
+                placeholder="e.g. 500 (unlocked at 100% completion)"
+              />
+
+              {(() => {
+                const pkts = parseInt(targetPacketsInput.trim(), 10);
+                const ratePaise =
+                  targetModalUser?.effectiveRatePaise ??
+                  targetModalUser?.incentiveRatePaise ??
+                  settings?.incentiveRatePaise ??
+                  100;
+                const bonusRs = parseFloat(targetBonusRupeesInput.trim());
+                const validPkts = Number.isFinite(pkts) && pkts > 0 ? pkts : 0;
+                const validBonusRs = Number.isFinite(bonusRs) && bonusRs > 0 ? bonusRs : 0;
+                const commissionRs = (validPkts * ratePaise) / 100;
+                const totalRs = commissionRs + validBonusRs;
+
+                return validPkts > 0 ? (
+                  <View style={styles.targetPreviewBox}>
+                    <Text style={styles.targetPreviewTitle}>
+                      {targetBulkUsers.length > 0
+                        ? 'Per-Employee Earnings on Completion'
+                        : 'Employee Earnings on Completion'}
+                    </Text>
+                    <Text style={styles.targetPreviewText}>
+                      {validPkts} pkts × ₹{(ratePaise / 100).toFixed(2)} = ₹{commissionRs.toFixed(2)}{' '}
+                      commission
+                      {validBonusRs > 0 ? ` + ₹${validBonusRs.toFixed(2)} bonus` : ''} ={' '}
+                      <Text style={{ fontWeight: '800', color: BrandColors.green.primary }}>
+                        ₹{totalRs.toFixed(2)}
+                      </Text>
+                    </Text>
+                  </View>
+                ) : null;
+              })()}
+
+              <Button
+                title={
+                  savingTarget
+                    ? 'Saving...'
+                    : targetBulkUsers.length > 0
+                      ? `Assign to ${targetBulkUsers.length} Employees`
+                      : 'Save Sales Target'
+                }
+                variant="admin"
+                onPress={() => handleSaveTarget(false)}
+                disabled={savingTarget}
+                style={{ marginTop: Spacing.sm }}
+              />
+
+              {targetBulkUsers.length > 0 ||
+              targetModalUser?.targetProgress?.hasTarget ||
+              (targetModalUser?.salesTargetPackets ?? 0) > 0 ? (
+                <Pressable
+                  onPress={() => handleSaveTarget(true)}
+                  disabled={savingTarget}
+                  style={styles.clearTargetBtn}
+                >
+                  <Ionicons name="trash-outline" size={15} color={Colors.light.danger} />
+                  <Text style={styles.clearTargetText}>
+                    {targetBulkUsers.length > 0 ? 'Remove Target for Selected' : 'Remove Target'}
+                  </Text>
+                </Pressable>
               ) : null}
             </ScrollView>
           </View>
@@ -1393,6 +1865,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  topSectionTabsWrap: {
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
   scrollContent: {
     padding: Spacing.md,
     paddingBottom: Spacing.huge,
@@ -1401,7 +1880,7 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   globalRuleBanner: {
     padding: Spacing.md,
@@ -1424,19 +1903,94 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metricsContainer: {
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   metricRow: {
     flexDirection: 'row',
-    gap: Spacing.md,
+    gap: Spacing.sm,
     width: '100%',
   },
   metricCardWrapper: {
     flex: 1,
   },
+  bulkBarCard: {
+    padding: Spacing.md,
+  },
+  bulkBarTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bulkBarTitle: {
+    ...Typography.subtitle,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  bulkBarSub: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
+    marginTop: 1,
+  },
+  bulkToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
+    backgroundColor: BrandColors.pink.subtle,
+  },
+  bulkToggleBtnActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  bulkToggleBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  bulkControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderSubtle,
+  },
+  bulkQuickChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.light.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  bulkQuickChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  bulkApplyCta: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: BrandColors.pink.primary,
+  },
+  bulkApplyCtaText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   filterSection: {
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   roleTabsRow: {
     flexDirection: 'row',
@@ -1462,22 +2016,64 @@ const styles = StyleSheet.create({
   roleTabTextActive: {
     color: '#FFFFFF',
   },
+  targetStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 2,
+  },
+  targetStatusChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.surface,
+  },
+  targetStatusChipActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  targetStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  targetStatusTextActive: {
+    color: '#FFFFFF',
+  },
   sectionHeading: {
-    ...Typography.subtitle,
+    ...Typography.caption,
     fontWeight: '700',
-    color: Colors.light.text,
+    color: Colors.light.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
     marginTop: Spacing.xs,
   },
   empCard: {
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
-  empHeaderRow: {
+  empCardSelected: {
+    borderColor: BrandColors.pink.primary,
+    backgroundColor: '#FFF8FA',
+  },
+  compactHeaderRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    paddingVertical: 4,
+  },
+  checkboxBox: {
+    marginRight: Spacing.sm,
+  },
+  compactRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   empName: {
-    ...Typography.subtitle,
+    ...Typography.bodyMedium,
     fontWeight: '700',
     color: Colors.light.text,
   },
@@ -1486,12 +2082,18 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     marginTop: 2,
   },
+  expandedDrawer: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.borderSubtle,
+  },
   empMetricsRow: {
     flexDirection: 'row',
     backgroundColor: Colors.light.surfaceSecondary,
     borderRadius: BorderRadius.md,
     padding: Spacing.sm,
-    marginVertical: Spacing.sm,
+    marginVertical: Spacing.xs,
   },
   empMetricCol: {
     flex: 1,
@@ -1519,8 +2121,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -1536,7 +2138,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1576,6 +2177,24 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.light.textSecondary,
     marginBottom: Spacing.sm,
+  },
+  bulkSelectedBox: {
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
+    marginBottom: Spacing.sm,
+  },
+  bulkSelectedHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
+  },
+  bulkSelectedNames: {
+    ...Typography.caption,
+    color: Colors.light.textPrimary,
+    marginTop: 2,
   },
   inputLabel: {
     ...Typography.caption,
@@ -1652,7 +2271,6 @@ const styles = StyleSheet.create({
   methodTextActive: {
     color: BrandColors.pink.dark,
   },
-  // Ledger
   ledgerUserBox: {
     padding: Spacing.sm,
     backgroundColor: Colors.light.surfaceSecondary,
@@ -1843,4 +2461,3 @@ const styles = StyleSheet.create({
     color: Colors.light.danger,
   },
 });
-

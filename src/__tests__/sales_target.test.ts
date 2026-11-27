@@ -41,7 +41,9 @@ describe('Employee Sales Targets & Progress Contracts', () => {
 
     const adminApiSrc = fs.readFileSync(path.join(appRoot, 'src/api/admin.ts'), 'utf8');
     assert.ok(adminApiSrc.includes('async updateUserTarget'));
+    assert.ok(adminApiSrc.includes('async bulkUpdateUserTargets'));
     assert.ok(adminApiSrc.includes('admin/incentives/users/${userId}/target'));
+    assert.ok(adminApiSrc.includes('admin/incentives/users/bulk-target'));
 
     const sellerApiSrc = fs.readFileSync(path.join(appRoot, 'src/api/seller.ts'), 'utf8');
     assert.ok(sellerApiSrc.includes('targetProgress:'));
@@ -61,6 +63,12 @@ describe('Employee Sales Targets & Progress Contracts', () => {
       'utf8'
     );
     assert.ok(adminIncentivesSrc.includes('Assign Sales Target'));
+    assert.ok(adminIncentivesSrc.includes('Bulk Assign Sales Target'));
+    assert.ok(adminIncentivesSrc.includes('Bulk Sales Target'));
+    assert.ok(adminIncentivesSrc.includes('SegmentedTabs'));
+    assert.ok(adminIncentivesSrc.includes('renderIncentiveAccordionCard'));
+    assert.ok(adminIncentivesSrc.includes('renderTargetAccordionCard'));
+    assert.ok(!adminIncentivesSrc.includes('{r}S'));
     assert.ok(adminIncentivesSrc.includes('Remove Target'));
     assert.ok(adminIncentivesSrc.includes('TargetProgressStrip'));
 

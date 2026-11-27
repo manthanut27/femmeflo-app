@@ -945,6 +945,37 @@ export const adminApi = {
     });
   },
 
+  async bulkUpdateUserTargets(payload: {
+    userIds: string[];
+    salesTargetPackets: number | null;
+    salesTargetPeriod: 'DAILY' | 'MONTHLY';
+    targetBonusPaise?: number | null;
+  }): Promise<{ updatedCount: number }> {
+    try {
+      const res = await apiRequest<any>('admin/incentives/users/bulk-target', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      return {
+        updatedCount: res?.updatedCount ?? res?.data?.updatedCount ?? payload.userIds.length,
+      };
+    } catch (err: any) {
+      const status = err?.statusCode ?? 0;
+      if (status === 401 || status === 403 || status === 400) {
+        throw err;
+      }
+      const uniqueIds = Array.from(new Set(payload.userIds));
+      for (const userId of uniqueIds) {
+        await adminApi.updateUserTarget(userId, {
+          salesTargetPackets: payload.salesTargetPackets,
+          salesTargetPeriod: payload.salesTargetPeriod,
+          targetBonusPaise: payload.targetBonusPaise,
+        });
+      }
+      return { updatedCount: uniqueIds.length };
+    }
+  },
+
   async getUserIncentiveDetails(userId: string): Promise<UserIncentiveDetails> {
     return apiRequest<UserIncentiveDetails>(`admin/incentives/users/${userId}`, {
       method: 'GET',
