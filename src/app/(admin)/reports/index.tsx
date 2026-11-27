@@ -24,8 +24,11 @@ import type {
   SaleItem,
   SalesReportData,
   SalesReportGroupItem,
+  SellerReportPreset,
   StockLocationItem,
 } from '@/api/types';
+import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
+import { DateRangeFilterModal } from '@/components/common/DateRangeFilterModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -50,19 +53,14 @@ import {
   formatCurrencyINR,
   formatDateIST,
   formatDateTimeIST,
-  getISTDateRangeFilter,
 } from '@/utils/dateUtils';
+import {
+  ADMIN_DATE_FILTER_PRESETS,
+  getSellerReportDateRange,
+} from '@/utils/reportFilterUtils';
 
 type MainReportMode = 'SALES' | 'INVENTORY';
 type GroupByOption = 'district' | 'seller' | 'date';
-type PeriodOption = 'all' | 'today' | 'week' | 'month';
-
-const PERIOD_OPTIONS: Array<{ label: string; value: PeriodOption }> = [
-  { label: 'All Time', value: 'all' },
-  { label: 'Today', value: 'today' },
-  { label: 'Last 7 Days', value: 'week' },
-  { label: 'This Month', value: 'month' },
-];
 
 function escapeCsvCell(val: any): string {
   if (val === null || val === undefined) return '';
@@ -89,7 +87,21 @@ export default function AdminReportsScreen() {
 
   const [mode, setMode] = useState<MainReportMode>('SALES');
   const [groupBy, setGroupBy] = useState<GroupByOption>('district');
-  const [period, setPeriod] = useState<PeriodOption>('all');
+  const [datePreset, setDatePreset] = useState<SellerReportPreset>('all');
+  const [customFromDateKey, setCustomFromDateKey] = useState<string | undefined>(undefined);
+  const [customToDateKey, setCustomToDateKey] = useState<string | undefined>(undefined);
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+
+  const activeDateRange = useMemo(
+    () =>
+      getSellerReportDateRange({
+        preset: datePreset,
+        customFromDateKey,
+        customToDateKey,
+      }),
+    [datePreset, customFromDateKey, customToDateKey]
+  );
+
   const [report, setReport] = useState<SalesReportData | null>(null);
   const [inventoryReport, setInventoryReport] = useState<InventorySummaryData | null>(null);
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
@@ -100,13 +112,12 @@ export default function AdminReportsScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const dateFilter = getISTDateRangeFilter(period);
       const [salesRes, invRes, dashRes] = await Promise.all([
         adminApi
           .getSalesReport({
             groupBy,
-            from: dateFilter.from,
-            to: dateFilter.to,
+            from: activeDateRange.fromDateKey,
+            to: activeDateRange.toDateKey,
             status: 'CONFIRMED',
           })
           .catch(() => null),
@@ -123,7 +134,7 @@ export default function AdminReportsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [groupBy, period]);
+  }, [groupBy, activeDateRange.fromDateKey, activeDateRange.toDateKey]);
 
   useEffect(() => {
     setLoading(true);
@@ -198,7 +209,7 @@ export default function AdminReportsScreen() {
 
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `FemmeFlo_Sales_Report_${period}_${timestamp}.csv`;
+      const filename = `FemmeFlo_Sales_Report_${datePreset}_${timestamp}.csv`;
 
       const headers = [
         'Sale Number',
@@ -315,10 +326,18 @@ export default function AdminReportsScreen() {
     <View style={styles.container}>
       <Header
         title="Reports & Analytics"
-        subtitle="Sales & Inventory"
+        subtitle={`${activeDateRange.label} • ${activeDateRange.subtitle}`}
         showBack
         onBack={handleBack}
         showNotificationBell
+        rightAction={
+          <AttendanceFilterButton
+            onPress={() => setDateFilterOpen(true)}
+            hasActiveFilter={datePreset !== 'all'}
+            accentColor={BrandColors.pink.dark}
+            accessibilityLabel="Filter reports by All Time, Today, Last 7 Days, This Month or Date Range"
+          />
+        }
       />
 
       <ScrollView
@@ -414,26 +433,29 @@ export default function AdminReportsScreen() {
           {/* ========================================================================= */}
           {mode === 'SALES' && (
             <>
-              {/* Date Period Filter Chips */}
-              <View style={styles.periodFilterRow}>
-                {PERIOD_OPTIONS.map((opt) => {
-                  const active = period === opt.value;
-                  return (
-                    <Pressable
-                      key={opt.value}
-                      onPress={() => setPeriod(opt.value)}
-                      style={[styles.periodChip, active && styles.periodChipActive]}
-                      hitSlop={HitSlop.sm}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Text style={[styles.periodChipText, active && styles.periodChipTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {datePreset !== 'all' ? (
+                <View style={styles.activeDateStrip}>
+                  <Pressable
+                    onPress={() => setDateFilterOpen(true)}
+                    style={styles.activeDateStripLeft}
+                  >
+                    <Ionicons name="calendar-outline" size={14} color={BrandColors.pink.dark} />
+                    <Text style={styles.activeDateStripText} numberOfLines={1}>
+                      {activeDateRange.label} • {activeDateRange.subtitle}
+                    </Text>
+                  </Pressable>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setDatePreset('all');
+                      setCustomFromDateKey(undefined);
+                      setCustomToDateKey(undefined);
+                    }}
+                    hitSlop={HitSlop.sm}
+                  >
+                    <Text style={styles.activeDateStripReset}>Reset</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               {/* KPI Summary Cards */}
               {loading ? (
@@ -973,6 +995,24 @@ export default function AdminReportsScreen() {
           )}
         </View>
       </ScrollView>
+
+      <DateRangeFilterModal
+        visible={dateFilterOpen}
+        preset={datePreset}
+        customFromDateKey={customFromDateKey}
+        customToDateKey={customToDateKey}
+        defaultPreset="all"
+        presets={ADMIN_DATE_FILTER_PRESETS}
+        accentColor={BrandColors.pink.dark}
+        title="Filter Reports by Date"
+        subtitle="Select All Time, Today, Last 7 Days, This Month or Date Range"
+        onApply={({ preset: nextPreset, customFromDateKey: nextFrom, customToDateKey: nextTo }) => {
+          setDatePreset(nextPreset);
+          setCustomFromDateKey(nextFrom);
+          setCustomToDateKey(nextTo);
+        }}
+        onClose={() => setDateFilterOpen(false)}
+      />
     </View>
   );
 }
@@ -981,6 +1021,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  activeDateStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    marginBottom: Spacing.md,
+  },
+  activeDateStripLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  activeDateStripText: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.light.textPrimary,
+  },
+  activeDateStripReset: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: BrandColors.pink.dark,
   },
   scrollContent: {
     paddingBottom: 110,

@@ -1086,6 +1086,7 @@ export type SellerItem = ManagerSellerItem;
 // ----------------------------------------------------
 export type SellerReportPreset =
   | 'today'
+  | '7days'
   | 'week'
   | 'weekend'
   | 'month'

@@ -830,23 +830,33 @@ export const sellerApi = {
         cacheTtlMs: 30_000,
       });
     } catch (err: any) {
-      const shouldFallback =
-        err instanceof ApiError && (err.statusCode === 404 || err.isNetworkError);
-      if (!shouldFallback) {
+      const status = err instanceof ApiError ? err.statusCode : (err?.statusCode ?? 0);
+      if (status === 401) {
         throw err;
       }
 
       const fromBounds = params?.from ? istDateKeyToIsoBounds(params.from) : null;
       const toBounds = params?.to ? istDateKeyToIsoBounds(params.to) : null;
 
+      const emptySalesPage = {
+        items: [] as SaleItem[],
+        pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 },
+      };
+      const emptyShiftsPage = {
+        items: [] as Shift[],
+        pagination: { page: 1, pageSize: 100, total: 0, totalPages: 1 },
+      };
+
       const [shiftRes, firstSalesRes, incentives, currentShiftRes] = await Promise.all([
-        sellerApi.getShiftHistory({
-          page: 1,
-          pageSize: 200,
-          from: fromBounds?.startIso,
-          to: toBounds?.endIso,
-        }),
-        sellerApi.listSales({ page: 1, pageSize: 200 }),
+        sellerApi
+          .getShiftHistory({
+            page: 1,
+            pageSize: 100,
+            from: fromBounds?.startIso,
+            to: toBounds?.endIso,
+          })
+          .catch(() => emptyShiftsPage),
+        sellerApi.listSales({ page: 1, pageSize: 100 }).catch(() => emptySalesPage),
         sellerApi.getIncentives().catch(() => null),
         sellerApi.getCurrentShift().catch(() => ({ shift: null })),
       ]);
@@ -856,7 +866,7 @@ export const sellerApi = {
       if (totalPages > 1) {
         const extraPages = await Promise.all(
           Array.from({ length: totalPages - 1 }, (_, i) =>
-            sellerApi.listSales({ page: i + 2, pageSize: 200 }).catch(() => null)
+            sellerApi.listSales({ page: i + 2, pageSize: 100 }).catch(() => null)
           )
         );
         for (const pageRes of extraPages) {

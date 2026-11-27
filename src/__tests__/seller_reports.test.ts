@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { describe, it } from 'node:test';
 import type { SaleItem, SellerIncentiveData, Shift } from '../api/types.ts';
 import {
+  ADMIN_DATE_FILTER_PRESETS,
   composeFallbackSellerReport,
   formatReportDuration,
   getSellerReportDateRange,
@@ -45,6 +46,14 @@ describe('Seller Activity Report Filters, Fallback Composition & UI Contracts', 
     const monthRange = getSellerReportDateRange({ preset: 'month' }, fridayRef);
     assert.equal(monthRange.fromDateKey, '2026-11-01');
     assert.equal(monthRange.toDateKey, '2026-11-27');
+
+    const last7Range = getSellerReportDateRange({ preset: '7days' }, fridayRef);
+    assert.equal(last7Range.fromDateKey, '2026-11-21');
+    assert.equal(last7Range.toDateKey, '2026-11-27');
+    assert.deepEqual(
+      ADMIN_DATE_FILTER_PRESETS.map((p) => p.label),
+      ['All Time', 'Today', 'Last 7 Days', 'This Month']
+    );
 
     const allRange = getSellerReportDateRange({ preset: 'all' }, fridayRef);
     assert.equal(allRange.fromDateKey, undefined);
@@ -219,7 +228,40 @@ describe('Seller Activity Report Filters, Fallback Composition & UI Contracts', 
     assert.match(reportScreen, /OVERALL SUMMARY/);
     assert.match(reportScreen, /INCENTIVE & TARGET/);
     assert.match(reportScreen, /DAILY RECORD/);
-    assert.match(reportScreen, /buildCalendarMonthCells/);
+    assert.match(reportScreen, /AttendanceFilterButton/);
+    assert.match(reportScreen, /DateRangeFilterModal/);
+    assert.doesNotMatch(reportScreen, /filterPillsScroll/);
+
+    const dateFilterModal = readSource('src/components/common/DateRangeFilterModal.tsx');
+    assert.match(dateFilterModal, /buildCalendarMonthCells/);
+
+    const sellerSalesScreen = readSource('src/app/(seller)/sales/index.tsx');
+    assert.doesNotMatch(sellerSalesScreen, /All Retail Customers/);
+    assert.doesNotMatch(sellerSalesScreen, /Retail Customer Account/);
+    assert.match(sellerSalesScreen, /DateRangeFilterModal/);
+
+    const managerSalesScreen = readSource('src/app/(manager)/sales/index.tsx');
+    assert.match(managerSalesScreen, /DateRangeFilterModal/);
+    assert.doesNotMatch(managerSalesScreen, /All Retail Customers/);
+
+    const adminFilterModal = readSource('src/components/sales/AdminSalesFilterModal.tsx');
+    assert.match(adminFilterModal, /ADMIN_DATE_FILTER_PRESETS/);
+    assert.match(adminFilterModal, /Date Range/);
+    assert.match(adminFilterModal, /buildCalendarMonthCells/);
+
+    const adminReportsScreen = readSource('src/app/(admin)/reports/index.tsx');
+    assert.match(adminReportsScreen, /AttendanceFilterButton/);
+    assert.match(adminReportsScreen, /DateRangeFilterModal/);
+    assert.match(adminReportsScreen, /ADMIN_DATE_FILTER_PRESETS/);
+
+    const adminDashboardScreen = readSource('src/app/(admin)/index.tsx');
+    assert.match(adminDashboardScreen, /AttendanceFilterButton/);
+    assert.match(adminDashboardScreen, /All Time/);
+
+    const sellerIncentivesScreen = readSource('src/app/(seller)/incentives/index.tsx');
+    assert.match(sellerIncentivesScreen, /Sales Target/);
+    assert.match(sellerIncentivesScreen, /SegmentedTabs/);
+    assert.doesNotMatch(sellerIncentivesScreen, /Incentive Policy & Rate Protection/);
 
     const sellerLayout = readSource('src/app/(seller)/_layout.tsx');
     assert.match(sellerLayout, /name="reports\/index"/);

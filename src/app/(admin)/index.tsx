@@ -31,6 +31,7 @@ import { Header } from '@/components/ui/Header';
 import { PageTransition } from '@/components/ui/PageTransition';
 import { StatCardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
+import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import {
   BorderRadius,
@@ -400,6 +401,14 @@ export default function AdminDashboardScreen() {
         showMenu
         onMenuPress={() => setMenuOpen(true)}
         showNotificationBell
+        rightAction={
+          <AttendanceFilterButton
+            onPress={() => setFiltersOpen(true)}
+            hasActiveFilter={activeFiltersCount > 0}
+            accentColor={BrandColors.pink.dark}
+            accessibilityLabel="Filter dashboard by All Time, Today, Last 7 Days, This Month or Date Range"
+          />
+        }
       />
 
       <ScrollView
@@ -1109,19 +1118,23 @@ export default function AdminDashboardScreen() {
                   <View style={styles.chipGrid}>
                     {(
                       [
+                        { id: 'all', label: 'All Time' },
                         { id: 'today', label: 'Today' },
                         { id: '7days', label: 'Last 7 Days' },
                         { id: '30days', label: 'Last 30 Days' },
                         { id: 'this_month', label: 'This Month' },
                       ] as const
                     ).map((d) => {
-                      const isSelected = datePreset === d.id && !customFrom && !customTo;
+                      const isSelected =
+                        d.id === 'all'
+                          ? datePreset === 'all' && !customFrom && !customTo
+                          : datePreset === d.id && !customFrom && !customTo;
                       return (
                         <TouchableOpacity
                           key={d.id}
                           style={[styles.filterChip, isSelected && styles.filterChipActive]}
                           onPress={() => {
-                            setDatePreset(isSelected ? 'all' : d.id);
+                            setDatePreset(d.id === 'all' ? 'all' : isSelected ? 'all' : d.id);
                             setCustomFrom('');
                             setCustomTo('');
                           }}

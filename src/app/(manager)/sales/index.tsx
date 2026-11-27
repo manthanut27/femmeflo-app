@@ -25,7 +25,9 @@ import { managerApi } from '@/api/manager';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { tokenStorage } from '@/api/client';
-import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
+import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem, SellerReportPreset } from '@/api/types';
+import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
+import { DateRangeFilterModal } from '@/components/common/DateRangeFilterModal';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -54,14 +56,9 @@ import {
   groupSalesByDay,
   type DailyReportGroup,
 } from '@/utils/dateUtils';
+import { getSellerReportDateRange } from '@/utils/reportFilterUtils';
 
 type StatusFilter = 'ALL' | 'CONFIRMED' | 'PENDING' | 'REJECTED';
-
-const PERIOD_FILTERS = [
-  { label: 'All', value: 'all' },
-  { label: 'Today', value: 'today' },
-  { label: 'This Month', value: 'this_month' },
-];
 
 export default function ManagerSalesScreen() {
   const router = useRouter();
@@ -74,7 +71,10 @@ export default function ManagerSalesScreen() {
   const [dashboardData, setDashboardData] = useState<ManagerDashboardData | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
-  const [periodFilter, setPeriodFilter] = useState('all');
+  const [datePreset, setDatePreset] = useState<SellerReportPreset>('all');
+  const [customFromDateKey, setCustomFromDateKey] = useState<string | undefined>(undefined);
+  const [customToDateKey, setCustomToDateKey] = useState<string | undefined>(undefined);
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({
     [getISTDateKey(new Date())]: true,
@@ -235,15 +235,33 @@ export default function ManagerSalesScreen() {
     setExpandedDates((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
   };
 
-  // Group sales date-by-date
-  const dailyGroups = useMemo<DailyReportGroup<SaleItem>[]>(() => {
-    let list = sales;
-    if (periodFilter === 'today') {
-      const todayKey = getISTDateKey(new Date());
-      list = list.filter((s) => getISTDateKey(s.createdAt || s.requestedAt) === todayKey);
+  const activeDateRange = useMemo(
+    () =>
+      getSellerReportDateRange({
+        preset: datePreset,
+        customFromDateKey,
+        customToDateKey,
+      }),
+    [datePreset, customFromDateKey, customToDateKey]
+  );
+
+  const dateFilteredSales = useMemo(() => {
+    if (!activeDateRange.fromDateKey && !activeDateRange.toDateKey) {
+      return sales;
     }
-    return groupSalesByDay(list);
-  }, [sales, periodFilter]);
+    return sales.filter((s) => {
+      const key = getISTDateKey(s.createdAt || s.requestedAt);
+      if (activeDateRange.fromDateKey && key < activeDateRange.fromDateKey) return false;
+      if (activeDateRange.toDateKey && key > activeDateRange.toDateKey) return false;
+      return true;
+    });
+  }, [sales, activeDateRange.fromDateKey, activeDateRange.toDateKey]);
+
+  // Group sales date-by-date
+  const dailyGroups = useMemo<DailyReportGroup<SaleItem>[]>(
+    () => groupSalesByDay(dateFilteredSales),
+    [dateFilteredSales]
+  );
 
   // Aggregate metrics across territory
   const territoryMetrics = useMemo(() => {
@@ -284,7 +302,7 @@ export default function ManagerSalesScreen() {
   }, [sales, user]);
 
   const filteredSales = useMemo(() => {
-    let result = sales;
+    let result = dateFilteredSales;
     if (statusFilter !== 'ALL') {
       result = result.filter((s) => s.status === statusFilter || (statusFilter === 'PENDING' && s.status === 'PENDING_APPROVAL'));
     }
@@ -300,7 +318,7 @@ export default function ManagerSalesScreen() {
       );
     }
     return result;
-  }, [sales, statusFilter, searchQuery]);
+  }, [dateFilteredSales, statusFilter, searchQuery]);
 
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
   const [pdfPreview, setPdfPreview] = useState<{
@@ -585,17 +603,29 @@ export default function ManagerSalesScreen() {
     <View style={styles.container}>
       <Header
         title="Area Sales"
-        subtitle={`${territoryMetrics.activeOfficersCount} sellers`}
+        subtitle={
+          datePreset === 'all'
+            ? `${territoryMetrics.activeOfficersCount} sellers`
+            : `${activeDateRange.label} • ${activeDateRange.subtitle}`
+        }
         showBack
         onBack={handleBack}
         rightAction={
-          <Button
-            title="New Sale"
-            size="sm"
-            variant="primary"
-            icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
-            onPress={handleNewSale}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <AttendanceFilterButton
+              onPress={() => setDateFilterOpen(true)}
+              hasActiveFilter={datePreset !== 'all'}
+              accentColor={BrandColors.green.primary}
+              accessibilityLabel="Filter area sales by date range"
+            />
+            <Button
+              title="New Sale"
+              size="sm"
+              variant="primary"
+              icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
+              onPress={handleNewSale}
+            />
+          </View>
         }
       />
 
@@ -695,27 +725,23 @@ export default function ManagerSalesScreen() {
               </Card>
             )}
 
-            {/* Period Filter Chips */}
-            <View style={styles.periodChipsRow}>
-              {PERIOD_FILTERS.map((p) => {
-                const isSelected = periodFilter === p.value;
-                return (
-                  <Pressable
-                    key={p.value}
-                    style={[styles.periodChip, isSelected && styles.periodChipActive]}
-                    onPress={() => setPeriodFilter(p.value)}
-                  >
-                    <Text style={[styles.periodChipText, isSelected && styles.periodChipTextActive]}>
-                      {p.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
             {/* Daily Sales Breakdown */}
             <View style={styles.dailySectionHeader}>
               <Text style={styles.dailySectionTitle}>Day-by-Day Sales</Text>
+              {datePreset !== 'all' ? (
+                <Pressable
+                  onPress={() => {
+                    setDatePreset('all');
+                    setCustomFromDateKey(undefined);
+                    setCustomToDateKey(undefined);
+                  }}
+                  hitSlop={HitSlop.sm}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: BrandColors.green.primary }}>
+                    {activeDateRange.label} (Reset)
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
 
             {loading && !refreshing ? (
@@ -1084,6 +1110,24 @@ export default function ManagerSalesScreen() {
           </KeyboardAvoidingView>
         </Modal>
       )}
+
+      {/* Date Filter Modal */}
+      <DateRangeFilterModal
+        visible={dateFilterOpen}
+        preset={datePreset}
+        customFromDateKey={customFromDateKey}
+        customToDateKey={customToDateKey}
+        defaultPreset="all"
+        accentColor={BrandColors.green.primary}
+        title="Filter Area Sales by Date"
+        subtitle="Select Today, Week, Weekend, Month or pick dates"
+        onApply={({ preset: nextPreset, customFromDateKey: nextFrom, customToDateKey: nextTo }) => {
+          setDatePreset(nextPreset);
+          setCustomFromDateKey(nextFrom);
+          setCustomToDateKey(nextTo);
+        }}
+        onClose={() => setDateFilterOpen(false)}
+      />
 
       {/* In-App Tax Invoice PDF Preview + Share Modal */}
       <PdfPreviewModal

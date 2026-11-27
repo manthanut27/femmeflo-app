@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
+import type { DateRangeFilterSelection } from '@/components/common/DateRangeFilterModal';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import {
   AdminSalesFilterModal,
@@ -32,6 +33,8 @@ import { SalesOrderCard } from '@/components/sales/SalesOrderCard';
 import { RemittanceActionModal } from '@/components/sales/RemittanceActionModal';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { getISTDateKey } from '@/utils/dateUtils';
+import { getSellerReportDateRange } from '@/utils/reportFilterUtils';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -79,6 +82,7 @@ export default function AdminSalesScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<AdminSalesStatusFilter>('ALL');
   const [paymentFilter, setPaymentFilter] = useState<AdminSalesPaymentFilter>('ALL');
+  const [dateSelection, setDateSelection] = useState<DateRangeFilterSelection>({ preset: 'all' });
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   // Selection & Company Payment Receipt state
@@ -217,14 +221,35 @@ export default function AdminSalesScreen() {
     });
   };
 
+  const activeDateRange = useMemo(
+    () => getSellerReportDateRange(dateSelection),
+    [dateSelection]
+  );
+
+  const displayedSales = useMemo(() => {
+    if (!activeDateRange.fromDateKey && !activeDateRange.toDateKey) {
+      return sales;
+    }
+    return sales.filter((s) => {
+      const key = getISTDateKey(s.createdAt || (s as any).requestedAt);
+      if (activeDateRange.fromDateKey && key < activeDateRange.fromDateKey) return false;
+      if (activeDateRange.toDateKey && key > activeDateRange.toDateKey) return false;
+      return true;
+    });
+  }, [sales, activeDateRange.fromDateKey, activeDateRange.toDateKey]);
+
   const hasActiveFilters =
-    statusFilter !== 'ALL' || paymentFilter !== 'ALL' || search.trim().length > 0;
+    statusFilter !== 'ALL' ||
+    paymentFilter !== 'ALL' ||
+    dateSelection.preset !== 'all' ||
+    search.trim().length > 0;
 
   const clearAllFilters = () => {
     setSearch('');
     setDebouncedSearch('');
     setStatusFilter('ALL');
     setPaymentFilter('ALL');
+    setDateSelection({ preset: 'all' });
   };
 
   const renderSaleItem = ({ item }: { item: SaleItem }) => (
@@ -280,9 +305,9 @@ export default function AdminSalesScreen() {
           </View>
           <AttendanceFilterButton
             onPress={() => setFilterModalVisible(true)}
-            hasActiveFilter={statusFilter !== 'ALL' || paymentFilter !== 'ALL'}
+            hasActiveFilter={statusFilter !== 'ALL' || paymentFilter !== 'ALL' || dateSelection.preset !== 'all'}
             accentColor={BrandColors.pink.dark}
-            accessibilityLabel="Open sales status and payment mode filter"
+            accessibilityLabel="Open sales status, date and payment mode filter"
           />
         </View>
 
@@ -290,7 +315,8 @@ export default function AdminSalesScreen() {
         {hasActiveFilters ? (
           <View style={styles.activeSummaryBar}>
             <Text style={styles.activeSummaryText} numberOfLines={1}>
-              {sales.length} {sales.length === 1 ? 'result' : 'results'}
+              {displayedSales.length} {displayedSales.length === 1 ? 'result' : 'results'}
+              {dateSelection.preset !== 'all' ? ` · ${activeDateRange.label}` : ''}
               {statusFilter !== 'ALL'
                 ? ` · ${
                     statusFilter === 'CONFIRMED'
@@ -373,7 +399,7 @@ export default function AdminSalesScreen() {
             fetchSales();
           }}
         />
-      ) : sales.length === 0 ? (
+      ) : displayedSales.length === 0 ? (
         <EmptyState
           icon="cart-outline"
           title="No Sales Found"
@@ -390,7 +416,7 @@ export default function AdminSalesScreen() {
           key={isMultiColumn ? 'grid-2' : 'list-1'}
           numColumns={isMultiColumn ? 2 : 1}
           columnWrapperStyle={isMultiColumn ? styles.columnWrapper : undefined}
-          data={sales}
+          data={displayedSales}
           keyExtractor={(item) => item.id}
           renderItem={renderSaleItem}
           contentContainerStyle={[
@@ -684,9 +710,15 @@ export default function AdminSalesScreen() {
         visible={filterModalVisible}
         statusFilter={statusFilter}
         paymentFilter={paymentFilter}
-        onApply={({ statusFilter: nextStatus, paymentFilter: nextPayment }) => {
+        dateSelection={dateSelection}
+        onApply={({
+          statusFilter: nextStatus,
+          paymentFilter: nextPayment,
+          dateSelection: nextDate,
+        }) => {
           setStatusFilter(nextStatus);
           setPaymentFilter(nextPayment);
+          if (nextDate) setDateSelection(nextDate);
         }}
         onClose={() => setFilterModalVisible(false)}
       />

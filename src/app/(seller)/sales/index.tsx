@@ -17,20 +17,19 @@ import {
 import { sellerApi } from '@/api/seller';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import type { CustomerItem, PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
+import type { PaginationMeta, SaleItem, SellerDashboardData, SellerReportPreset } from '@/api/types';
+import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
+import { DateRangeFilterModal } from '@/components/common/DateRangeFilterModal';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
-import {
-  DropdownOption,
-  SearchableDropdownModal,
-} from '@/components/ui/SearchableDropdownModal';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { formatCurrencyINR, formatDateIST, getISTDateKey, groupSalesByDay, isTodayIST, type DailyReportGroup } from '@/utils/dateUtils';
+import { getSellerReportDateRange } from '@/utils/reportFilterUtils';
 
 const STATUS_FILTERS: Array<{ label: string; value: string | null }> = [
   { label: 'All Orders', value: null },
@@ -41,24 +40,18 @@ const STATUS_FILTERS: Array<{ label: string; value: string | null }> = [
   { label: 'Rejected', value: 'REJECTED' },
 ];
 
-const PERIOD_FILTERS = [
-  { label: 'All Dates', value: 'all' },
-  { label: 'Today Only', value: 'today' },
-  { label: 'This Month', value: 'this_month' },
-];
-
 export default function SalesListScreen() {
   const router = useRouter();
   const handleBack = useDashboardBackHandler('/(seller)');
 
   const [viewMode, setViewMode] = useState<'DAILY_REPORT' | 'TRANSACTIONS'>('DAILY_REPORT');
   const [sales, setSales] = useState<SaleItem[]>([]);
-  const [customers, setCustomers] = useState<CustomerItem[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('all');
-  const [dashboardData, setDashboardData] = useState<SellerDashboardData | null>(null);
+  const [datePreset, setDatePreset] = useState<SellerReportPreset>('all');
+  const [customFromDateKey, setCustomFromDateKey] = useState<string | undefined>(undefined);
+  const [customToDateKey, setCustomToDateKey] = useState<string | undefined>(undefined);
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+  const [, setDashboardData] = useState<SellerDashboardData | null>(null);
 
   const [pagination, setPagination] = useState<PaginationMeta>({
     page: 1,
@@ -97,18 +90,15 @@ export default function SalesListScreen() {
     });
   };
 
-  const loadCustomers = useCallback(async () => {
-    try {
-      const res = await sellerApi.listCustomers({ pageSize: 100 });
-      setCustomers(res.items || []);
-    } catch (err) {
-      console.warn('Failed to load customers for sales list', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadCustomers();
-  }, [loadCustomers]);
+  const activeDateRange = useMemo(
+    () =>
+      getSellerReportDateRange({
+        preset: datePreset,
+        customFromDateKey,
+        customToDateKey,
+      }),
+    [datePreset, customFromDateKey, customToDateKey]
+  );
 
   const loadSales = useCallback(
     async (page = 1, append = false) => {
@@ -120,16 +110,12 @@ export default function SalesListScreen() {
             pageSize: 50,
             status: selectedStatus === 'PAYMENT_PENDING' ? undefined : (selectedStatus || undefined),
             paymentMode: selectedStatus === 'PAYMENT_PENDING' ? 'PENDING' : undefined,
-            period: selectedPeriod === 'this_month' ? 'this_month' : undefined,
-            customerId: selectedCustomerId || undefined,
+            period: datePreset === 'month' ? 'this_month' : undefined,
           }),
           sellerApi.getDashboard().catch(() => null),
         ]);
 
         let items = salesRes.items || [];
-        if (selectedCustomerId) {
-          items = items.filter((s) => (s.customer?.id || s.customerId) === selectedCustomerId);
-        }
         if (selectedStatus === 'PAYMENT_PENDING') {
           items = items.filter((s) => s.paymentMode === 'PENDING' && s.status !== 'REJECTED');
         }
@@ -149,7 +135,7 @@ export default function SalesListScreen() {
         setLoadingMore(false);
       }
     },
-    [selectedStatus, selectedPeriod, selectedCustomerId]
+    [selectedStatus, datePreset]
   );
 
   useEffect(() => {
@@ -178,32 +164,6 @@ export default function SalesListScreen() {
     };
   }, [loadSales]);
 
-  const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === selectedCustomerId) || null,
-    [customers, selectedCustomerId]
-  );
-
-  const customerDropdownOptions = useMemo<DropdownOption[]>(() => {
-    const allOpt: DropdownOption = {
-      id: 'ALL',
-      title: 'All Retail Customers',
-      subtitle: `View transactions across all ${customers.length} retail outlets`,
-      badge: `${customers.length} outlets`,
-      icon: 'people-outline',
-    };
-
-    const items: DropdownOption[] = customers.map((c) => ({
-      id: c.id,
-      title: c.shopName,
-      subtitle: `Owner: ${c.ownerName || (c as any).contactName || '—'} • ${c.village || c.district || 'Territory'} • 📞 ${c.phone}`,
-      badge: c.category?.name || 'RETAIL',
-      icon: 'storefront-outline',
-      metadata: `${c.phone || ''} ${c.address || ''} ${c.pincode || ''}`,
-    }));
-
-    return [allOpt, ...items];
-  }, [customers]);
-
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadSales(1, false);
@@ -221,15 +181,23 @@ export default function SalesListScreen() {
     setExpandedDates((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
   };
 
-  // Group sales date-by-date
-  const dailyGroups = useMemo<DailyReportGroup<SaleItem>[]>(() => {
-    let list = sales;
-    if (selectedPeriod === 'today') {
-      const todayKey = getISTDateKey(new Date());
-      list = list.filter((s) => getISTDateKey(s.createdAt || s.requestedAt) === todayKey);
+  const dateFilteredSales = useMemo(() => {
+    if (!activeDateRange.fromDateKey && !activeDateRange.toDateKey) {
+      return sales;
     }
-    return groupSalesByDay(list);
-  }, [sales, selectedPeriod]);
+    return sales.filter((s) => {
+      const key = getISTDateKey(s.createdAt || s.requestedAt);
+      if (activeDateRange.fromDateKey && key < activeDateRange.fromDateKey) return false;
+      if (activeDateRange.toDateKey && key > activeDateRange.toDateKey) return false;
+      return true;
+    });
+  }, [sales, activeDateRange.fromDateKey, activeDateRange.toDateKey]);
+
+  // Group sales date-by-date
+  const dailyGroups = useMemo<DailyReportGroup<SaleItem>[]>(
+    () => groupSalesByDay(dateFilteredSales),
+    [dateFilteredSales]
+  );
 
   // Today's verified totals
   const todayMetrics = useMemo(() => {
@@ -344,27 +312,30 @@ export default function SalesListScreen() {
       <Header
         title="Sales & Reports"
         subtitle={
-          selectedCustomer
-            ? `${sales.length} orders for ${selectedCustomer.shopName}`
-            : `${sales.length} orders recorded`
+          datePreset === 'all'
+            ? `${dateFilteredSales.length} orders recorded`
+            : `${dateFilteredSales.length} orders • ${activeDateRange.label}`
         }
         showBack
         onBack={handleBack}
         rightAction={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Create new sale"
-            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-            onPress={() =>
-              router.push({
-                pathname: '/(seller)/sales/new',
-                params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
-              } as any)
-            }
-            hitSlop={HitSlop.md}
-          >
-            <Ionicons name="cart-outline" size={20} color="#FFFFFF" />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <AttendanceFilterButton
+              onPress={() => setDateFilterOpen(true)}
+              hasActiveFilter={datePreset !== 'all'}
+              accentColor={BrandColors.pink.primary}
+              accessibilityLabel="Filter sales by Today, Week, Month or Date Range"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Create new sale"
+              style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+              onPress={() => router.push('/(seller)/sales/new' as any)}
+              hitSlop={HitSlop.md}
+            >
+              <Ionicons name="cart-outline" size={20} color="#FFFFFF" />
+            </Pressable>
+          </View>
         }
       />
 
@@ -401,60 +372,26 @@ export default function SalesListScreen() {
         </Pressable>
       </View>
 
-      {/* Retail Customer Dropdown Filter with Search */}
-      <View style={styles.customerFilterRow}>
-        <TouchableOpacity
-          style={[
-            styles.customerFilterTrigger,
-            Boolean(selectedCustomerId) && styles.customerFilterTriggerActive,
-          ]}
-          onPress={() => setCustomerPickerOpen(true)}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Filter sales by retail customer"
-        >
-          <View style={styles.customerFilterLeft}>
-            <View
-              style={[
-                styles.customerFilterIconBox,
-                Boolean(selectedCustomerId) && styles.customerFilterIconBoxActive,
-              ]}
-            >
-              <Ionicons
-                name={selectedCustomerId ? 'storefront' : 'funnel-outline'}
-                size={16}
-                color={selectedCustomerId ? '#FFFFFF' : BrandColors.pink.primary}
-              />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.customerFilterLabelText}>Retail Customer Account</Text>
-              <Text style={styles.customerFilterSelectedName} numberOfLines={1}>
-                {selectedCustomer ? selectedCustomer.shopName : 'All Retail Customers'}
-              </Text>
-            </View>
+      {datePreset !== 'all' ? (
+        <View style={styles.activeDateBar}>
+          <View style={styles.activeDateLeft}>
+            <Ionicons name="calendar-outline" size={14} color={BrandColors.pink.primary} />
+            <Text style={styles.activeDateText} numberOfLines={1}>
+              {activeDateRange.label} • {activeDateRange.subtitle}
+            </Text>
           </View>
-          <View style={styles.customerFilterRight}>
-            {selectedCustomerId ? (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  setSelectedCustomerId(null);
-                }}
-                hitSlop={HitSlop.md}
-                style={styles.customerFilterClearBtn}
-              >
-                <Ionicons name="close-circle" size={16} color={Colors.light.textSecondary} />
-                <Text style={styles.customerFilterClearText}>Reset</Text>
-              </Pressable>
-            ) : (
-              <View style={styles.customerFilterChevron}>
-                <Text style={styles.customerFilterCountText}>{customers.length}</Text>
-                <Ionicons name="chevron-down" size={16} color={Colors.light.textSecondary} />
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            onPress={() => {
+              setDatePreset('all');
+              setCustomFromDateKey(undefined);
+              setCustomToDateKey(undefined);
+            }}
+            hitSlop={HitSlop.sm}
+          >
+            <Text style={styles.activeDateClearText}>Reset</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* ==================================================== */}
       {/* 1. DAILY SALES REPORT VIEW */}
@@ -469,7 +406,7 @@ export default function SalesListScreen() {
             <View style={styles.kpiGrid}>
               <Card
                 onPress={() => {
-                  setSelectedPeriod('today');
+                  setDatePreset('today');
                   setSelectedStatus(null);
                   setViewMode('TRANSACTIONS');
                 }}
@@ -486,7 +423,7 @@ export default function SalesListScreen() {
 
               <Card
                 onPress={() => {
-                  setSelectedPeriod('today');
+                  setDatePreset('today');
                   setSelectedStatus(null);
                   setViewMode('TRANSACTIONS');
                 }}
@@ -519,7 +456,7 @@ export default function SalesListScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Cash collection: ${formatCurrencyINR(todayMetrics.cashPaise)}`}
                   onPress={() => {
-                    setSelectedPeriod('today');
+                    setDatePreset('today');
                     setViewMode('TRANSACTIONS');
                   }}
                   style={({ pressed }) => [styles.paymentBox, pressed && styles.paymentBoxPressed]}
@@ -532,7 +469,7 @@ export default function SalesListScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`UPI and bank collection: ${formatCurrencyINR(todayMetrics.bankPaise)}`}
                   onPress={() => {
-                    setSelectedPeriod('today');
+                    setDatePreset('today');
                     setViewMode('TRANSACTIONS');
                   }}
                   style={({ pressed }) => [styles.paymentBox, pressed && styles.paymentBoxPressed]}
@@ -563,24 +500,6 @@ export default function SalesListScreen() {
               </View>
             </Card>
 
-            {/* Period Filter Chips */}
-            <View style={styles.periodChipsRow}>
-              {PERIOD_FILTERS.map((p) => {
-                const isSelected = selectedPeriod === p.value;
-                return (
-                  <Pressable
-                    key={p.value}
-                    style={[styles.periodChip, isSelected && styles.periodChipActive]}
-                    onPress={() => setSelectedPeriod(p.value)}
-                  >
-                    <Text style={[styles.periodChipText, isSelected && styles.periodChipTextActive]}>
-                      {p.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
             {/* Collapsible Date-by-Date History */}
             <View style={styles.dailySectionHeader}>
               <Text style={styles.dailySectionTitle}>Date-by-Date Performance History</Text>
@@ -595,19 +514,10 @@ export default function SalesListScreen() {
             ) : dailyGroups.length === 0 ? (
               <EmptyState
                 icon="calendar-outline"
-                title={selectedCustomer ? `No Sales for ${selectedCustomer.shopName}` : 'No Sales Recorded'}
-                description={
-                  selectedCustomer
-                    ? `No orders recorded for ${selectedCustomer.shopName} in this period.`
-                    : 'No orders have been recorded for the selected period.'
-                }
-                actionTitle={selectedCustomer ? 'Create Sale for Customer' : 'Create New Sale'}
-                onAction={() =>
-                  router.push({
-                    pathname: '/(seller)/sales/new',
-                    params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
-                  } as any)
-                }
+                title="No Sales Recorded"
+                description="No orders have been recorded for the selected period."
+                actionTitle="Create New Sale"
+                onAction={() => router.push('/(seller)/sales/new' as any)}
               />
             ) : (
               dailyGroups.map((group) => {
@@ -746,28 +656,21 @@ export default function SalesListScreen() {
               <CardSkeleton />
               <CardSkeleton />
             </View>
-          ) : sales.length === 0 ? (
+          ) : dateFilteredSales.length === 0 ? (
             <EmptyState
               icon="receipt-outline"
-              title={selectedCustomer ? `No Sales for ${selectedCustomer.shopName}` : 'No Sales Found'}
+              title="No Sales Found"
               description={
-                selectedCustomer
-                  ? `No orders found for ${selectedCustomer.shopName}. Tap below to record a sale.`
-                  : selectedStatus
+                selectedStatus
                   ? `No ${selectedStatus.toLowerCase()} orders found for this filter.`
-                  : 'You have not recorded any sales yet.'
+                  : 'No orders found for the selected date range.'
               }
-              actionTitle={selectedCustomer ? 'Create Sale for Customer' : 'Create First Sale'}
-              onAction={() =>
-                router.push({
-                  pathname: '/(seller)/sales/new',
-                  params: selectedCustomerId ? { customerId: selectedCustomerId } : {},
-                } as any)
-              }
+              actionTitle="Create First Sale"
+              onAction={() => router.push('/(seller)/sales/new' as any)}
             />
           ) : (
             <FlatList
-              data={sales}
+              data={dateFilteredSales}
               keyExtractor={(item) => item.id}
               renderItem={renderTransactionItem}
               contentContainerStyle={styles.listContent}
@@ -793,19 +696,21 @@ export default function SalesListScreen() {
         </View>
       )}
 
-      {/* Searchable Retail Customer Dropdown Modal */}
-      <SearchableDropdownModal
-        visible={customerPickerOpen}
-        title="Select Retail Customer"
-        searchPlaceholder="Search customer by shop, owner, phone, district..."
-        options={customerDropdownOptions}
-        selectedId={selectedCustomerId || 'ALL'}
-        onSelect={(opt) => {
-          setSelectedCustomerId(opt.id === 'ALL' ? null : opt.id);
-          setCustomerPickerOpen(false);
+      <DateRangeFilterModal
+        visible={dateFilterOpen}
+        preset={datePreset}
+        customFromDateKey={customFromDateKey}
+        customToDateKey={customToDateKey}
+        defaultPreset="all"
+        accentColor={BrandColors.pink.primary}
+        title="Filter Sales by Date"
+        subtitle="Select Today, Week, Weekend, Month or pick dates"
+        onApply={({ preset: nextPreset, customFromDateKey: nextFrom, customToDateKey: nextTo }) => {
+          setDatePreset(nextPreset);
+          setCustomFromDateKey(nextFrom);
+          setCustomToDateKey(nextTo);
         }}
-        onClose={() => setCustomerPickerOpen(false)}
-        emptyMessage="No customers found matching search"
+        onClose={() => setDateFilterOpen(false)}
       />
 
       {/* In-App Tax Invoice PDF Preview + Share Modal */}
@@ -824,6 +729,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activeDateBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: BrandColors.pink.subtle,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: BrandColors.pink.border,
+  },
+  activeDateLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  activeDateText: {
+    ...Typography.caption,
+    fontWeight: '600',
+    color: Colors.light.textPrimary,
+  },
+  activeDateClearText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: BrandColors.pink.primary,
   },
   modeToggleRow: {
     flexDirection: 'row',

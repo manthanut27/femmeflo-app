@@ -2,7 +2,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -13,9 +12,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sellerApi } from '@/api/seller';
 import type { SellerReportDailyRecord, SellerReportData, SellerReportPreset } from '@/api/types';
+import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
+import { DateRangeFilterModal } from '@/components/common/DateRangeFilterModal';
 import { TargetProgressStrip } from '@/components/incentives/TargetProgressStrip';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -28,58 +28,31 @@ import {
   HitSlop,
   MaxContentWidth,
   Radius,
-  Shadows,
   Spacing,
   Typography,
 } from '@/constants/theme';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
-import { formatCurrencyINR, formatDateIST, formatTimeIST, getISTDateParts } from '@/utils/dateUtils';
+import { formatCurrencyINR, formatDateIST, formatTimeIST } from '@/utils/dateUtils';
 import {
   formatReportDuration,
   formatShortDateKey,
   getSellerReportDateRange,
-  SELLER_REPORT_PRESETS,
 } from '@/utils/reportFilterUtils';
-import { buildCalendarMonthCells } from '@/utils/shiftFilterUtils';
-
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function SellerReportsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const handleBack = useDashboardBackHandler('/(seller)');
 
-  const nowParts = useMemo(() => getISTDateParts(new Date()), []);
   const [preset, setPreset] = useState<SellerReportPreset>('month');
   const [customFromDateKey, setCustomFromDateKey] = useState<string | undefined>(undefined);
   const [customToDateKey, setCustomToDateKey] = useState<string | undefined>(undefined);
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
 
   const [report, setReport] = useState<SellerReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-
-  // Custom Date Range Calendar Modal State
-  const [rangeModalOpen, setRangeModalOpen] = useState(false);
-  const [calYear, setCalYear] = useState(nowParts.year);
-  const [calMonth, setCalMonth] = useState(nowParts.month);
-  const [draftStartKey, setDraftStartKey] = useState<string | undefined>(undefined);
-  const [draftEndKey, setDraftEndKey] = useState<string | undefined>(undefined);
 
   const activeRange = useMemo(
     () =>
@@ -129,47 +102,6 @@ export default function SellerReportsScreen() {
       loadReport(true);
     }, [loadReport])
   );
-
-  const calendarCells = useMemo(
-    () => buildCalendarMonthCells(calYear, calMonth),
-    [calYear, calMonth]
-  );
-
-  const canGoNextMonth =
-    calYear < nowParts.year || (calYear === nowParts.year && calMonth < nowParts.month);
-
-  function openRangePicker() {
-    setDraftStartKey(customFromDateKey || activeRange.fromDateKey);
-    setDraftEndKey(customToDateKey || activeRange.toDateKey);
-    setCalYear(nowParts.year);
-    setCalMonth(nowParts.month);
-    setRangeModalOpen(true);
-  }
-
-  function handleCalendarDayPress(dateKey: string) {
-    if (!draftStartKey || (draftStartKey && draftEndKey)) {
-      setDraftStartKey(dateKey);
-      setDraftEndKey(undefined);
-      return;
-    }
-    if (dateKey < draftStartKey) {
-      setDraftEndKey(draftStartKey);
-      setDraftStartKey(dateKey);
-    } else {
-      setDraftEndKey(dateKey);
-    }
-  }
-
-  function handleApplyCustomRange() {
-    if (!draftStartKey) {
-      setRangeModalOpen(false);
-      return;
-    }
-    setCustomFromDateKey(draftStartKey);
-    setCustomToDateKey(draftEndKey || draftStartKey);
-    setPreset('custom_range');
-    setRangeModalOpen(false);
-  }
 
   function toggleDayExpanded(dateKey: string) {
     setExpandedDates((prev) => ({
@@ -230,20 +162,17 @@ export default function SellerReportsScreen() {
     <View style={styles.container}>
       <Header
         title="My Activity Report"
-        subtitle={activeRange.subtitle}
+        subtitle={`${activeRange.label} • ${activeRange.subtitle}`}
         showBack
         onBack={handleBack}
         rightAction={
           <View style={styles.headerActions}>
-            <Pressable
-              onPress={openRangePicker}
-              hitSlop={HitSlop.sm}
-              accessibilityRole="button"
-              accessibilityLabel="Select custom date range"
-              style={({ pressed }) => [styles.headerIconBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Ionicons name="calendar-outline" size={19} color={BrandColors.pink.primary} />
-            </Pressable>
+            <AttendanceFilterButton
+              onPress={() => setFilterModalOpen(true)}
+              hasActiveFilter={preset !== 'all'}
+              accentColor={BrandColors.pink.primary}
+              accessibilityLabel="Filter report by day, week, weekend, month or date range"
+            />
             {report ? (
               <Pressable
                 onPress={handleShareSummary}
@@ -258,50 +187,6 @@ export default function SellerReportsScreen() {
           </View>
         }
       />
-
-      {/* Preset Filter Strip */}
-      <View style={styles.filterBarContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterPillsScroll}
-        >
-          {SELLER_REPORT_PRESETS.map((item) => {
-            const active = preset === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() => {
-                  if (item.id === 'custom_range') {
-                    openRangePicker();
-                  } else {
-                    setPreset(item.id);
-                  }
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter report by ${item.label}`}
-                style={({ pressed }) => [
-                  styles.filterPill,
-                  active && styles.filterPillActive,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                {item.id === 'custom_range' ? (
-                  <Ionicons
-                    name="calendar"
-                    size={13}
-                    color={active ? '#FFFFFF' : BrandColors.pink.primary}
-                    style={{ marginRight: 4 }}
-                  />
-                ) : null}
-                <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
 
       {loading && !report ? (
         <View style={styles.centerContainer}>
@@ -332,24 +217,23 @@ export default function SellerReportsScreen() {
           }
         >
           <View style={styles.contentWrapper}>
-            {/* Active Filter Context Bar */}
-            <View style={styles.contextStrip}>
+            {/* Active Filter Summary Strip */}
+            <Pressable
+              onPress={() => setFilterModalOpen(true)}
+              style={({ pressed }) => [styles.contextStrip, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Change report date filter"
+            >
               <View style={styles.contextLeft}>
-                <Ionicons name="time-outline" size={15} color={BrandColors.pink.primary} />
+                <Ionicons name="calendar-outline" size={15} color={BrandColors.pink.primary} />
                 <Text style={styles.contextText} numberOfLines={1}>
                   {activeRange.label} • {activeRange.subtitle}
                 </Text>
               </View>
-              {preset === 'custom_range' ? (
-                <TouchableOpacity onPress={openRangePicker} hitSlop={HitSlop.sm}>
-                  <Text style={styles.contextActionText}>Change</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.contextDaysText}>
-                  {summary?.activeDays || 0} active {(summary?.activeDays || 0) === 1 ? 'day' : 'days'}
-                </Text>
-              )}
-            </View>
+              <Text style={styles.contextDaysText}>
+                {summary?.activeDays || 0} {(summary?.activeDays || 0) === 1 ? 'day' : 'days'} • Filter
+              </Text>
+            </Pressable>
 
             {/* Overall Activity KPIs */}
             <Text style={styles.sectionTitle}>OVERALL SUMMARY</Text>
@@ -514,14 +398,16 @@ export default function SellerReportsScreen() {
                 </View>
               </View>
 
-              <View style={{ marginTop: Spacing.sm }}>
-                <TargetProgressStrip
-                  targetProgress={report?.targetProgress}
-                  ratePerPacketPaise={report?.ratePerPacketPaise ?? 100}
-                  mode="compact"
-                  showWhenUnset
-                />
-              </View>
+              {report?.targetProgress?.hasTarget ? (
+                <View style={{ marginTop: Spacing.sm }}>
+                  <TargetProgressStrip
+                    targetProgress={report.targetProgress}
+                    ratePerPacketPaise={report.ratePerPacketPaise ?? 100}
+                    mode="compact"
+                    showWhenUnset={false}
+                  />
+                </View>
+              ) : null}
             </Card>
 
             {/* Daily Record Section */}
@@ -548,7 +434,11 @@ export default function SellerReportsScreen() {
                 title="No Daily Records Found"
                 description={`No shifts, shop visits, or sales found for ${activeRange.label.toLowerCase()} (${activeRange.subtitle}).`}
                 actionTitle="View All Time"
-                onAction={() => setPreset('all')}
+                onAction={() => {
+                  setPreset('all');
+                  setCustomFromDateKey(undefined);
+                  setCustomToDateKey(undefined);
+                }}
               />
             ) : (
               dailyRecords.map((day) => {
@@ -744,177 +634,22 @@ export default function SellerReportsScreen() {
         </ScrollView>
       )}
 
-      {/* Custom Date Range Picker Modal */}
-      <Modal
-        visible={rangeModalOpen}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => setRangeModalOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setRangeModalOpen(false)} />
-          <View
-            style={[
-              styles.modalSheet,
-              { paddingBottom: Math.max(insets.bottom + Spacing.md, Spacing.xl) },
-            ]}
-          >
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={styles.modalTitle}>Select Date Range</Text>
-                <Text style={styles.modalSubtitle}>
-                  Tap start date and end date (tap once for single day)
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setRangeModalOpen(false)}
-                hitSlop={HitSlop.md}
-                style={styles.modalCloseBtn}
-              >
-                <Ionicons name="close" size={20} color={Colors.light.textSecondary} />
-              </Pressable>
-            </View>
-
-            <View style={styles.selectedPreviewRow}>
-              <View style={styles.selectedDatePill}>
-                <Text style={styles.selectedDatePillLabel}>FROM</Text>
-                <Text style={styles.selectedDatePillVal}>
-                  {draftStartKey ? formatShortDateKey(draftStartKey) : 'Pick start'}
-                </Text>
-              </View>
-              <Ionicons name="arrow-forward" size={16} color={Colors.light.textMuted} />
-              <View style={styles.selectedDatePill}>
-                <Text style={styles.selectedDatePillLabel}>TO</Text>
-                <Text style={styles.selectedDatePillVal}>
-                  {draftEndKey
-                    ? formatShortDateKey(draftEndKey)
-                    : draftStartKey
-                      ? formatShortDateKey(draftStartKey)
-                      : 'Pick end'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.calendarBox}>
-              <View style={styles.calHeader}>
-                <Pressable
-                  onPress={() => {
-                    if (calMonth === 1) {
-                      setCalYear((y) => y - 1);
-                      setCalMonth(12);
-                    } else {
-                      setCalMonth((m) => m - 1);
-                    }
-                  }}
-                  hitSlop={HitSlop.sm}
-                  style={styles.calNavBtn}
-                >
-                  <Ionicons name="chevron-back" size={18} color={Colors.light.textPrimary} />
-                </Pressable>
-                <Text style={styles.calMonthTitle}>
-                  {MONTH_NAMES[calMonth - 1]} {calYear}
-                </Text>
-                <Pressable
-                  disabled={!canGoNextMonth}
-                  onPress={() => {
-                    if (!canGoNextMonth) return;
-                    if (calMonth === 12) {
-                      setCalYear((y) => y + 1);
-                      setCalMonth(1);
-                    } else {
-                      setCalMonth((m) => m + 1);
-                    }
-                  }}
-                  hitSlop={HitSlop.sm}
-                  style={[styles.calNavBtn, !canGoNextMonth && { opacity: 0.35 }]}
-                >
-                  <Ionicons name="chevron-forward" size={18} color={Colors.light.textPrimary} />
-                </Pressable>
-              </View>
-
-              <View style={styles.calWeekRow}>
-                {WEEKDAY_LABELS.map((wd) => (
-                  <Text key={wd} style={styles.calWeekdayText}>
-                    {wd}
-                  </Text>
-                ))}
-              </View>
-
-              <View style={styles.calGrid}>
-                {calendarCells.map((cell, idx) => {
-                  if (!cell.dateKey || !cell.dayNumber) {
-                    return <View key={`empty-${idx}`} style={styles.calDayCell} />;
-                  }
-                  const key = cell.dateKey;
-                  const endOrStart = draftEndKey || draftStartKey;
-                  const isEndpoint = key === draftStartKey || key === endOrStart;
-                  const isBetween =
-                    Boolean(draftStartKey && draftEndKey) &&
-                    key > draftStartKey! &&
-                    key < draftEndKey!;
-
-                  return (
-                    <Pressable
-                      key={key}
-                      disabled={cell.isFuture}
-                      onPress={() => handleCalendarDayPress(key)}
-                      style={[
-                        styles.calDayCell,
-                        isBetween && styles.calDayBetweenCell,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.calDayCircle,
-                          cell.isToday && !isEndpoint && styles.calDayTodayBorder,
-                          isEndpoint && styles.calDayEndpointCircle,
-                          cell.isFuture && { opacity: 0.3 },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.calDayText,
-                            cell.isToday && !isEndpoint && { color: BrandColors.pink.primary, fontWeight: '700' },
-                            isEndpoint && styles.calDayEndpointText,
-                          ]}
-                        >
-                          {cell.dayNumber}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={styles.modalFooterRow}>
-              <Pressable
-                onPress={() => {
-                  setDraftStartKey(undefined);
-                  setDraftEndKey(undefined);
-                  setCustomFromDateKey(undefined);
-                  setCustomToDateKey(undefined);
-                  setPreset('month');
-                  setRangeModalOpen(false);
-                }}
-                style={styles.modalResetBtn}
-              >
-                <Text style={styles.modalResetBtnText}>Reset to Month</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleApplyCustomRange}
-                disabled={!draftStartKey}
-                style={[styles.modalApplyBtn, !draftStartKey && { opacity: 0.5 }]}
-              >
-                <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                <Text style={styles.modalApplyBtnText}>Apply Range</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <DateRangeFilterModal
+        visible={filterModalOpen}
+        preset={preset}
+        customFromDateKey={customFromDateKey}
+        customToDateKey={customToDateKey}
+        defaultPreset="month"
+        accentColor={BrandColors.pink.primary}
+        title="Filter Activity Report"
+        subtitle="Choose Day, Week, Weekend, Month or pick custom dates"
+        onApply={({ preset: nextPreset, customFromDateKey: nextFrom, customToDateKey: nextTo }) => {
+          setPreset(nextPreset);
+          setCustomFromDateKey(nextFrom);
+          setCustomToDateKey(nextTo);
+        }}
+        onClose={() => setFilterModalOpen(false)}
+      />
     </View>
   );
 }
@@ -936,47 +671,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerIconBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: Radius.md,
     backgroundColor: BrandColors.pink.subtle,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  filterBarContainer: {
-    backgroundColor: Colors.light.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  filterPillsScroll: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.light.surfaceMuted,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginRight: 6,
-  },
-  filterPillActive: {
-    backgroundColor: BrandColors.pink.primary,
-    borderColor: BrandColors.pink.primary,
-  },
-  filterPillText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
   },
   scrollContent: {
     padding: Spacing.lg,
@@ -994,7 +696,7 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.pink.subtle,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 9,
     marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: BrandColors.pink.border,
@@ -1013,11 +715,6 @@ const styles = StyleSheet.create({
   },
   contextDaysText: {
     ...Typography.captionSm,
-    fontWeight: '700',
-    color: BrandColors.pink.primary,
-  },
-  contextActionText: {
-    ...Typography.caption,
     fontWeight: '700',
     color: BrandColors.pink.primary,
   },
@@ -1298,186 +995,5 @@ const styles = StyleSheet.create({
     color: BrandColors.green.primary,
     fontWeight: '600',
     marginTop: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    flex: 1,
-  },
-  modalSheet: {
-    backgroundColor: Colors.light.surface,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    ...Shadows.lg,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.light.border,
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  modalTitle: {
-    ...Typography.h3,
-    color: Colors.light.textPrimary,
-  },
-  modalSubtitle: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.light.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedPreviewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  selectedDatePill: {
-    flex: 1,
-    backgroundColor: Colors.light.surfaceMuted,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-  },
-  selectedDatePillLabel: {
-    ...Typography.overline,
-    fontSize: 10,
-    color: Colors.light.textMuted,
-  },
-  selectedDatePillVal: {
-    ...Typography.bodySmall,
-    fontWeight: '700',
-    color: Colors.light.textPrimary,
-    marginTop: 2,
-  },
-  calendarBox: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    backgroundColor: Colors.light.surface,
-  },
-  calHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
-  },
-  calNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.light.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calMonthTitle: {
-    ...Typography.bodyMedium,
-    fontWeight: '700',
-    color: Colors.light.textPrimary,
-  },
-  calWeekRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
-  calWeekdayText: {
-    flex: 1,
-    textAlign: 'center',
-    ...Typography.captionSm,
-    fontWeight: '600',
-    color: Colors.light.textMuted,
-  },
-  calGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calDayCell: {
-    width: '14.2857%',
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 1,
-  },
-  calDayBetweenCell: {
-    backgroundColor: BrandColors.pink.subtle,
-  },
-  calDayCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calDayTodayBorder: {
-    borderWidth: 1.5,
-    borderColor: BrandColors.pink.primary,
-  },
-  calDayEndpointCircle: {
-    backgroundColor: BrandColors.pink.primary,
-  },
-  calDayText: {
-    ...Typography.bodySmall,
-    color: Colors.light.textPrimary,
-  },
-  calDayEndpointText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  modalFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-  },
-  modalResetBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalResetBtnText: {
-    ...Typography.bodyMedium,
-    color: Colors.light.textSecondary,
-  },
-  modalApplyBtn: {
-    flex: 1.5,
-    flexDirection: 'row',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    backgroundColor: BrandColors.pink.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalApplyBtnText: {
-    ...Typography.bodyMedium,
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
 });

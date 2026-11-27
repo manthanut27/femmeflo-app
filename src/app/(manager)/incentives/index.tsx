@@ -539,14 +539,16 @@ export default function ManagerIncentivesScreen() {
                 </View>
               </Card>
 
-              <View style={{ marginTop: Spacing.md }}>
-                <TargetProgressStrip
-                  targetProgress={personal?.targetProgress}
-                  ratePerPacketPaise={personalRatePaise}
-                  mode="detailed"
-                  showWhenUnset
-                />
-              </View>
+              {personal?.targetProgress?.hasTarget ? (
+                <View style={{ marginTop: Spacing.md }}>
+                  <TargetProgressStrip
+                    targetProgress={personal?.targetProgress}
+                    ratePerPacketPaise={personalRatePaise}
+                    mode="detailed"
+                    showWhenUnset={false}
+                  />
+                </View>
+              ) : null}
 
               {Array.isArray(personal?.items) && personal.items.length > 0 && (
                 <Card style={[styles.personalDetailCard, { marginTop: Spacing.md }]}>

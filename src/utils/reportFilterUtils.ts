@@ -50,6 +50,17 @@ export const SELLER_REPORT_PRESETS: Array<{
   { id: 'custom_range', label: 'Date Range', shortLabel: 'Range' },
 ];
 
+export const ADMIN_DATE_FILTER_PRESETS: Array<{
+  id: SellerReportPreset;
+  label: string;
+  shortLabel: string;
+}> = [
+  { id: 'all', label: 'All Time', shortLabel: 'All' },
+  { id: 'today', label: 'Today', shortLabel: 'Today' },
+  { id: '7days', label: 'Last 7 Days', shortLabel: '7 Days' },
+  { id: 'month', label: 'This Month', shortLabel: 'Month' },
+];
+
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export function formatShortDateKey(dateKey: string): string {
@@ -84,6 +95,10 @@ export function getSellerReportDateRange(
     fromDateKey = todayKey;
     toDateKey = todayKey;
     label = 'Today';
+  } else if (selection.preset === '7days') {
+    fromDateKey = subtractDaysFromDateKey(parts.year, parts.month, parts.day, 6);
+    toDateKey = todayKey;
+    label = 'Last 7 Days';
   } else if (selection.preset === 'week') {
     const daysSinceMonday = weekday === 0 ? 6 : weekday - 1;
     fromDateKey = subtractDaysFromDateKey(parts.year, parts.month, parts.day, daysSinceMonday);
