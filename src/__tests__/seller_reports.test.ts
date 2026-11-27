@@ -282,4 +282,21 @@ describe('Seller Activity Report Filters, Fallback Composition & UI Contracts', 
     const mockService = readSource('src/api/mockService.ts');
     assert.match(mockService, /cleanEndpoint === 'seller\/reports'/);
   });
+
+  it('keeps seller stock outflows signed negative and report header/context non-overlapping', () => {
+    const sellerInventory = readSource('src/app/(seller)/inventory/index.tsx');
+    assert.match(sellerInventory, /isStockOutflow/);
+    assert.match(sellerInventory, /upperType === 'SALE'/);
+    assert.match(sellerInventory, /-\$\{absQty\.toLocaleString\('en-IN'\)\}/);
+    assert.match(sellerInventory, /Received \(/);
+    assert.match(sellerInventory, /Sold \(/);
+    assert.doesNotMatch(sellerInventory, /Standard product allocation is active/);
+
+    const reportScreen = readSource('src/app/(seller)/reports/index.tsx');
+    assert.match(reportScreen, /subtitle="Daily Visits, Travel & Earnings"/);
+    assert.match(reportScreen, /flexShrink:\s*1/);
+    assert.match(reportScreen, /contextRightPill/);
+    assert.match(reportScreen, /Earnings Breakdown/);
+    assert.doesNotMatch(reportScreen, /Selected Period Commission/);
+  });
 });

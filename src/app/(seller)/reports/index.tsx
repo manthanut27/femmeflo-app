@@ -162,7 +162,7 @@ export default function SellerReportsScreen() {
     <View style={styles.container}>
       <Header
         title="My Activity Report"
-        subtitle={`${activeRange.label} • ${activeRange.subtitle}`}
+        subtitle="Daily Visits, Travel & Earnings"
         showBack
         onBack={handleBack}
         rightAction={
@@ -226,13 +226,15 @@ export default function SellerReportsScreen() {
             >
               <View style={styles.contextLeft}>
                 <Ionicons name="calendar-outline" size={15} color={BrandColors.pink.primary} />
-                <Text style={styles.contextText} numberOfLines={1}>
+                <Text style={styles.contextText} numberOfLines={1} ellipsizeMode="tail">
                   {activeRange.label} • {activeRange.subtitle}
                 </Text>
               </View>
-              <Text style={styles.contextDaysText}>
-                {summary?.activeDays || 0} {(summary?.activeDays || 0) === 1 ? 'day' : 'days'} • Filter
-              </Text>
+              <View style={styles.contextRightPill}>
+                <Text style={styles.contextDaysText}>
+                  {summary?.activeDays || 0} {(summary?.activeDays || 0) === 1 ? 'day' : 'days'} • Change
+                </Text>
+              </View>
             </Pressable>
 
             {/* Overall Activity KPIs */}
@@ -271,7 +273,8 @@ export default function SellerReportsScreen() {
                   {formatCurrencyINR(summary?.totalSalesPaise ?? 0)}
                 </Text>
                 <Text style={styles.kpiSub}>
-                  {summary?.totalPacketsSold ?? 0} pkts • {summary?.confirmedOrdersCount ?? 0} confirmed
+                  {(summary?.totalPacketsSold ?? 0).toLocaleString('en-IN')} pkts •{' '}
+                  {summary?.confirmedOrdersCount ?? 0} confirmed
                 </Text>
               </Card>
 
@@ -297,21 +300,21 @@ export default function SellerReportsScreen() {
               <Card variant="flat" style={styles.paymentSplitCard}>
                 <View style={styles.paymentSplitRow}>
                   <View style={styles.paymentCol}>
-                    <Text style={styles.paymentLabel}>CASH</Text>
+                    <Text style={styles.paymentLabel}>Cash</Text>
                     <Text style={[styles.paymentVal, { color: BrandColors.green.primary }]}>
                       {formatCurrencyINR(summary?.cashPaise ?? 0)}
                     </Text>
                   </View>
                   <View style={styles.paymentDivider} />
                   <View style={styles.paymentCol}>
-                    <Text style={styles.paymentLabel}>BANK / UPI</Text>
+                    <Text style={styles.paymentLabel}>UPI / Bank</Text>
                     <Text style={[styles.paymentVal, { color: Colors.light.info }]}>
                       {formatCurrencyINR(summary?.bankPaise ?? 0)}
                     </Text>
                   </View>
                   <View style={styles.paymentDivider} />
                   <View style={styles.paymentCol}>
-                    <Text style={styles.paymentLabel}>PAY LATER</Text>
+                    <Text style={styles.paymentLabel}>Pay Later</Text>
                     <Text style={[styles.paymentVal, { color: BrandColors.accent.amber }]}>
                       {formatCurrencyINR(summary?.pendingPaise ?? 0)}
                     </Text>
@@ -341,17 +344,12 @@ export default function SellerReportsScreen() {
 
             <Card style={styles.incentiveCard}>
               <View style={styles.incentiveTopRow}>
-                <View>
-                  <Text style={styles.incentiveHeadlineLabel}>Selected Period Commission</Text>
-                  <Text style={styles.incentiveHeadlineVal}>
-                    {formatCurrencyINR(summary?.netIncentivePaise ?? 0)}
+                <Text style={styles.incentiveHeadlineLabel}>Earnings Breakdown</Text>
+                <View style={styles.ratePill}>
+                  <Text style={styles.ratePillText}>
+                    ₹{((report?.ratePerPacketPaise ?? 100) / 100).toFixed(2)} / pkt
                   </Text>
                 </View>
-                <Badge
-                  label={`₹${((report?.ratePerPacketPaise ?? 100) / 100).toFixed(2)}/pkt`}
-                  variant="info"
-                  size="sm"
-                />
               </View>
 
               <View style={styles.breakdownRow}>
@@ -379,7 +377,7 @@ export default function SellerReportsScreen() {
 
               <View style={styles.lifetimeRow}>
                 <View style={styles.lifetimeCol}>
-                  <Text style={styles.lifetimeLabel}>Lifetime Earned</Text>
+                  <Text style={styles.lifetimeLabel}>All-Time Earned</Text>
                   <Text style={styles.lifetimeVal}>
                     {formatCurrencyINR(overview?.totalEarnedPaise ?? 0)}
                   </Text>
@@ -693,10 +691,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.sm,
     backgroundColor: BrandColors.pink.subtle,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 9,
+    paddingVertical: 8,
     marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: BrandColors.pink.border,
@@ -706,12 +705,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
-    marginRight: 8,
+    minWidth: 0,
   },
   contextText: {
+    flexShrink: 1,
     ...Typography.caption,
     fontWeight: '600',
     color: Colors.light.textPrimary,
+  },
+  contextRightPill: {
+    flexShrink: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.full,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
   },
   contextDaysText: {
     ...Typography.captionSm,
@@ -788,9 +797,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.border,
   },
   paymentLabel: {
-    ...Typography.overline,
-    fontSize: 10,
-    color: Colors.light.textMuted,
+    ...Typography.captionSm,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
   },
   paymentVal: {
     ...Typography.bodyMedium,
@@ -812,23 +821,32 @@ const styles = StyleSheet.create({
     color: BrandColors.accent.amber,
   },
   incentiveCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
   },
   incentiveTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   incentiveHeadlineLabel: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.light.heading,
   },
-  incentiveHeadlineVal: {
-    ...Typography.h1,
+  ratePill: {
+    backgroundColor: BrandColors.pink.subtle,
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: BrandColors.pink.border,
+  },
+  ratePillText: {
+    ...Typography.captionSm,
+    fontWeight: '700',
     color: BrandColors.pink.primary,
-    marginTop: 2,
   },
   breakdownRow: {
     flexDirection: 'row',
@@ -854,7 +872,7 @@ const styles = StyleSheet.create({
   cardDivider: {
     height: 1,
     backgroundColor: Colors.light.borderSubtle,
-    marginVertical: Spacing.md,
+    marginVertical: Spacing.sm,
   },
   lifetimeRow: {
     flexDirection: 'row',

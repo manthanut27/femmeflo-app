@@ -236,6 +236,7 @@ export interface ProductStockItem {
 }
 
 export interface SellerInventoryData {
+  locationId?: string;
   balance: number;
   remaining?: number;
   assignedPackets: number;
@@ -250,7 +251,12 @@ export interface StockTransactionItem {
   product?: { name: string; sku?: string };
   quantity: number;
   type: string;
+  note?: string | null;
   reference?: string | null;
+  sourceId?: string | null;
+  destinationId?: string | null;
+  source?: { id: string; name: string; type: string } | null;
+  destination?: { id: string; name: string; type: string } | null;
   sourceLocation?: string | null;
   targetLocation?: string | null;
   createdAt: string;
