@@ -223,16 +223,25 @@ export function SalesOrderCard({
           </TouchableOpacity>
         ) : null}
 
-        {canReceiveCompanyPayment && onReceivePayment ? (
+        {item.status === 'COMPLETED' ? (
+          <View
+            accessibilityRole="text"
+            accessibilityLabel={`Payment received for ${customerName}`}
+            style={styles.receivedDoneBtn}
+          >
+            <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+            <Text style={styles.receivedDoneBtnText}>Received</Text>
+          </View>
+        ) : canReceiveCompanyPayment && onReceivePayment ? (
           <TouchableOpacity
             style={styles.receiveBtn}
             onPress={() => onReceivePayment(item)}
             activeOpacity={0.75}
             accessibilityRole="button"
-            accessibilityLabel={`Mark amount received for ${customerName}`}
+            accessibilityLabel={`Receive payment for ${customerName}`}
           >
-            <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.receiveBtnText}>Received</Text>
+            <Ionicons name="wallet-outline" size={16} color="#15803D" />
+            <Text style={styles.receiveBtnText}>Receive</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -476,9 +485,27 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 10,
     borderRadius: BorderRadius.md,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#16A34A',
   },
   receiveBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  receivedDoneBtn: {
+    flex: 1.15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    minHeight: 38,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.md,
+    backgroundColor: '#16A34A',
+  },
+  receivedDoneBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
     color: '#FFFFFF',

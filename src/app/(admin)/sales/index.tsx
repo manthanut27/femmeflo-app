@@ -708,15 +708,47 @@ export default function AdminSalesScreen() {
               ) : null}
 
               {/* Actions */}
-              {selectedSale?.status === 'CONFIRMED' &&
-              (selectedSale.paymentMode === 'CASH' || selectedSale.paymentMode === 'BANK') ? (
-                <Button
-                  title="Confirm Amount Received in FemmeFlo & Complete"
-                  variant="primary"
-                  icon={<Ionicons name="checkmark-done-circle-outline" size={18} color="#FFFFFF" />}
+              {selectedSale?.status === 'COMPLETED' ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    paddingVertical: 12,
+                    borderRadius: BorderRadius.md,
+                    backgroundColor: '#16A34A',
+                  }}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                    Received
+                  </Text>
+                </View>
+              ) : selectedSale?.status === 'CONFIRMED' &&
+                (selectedSale.paymentMode === 'CASH' || selectedSale.paymentMode === 'BANK') ? (
+                <TouchableOpacity
                   onPress={() => setRemittanceTargets([selectedSale])}
-                  style={{ backgroundColor: '#0F766E' }}
-                />
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel="Receive payment and mark sale completed"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    paddingVertical: 12,
+                    borderRadius: BorderRadius.md,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1.5,
+                    borderColor: '#16A34A',
+                  }}
+                >
+                  <Ionicons name="wallet-outline" size={18} color="#15803D" />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#15803D' }}>
+                    Receive
+                  </Text>
+                </TouchableOpacity>
               ) : null}
 
               <View style={styles.modalBtnRow}>
