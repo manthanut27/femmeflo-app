@@ -36,9 +36,9 @@ describe('Sales Company Remittance & Bulk Complete Contracts', () => {
     assert.ok(adminSalesSrc.includes('RemittanceActionModal'));
 
     const orderCardSrc = fs.readFileSync(path.join(appRoot, 'src/components/sales/SalesOrderCard.tsx'), 'utf8');
-    assert.ok(orderCardSrc.includes('>Receive<'));
-    assert.ok(orderCardSrc.includes('>Received<'));
-    assert.ok(orderCardSrc.includes("backgroundColor: '#FFFFFF'") && orderCardSrc.includes("backgroundColor: '#16A34A'"));
+    assert.ok(orderCardSrc.includes('Receive'));
+    assert.ok(orderCardSrc.includes('Received'));
+    assert.ok(orderCardSrc.includes("backgroundColor: '#FFFFFF'") && orderCardSrc.includes('BrandColors.green.primary'));
 
     const sellerDetailSrc = fs.readFileSync(path.join(appRoot, 'src/app/(seller)/sales/[id].tsx'), 'utf8');
     assert.ok(sellerDetailSrc.includes('Mark Payment Sent to Company'));

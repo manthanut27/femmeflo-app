@@ -717,7 +717,7 @@ export default function AdminSalesScreen() {
                     gap: 8,
                     paddingVertical: 12,
                     borderRadius: BorderRadius.md,
-                    backgroundColor: '#16A34A',
+                    backgroundColor: BrandColors.green.primary,
                   }}
                 >
                   <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
@@ -741,11 +741,11 @@ export default function AdminSalesScreen() {
                     borderRadius: BorderRadius.md,
                     backgroundColor: '#FFFFFF',
                     borderWidth: 1.5,
-                    borderColor: '#16A34A',
+                    borderColor: BrandColors.green.primary,
                   }}
                 >
-                  <Ionicons name="wallet-outline" size={18} color="#15803D" />
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#15803D' }}>
+                  <Ionicons name="wallet-outline" size={18} color={BrandColors.green.primary} />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: BrandColors.green.primary }}>
                     Receive
                   </Text>
                 </TouchableOpacity>

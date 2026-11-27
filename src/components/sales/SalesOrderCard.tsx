@@ -206,8 +206,10 @@ export function SalesOrderCard({
           accessibilityRole="button"
           accessibilityLabel={`View order details for ${customerName}`}
         >
-          <Ionicons name="receipt-outline" size={16} color="#0F172A" />
-          <Text style={styles.detailsBtnText}>Details</Text>
+          <Ionicons name="receipt-outline" size={14} color="#0F172A" />
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.detailsBtnText}>
+            Details
+          </Text>
         </TouchableOpacity>
 
         {canDownloadInvoice ? (
@@ -218,19 +220,22 @@ export function SalesOrderCard({
             accessibilityRole="button"
             accessibilityLabel={`Open invoice PDF for ${customerName}`}
           >
-            <Ionicons name="document-text-outline" size={16} color={BrandColors.pink.dark} />
-            <Text style={styles.pdfBtnText}>Invoice</Text>
+            <Ionicons name="document-text-outline" size={14} color={BrandColors.pink.dark} />
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.pdfBtnText}>
+              Invoice
+            </Text>
           </TouchableOpacity>
         ) : null}
 
         {item.status === 'COMPLETED' ? (
           <View
-            accessibilityRole="text"
             accessibilityLabel={`Payment received for ${customerName}`}
             style={styles.receivedDoneBtn}
           >
-            <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
-            <Text style={styles.receivedDoneBtnText}>Received</Text>
+            <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.receivedDoneBtnText}>
+              Received
+            </Text>
           </View>
         ) : canReceiveCompanyPayment && onReceivePayment ? (
           <TouchableOpacity
@@ -240,8 +245,10 @@ export function SalesOrderCard({
             accessibilityRole="button"
             accessibilityLabel={`Receive payment for ${customerName}`}
           >
-            <Ionicons name="wallet-outline" size={16} color="#15803D" />
-            <Text style={styles.receiveBtnText}>Receive</Text>
+            <Ionicons name="wallet-outline" size={14} color={BrandColors.green.primary} />
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.receiveBtnText}>
+              Receive
+            </Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -433,7 +440,7 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: 2,
   },
   actionsRowStacked: {
@@ -445,69 +452,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     minHeight: 38,
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     borderRadius: BorderRadius.md,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   detailsBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#0F172A',
+    flexShrink: 1,
   },
   pdfBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     minHeight: 38,
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     borderRadius: BorderRadius.md,
     backgroundColor: '#FDF2F8',
     borderWidth: 1,
     borderColor: '#FBCFE8',
   },
   pdfBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: BrandColors.pink.dark,
+    flexShrink: 1,
   },
   receiveBtn: {
-    flex: 1.15,
+    flex: 1.25,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     minHeight: 38,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderRadius: BorderRadius.md,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#16A34A',
+    borderWidth: 1.5,
+    borderColor: BrandColors.green.primary,
   },
   receiveBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#15803D',
+    color: BrandColors.green.primary,
+    flexShrink: 1,
   },
   receivedDoneBtn: {
-    flex: 1.15,
+    flex: 1.25,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     minHeight: 38,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderRadius: BorderRadius.md,
-    backgroundColor: '#16A34A',
+    backgroundColor: BrandColors.green.primary,
   },
   receivedDoneBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
+    flexShrink: 1,
   },
 });
