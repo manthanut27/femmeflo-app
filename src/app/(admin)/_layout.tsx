@@ -71,6 +71,23 @@ export default function AdminTabsLayout() {
       }}
     >
       <Tabs.Screen
+        name="home/index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name="home-outline"
+              focusedName="home"
+              focused={focused}
+              color={color}
+              size={iconSize}
+              tintColor={BrandColors.pink.dark}
+              isSmallMobile={isSmallMobile}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="index"
         options={{
           title: 'Dashboard',
@@ -95,23 +112,6 @@ export default function AdminTabsLayout() {
             <TabBarIcon
               name="checkmark-done-circle-outline"
               focusedName="checkmark-done-circle"
-              focused={focused}
-              color={color}
-              size={iconSize}
-              tintColor={BrandColors.pink.dark}
-              isSmallMobile={isSmallMobile}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="users/index"
-        options={{
-          title: 'Users',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name="people-circle-outline"
-              focusedName="people-circle"
               focused={focused}
               color={color}
               size={iconSize}
@@ -153,6 +153,14 @@ export default function AdminTabsLayout() {
               isSmallMobile={isSmallMobile}
             />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="users/index"
+        options={{
+          title: 'Users',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
         }}
       />
       <Tabs.Screen

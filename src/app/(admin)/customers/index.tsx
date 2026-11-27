@@ -1,12 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   FlatList,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta } from '@/api/types';
 import { CustomerCard } from '@/components/customers/CustomerCard';
@@ -64,31 +64,9 @@ function formatISTDate(dateStr?: string | null): string {
 
 export default function AdminCustomersScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
   const { width } = useWindowDimensions();
   const isMultiColumn = width >= 768;
-
-  const handleBack = useCallback(() => {
-    try {
-      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-    } catch {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [navigation, router]);
-
-  useEffect(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');

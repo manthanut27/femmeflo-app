@@ -1,10 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -29,43 +28,12 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function AdminSettingsScreen() {
   const { user, logout, updateProfile } = useAuth();
   const router = useRouter();
-  const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
-
-  const handleBack = useCallback(() => {
-    if (params?.from === 'actions') {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-        return;
-      } catch {
-        // fallback
-      }
-    }
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-      } catch {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [params, navigation, router]);
-
-  useEffect(() => {
-    if (params?.from === 'actions') {
-      const onBackPress = () => {
-        handleBack();
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-    }
-  }, [params?.from, handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
     // Executive Profile Editing
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -275,7 +243,7 @@ export default function AdminSettingsScreen() {
       <Header
         title="Company & Legal Settings"
         subtitle="Global Governance & Invoice Configuration"
-        showBack={Boolean(params?.from === 'actions')}
+        showBack
         onBack={handleBack}
       />
 

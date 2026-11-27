@@ -16,8 +16,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { BrandColors, Colors, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function SellerInventoryScreen() {
+  const handleBack = useDashboardBackHandler('/(seller)');
   const [inventory, setInventory] = useState<SellerInventoryData | null>(null);
   const [transactions, setTransactions] = useState<StockTransactionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +112,7 @@ export default function SellerInventoryScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="My Stock" subtitle="Inventory & Transfer History" />
+      <Header title="My Stock" subtitle="Inventory & Transfer History" showBack onBack={handleBack} />
 
       {loading ? (
         <View style={styles.loadingContainer}>

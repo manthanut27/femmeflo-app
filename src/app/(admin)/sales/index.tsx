@@ -1,9 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  BackHandler,
   FlatList,
   Modal,
   Pressable,
@@ -21,7 +20,6 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
-import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import {
@@ -32,6 +30,7 @@ import {
 } from '@/components/sales/AdminSalesFilterModal';
 import { SalesOrderCard } from '@/components/sales/SalesOrderCard';
 import { RemittanceActionModal } from '@/components/sales/RemittanceActionModal';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
@@ -65,32 +64,10 @@ function formatISTDateTime(isoString: string | null | undefined): string {
 
 export default function AdminSalesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ from?: string }>();
   const { width } = useWindowDimensions();
   const isMultiColumn = width >= 768;
   const isCompactWidth = width < 360;
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const handleBack = useCallback(() => {
-    try {
-      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-    } catch {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [router]);
-
-  useEffect(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   const [sales, setSales] = useState<SaleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,27 +248,8 @@ export default function AdminSalesScreen() {
       <Header
         title="Sales Directory"
         subtitle="Orders & Invoices"
-        leftAction={
-          params?.from === 'actions' ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back to administrative actions"
-              onPress={handleBack}
-              style={styles.headerBackBtn}
-            >
-              <Ionicons name="arrow-back" size={22} color={Colors.light.text} />
-            </Pressable>
-          ) : (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open mobile navigation menu"
-              onPress={() => setMenuOpen(true)}
-              style={styles.headerBackBtn}
-            >
-              <Ionicons name="menu-outline" size={26} color={Colors.light.text} />
-            </Pressable>
-          )
-        }
+        showBack
+        onBack={handleBack}
       />
 
       <View style={styles.filterSection}>
@@ -739,12 +697,6 @@ export default function AdminSalesScreen() {
         filename={pdfPreview?.filename}
         title={pdfPreview?.title}
         onClose={() => setPdfPreview(null)}
-      />
-
-      {/* Slide-out Mobile Navigation Drawer / Sidebar */}
-      <MobileNavigationDrawer
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
       />
     </View>
   );

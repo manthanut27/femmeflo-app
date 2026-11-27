@@ -211,7 +211,7 @@ export default function LoginScreen() {
 
       // Role-based routing based on verified backend user object and selected portal
       if (user.role === 'SUPER_ADMIN') {
-        router.replace('/(admin)' as any);
+        router.replace('/(admin)/home' as any);
       } else if (user.role === 'MANAGER') {
         // Dual-role manager routing distinction
         if (selectedRole === 'seller' && user.isSeller) {

@@ -1,10 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -35,6 +34,7 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import {
   MANAGER_PERMISSIONS,
   PERMISSION_METADATA,
@@ -44,30 +44,7 @@ import {
 } from '@/utils/permissions';
 
 export default function AdminPermissionsScreen() {
-  const router = useRouter();
-  const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
-
-  const handleBack = useCallback(() => {
-    try {
-      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-    } catch {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [navigation, router]);
-
-  useEffect(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   const [managers, setManagers] = useState<PublicUser[]>([]);
   const [selectedManagerId, setSelectedManagerId] = useState<string>('');

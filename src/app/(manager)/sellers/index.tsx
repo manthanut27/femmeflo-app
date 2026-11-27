@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { canOnboardSellers, canViewSellers } from '@/utils/permissions';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -40,6 +41,7 @@ import {
 export default function ManagerSellersScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const handleBack = useDashboardBackHandler('/(manager)');
   const allowView = canViewSellers(user);
   const allowOnboard = canOnboardSellers(user);
 
@@ -267,7 +269,7 @@ export default function ManagerSellersScreen() {
   if (!allowView) {
     return (
       <View style={styles.container}>
-        <Header title="Sellers" subtitle="Team" showBack />
+        <Header title="Sellers" subtitle="Team" showBack onBack={handleBack} />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
@@ -289,6 +291,8 @@ export default function ManagerSellersScreen() {
       <Header
         title="Sellers"
         subtitle={`${pagination.total} Sellers in Team`}
+        showBack
+        onBack={handleBack}
         rightAction={
           allowOnboard ? (
             <Pressable

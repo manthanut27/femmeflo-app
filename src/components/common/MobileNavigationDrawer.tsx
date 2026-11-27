@@ -52,9 +52,9 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
     onClose();
     setTimeout(() => {
       try {
-        router.push(route as any);
-      } catch {
         router.replace(route as any);
+      } catch {
+        router.push(route as any);
       }
     }, 150);
   };
@@ -82,6 +82,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
   const isManager = user?.role === 'MANAGER';
 
   const SUPER_ADMIN_MAIN_NAV = [
+    { title: 'Home', icon: 'home-outline', route: '/(admin)/home' },
     { title: 'Dashboard', icon: 'pie-chart-outline', route: '/(admin)' },
     { title: 'Managers', icon: 'people-outline', route: '/(admin)/users' },
     { title: 'Field Officers', icon: 'shield-checkmark-outline', route: '/(admin)/permissions' },
@@ -191,9 +192,9 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
       ]
     : [
         {
-          title: 'Home',
+          title: isManager ? 'Dashboard' : 'Home',
           subtitle: "Today's work",
-          icon: 'pie-chart-outline',
+          icon: isManager ? 'pie-chart-outline' : 'home-outline',
           route: isManager ? '/(manager)' : '/(seller)',
         },
         ...(isManager

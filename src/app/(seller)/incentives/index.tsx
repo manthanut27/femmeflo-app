@@ -14,8 +14,10 @@ import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { BrandColors, Colors, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function SellerIncentivesScreen() {
+  const handleBack = useDashboardBackHandler('/(seller)');
   const [incentives, setIncentives] = useState<SellerIncentiveData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,7 +47,7 @@ export default function SellerIncentivesScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Seller Incentives" subtitle="Commissions & Target Performance" showBack />
+      <Header title="Seller Incentives" subtitle="Commissions & Target Performance" showBack onBack={handleBack} />
 
       {loading ? (
         <View style={styles.centerContainer}>

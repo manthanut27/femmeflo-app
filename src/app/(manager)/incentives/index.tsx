@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -28,6 +27,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { formatCurrencyINR, formatDateIST } from '@/utils/dateUtils';
 
 interface TeamIncentiveMember {
@@ -49,7 +49,7 @@ interface TeamIncentiveMember {
 
 export default function ManagerIncentivesScreen() {
   const { user } = useAuth();
-  const router = useRouter();
+  const handleBack = useDashboardBackHandler('/(manager)');
 
   const [data, setData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'TEAM' | 'PERSONAL'>('TEAM');
@@ -189,6 +189,7 @@ export default function ManagerIncentivesScreen() {
         title="Team Bonus"
         subtitle={`Area: ${user?.district || 'My Area'}${user?.name ? ` • ${user.name}` : ''}`}
         showBack
+        onBack={handleBack}
       />
 
       <ScrollView

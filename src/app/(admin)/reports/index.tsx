@@ -1,12 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   Platform,
   Pressable,
   RefreshControl,
@@ -18,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type {
   AdminDashboardData,
@@ -82,44 +81,11 @@ function buildCsvString(headers: string[], rows: (string | number)[][]): string 
 
 export default function AdminReportsScreen() {
   const { user } = useAuth();
-  const router = useRouter();
-  const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
   const { width } = useWindowDimensions();
   const isMultiColumn = width >= 768;
   const [sortBy, setSortBy] = useState<'REVENUE_DESC' | 'REVENUE_ASC' | 'PACKETS_DESC' | 'ORDERS_DESC'>('REVENUE_DESC');
   const [expandedFeedbackIds, setExpandedFeedbackIds] = useState<Record<string, boolean>>({});
-
-  const handleBack = useCallback(() => {
-    if (params?.from === 'actions') {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-        return;
-      } catch {
-        // fallback
-      }
-    }
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-      } catch {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [params, navigation, router]);
-
-  useEffect(() => {
-    if (params?.from === 'actions') {
-      const onBackPress = () => {
-        handleBack();
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-    }
-  }, [params?.from, handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   const [mode, setMode] = useState<MainReportMode>('SALES');
   const [groupBy, setGroupBy] = useState<GroupByOption>('district');
@@ -350,7 +316,7 @@ export default function AdminReportsScreen() {
       <Header
         title="Reports & Analytics"
         subtitle="Sales & Inventory"
-        showBack={Boolean(params?.from === 'actions')}
+        showBack
         onBack={handleBack}
         showNotificationBell
       />

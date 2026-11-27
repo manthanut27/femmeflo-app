@@ -33,6 +33,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { canMonitorStock } from '@/utils/permissions';
 
 interface SellerInventoryItem {
@@ -52,6 +53,7 @@ interface SellerInventoryItem {
 export default function ManagerInventoryScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const handleBack = useDashboardBackHandler('/(manager)');
   const allowStock = canMonitorStock(user);
 
   const [summary, setSummary] = useState({
@@ -189,6 +191,7 @@ export default function ManagerInventoryScreen() {
           title="Area Inventory & Stock"
           subtitle={`Area: ${user?.district || 'Field Operations'} • ${user?.name}`}
           showBack
+          onBack={handleBack}
         />
         <View style={styles.restrictedContainer}>
           <EmptyState
@@ -212,6 +215,7 @@ export default function ManagerInventoryScreen() {
         title="Area Stock"
         subtitle={`Area: ${user?.district || 'My Area'}`}
         showBack
+        onBack={handleBack}
       />
 
       <ScrollView

@@ -25,7 +25,9 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
 import { useAppPermissions } from '@/hooks/useAppPermissions';
+import { getRoleDashboardRoute, useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import {
   APP_PERMISSIONS_METADATA,
   AppPermissionType,
@@ -43,6 +45,8 @@ const PERMISSION_ORDER: AppPermissionType[] = [
 ];
 
 export default function AppPermissionsScreen() {
+  const { user } = useAuth();
+  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(user?.role));
   const {
     permissions,
     loading,
@@ -203,6 +207,7 @@ export default function AppPermissionsScreen() {
         title="App Permissions"
         subtitle="Manage the permissions needed for this application."
         showBack
+        onBack={handleBack}
       />
 
       <ScrollView

@@ -1,9 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  BackHandler,
   DeviceEventEmitter,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type {
   AdminInventoryTransactionItem,
@@ -29,7 +29,6 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
-import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -60,39 +59,8 @@ const QUICK_ADD_PILLS = [100, 500, 1000, 2500, 5000];
 
 export default function AdminInventoryMainScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string; section?: string; tab?: string }>();
-
-  const handleBack = useCallback(() => {
-    if (params?.from === 'actions') {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-        return;
-      } catch {
-        // fallback
-      }
-    }
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-      } catch {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [params?.from, navigation, router]);
-
-  useEffect(() => {
-    if (params?.from === 'actions') {
-      const onBackPress = () => {
-        handleBack();
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-    }
-  }, [params?.from, handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   // Primary 3-Section Navigation: Stock Transfer, Stock Inward, History
   // Default to 'HISTORY' so recent history is shown below the stat cards and action buttons
@@ -113,7 +81,6 @@ export default function AdminInventoryMainScreen() {
   const [inventorySummary, setInventorySummary] = useState<InventorySummaryData | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // Section 1: Stock Transfer Form State
   const [sourceWarehouseId, setSourceWarehouseId] = useState('');
@@ -632,10 +599,8 @@ export default function AdminInventoryMainScreen() {
       <Header
         title="Inventory"
         subtitle="Manage stock and movements"
-        showBack={Boolean(params?.from === 'actions')}
+        showBack
         onBack={handleBack}
-        showMenu={params?.from !== 'actions'}
-        onMenuPress={() => setMenuOpen(true)}
         rightAction={
           <TouchableOpacity
             style={styles.addWarehouseHeaderBtn}
@@ -1290,12 +1255,6 @@ export default function AdminInventoryMainScreen() {
         }}
         onClose={() => setInwardProdPickerOpen(false)}
         emptyMessage="No matching products found"
-      />
-
-      {/* Slide-out Mobile Navigation Drawer / Sidebar */}
-      <MobileNavigationDrawer
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
       />
     </KeyboardAvoidingView>
   );

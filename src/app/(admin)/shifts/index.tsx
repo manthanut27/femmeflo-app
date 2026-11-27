@@ -1,8 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  BackHandler,
   FlatList,
   Modal,
   Pressable,
@@ -14,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { Shift, ShiftSummary, ShiftVisit } from '@/api/types';
 import {
@@ -70,30 +69,7 @@ function formatISTDateTime(isoString: string | null | undefined): string {
 }
 
 export default function AdminShiftsScreen() {
-  const router = useRouter();
-  const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
-
-  const handleBack = useCallback(() => {
-    try {
-      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-    } catch {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [navigation, router]);
-
-  useEffect(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [serverSummary, setServerSummary] = useState<ShiftSummary | null>(null);

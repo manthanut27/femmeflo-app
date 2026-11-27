@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -29,6 +30,7 @@ export default function ManagerCustomersScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const handleBack = useDashboardBackHandler('/(manager)');
   const allowView = canViewCustomers(user);
   const allowOnboard = canOnboardCustomers(user);
 
@@ -183,7 +185,7 @@ export default function ManagerCustomersScreen() {
   if (!allowView) {
     return (
       <View style={styles.container}>
-        <Header title="Shops" subtitle="Directory" showBack />
+        <Header title="Shops" subtitle="Directory" showBack onBack={handleBack} />
         <View style={styles.restrictedContainer}>
           <EmptyState
             icon="lock-closed-outline"
@@ -205,6 +207,8 @@ export default function ManagerCustomersScreen() {
       <Header
         title="Shops"
         subtitle={`${pagination.total} registered shops`}
+        showBack
+        onBack={handleBack}
         rightAction={
           allowOnboard ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

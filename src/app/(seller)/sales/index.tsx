@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CustomerItem, PaginationMeta, SaleItem, SellerDashboardData } from '@/api/types';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
@@ -48,6 +49,7 @@ const PERIOD_FILTERS = [
 
 export default function SalesListScreen() {
   const router = useRouter();
+  const handleBack = useDashboardBackHandler('/(seller)');
 
   const [viewMode, setViewMode] = useState<'DAILY_REPORT' | 'TRANSACTIONS'>('DAILY_REPORT');
   const [sales, setSales] = useState<SaleItem[]>([]);
@@ -346,6 +348,8 @@ export default function SalesListScreen() {
             ? `${sales.length} orders for ${selectedCustomer.shopName}`
             : `${sales.length} orders recorded`
         }
+        showBack
+        onBack={handleBack}
         rightAction={
           <Pressable
             accessibilityRole="button"

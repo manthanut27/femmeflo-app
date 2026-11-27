@@ -29,10 +29,12 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function ManagerProfileScreen() {
   const { user, logout, updateProfile } = useAuth();
   const router = useRouter();
+  const handleBack = useDashboardBackHandler('/(manager)');
 
   // Edit Manager Profile Modal States
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -128,7 +130,7 @@ export default function ManagerProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Manager Profile" subtitle="Area Management" showBack />
+      <Header title="Manager Profile" subtitle="Area Management" showBack onBack={handleBack} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.innerContainer}>

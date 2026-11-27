@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -23,9 +22,12 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { getRoleDashboardRoute, useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function ChangePasswordScreen() {
-  const router = useRouter();
+  const { user } = useAuth();
+  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(user?.role));
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -57,7 +59,7 @@ export default function ChangePasswordScreen() {
       await authApi.changePassword({ currentPassword, newPassword });
       setSuccessMsg('Your password has been successfully updated.');
       Alert.alert('Password Changed', 'Your password has been successfully updated.', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: handleBack },
       ]);
     } catch (err: any) {
       setError(err.message || 'Failed to update password.');
@@ -71,7 +73,7 @@ export default function ChangePasswordScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}
     >
-      <Header title="Change Password" subtitle="Update Your Password" showBack />
+      <Header title="Change Password" subtitle="Update Your Password" showBack onBack={handleBack} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.containerBox}>

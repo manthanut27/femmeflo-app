@@ -30,10 +30,12 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function SellerProfileScreen() {
   const { user, logout, updateProfile } = useAuth();
   const router = useRouter();
+  const handleBack = useDashboardBackHandler('/(seller)');
 
   const [shiftHistory, setShiftHistory] = useState<Shift[]>([]);
   const [totalShiftsCount, setTotalShiftsCount] = useState<number>(0);
@@ -145,7 +147,7 @@ export default function SellerProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="My Profile" subtitle="Field Officer Account & Duty Log" showBack />
+      <Header title="My Profile" subtitle="Field Officer Account & Duty Log" showBack onBack={handleBack} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.contentWrapper}>

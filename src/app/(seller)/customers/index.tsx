@@ -1,5 +1,6 @@
 import { categoriesApi } from '@/api/categories';
 import { sellerApi } from '@/api/seller';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { CategoryItem, CustomerItem, PaginationMeta } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
@@ -31,6 +32,7 @@ export default function CustomerListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const handleBack = useDashboardBackHandler('/(seller)');
 
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -206,6 +208,8 @@ export default function CustomerListScreen() {
       <Header
         title="Store Directory"
         subtitle={`${pagination.total} retail partners`}
+        showBack
+        onBack={handleBack}
         rightAction={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable

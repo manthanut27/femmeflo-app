@@ -1,9 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  BackHandler,
   DeviceEventEmitter,
   FlatList,
   Pressable,
@@ -22,7 +21,6 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
-import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -35,33 +33,14 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useResponsiveLayout } from '@/utils/responsive';
 
 export default function AdminApprovalsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ from?: string }>();
   const insets = useSafeAreaInsets();
   const { isSmallMobile, isTablet } = useResponsiveLayout();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-    router.replace('/(admin)' as any);
-  }, [router]);
-
-  useEffect(() => {
-    if (params?.from === 'actions') {
-      const onBackPress = () => {
-        handleBack();
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-    }
-  }, [params?.from, handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   const { isOffline } = useAuth();
   const [approvals, setApprovals] = useState<PendingApprovalItem[]>([]);
@@ -539,10 +518,8 @@ export default function AdminApprovalsScreen() {
       <Header
         title="Price Approvals"
         subtitle={`${approvals.length === 1 ? '1 order' : `${approvals.length} orders`} waiting for approval`}
-        showBack={Boolean(params?.from === 'actions')}
+        showBack
         onBack={handleBack}
-        showMenu={params?.from !== 'actions'}
-        onMenuPress={() => setMenuOpen(true)}
       />
 
       <View style={styles.innerContainer}>
@@ -643,11 +620,6 @@ export default function AdminApprovalsScreen() {
           />
         )}
       </View>
-
-      <MobileNavigationDrawer
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-      />
     </View>
   );
 }

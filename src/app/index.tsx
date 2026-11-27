@@ -17,7 +17,7 @@ export default function StartupScreen() {
     }
 
     if (role === 'SUPER_ADMIN') {
-      router.replace('/(admin)' as any);
+      router.replace('/(admin)/home' as any);
     } else if (role === 'MANAGER') {
       router.replace('/(manager)' as any);
     } else if (role === 'SELLER') {

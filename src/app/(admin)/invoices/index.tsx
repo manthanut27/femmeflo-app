@@ -1,12 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  BackHandler,
   FlatList,
   Linking,
   Platform,
@@ -34,6 +32,7 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { formatCurrencyINR } from '@/utils/dateUtils';
 
 function escapeCsvCell(val: any): string {
@@ -48,30 +47,7 @@ function escapeCsvCell(val: any): string {
 type PaymentFilter = 'ALL' | 'PAID' | 'PENDING';
 
 export default function AdminInvoicesScreen() {
-  const router = useRouter();
-  const navigation = useNavigation();
-  const params = useLocalSearchParams<{ from?: string }>();
-
-  const handleBack = useCallback(() => {
-    try {
-      if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-    } catch {
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [navigation, router]);
-
-  useEffect(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
 
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);

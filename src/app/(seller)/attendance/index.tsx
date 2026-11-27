@@ -52,6 +52,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { normalizeCustomerItem } from '@/utils/customerSanitizer';
 import {
@@ -119,6 +120,7 @@ export default function SellerAttendanceScreen() {
   const isCompactScreen = width < 380;
   const { user } = useAuth();
   const userId = user?.id || 'anonymous';
+  const handleBack = useDashboardBackHandler(user?.role === 'MANAGER' ? '/(manager)' : '/(seller)');
 
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [pastShifts, setPastShifts] = useState<Shift[]>([]);
@@ -1463,7 +1465,8 @@ export default function SellerAttendanceScreen() {
       <Header
         title="Attendance"
         subtitle={user?.name ? `${user.name} · Duty & Visits` : 'Daily Duty & Visits'}
-        showBack={user?.role === 'MANAGER'}
+        showBack
+        onBack={handleBack}
         rightAction={
           isShiftActive ? (
             <Button

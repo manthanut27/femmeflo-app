@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import type { Shift, ShiftSummary } from '@/api/types';
 import {
@@ -52,6 +53,7 @@ export default function ManagerShiftsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const router = useRouter();
+  const handleBack = useDashboardBackHandler('/(manager)');
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [serverSummary, setServerSummary] = useState<ShiftSummary | null>(null);
@@ -140,6 +142,7 @@ export default function ManagerShiftsScreen() {
         title="Attendance"
         subtitle={`${user?.district || 'My Area'}${user?.name ? ` • ${user.name}` : ''}`}
         showBack
+        onBack={handleBack}
         rightAction={
           <Button
             title="New Shift"

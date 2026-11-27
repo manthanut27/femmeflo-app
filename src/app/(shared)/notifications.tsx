@@ -37,6 +37,7 @@ import {
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { getRoleDashboardRoute, useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export type NotificationFilter =
   | 'ALL'
@@ -129,6 +130,7 @@ export const FILTER_TABS = FILTER_OPTIONS.map((o) => ({ key: o.key, label: o.lab
 export default function NotificationsScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(user?.role));
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -485,6 +487,7 @@ export default function NotificationsScreen() {
         title="Notifications"
         subtitle="Live system feeds"
         showBack
+        onBack={handleBack}
         rightAction={
           <Pressable
             onPress={handleMarkAllAsRead}

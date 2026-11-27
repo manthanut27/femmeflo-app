@@ -22,10 +22,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { tokenStorage } from '@/api/client';
 import type { ManagerDashboardData, PaginationMeta, SaleItem, SellerItem } from '@/api/types';
-import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -66,7 +66,7 @@ const PERIOD_FILTERS = [
 export default function ManagerSalesScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const handleBack = useDashboardBackHandler('/(manager)');
 
   const [viewMode, setViewMode] = useState<'DAILY_REPORT' | 'TRANSACTIONS'>('DAILY_REPORT');
   const [sales, setSales] = useState<SaleItem[]>([]);
@@ -586,8 +586,8 @@ export default function ManagerSalesScreen() {
       <Header
         title="Area Sales"
         subtitle={`${territoryMetrics.activeOfficersCount} sellers`}
-        showMenu={true}
-        onMenuPress={() => setMenuOpen(true)}
+        showBack
+        onBack={handleBack}
         rightAction={
           <Button
             title="New Sale"
@@ -1092,12 +1092,6 @@ export default function ManagerSalesScreen() {
         filename={pdfPreview?.filename}
         title={pdfPreview?.title}
         onClose={() => setPdfPreview(null)}
-      />
-
-      {/* Mobile Navigation Drawer */}
-      <MobileNavigationDrawer
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
       />
     </View>
   );

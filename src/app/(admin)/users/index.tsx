@@ -1,8 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  BackHandler,
   DeviceEventEmitter,
   FlatList,
   Modal,
@@ -27,8 +26,8 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FeedbackBanner } from '@/components/ui/FeedbackBanner';
 import { Header } from '@/components/ui/Header';
-import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
 import { Input } from '@/components/ui/Input';
+import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { DropdownTrigger } from '@/components/ui/SearchableDropdownModal';
@@ -86,39 +85,8 @@ const SIMPLE_MANAGER_PERMISSION_INFO: Record<string, { title: string; subtitle: 
 export default function AdminUsersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string; tab?: string }>();
-
-  const handleBack = useCallback(() => {
-    if (params?.from === 'actions') {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-        return;
-      } catch {
-        // fallback
-      }
-    }
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      try {
-        if (router.canGoBack()) { router.back(); } else { router.replace('/(admin)' as any); }
-      } catch {
-        router.replace('/(admin)' as any);
-      }
-    }
-  }, [params, navigation, router]);
-
-  useEffect(() => {
-    if (params?.from === 'actions') {
-      const onBackPress = () => {
-        handleBack();
-        return true;
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-    }
-  }, [params?.from, handleBack]);
+  const handleBack = useDashboardBackHandler('/(admin)');
   const [tab, setTab] = useState<UserTab>(params?.tab === 'SELLERS' ? 'SELLERS' : 'MANAGERS');
 
   useEffect(() => {
@@ -132,7 +100,6 @@ export default function AdminUsersScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // Success / Error Feedback for the screen
   const [screenFeedback, setScreenFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -745,10 +712,8 @@ export default function AdminUsersScreen() {
       <Header
         title="User Management"
         subtitle="Manage your team"
-        showBack={Boolean(params?.from === 'actions')}
+        showBack
         onBack={handleBack}
-        showMenu={params?.from !== 'actions'}
-        onMenuPress={() => setMenuOpen(true)}
         rightAction={
           <Pressable
             accessibilityRole="button"
@@ -1979,11 +1944,6 @@ export default function AdminUsersScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      <MobileNavigationDrawer
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-      />
     </View>
   );
 }
