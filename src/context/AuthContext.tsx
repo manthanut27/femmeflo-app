@@ -31,9 +31,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function resolveActivePortalRole(
+  userObj: Pick<PublicUser, 'role' | 'isSeller' | 'sessionRole'>,
+  preferred?: AuthRole | 'admin' | 'manager' | 'seller' | null
+): AuthRole {
+  const normalizedPreferred = preferred
+    ? preferred === 'admin'
+      ? 'SUPER_ADMIN'
+      : preferred === 'manager'
+        ? 'MANAGER'
+        : preferred === 'seller'
+          ? 'SELLER'
+          : preferred
+    : userObj.sessionRole;
+
+  if (
+    normalizedPreferred === 'SELLER' &&
+    (userObj.role === 'SELLER' || (userObj.role === 'MANAGER' && userObj.isSeller))
+  ) {
+    return 'SELLER';
+  }
+  if (
+    normalizedPreferred === 'MANAGER' &&
+    (userObj.role === 'MANAGER' || userObj.role === 'SUPER_ADMIN')
+  ) {
+    return 'MANAGER';
+  }
+  if (normalizedPreferred === 'SUPER_ADMIN' && userObj.role === 'SUPER_ADMIN') {
+    return 'SUPER_ADMIN';
+  }
+  return userObj.role;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [sessionRole, setSessionRoleState] = useState<AuthRole | null>(null);
   const [state, setAuthState] = useState<AuthState>('INITIALIZING');
   const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
 
@@ -55,11 +88,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Ignore version migration errors
       }
 
-      const storedToken = await tokenStorage.getToken();
+      const [storedToken, storedSessionRole] = await Promise.all([
+        tokenStorage.getToken(),
+        tokenStorage.getSessionRole(),
+      ]);
       if (!storedToken) {
         await cacheManager.clearAll().catch(() => {});
         setToken(null);
         setUser(null);
+        setSessionRoleState(null);
         setAuthState('UNAUTHENTICATED');
         return;
       }
@@ -70,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await cacheManager.clearAll().catch(() => {});
         setToken(null);
         setUser(null);
+        setSessionRoleState(null);
         setAuthState('UNAUTHENTICATED');
         return;
       }
@@ -80,15 +118,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const res = await authApi.me();
         if (res && res.user && res.user.id && res.user.role) {
-          setUser(res.user);
-          await tokenStorage.setCachedUser(res.user);
-          syncMockServiceUser(res.user);
+          const resolvedRole = resolveActivePortalRole(
+            res.user,
+            res.user.sessionRole ?? storedSessionRole
+          );
+          const sessionUser: PublicUser = { ...res.user, sessionRole: resolvedRole };
+          setUser(sessionUser);
+          setSessionRoleState(resolvedRole);
+          await tokenStorage.setSessionRole(resolvedRole);
+          await tokenStorage.setCachedUser(sessionUser);
+          syncMockServiceUser(sessionUser);
           setAuthState('AUTHENTICATED');
         } else {
           await tokenStorage.clearToken();
           await cacheManager.clearAll().catch(() => {});
           setToken(null);
           setUser(null);
+          setSessionRoleState(null);
           setAuthState('UNAUTHENTICATED');
         }
       } catch (err: any) {
@@ -103,15 +149,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await cacheManager.clearAll().catch(() => {});
           setToken(null);
           setUser(null);
+          setSessionRoleState(null);
           setAuthState('SESSION_EXPIRED');
         } else if (isNetworkErr || statusCode >= 500) {
           // Network failure, timeout, host unreachable, or temporary 5xx gateway error
           // Restore previously authenticated profile from cache without changing user role
           const cached = await tokenStorage.getCachedUser();
           if (cached && cached.id && cached.role && !cached.id.startsWith('mock_')) {
-            console.info(`[AuthContext] Backend unreachable. Restoring cached session for ${cached.role} (${cached.email || cached.name}).`);
-            setUser(cached);
-            syncMockServiceUser(cached);
+            const resolvedRole = resolveActivePortalRole(cached, storedSessionRole ?? cached.sessionRole);
+            const sessionUser: PublicUser = { ...cached, sessionRole: resolvedRole };
+            console.info(`[AuthContext] Backend unreachable. Restoring cached session for ${resolvedRole} (${cached.email || cached.name}).`);
+            setUser(sessionUser);
+            setSessionRoleState(resolvedRole);
+            syncMockServiceUser(sessionUser);
             setAuthState('OFFLINE_AUTHENTICATED');
           } else {
             // No valid cached user to restore
@@ -119,19 +169,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await tokenStorage.clearToken();
             setToken(null);
             setUser(null);
+            setSessionRoleState(null);
             setAuthState('UNAUTHENTICATED');
           }
         } else {
           // Other unexpected error (e.g. malformed response)
           const cached = await tokenStorage.getCachedUser();
           if (cached && cached.id && cached.role && !cached.id.startsWith('mock_')) {
-            setUser(cached);
-            syncMockServiceUser(cached);
+            const resolvedRole = resolveActivePortalRole(cached, storedSessionRole ?? cached.sessionRole);
+            const sessionUser: PublicUser = { ...cached, sessionRole: resolvedRole };
+            setUser(sessionUser);
+            setSessionRoleState(resolvedRole);
+            syncMockServiceUser(sessionUser);
             setAuthState('OFFLINE_AUTHENTICATED');
           } else {
             await tokenStorage.clearToken();
             setToken(null);
             setUser(null);
+            setSessionRoleState(null);
             setAuthState('UNAUTHENTICATED');
           }
         }
@@ -149,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestRateLimiter.reset();
       setUser(null);
       setToken(null);
+      setSessionRoleState(null);
       setAuthState('SESSION_EXPIRED');
     });
 
@@ -176,13 +232,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Always wipe cached data from any prior user session before entering the new workspace
       await cacheManager.clearAll().catch(() => {});
       requestRateLimiter.reset();
+      const resolvedRole = resolveActivePortalRole(res.user, roleHint ?? res.user.sessionRole);
+      const sessionUser: PublicUser = { ...res.user, sessionRole: resolvedRole };
       await tokenStorage.setToken(res.token);
-      await tokenStorage.setCachedUser(res.user);
+      await tokenStorage.setSessionRole(resolvedRole);
+      await tokenStorage.setCachedUser(sessionUser);
       setToken(res.token);
-      setUser(res.user);
-      syncMockServiceUser(res.user);
+      setSessionRoleState(resolvedRole);
+      setUser(sessionUser);
+      syncMockServiceUser(sessionUser);
       setAuthState('AUTHENTICATED');
-      return res;
+      return { ...res, user: sessionUser };
     } finally {
       setIsActionLoading(false);
     }
@@ -204,6 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await tokenStorage.clearToken();
       setToken(null);
       setUser(null);
+      setSessionRoleState(null);
       setAuthState('UNAUTHENTICATED');
     } finally {
       setIsActionLoading(false);
@@ -212,13 +273,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshUser(): Promise<PublicUser | null> {
     try {
-      const res = await authApi.me();
+      const [res, storedSessionRole] = await Promise.all([
+        authApi.me(),
+        tokenStorage.getSessionRole(),
+      ]);
       if (res && res.user) {
-        setUser(res.user);
-        await tokenStorage.setCachedUser(res.user);
-        syncMockServiceUser(res.user);
+        const resolvedRole = resolveActivePortalRole(
+          res.user,
+          res.user.sessionRole ?? sessionRole ?? storedSessionRole
+        );
+        const sessionUser: PublicUser = { ...res.user, sessionRole: resolvedRole };
+        setUser(sessionUser);
+        setSessionRoleState(resolvedRole);
+        await tokenStorage.setSessionRole(resolvedRole);
+        await tokenStorage.setCachedUser(sessionUser);
+        syncMockServiceUser(sessionUser);
         setAuthState('AUTHENTICATED');
-        return res.user;
+        return sessionUser;
       }
       return null;
     } catch {
@@ -233,10 +304,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ...updates,
       id: user.id,
       role: user.role,
+      sessionRole: sessionRole ?? user.sessionRole,
     };
     try {
       const res = await authApi.updateProfile(updates);
-      const finalUser = res?.user ? { ...mergedUser, ...res.user } : mergedUser;
+      const finalUser = res?.user
+        ? { ...mergedUser, ...res.user, sessionRole: sessionRole ?? res.user.sessionRole ?? user.sessionRole }
+        : mergedUser;
       setUser(finalUser);
       await tokenStorage.setCachedUser(finalUser);
       syncMockServiceUser(finalUser);
@@ -250,7 +324,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const role = user?.role ?? null;
+  const role = sessionRole ?? user?.sessionRole ?? user?.role ?? null;
   const isLoading = state === 'INITIALIZING' || isActionLoading;
   const isOffline = state === 'OFFLINE_AUTHENTICATED';
 

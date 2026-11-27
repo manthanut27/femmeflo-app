@@ -18,7 +18,7 @@ interface FaceVerificationGateProps {
 }
 
 export function FaceVerificationGate({ children }: FaceVerificationGateProps) {
-  const { user, state, logout } = useAuth();
+  const { user, role, state, logout } = useAuth();
   const [isFaceVerified, setIsFaceVerified] = useState<boolean>(false);
   const [modalVisible, setModalVisible] = useState<boolean>(true);
 
@@ -48,11 +48,10 @@ export function FaceVerificationGate({ children }: FaceVerificationGateProps) {
     }
   };
 
+  const activeRole = role ?? user?.role;
   const roleLabel =
-    user?.role === 'MANAGER'
-      ? user.isSeller
-        ? 'Territory Manager & Sales Officer'
-        : 'Territory Manager'
+    activeRole === 'MANAGER'
+      ? 'Territory Manager'
       : 'Field Sales Officer';
 
   return (

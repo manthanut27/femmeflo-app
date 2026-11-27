@@ -9,7 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useResponsiveLayout } from '@/utils/responsive';
 
 export default function SellerTabsLayout() {
-  const { user, state, isLoading } = useAuth();
+  const { user, role, state, isLoading } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, isSmallMobile, isTablet } = useResponsiveLayout();
@@ -21,24 +21,23 @@ export default function SellerTabsLayout() {
   const iconSize = isSmallMobile ? 20 : isTablet ? 25 : 22;
   const labelFontSize = isSmallMobile ? 9.5 : isTablet ? 12 : 10.5;
 
-  const isAllowedSeller =
-    user?.role === 'SELLER' ||
-    user?.role === 'MANAGER';
+  const effectiveRole = role ?? user?.role ?? null;
+  const isAllowedSeller = effectiveRole === 'SELLER';
 
   useEffect(() => {
     if (isLoading || state === 'INITIALIZING') return;
     if (!user) {
       router.replace('/(auth)/login' as any);
     } else if (!isAllowedSeller) {
-      if (user.role === 'SUPER_ADMIN') {
-        router.replace('/(admin)' as any);
-      } else if (user.role === 'MANAGER') {
+      if (effectiveRole === 'SUPER_ADMIN') {
+        router.replace('/(admin)/home' as any);
+      } else if (effectiveRole === 'MANAGER') {
         router.replace('/(manager)' as any);
       } else {
         router.replace('/(auth)/login' as any);
       }
     }
-  }, [user, state, isLoading, router, isAllowedSeller]);
+  }, [user, state, isLoading, router, isAllowedSeller, effectiveRole]);
 
   if (isLoading || state === 'INITIALIZING' || !user || !isAllowedSeller) {
     return (
@@ -173,6 +172,15 @@ export default function SellerTabsLayout() {
         name="incentives/index"
         options={{
           title: 'Incentives',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="reports/index"
+        options={{
+          title: 'My Report',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },

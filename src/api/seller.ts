@@ -1,4 +1,4 @@
-import { apiRequest, API_BASE_URL, isMockMode, uploadFileMultipart } from './client';
+import { apiRequest, API_BASE_URL, ApiError, isMockMode, uploadFileMultipart } from './client';
 import { handleMockRequest } from './mockService';
 import type {
   BulkCustomerResponse,
@@ -18,6 +18,7 @@ import type {
   SellerDashboardData,
   SellerIncentiveData,
   SellerInventoryData,
+  SellerReportData,
   Shift,
   ShiftVisit,
   StartShiftPayload,
@@ -28,6 +29,8 @@ import type {
 
 import { sanitizeUpdateSalePayload } from '../utils/saleSanitizer';
 import { buildCustomerUpdateBody, normalizeCustomerItem } from '../utils/customerSanitizer';
+import { composeFallbackSellerReport } from '../utils/reportFilterUtils';
+import { istDateKeyToIsoBounds } from '../utils/shiftFilterUtils';
 import { draftStorage } from '../utils/draftStorage';
 import { sanitizeIndiaCoordinates } from '../utils/geoValidation';
 
@@ -811,6 +814,72 @@ export const sellerApi = {
         notes: endNotesText,
       };
       return { shift: closedShift };
+    }
+  },
+
+  async getReport(params?: { from?: string; to?: string }): Promise<SellerReportData> {
+    const queryParams: Record<string, string> = {};
+    if (params?.from) queryParams.from = params.from;
+    if (params?.to) queryParams.to = params.to;
+
+    try {
+      return await apiRequest<SellerReportData>('seller/reports', {
+        method: 'GET',
+        params: queryParams,
+        cachePolicy: 'network-first',
+        cacheTtlMs: 30_000,
+      });
+    } catch (err: any) {
+      const shouldFallback =
+        err instanceof ApiError && (err.statusCode === 404 || err.isNetworkError);
+      if (!shouldFallback) {
+        throw err;
+      }
+
+      const fromBounds = params?.from ? istDateKeyToIsoBounds(params.from) : null;
+      const toBounds = params?.to ? istDateKeyToIsoBounds(params.to) : null;
+
+      const [shiftRes, firstSalesRes, incentives, currentShiftRes] = await Promise.all([
+        sellerApi.getShiftHistory({
+          page: 1,
+          pageSize: 200,
+          from: fromBounds?.startIso,
+          to: toBounds?.endIso,
+        }),
+        sellerApi.listSales({ page: 1, pageSize: 200 }),
+        sellerApi.getIncentives().catch(() => null),
+        sellerApi.getCurrentShift().catch(() => ({ shift: null })),
+      ]);
+
+      let allSales = [...firstSalesRes.items];
+      const totalPages = Math.min(firstSalesRes.pagination?.totalPages ?? 1, 5);
+      if (totalPages > 1) {
+        const extraPages = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) =>
+            sellerApi.listSales({ page: i + 2, pageSize: 200 }).catch(() => null)
+          )
+        );
+        for (const pageRes of extraPages) {
+          if (pageRes?.items?.length) {
+            allSales = allSales.concat(pageRes.items);
+          }
+        }
+      }
+
+      const allShifts = currentShiftRes?.shift
+        ? [
+            currentShiftRes.shift,
+            ...shiftRes.items.filter((s) => s.id !== currentShiftRes.shift?.id),
+          ]
+        : shiftRes.items;
+
+      return composeFallbackSellerReport({
+        shifts: allShifts,
+        sales: allSales,
+        incentives,
+        fromDateKey: params?.from,
+        toDateKey: params?.to,
+      });
     }
   },
 

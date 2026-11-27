@@ -90,12 +90,22 @@ function toFriendlySaveError(err: any): string {
 }
 
 export default function NewSaleScreen() {
+  return <NewSaleView />;
+}
+
+export function NewSaleView({
+  salesListRoute,
+  attendanceRoute,
+}: {
+  salesListRoute?: string;
+  attendanceRoute?: string;
+} = {}) {
   const insets = useSafeAreaInsets();
   const { width } = useResponsiveLayout();
   const isCompactScreen = width < 400;
   const params = useLocalSearchParams<{ customerId?: string; customerName?: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const userId = user?.id || 'anonymous';
 
   // Catalog & Inventory Data
@@ -506,7 +516,8 @@ export default function NewSaleScreen() {
       await draftStorage.clearOrderDraft(userId).catch(() => {});
 
       const isPendingApproval = res.sale.status === 'PENDING_APPROVAL';
-      const salesTargetRoute = user?.role === 'MANAGER' ? '/(manager)/sales' : '/(seller)/sales';
+      const salesTargetRoute =
+        salesListRoute || (role === 'MANAGER' ? '/(manager)/sales' : '/(seller)/sales');
       const billNo = res.sale.saleNumber ? `#${res.sale.saleNumber} ` : '';
       const totalFormatted = formatRupeeDisplay(grandTotalRupees);
 
@@ -574,8 +585,10 @@ export default function NewSaleScreen() {
   }, [products, stockMap]);
 
   const handleOpenShift = useCallback(() => {
-    router.push('/(seller)/attendance' as any);
-  }, [router]);
+    const targetRoute =
+      attendanceRoute || (role === 'MANAGER' ? '/(manager)/attendance' : '/(seller)/attendance');
+    router.push(targetRoute as any);
+  }, [attendanceRoute, role, router]);
 
   const paymentOptions: Array<{
     value: PaymentMode;

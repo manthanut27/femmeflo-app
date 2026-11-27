@@ -192,27 +192,6 @@ export default function ManagerProfileScreen() {
             ) : null}
           </Card>
 
-          {/* Multi-Role Switcher for Managers with Field Sales Authority */}
-          {user?.isSeller ? (
-            <Card style={styles.roleSwitchCard}>
-              <View style={styles.roleSwitchHeader}>
-                <Ionicons name="swap-horizontal" size={20} color={BrandColors.pink.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.roleSwitchTitle}>Dual Operational Role</Text>
-              </View>
-              <Text style={styles.roleSwitchDesc}>
-                You are designated as both Area Manager and Field Sales Officer. Switch into Field Sales mode to enter mobile POS orders and record on-ground duty shifts.
-              </Text>
-              <Button
-                title="Switch to Field Sales Mode"
-                variant="primary"
-                size="md"
-                onPress={() => router.replace('/(seller)' as any)}
-                icon={<Ionicons name="bag-handle-outline" size={18} color="#FFFFFF" />}
-                style={{ marginTop: Spacing.md }}
-              />
-            </Card>
-          ) : null}
-
           <Text style={styles.sectionHeading}>Settings & Actions</Text>
           <Card style={styles.menuCard}>
             <TouchableOpacity

@@ -11,6 +11,7 @@ export const authApi = {
       body: JSON.stringify({
         login: payload.identifier.trim(),
         password: payload.password,
+        ...(payload.roleHint ? { roleHint: payload.roleHint } : {}),
       }),
       skipAuth: true,
     });

@@ -10,7 +10,7 @@ import { canViewCustomers, canViewSellers } from '@/utils/permissions';
 import { useResponsiveLayout } from '@/utils/responsive';
 
 export default function ManagerTabsLayout() {
-  const { user, state, isLoading } = useAuth();
+  const { user, role, state, isLoading } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, isSmallMobile, isTablet } = useResponsiveLayout();
@@ -24,21 +24,23 @@ export default function ManagerTabsLayout() {
 
   const allowSellers = canViewSellers(user);
   const allowCustomers = canViewCustomers(user);
+  const effectiveRole = role ?? user?.role ?? null;
+  const isAllowedManager = effectiveRole === 'MANAGER' || effectiveRole === 'SUPER_ADMIN';
 
   useEffect(() => {
     if (isLoading || state === 'INITIALIZING') return;
-    if (!user || (user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN')) {
+    if (!user || !isAllowedManager) {
       if (!user) {
         router.replace('/(auth)/login' as any);
-      } else if (user.role === 'SELLER') {
+      } else if (effectiveRole === 'SELLER') {
         router.replace('/(seller)' as any);
       } else {
         router.replace('/(auth)/login' as any);
       }
     }
-  }, [user, state, isLoading, router]);
+  }, [user, state, isLoading, router, isAllowedManager, effectiveRole]);
 
-  if (isLoading || state === 'INITIALIZING' || !user || (user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN')) {
+  if (isLoading || state === 'INITIALIZING' || !user || !isAllowedManager) {
     return (
       <View style={styles.authLoadingContainer}>
         <ActivityIndicator size="large" color={BrandColors.green.primary} />
@@ -136,7 +138,7 @@ export default function ManagerTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="sales/index"
+        name="sales"
         options={{
           title: 'Sales',
           tabBarIcon: ({ color, focused }) => (
@@ -191,6 +193,15 @@ export default function ManagerTabsLayout() {
         name="incentives/index"
         options={{
           title: 'Incentives',
+          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="attendance/index"
+        options={{
+          title: 'My Attendance',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },

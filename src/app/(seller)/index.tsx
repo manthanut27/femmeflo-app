@@ -57,7 +57,7 @@ import {
 export default function SellerDashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const userId = user?.id;
   const [data, setData] = useState<SellerDashboardData | null>(null);
   const [recentSales, setRecentSales] = useState<SaleItem[]>([]);
@@ -431,34 +431,6 @@ export default function SellerDashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[BrandColors.pink.primary]} />}
       >
         <View style={styles.contentWrapper}>
-          {/* Dual-Role Persona Manager Return Banner */}
-          {user?.role === 'MANAGER' ? (
-            <Card style={styles.managerModeCard}>
-              <View style={styles.managerModeHeader}>
-                <View style={styles.managerModeIconBox}>
-                  <Ionicons name="briefcase-outline" size={18} color="#FFFFFF" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.managerModeTitleRow}>
-                    <Text style={styles.managerModeTitle}>Field Sales Mode</Text>
-                    <Badge label="MANAGER" variant="ACTIVE" size="sm" pulse={true} />
-                  </View>
-                  <Text style={styles.managerModeDesc}>
-                    Taking shop orders with your available stock.
-                  </Text>
-                </View>
-              </View>
-              <Button
-                title="Back to Manager Screen"
-                variant="outline-secondary"
-                size="sm"
-                icon={<Ionicons name="arrow-back" size={16} color={BrandColors.green.primary} />}
-                onPress={() => router.replace('/(manager)' as any)}
-                style={styles.managerModeBtn}
-              />
-            </Card>
-          ) : null}
-
           {/* Primary Action Card: My Field Sales */}
           <View style={styles.heroSalesCard}>
             <View style={styles.heroSalesHeader}>
@@ -564,6 +536,9 @@ export default function SellerDashboardScreen() {
           {/* Sales Performance Cards */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeading}>{"Today's Overview"}</Text>
+            <TouchableOpacity onPress={() => router.push('/(seller)/reports' as any)} hitSlop={HitSlop.sm}>
+              <Text style={styles.viewAllLink}>My Report ›</Text>
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -860,7 +835,7 @@ export default function SellerDashboardScreen() {
         mode="START"
         locationAddress={currentLocation?.address || undefined}
         userName={user?.name || 'Field Officer'}
-        userRole={user?.role || 'SELLER'}
+        userRole={role || 'SELLER'}
         onClose={() => setShiftAuthModalVisible(false)}
         onVerified={handleVerifiedShiftStart}
       />
@@ -870,7 +845,7 @@ export default function SellerDashboardScreen() {
         visible={faceModalVisible}
         mode={faceModalMode}
         userName={user?.name || 'Field Officer'}
-        userRole={user?.role || 'SELLER'}
+        userRole={role || 'SELLER'}
         onClose={() => setFaceModalVisible(false)}
         onVerified={handleVerifiedFaceAction}
       />

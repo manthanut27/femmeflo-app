@@ -16,7 +16,7 @@ export default function ManagerCustomerDetailScreen() {
       listSales={(params) => managerApi.listSales(params as any)}
       backRoute="/(manager)/customers"
       canCreateSale={false}
-      salesRoutePrefix="/(seller)/sales"
+      salesRoutePrefix="/(manager)/sales"
     />
   );
 }

@@ -162,6 +162,7 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
       'src/app/(seller)/customers/index.tsx',
       'src/app/(seller)/inventory/index.tsx',
       'src/app/(seller)/incentives/index.tsx',
+      'src/app/(seller)/reports/index.tsx',
       'src/app/(seller)/profile/index.tsx',
     ];
 

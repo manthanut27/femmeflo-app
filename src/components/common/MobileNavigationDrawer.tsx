@@ -37,7 +37,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, role: sessionRole, logout } = useAuth();
   const [hasActiveShift, setHasActiveShift] = useState(false);
 
   useEffect(() => {
@@ -78,8 +78,9 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
     ]);
   };
 
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const isManager = user?.role === 'MANAGER';
+  const effectiveRole = sessionRole ?? user?.role;
+  const isSuperAdmin = effectiveRole === 'SUPER_ADMIN';
+  const isManager = effectiveRole === 'MANAGER';
 
   const SUPER_ADMIN_MAIN_NAV = [
     { title: 'Employees', icon: 'people-outline', route: '/(admin)/users' },
@@ -235,6 +236,12 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                 icon: 'cash-outline',
                 route: '/(seller)/incentives',
               },
+              {
+                title: 'My Report',
+                subtitle: 'Visits, travel & earnings',
+                icon: 'bar-chart-outline',
+                route: '/(seller)/reports',
+              },
             ]),
         {
           title: 'My Profile',
@@ -312,7 +319,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                   {user?.name || 'Authorized User'}
                 </Text>
                 <Text style={styles.userRole}>
-                  {user?.role === 'MANAGER' ? 'Area Manager' : 'Field Seller'}
+                  {isManager ? 'Area Manager' : 'Field Seller'}
                 </Text>
                 <Text style={styles.userTerritory} numberOfLines={1}>
                   📍 {[user?.district, user?.state].filter(Boolean).join(', ') || 'Regional Field'}
@@ -337,7 +344,7 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
                 styles.shiftBanner,
                 hasActiveShift ? styles.shiftBannerActive : styles.shiftBannerInactive,
               ]}
-              onPress={() => handleNavigate('/(seller)/attendance')}
+              onPress={() => handleNavigate(isManager ? '/(manager)/attendance' : '/(seller)/attendance')}
               accessibilityRole="button"
               accessibilityLabel={`Duty Shift: ${hasActiveShift ? 'Active' : 'Off'}`}
             >

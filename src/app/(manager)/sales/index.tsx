@@ -553,7 +553,7 @@ export default function ManagerSalesScreen() {
                   },
                   pressed && styles.btnPressed,
                 ]}
-                onPress={() => router.push(`/(seller)/sales/${item.id}` as any)}
+                onPress={() => router.push(`/(manager)/sales/${item.id}` as any)}
               >
                 <Ionicons
                   name={item.paymentSentAt ? 'checkmark-circle' : 'send-outline'}
@@ -578,7 +578,7 @@ export default function ManagerSalesScreen() {
   };
 
   const handleNewSale = () => {
-    router.push('/(seller)/sales/new' as any);
+    router.push('/(manager)/sales/new' as any);
   };
 
   return (

@@ -55,9 +55,9 @@ export function ShiftAuthVerificationModal({
   onClose,
   onVerified,
 }: ShiftAuthVerificationModalProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const displayName = userName || user?.name || 'Field Officer';
-  const roleName = userRole || user?.role || 'SELLER';
+  const roleName = userRole || role || user?.role || 'SELLER';
   const isStart = mode === 'START';
 
   const [activeTab, setActiveTab] = useState<AuthTab>('FINGERPRINT');

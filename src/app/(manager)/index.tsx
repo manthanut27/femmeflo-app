@@ -32,7 +32,7 @@ export default function ManagerDashboardScreen() {
   const [isLocating, setIsLocating] = useState(false);
 
   const handleNewSale = () => {
-    router.push('/(seller)/sales/new' as any);
+    router.push('/(manager)/sales/new' as any);
   };
 
   const loadData = useCallback(async () => {
@@ -245,7 +245,7 @@ export default function ManagerDashboardScreen() {
               {/* Translucent Outline Pill Button: Attendance & Duty */}
               <TouchableOpacity
                 style={styles.heroDailyShiftBtn}
-                onPress={() => router.push('/(seller)/attendance' as any)}
+                onPress={() => router.push('/(manager)/attendance' as any)}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel="Daily Duty & Attendance"

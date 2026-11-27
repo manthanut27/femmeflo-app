@@ -210,27 +210,6 @@ export default function SellerProfileScreen() {
             ) : null}
           </Card>
 
-          {/* Multi-Role Return for Managers viewing Field Sales Mode */}
-          {user?.role === 'MANAGER' ? (
-            <Card style={styles.roleSwitchCard}>
-              <View style={styles.roleSwitchHeader}>
-                <Ionicons name="swap-horizontal" size={20} color={BrandColors.green.primary} style={{ marginRight: 8 }} />
-                <Text style={styles.roleSwitchTitle}>Area Manager Session</Text>
-              </View>
-              <Text style={styles.roleSwitchDesc}>
-                You are currently in Field Sales Mode. Tap below to return to your primary Area Manager operational dashboard.
-              </Text>
-              <Button
-                title="Return to Manager Hub"
-                variant="secondary"
-                size="md"
-                onPress={() => router.replace('/(manager)' as any)}
-                icon={<Ionicons name="briefcase-outline" size={18} color="#FFFFFF" />}
-                style={{ marginTop: Spacing.md }}
-              />
-            </Card>
-          ) : null}
-
           {/* Operational Shortcuts */}
           <Text style={styles.sectionHeading}>Account Settings</Text>
           <Card style={{ padding: 0, overflow: 'hidden' }}>
@@ -262,6 +241,23 @@ export default function SellerProfileScreen() {
                   <Ionicons name="wallet-outline" size={18} color={BrandColors.pink.primary} />
                 </View>
                 <Text style={styles.menuText}>My Incentives & Earnings</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="My Activity Report"
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+              onPress={() => router.push('/(seller)/reports' as any)}
+            >
+              <View style={styles.menuLeft}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="bar-chart-outline" size={18} color={BrandColors.pink.primary} />
+                </View>
+                <Text style={styles.menuText}>My Activity Report</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </Pressable>

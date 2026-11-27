@@ -129,8 +129,9 @@ export const FILTER_TABS = FILTER_OPTIONS.map((o) => ({ key: o.key, label: o.lab
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(user?.role));
+  const { user, role } = useAuth();
+  const effectiveRole = role ?? user?.role;
+  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(effectiveRole));
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -236,11 +237,11 @@ export default function NotificationsScreen() {
 
     // Role-aware internal routing
     let target = item.actionUrl;
-    if (user?.role === 'MANAGER') {
+    if (effectiveRole === 'MANAGER') {
       if (target.startsWith('/(admin)')) {
         target = target.replace('/(admin)', '/(manager)');
       }
-    } else if (user?.role === 'SELLER') {
+    } else if (effectiveRole === 'SELLER') {
       if (target.startsWith('/(admin)')) {
         target = target.replace('/(admin)', '/(seller)');
       }
@@ -406,9 +407,9 @@ export default function NotificationsScreen() {
   }
 
   const workspaceBreadcrumb =
-    user?.role === 'SUPER_ADMIN'
+    effectiveRole === 'SUPER_ADMIN'
       ? 'Admin workspace / Notifications'
-      : user?.role === 'MANAGER'
+      : effectiveRole === 'MANAGER'
       ? 'Manager workspace / Notifications'
       : 'Seller workspace / Notifications';
 

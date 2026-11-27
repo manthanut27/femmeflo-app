@@ -10,6 +10,7 @@ import {
   syncPermissionAliases,
 } from '../utils/permissions.ts';
 import { resolveKnownUserRole } from '../utils/roleLoginValidator.ts';
+import { composeFallbackSellerReport } from '../utils/reportFilterUtils.ts';
 import {
   MOCK_ADMIN_DASHBOARD,
   MOCK_ALL_MANAGERS,
@@ -696,10 +697,23 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   // ----------------------------------------------------
-  // Seller: Incentives
+  // Seller: Incentives & Reports
   // ----------------------------------------------------
   if (cleanEndpoint === 'seller/incentives') {
     return mockDb.incentives as unknown as T;
+  }
+
+  if (cleanEndpoint === 'seller/reports' && method === 'GET') {
+    const combinedShifts = mockDb.currentShift
+      ? [mockDb.currentShift, ...mockDb.shiftHistory.filter((s) => s.id !== mockDb.currentShift?.id)]
+      : mockDb.shiftHistory;
+    return composeFallbackSellerReport({
+      shifts: combinedShifts,
+      sales: mockDb.sales,
+      incentives: mockDb.incentives,
+      fromDateKey: options.params?.from ? String(options.params.from) : undefined,
+      toDateKey: options.params?.to ? String(options.params.to) : undefined,
+    }) as unknown as T;
   }
 
   // ----------------------------------------------------

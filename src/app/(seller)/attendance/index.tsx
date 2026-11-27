@@ -111,12 +111,20 @@ function getCustomerSavedCoords(customer?: CustomerItem | null): { latitude: num
 }
 
 export default function SellerAttendanceScreen() {
+  return <SellerAttendanceView />;
+}
+
+export function SellerAttendanceView({
+  backRoute,
+}: {
+  backRoute?: string;
+} = {}) {
   const insets = useSafeAreaInsets();
   const { width } = useResponsiveLayout();
   const isCompactScreen = width < 380;
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const userId = user?.id || 'anonymous';
-  const handleBack = useDashboardBackHandler(user?.role === 'MANAGER' ? '/(manager)' : '/(seller)');
+  const handleBack = useDashboardBackHandler(backRoute || (role === 'MANAGER' ? '/(manager)' : '/(seller)'));
 
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [pastShifts, setPastShifts] = useState<Shift[]>([]);
@@ -2564,7 +2572,7 @@ export default function SellerAttendanceScreen() {
         mode="START"
         locationAddress={currentLocation?.address || undefined}
         userName={user?.name || 'Field Officer'}
-        userRole={user?.role || 'SELLER'}
+        userRole={role || 'SELLER'}
         onClose={() => setShiftAuthModalVisible(false)}
         onVerified={handleVerifiedShiftStart}
       />
@@ -2576,7 +2584,7 @@ export default function SellerAttendanceScreen() {
         visible={faceModalVisible}
         mode={faceModalMode}
         userName={user?.name || 'Field Officer'}
-        userRole={user?.role || 'SELLER'}
+        userRole={role || 'SELLER'}
         autoLaunch={true}
         onClose={() => setFaceModalVisible(false)}
         onVerified={(res) => {

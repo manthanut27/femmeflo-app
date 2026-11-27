@@ -45,8 +45,8 @@ const PERMISSION_ORDER: AppPermissionType[] = [
 ];
 
 export default function AppPermissionsScreen() {
-  const { user } = useAuth();
-  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(user?.role));
+  const { user, role } = useAuth();
+  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(role ?? user?.role));
   const {
     permissions,
     loading,

@@ -29,6 +29,7 @@ export interface PublicUser {
   email: string;
   phone?: string | null;
   role: AuthRole;
+  sessionRole?: AuthRole;
   isSeller?: boolean;
   active: boolean;
   state?: string | null;
@@ -1079,6 +1080,125 @@ export interface ManagerSellerItem extends PublicUser {
 }
 
 export type SellerItem = ManagerSellerItem;
+
+// ----------------------------------------------------
+// Seller Self Activity & Earnings Report
+// ----------------------------------------------------
+export type SellerReportPreset =
+  | 'today'
+  | 'week'
+  | 'weekend'
+  | 'month'
+  | 'all'
+  | 'custom_range';
+
+export interface SellerReportDailyVisitItem {
+  id: string;
+  shiftId: string;
+  shopName: string;
+  customerId: string | null;
+  checkInTime: string;
+  checkOutTime: string | null;
+  durationMins: number | null;
+  saleDone: boolean;
+  saleId: string | null;
+  saleTotalPaise: number | null;
+  saleQuantity: number | null;
+  notes: string | null;
+}
+
+export interface SellerReportDailySaleItem {
+  id: string;
+  shopName: string;
+  customerId: string;
+  quantity: number;
+  unitPricePaise: number;
+  totalPaise: number;
+  paymentMode: string;
+  status: string;
+  incentivePaise: number;
+  createdAt: string;
+}
+
+export interface SellerReportDailyAdjustmentItem {
+  id: string;
+  type: 'ADD' | 'DEDUCT';
+  amountPaise: number;
+  reason: string;
+  adjustmentDate: string;
+}
+
+export interface SellerReportDailyRecord {
+  date: string;
+  shiftsCount: number;
+  activeShiftsCount: number;
+  shopsVisited: number;
+  uniqueShopsVisited: number;
+  salesDoneVisits: number;
+  travelKm: number;
+  durationSeconds: number;
+  ordersCount: number;
+  confirmedOrdersCount: number;
+  pendingOrdersCount: number;
+  rejectedOrdersCount: number;
+  packetsSold: number;
+  salesPaise: number;
+  cashPaise: number;
+  bankPaise: number;
+  pendingPaise: number;
+  baseCommissionPaise: number;
+  additionsPaise: number;
+  deductionsPaise: number;
+  netIncentivePaise: number;
+  visits: SellerReportDailyVisitItem[];
+  sales: SellerReportDailySaleItem[];
+  adjustments: SellerReportDailyAdjustmentItem[];
+}
+
+export interface SellerReportData {
+  range: {
+    from: string | null;
+    to: string | null;
+  };
+  ratePerPacketPaise: number;
+  summary: {
+    activeDays: number;
+    shiftsCount: number;
+    activeShiftsCount: number;
+    completedShiftsCount: number;
+    shopsVisited: number;
+    uniqueShopsVisited: number;
+    salesDoneVisits: number;
+    conversionRatePercent: number;
+    totalDistanceKm: number;
+    totalDurationSeconds: number;
+    ordersCount: number;
+    confirmedOrdersCount: number;
+    pendingOrdersCount: number;
+    rejectedOrdersCount: number;
+    totalPacketsSold: number;
+    totalSalesPaise: number;
+    cashPaise: number;
+    bankPaise: number;
+    pendingPaise: number;
+    baseCommissionPaise: number;
+    additionsPaise: number;
+    deductionsPaise: number;
+    netIncentivePaise: number;
+  };
+  incentiveOverview: {
+    ratePerPacketPaise: number;
+    salesIncentivePaise: number;
+    additionsPaise: number;
+    deductionsPaise: number;
+    totalEarnedPaise: number;
+    totalPaidPaise: number;
+    outstandingPaise: number;
+    status: string;
+  };
+  targetProgress?: TargetProgressSummary | null;
+  dailyRecords: SellerReportDailyRecord[];
+}
 
 export class ApiError extends Error {
   statusCode: number;

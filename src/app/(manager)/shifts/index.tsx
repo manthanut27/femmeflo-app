@@ -149,7 +149,7 @@ export default function ManagerShiftsScreen() {
             size="sm"
             variant="primary"
             icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
-            onPress={() => router.push('/(seller)/attendance' as any)}
+            onPress={() => router.push('/(manager)/attendance' as any)}
           />
         }
       />
@@ -289,7 +289,7 @@ export default function ManagerShiftsScreen() {
               description={`No shift records found for ${dateRangeInfo.label}.`}
               icon="calendar-outline"
               actionTitle="Start New Shift"
-              onAction={() => router.push('/(seller)/attendance' as any)}
+              onAction={() => router.push('/(manager)/attendance' as any)}
             />
           ) : (
             <View style={styles.shiftList}>

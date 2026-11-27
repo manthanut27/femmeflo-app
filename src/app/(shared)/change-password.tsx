@@ -26,8 +26,8 @@ import { useAuth } from '@/context/AuthContext';
 import { getRoleDashboardRoute, useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 
 export default function ChangePasswordScreen() {
-  const { user } = useAuth();
-  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(user?.role));
+  const { user, role } = useAuth();
+  const handleBack = useDashboardBackHandler(getRoleDashboardRoute(role ?? user?.role));
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');

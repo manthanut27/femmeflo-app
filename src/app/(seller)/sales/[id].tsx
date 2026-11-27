@@ -31,6 +31,7 @@ import { RemittanceActionModal } from '@/components/sales/RemittanceActionModal'
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
 import { Input } from '@/components/ui/Input';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
+import { useAuth } from '@/context/AuthContext';
 import { BrandColors, Colors, HitSlop, MaxContentWidth, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { formatDateTimeIST } from '@/utils/dateUtils';
 
@@ -82,9 +83,14 @@ function normalizeSale(raw: any): SaleItem {
 }
 
 export default function SaleDetailScreen() {
+  return <SaleDetailView />;
+}
+
+export function SaleDetailView({ salesListRoute }: { salesListRoute?: string } = {}) {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { role } = useAuth();
 
   const [sale, setSale] = useState<SaleItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -399,7 +405,11 @@ Generated in FemmeFlo Standalone Test Mode.`;
             title="Sale Record Not Found"
             description="The requested order could not be located in your history."
             actionTitle="Back to Sales List"
-            onAction={() => router.replace('/(seller)/sales' as any)}
+            onAction={() =>
+              router.replace(
+                (salesListRoute || (role === 'MANAGER' ? '/(manager)/sales' : '/(seller)/sales')) as any
+              )
+            }
           />
         </View>
       </View>

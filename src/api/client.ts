@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { cacheManager, type CachePolicy } from '../utils/cacheManager.ts';
 import { requestRateLimiter } from '../utils/rateLimiter.ts';
 import { handleMockRequest } from './mockService';
-import { ApiError, type PublicUser } from './types';
+import { ApiError, type AuthRole, type PublicUser } from './types';
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined | null>;
@@ -77,6 +77,7 @@ export async function testBackendHealth(targetUrl?: string): Promise<{ ok: boole
 
 const TOKEN_KEY = 'femmeflo_mobile_auth_token';
 const USER_KEY = 'femmeflo_mobile_auth_user';
+const SESSION_ROLE_KEY = 'femmeflo_mobile_session_role';
 
 function getAsyncStorageBackend() {
   if (Platform.OS === 'web') {
@@ -174,15 +175,41 @@ export const tokenStorage = {
         if (typeof localStorage !== 'undefined') {
           localStorage.removeItem(TOKEN_KEY);
           localStorage.removeItem(USER_KEY);
+          localStorage.removeItem(SESSION_ROLE_KEY);
         }
       } else {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         await SecureStore.deleteItemAsync(USER_KEY);
+        await asyncProfileBackend.removeItem(SESSION_ROLE_KEY).catch(() => {});
       }
       await userProfileStorage.clearCachedUser();
       await cacheManager.clearAll();
     } catch (err) {
       console.warn('Failed to clear auth token', err);
+    }
+  },
+
+  async getSessionRole(): Promise<AuthRole | null> {
+    try {
+      const raw = await asyncProfileBackend.getItem(SESSION_ROLE_KEY);
+      if (raw === 'SUPER_ADMIN' || raw === 'MANAGER' || raw === 'SELLER') {
+        return raw;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async setSessionRole(role: AuthRole | null): Promise<void> {
+    try {
+      if (!role) {
+        await asyncProfileBackend.removeItem(SESSION_ROLE_KEY);
+      } else {
+        await asyncProfileBackend.setItem(SESSION_ROLE_KEY, role);
+      }
+    } catch (err) {
+      console.warn('Failed to store active portal role', err);
     }
   },
 
