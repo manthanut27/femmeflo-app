@@ -107,7 +107,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="approvals/index"
         options={{
-          title: 'Approvals',
+          title: isSmallMobile ? 'Approval' : 'Price Approval',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon
               name="checkmark-done-circle-outline"
@@ -141,7 +141,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="sales/index"
         options={{
-          title: 'Sales',
+          title: isSmallMobile ? 'Sales' : 'Sales Record',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon
               name="receipt-outline"
@@ -158,7 +158,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="users/index"
         options={{
-          title: 'Users',
+          title: 'Employees',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
         }}
@@ -227,7 +227,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="categories/index"
         options={{
-          title: 'Categories',
+          title: 'Product Categories',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },
@@ -263,7 +263,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="shifts/index"
         options={{
-          title: 'Shifts',
+          title: 'Employee Attendance',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },
@@ -272,16 +272,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen
         name="permissions/index"
         options={{
-          title: 'Permissions',
-          tabBarItemStyle: { display: 'none', width: 0, height: 0 },
-          tabBarButton: () => null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="invoices/index"
-        options={{
-          title: 'Invoices',
+          title: 'Permission Manager',
           tabBarItemStyle: { display: 'none', width: 0, height: 0 },
           tabBarButton: () => null,
           tabBarStyle: { display: 'none' },

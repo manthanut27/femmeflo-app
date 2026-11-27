@@ -31,7 +31,6 @@ export default function AdminHomeScreen() {
     <View style={styles.container}>
       <Header
         title="Home"
-        subtitle="FemmeFlo · Sale Management System"
         showMenu
         onMenuPress={() => setMenuOpen(true)}
         showNotificationBell
@@ -48,10 +47,7 @@ export default function AdminHomeScreen() {
           <View style={styles.contentWrapper}>
             {/* Top Brand Card: FemmeFlo + Sale Management System */}
             <View style={styles.heroBrandCard}>
-              <View style={styles.brandTopBadge}>
-                <Ionicons name="sparkles" size={13} color={BrandColors.pink.dark} />
-                <Text style={styles.brandTopBadgeText}>Sale Management System</Text>
-              </View>
+              
 
               <Image
                 source={require('../../../../assets/images/femmeflo-logo.png')}
@@ -61,7 +57,6 @@ export default function AdminHomeScreen() {
                 accessibilityLabel="FemmeFlo brand logo"
               />
 
-              <Text style={styles.femmefloHeading}>FemmeFlo</Text>
               <Text style={styles.systemSubheading}>Sale Management System</Text>
               <Text style={styles.welcomeLine}>
                 Welcome, {user?.name || 'Administrator'}
@@ -81,9 +76,7 @@ export default function AdminHomeScreen() {
                 />
               </View>
               <Text style={styles.masakoCompanyName}>Masako Enterprises Private Limited</Text>
-              <Text style={styles.masakoCaption}>
-                FemmeFlo · Sale Management System
-              </Text>
+            
             </View>
           </View>
         </ScrollView>

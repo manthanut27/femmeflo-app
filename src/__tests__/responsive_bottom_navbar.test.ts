@@ -19,9 +19,10 @@ describe('Responsive Bottom Navbar & Tab Naming Suite', () => {
     assert.match(code, /title:\s*'Dashboard'/, 'Admin tab must be renamed from Executive to Dashboard');
     assert.doesNotMatch(code, /title:\s*'Executive'/, 'Executive naming must not be present');
     assert.match(code, /title:\s*'Reports'/, 'Admin must have Reports tab');
-    assert.match(code, /title:\s*'Approvals'/, 'Admin must have Approvals tab');
+    assert.match(code, /isSmallMobile \? 'Approval' : 'Price Approval'/, 'Admin must have Price Approval tab');
     assert.match(code, /isSmallMobile \? 'Stock' : 'Inventory'/, 'Admin inventory tab must be responsive for small screens');
-    assert.match(code, /title:\s*'Users'/, 'Admin must have Users tab');
+    assert.match(code, /isSmallMobile \? 'Sales' : 'Sales Record'/, 'Admin must have Sales Record tab');
+    assert.match(code, /title:\s*'Employees'/, 'Admin must have Employees route');
     assert.match(code, /title:\s*'Settings'/, 'Admin must have Settings tab');
 
     // Responsiveness & Insets

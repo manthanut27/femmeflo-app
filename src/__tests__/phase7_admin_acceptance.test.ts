@@ -546,24 +546,23 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
   });
 
   describe('Part H: Administrative Action Hub & Navigation Integrity', () => {
-    test('H1: All 13 master administrative modules are registered with strict indexes, routes and categories', () => {
+    test('H1: All 12 active master administrative modules are registered with strict indexes, routes and categories', () => {
       const EXPECTED_MODULES = [
         { id: 'reports', index: 1, route: '/(admin)/reports', category: 'finance' },
         { id: 'approvals', index: 2, route: '/(admin)/approvals', category: 'governance' },
         { id: 'products', index: 3, route: '/(admin)/products', category: 'stock' },
-        { id: 'invoices', index: 4, route: '/(admin)/invoices', category: 'finance' },
-        { id: 'sales', index: 5, route: '/(admin)/sales', category: 'finance' },
-        { id: 'incentives', index: 6, route: '/(admin)/incentives', category: 'finance' },
-        { id: 'shifts', index: 7, route: '/(admin)/shifts', category: 'field' },
-        { id: 'permissions', index: 8, route: '/(admin)/permissions', category: 'governance' },
-        { id: 'customers', index: 9, route: '/(admin)/customers', category: 'field' },
-        { id: 'inventory', index: 10, route: '/(admin)/inventory/transfer', category: 'stock' },
-        { id: 'users', index: 11, route: '/(admin)/users', category: 'field' },
-        { id: 'categories', index: 12, route: '/(admin)/categories', category: 'system' },
-        { id: 'settings', index: 13, route: '/(admin)/settings', category: 'system' },
+        { id: 'sales', index: 4, route: '/(admin)/sales', category: 'finance' },
+        { id: 'incentives', index: 5, route: '/(admin)/incentives', category: 'finance' },
+        { id: 'shifts', index: 6, route: '/(admin)/shifts', category: 'field' },
+        { id: 'permissions', index: 7, route: '/(admin)/permissions', category: 'governance' },
+        { id: 'customers', index: 8, route: '/(admin)/customers', category: 'field' },
+        { id: 'inventory', index: 9, route: '/(admin)/inventory/transfer', category: 'stock' },
+        { id: 'users', index: 10, route: '/(admin)/users', category: 'field' },
+        { id: 'categories', index: 11, route: '/(admin)/categories', category: 'system' },
+        { id: 'settings', index: 12, route: '/(admin)/settings', category: 'system' },
       ];
 
-      assert.equal(EXPECTED_MODULES.length, 13);
+      assert.equal(EXPECTED_MODULES.length, 12);
       for (let i = 0; i < EXPECTED_MODULES.length; i++) {
         assert.equal(EXPECTED_MODULES[i].index, i + 1);
         assert.ok(EXPECTED_MODULES[i].route.startsWith('/(admin)/'));

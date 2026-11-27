@@ -40,6 +40,12 @@ export interface CustomerOnboardingFormProps {
   locationButtonLabel?: string;
 
   // GPS / Location
+  locationMode?: 'CURRENT' | 'MANUAL';
+  onSelectCurrentLocation?: () => void;
+  onSelectManualAddress?: () => void;
+  onClearManualAddress?: () => void;
+  isGeocodingManual?: boolean;
+  onLookupManualCoordinates?: () => void;
   gpsStatus: GpsAcquisitionStatus;
   onRefreshLocation: () => void;
   latitude: number | null;
@@ -92,6 +98,10 @@ export interface CustomerOnboardingFormProps {
   pincodeStatus: PincodeLookupStatus;
   address: string;
   onChangeAddress: (v: string) => void;
+  streetName?: string;
+  onChangeStreetName?: (v: string) => void;
+  landmark?: string;
+  onChangeLandmark?: (v: string) => void;
   village: string;
   onChangeVillage: (v: string) => void;
   district: string;
@@ -124,6 +134,12 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
     onOpenBatchEntry,
     showBatchEntry = true,
     locationButtonLabel = 'Use Current Location',
+    locationMode = 'CURRENT',
+    onSelectCurrentLocation,
+    onSelectManualAddress,
+    onClearManualAddress,
+    isGeocodingManual = false,
+    onLookupManualCoordinates,
     gpsStatus,
     onRefreshLocation,
     latitude,
@@ -166,6 +182,10 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
     pincodeStatus,
     address,
     onChangeAddress,
+    streetName,
+    onChangeStreetName,
+    landmark,
+    onChangeLandmark,
     village,
     onChangeVillage,
     district,
@@ -230,24 +250,50 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
   }
 
   const isPhotoUploaded = Boolean(photoUri);
-  const isAcquiringGps = gpsStatus === 'acquiring_high' || gpsStatus === 'acquiring_fallback';
+  const isManualMode = locationMode === 'MANUAL';
+  const hasTwoModeSwitcher = Boolean(onSelectCurrentLocation && onSelectManualAddress);
+  const isAcquiringGps =
+    !isManualMode && (gpsStatus === 'acquiring_high' || gpsStatus === 'acquiring_fallback');
   const isGpsFound = gpsStatus === 'acquired';
-  const gpsStatusLabel = isAcquiringGps
-    ? 'Getting Location...'
-    : isGpsFound
-      ? 'Location Found'
-      : 'Location Not Found';
+  const hasManualCoords = isManualMode && latitude != null && longitude != null;
+  const hasAnyAddressErrors = Boolean(
+    errors.pincode || errors.address || errors.streetName || errors.district || errors.stateName
+  );
+  // Open manual address section below when Manual Mode is tapped (or when legacy callers omit switcher / address fields need completion / validation)
+  const showManualAddressSection =
+    isManualMode ||
+    !hasTwoModeSwitcher ||
+    hasAnyAddressErrors ||
+    (!isAcquiringGps && (!isGpsFound || !pincode.trim() || !address.trim()));
+
+  const gpsStatusLabel = isManualMode
+    ? isGeocodingManual
+      ? 'Fetching Coordinates...'
+      : hasManualCoords
+        ? 'Manual Location Ready'
+        : 'Enter Manual Address'
+    : isAcquiringGps
+      ? 'Getting Location...'
+      : isGpsFound
+        ? 'Location Found'
+        : 'Location Not Found';
 
   const areaSummary = [village.trim(), district.trim(), stateName.trim()].filter(Boolean).join(', ');
   const coordsText =
-    latitude != null && longitude != null ? `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}°` : '';
-  const locationSubtitleText = isAcquiringGps
-    ? 'Fetching live GPS & address...'
-    : isGpsFound
-      ? [areaSummary || 'GPS ready', coordsText].filter(Boolean).join(' · ')
-      : gpsStatus === 'denied'
-        ? 'Turn on GPS or type address below'
-        : areaSummary || 'Tap Use Current Location or enter address below';
+    latitude != null && longitude != null ? `${latitude.toFixed(5)}°, ${longitude.toFixed(5)}°` : '';
+  const locationSubtitleText = isManualMode
+    ? isGeocodingManual
+      ? 'Resolving live latitude & longitude for your entered address...'
+      : hasManualCoords
+        ? [areaSummary || 'Live coordinates fetched', coordsText].filter(Boolean).join(' · ')
+        : 'Fill shop address & PIN below to fetch live latitude & longitude'
+    : isAcquiringGps
+      ? 'Fetching live GPS & address...'
+      : isGpsFound
+        ? [formattedAddress || areaSummary || 'GPS ready', coordsText].filter(Boolean).join(' · ')
+        : gpsStatus === 'denied'
+          ? 'No GPS permission — tap Enter Manual Address below'
+          : 'No network or GPS signal — tap Enter Manual Address below';
 
   return (
     <KeyboardAvoidingView
@@ -307,21 +353,28 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
             />
           )}
 
-          {/* 1. CURRENT LOCATION CARD */}
-          <View style={[styles.locationCard, isCompactScreen && styles.locationCardStacked]}>
+          {/* 1. LOCATION MODE CARD (PRIMARY: CURRENT LOCATION, SECONDARY: MANUAL ADDRESS) */}
+          <View style={styles.locationSectionCard}>
             <View style={styles.locationLeft}>
               <View
                 style={[
                   styles.locationIconCircle,
-                  isGpsFound && { backgroundColor: '#16A34A' },
-                  !isGpsFound && !isAcquiringGps && { backgroundColor: '#D97706' },
+                  (isGpsFound || hasManualCoords) && { backgroundColor: '#16A34A' },
+                  isManualMode && !hasManualCoords && !isGeocodingManual && { backgroundColor: '#0284C7' },
+                  !isManualMode && !isGpsFound && !isAcquiringGps && { backgroundColor: '#D97706' },
                 ]}
               >
-                {isAcquiringGps ? (
+                {isAcquiringGps || isGeocodingManual ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Ionicons
-                    name={isGpsFound ? 'location-sharp' : 'alert-outline'}
+                    name={
+                      isGpsFound || hasManualCoords
+                        ? 'location-sharp'
+                        : isManualMode
+                          ? 'create-outline'
+                          : 'alert-outline'
+                    }
                     size={18}
                     color="#FFFFFF"
                   />
@@ -331,32 +384,78 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
                 <Text
                   style={[
                     styles.locationTitle,
-                    isGpsFound && { color: '#15803D' },
-                    !isGpsFound && !isAcquiringGps && { color: '#B45309' },
+                    (isGpsFound || hasManualCoords) && { color: '#15803D' },
+                    isManualMode && !hasManualCoords && !isGeocodingManual && { color: '#0369A1' },
+                    !isManualMode && !isGpsFound && !isAcquiringGps && { color: '#B45309' },
                   ]}
                   numberOfLines={1}
                 >
                   {gpsStatusLabel}
                 </Text>
-                <Text style={styles.locationSubtitle} numberOfLines={2}>
+                <Text style={styles.locationSubtitle} numberOfLines={3}>
                   {locationSubtitleText}
                 </Text>
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.changeBtn, isCompactScreen && styles.changeBtnFull]}
-              onPress={onRefreshLocation}
-              activeOpacity={0.8}
-              disabled={isAcquiringGps}
-              accessibilityRole="button"
-              accessibilityLabel="Use Current Location"
-            >
-              <Ionicons name="locate-outline" size={15} color={BrandColors.pink.deep} style={{ marginRight: 5 }} />
-              <Text style={styles.changeBtnText}>
-                {isAcquiringGps ? 'Locating...' : locationButtonLabel}
-              </Text>
-            </TouchableOpacity>
+            <View style={[styles.locationActionRow, isCompactScreen && styles.locationActionRowStacked]}>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtnPrimary,
+                  !isManualMode && styles.modeBtnPrimaryActive,
+                ]}
+                onPress={onSelectCurrentLocation || onRefreshLocation}
+                activeOpacity={0.8}
+                disabled={isAcquiringGps}
+                accessibilityRole="button"
+                accessibilityLabel="Use Current Location"
+              >
+                <Ionicons
+                  name="locate-outline"
+                  size={15}
+                  color={!isManualMode ? '#FFFFFF' : BrandColors.pink.deep}
+                  style={{ marginRight: 5 }}
+                />
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    !isManualMode ? styles.modeBtnTextActive : { color: BrandColors.pink.deep },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isAcquiringGps ? 'Locating...' : locationButtonLabel}
+                </Text>
+              </TouchableOpacity>
+
+              {hasTwoModeSwitcher ? (
+                <TouchableOpacity
+                  style={[
+                    styles.modeBtnSecondary,
+                    isManualMode && styles.modeBtnSecondaryActive,
+                  ]}
+                  onPress={onSelectManualAddress}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Enter Manual Address"
+                >
+                  <Ionicons
+                    name="create-outline"
+                    size={15}
+                    color={isManualMode ? '#FFFFFF' : '#0369A1'}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.modeBtnText,
+                      isManualMode ? styles.modeBtnTextActive : { color: '#0369A1' },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Enter Manual Address
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
 
           {/* 2. SHOP PHOTO CARD */}
@@ -718,146 +817,245 @@ export function CustomerOnboardingForm(props: CustomerOnboardingFormProps) {
             </View>
           </View>
 
-          {/* 5. SHOP ADDRESS CARD */}
-          <View style={styles.sectionCard}>
-            <View style={styles.cardHeaderRow}>
-              <View style={[styles.headerIconCircle, { backgroundColor: '#E11D48' }]}>
-                <Ionicons name="location-sharp" size={16} color="#FFFFFF" />
-              </View>
-              <Text style={styles.cardHeaderTitle}>Shop Address</Text>
-            </View>
-
-            {/* PIN Code * */}
-            <View style={styles.fieldSection}>
-              <View style={styles.labelWithTag}>
-                <Text style={styles.inputLabelNoMargin}>
-                  PIN Code <Text style={styles.reqAsterisk}>*</Text>
+          {/* 5. SHOP ADDRESS CARD (opens below when Enter Manual Address is active or required) */}
+          {showManualAddressSection ? (
+            <View style={styles.sectionCard}>
+              <View style={styles.cardHeaderRow}>
+                <View style={[styles.headerIconCircle, { backgroundColor: '#E11D48' }]}>
+                  <Ionicons name="location-sharp" size={16} color="#FFFFFF" />
+                </View>
+                <Text style={styles.cardHeaderTitle}>
+                  {isManualMode ? 'Manual Shop Address' : 'Shop Address'}
                 </Text>
-                {pincodeStatus === 'loading' && (
-                  <View style={styles.pinStatusRow}>
-                    <ActivityIndicator size="small" color={BrandColors.pink.deep} style={{ marginRight: 4 }} />
-                    <Text style={styles.pinStatusLoading}>Finding address...</Text>
-                  </View>
-                )}
-                {pincodeStatus === 'found' && (
-                  <View style={styles.pinStatusRow}>
-                    <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginRight: 4 }} />
-                    <Text style={styles.pinStatusFound}>Address Found</Text>
-                  </View>
-                )}
-                {pincodeStatus === 'not_found' && (
-                  <View style={styles.pinStatusRow}>
-                    <Ionicons name="alert-circle" size={14} color="#D97706" style={{ marginRight: 4 }} />
-                    <Text style={styles.pinStatusNotFound}>Address Not Found</Text>
-                  </View>
-                )}
+                {onClearManualAddress && isManualMode ? (
+                  <TouchableOpacity
+                    onPress={onClearManualAddress}
+                    style={styles.clearManualBtn}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear manual address fields"
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#64748B" style={{ marginRight: 4 }} />
+                    <Text style={styles.clearManualBtnText}>Clear</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
-              <View style={[styles.inputBox, Boolean(errors.pincode) && styles.inputErrorBorder]}>
-                <Ionicons name="navigate-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
-                <TextInput
-                  style={styles.textInputField}
-                  value={pincode}
-                  onChangeText={onChangePincode}
-                  keyboardType="numeric"
-                  maxLength={6}
-                  autoComplete="off"
-                  importantForAutofill="no"
-                  placeholder="Enter 6-digit PIN code"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-              {errors.pincode ? <Text style={styles.errorSubText}>{errors.pincode}</Text> : null}
-            </View>
 
-            {/* Full Shop Address * */}
-            <View style={styles.fieldSection}>
-              <Text style={styles.inputLabel}>
-                Full Shop Address <Text style={styles.reqAsterisk}>*</Text>
-              </Text>
-              <View style={[styles.inputBox, Boolean(errors.address) && styles.inputErrorBorder]}>
-                <Ionicons name="business-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
-                <TextInput
-                  style={styles.textInputField}
-                  value={address}
-                  onChangeText={onChangeAddress}
-                  autoComplete="off"
-                  importantForAutofill="no"
-                  placeholder="Shop number, street, landmark (editable)"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-              {errors.address ? <Text style={styles.errorSubText}>{errors.address}</Text> : null}
-            </View>
-
-            {/* Area / Village */}
-            <View style={styles.fieldSection}>
-              <Text style={styles.inputLabel}>Area / Village</Text>
-              <View style={styles.inputBox}>
-                <Ionicons name="map-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
-                <TextInput
-                  style={styles.textInputField}
-                  value={village}
-                  onChangeText={onChangeVillage}
-                  autoComplete="off"
-                  importantForAutofill="no"
-                  placeholder="Enter area or village"
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-            </View>
-
-            {/* District * & State * */}
-            <View style={[styles.districtStateRow, isCompactScreen && styles.districtStateStacked]}>
-              <View style={{ flex: 1 }}>
+              {/* Full Shop Address * */}
+              <View style={styles.fieldSection}>
                 <Text style={styles.inputLabel}>
-                  District <Text style={styles.reqAsterisk}>*</Text>
+                  Full Shop Address <Text style={styles.reqAsterisk}>*</Text>
                 </Text>
-                <View style={[styles.inputBox, Boolean(errors.district) && styles.inputErrorBorder]}>
+                <View style={[styles.inputBox, Boolean(errors.address) && styles.inputErrorBorder]}>
+                  <Ionicons name="business-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
                   <TextInput
                     style={styles.textInputField}
-                    value={district}
-                    onChangeText={onChangeDistrict}
+                    value={address}
+                    onChangeText={onChangeAddress}
                     autoComplete="off"
                     importantForAutofill="no"
-                    placeholder="Enter district"
+                    placeholder="Shop no., building, complex name"
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
-                {errors.district ? <Text style={styles.errorSubText}>{errors.district}</Text> : null}
+                {errors.address ? <Text style={styles.errorSubText}>{errors.address}</Text> : null}
               </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>
-                  State <Text style={styles.reqAsterisk}>*</Text>
-                </Text>
-                <View style={[styles.inputBox, Boolean(errors.stateName) && styles.inputErrorBorder]}>
-                  <TextInput
-                    style={styles.textInputField}
-                    value={stateName}
-                    onChangeText={onChangeStateName}
-                    autoComplete="off"
-                    importantForAutofill="no"
-                    placeholder="Enter state"
-                    placeholderTextColor="#94A3B8"
-                  />
+              {/* Street Name (Backend streetName) */}
+              {onChangeStreetName ? (
+                <View style={styles.fieldSection}>
+                  <View style={styles.labelWithTag}>
+                    <Text style={styles.inputLabelNoMargin}>
+                      Street / Road <Text style={styles.reqAsterisk}>*</Text>
+                    </Text>
+                  </View>
+                  <View style={[styles.inputBox, Boolean(errors.streetName) && styles.inputErrorBorder]}>
+                    <Ionicons name="trail-sign-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
+                    <TextInput
+                      style={styles.textInputField}
+                      value={streetName || ''}
+                      onChangeText={onChangeStreetName}
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      placeholder="e.g. Ghodbunder Road, Main Market"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  {errors.streetName ? <Text style={styles.errorSubText}>{errors.streetName}</Text> : null}
                 </View>
-                {errors.stateName ? <Text style={styles.errorSubText}>{errors.stateName}</Text> : null}
-              </View>
-            </View>
+              ) : null}
 
-            {/* Compact Address Found Preview */}
-            {formattedAddress ? (
-              <View style={styles.addressPreviewBox}>
-                <Ionicons name="checkmark-circle" size={17} color="#16A34A" style={{ marginTop: 1 }} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.addressPreviewTitle}>Address Found</Text>
-                  <Text style={styles.addressPreviewText} numberOfLines={2}>
-                    {formattedAddress}
+              {/* Landmark (Optional) */}
+              {onChangeLandmark ? (
+                <View style={styles.fieldSection}>
+                  <View style={styles.labelWithTag}>
+                    <Text style={styles.inputLabelNoMargin}>Landmark</Text>
+                    <Text style={styles.optionalBadge}>Optional</Text>
+                  </View>
+                  <View style={styles.inputBox}>
+                    <Ionicons name="flag-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
+                    <TextInput
+                      style={styles.textInputField}
+                      value={landmark || ''}
+                      onChangeText={onChangeLandmark}
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      placeholder="e.g. Near Railway Station, Opp. Bank"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              {/* PIN Code * */}
+              <View style={styles.fieldSection}>
+                <View style={styles.labelWithTag}>
+                  <Text style={styles.inputLabelNoMargin}>
+                    PIN Code <Text style={styles.reqAsterisk}>*</Text>
                   </Text>
+                  {pincodeStatus === 'loading' && (
+                    <View style={styles.pinStatusRow}>
+                      <ActivityIndicator size="small" color={BrandColors.pink.deep} style={{ marginRight: 4 }} />
+                      <Text style={styles.pinStatusLoading}>Finding address...</Text>
+                    </View>
+                  )}
+                  {pincodeStatus === 'found' && (
+                    <View style={styles.pinStatusRow}>
+                      <Ionicons name="checkmark-circle" size={14} color="#16A34A" style={{ marginRight: 4 }} />
+                      <Text style={styles.pinStatusFound}>PIN Verified</Text>
+                    </View>
+                  )}
+                  {pincodeStatus === 'not_found' && (
+                    <View style={styles.pinStatusRow}>
+                      <Ionicons name="alert-circle" size={14} color="#D97706" style={{ marginRight: 4 }} />
+                      <Text style={styles.pinStatusNotFound}>Enter City/District below</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={[styles.inputBox, Boolean(errors.pincode) && styles.inputErrorBorder]}>
+                  <Ionicons name="navigate-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
+                  <TextInput
+                    style={styles.textInputField}
+                    value={pincode}
+                    onChangeText={onChangePincode}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    autoComplete="off"
+                    importantForAutofill="no"
+                    placeholder="Enter 6-digit PIN code"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                {errors.pincode ? <Text style={styles.errorSubText}>{errors.pincode}</Text> : null}
+              </View>
+
+              {/* City / Area / Village */}
+              <View style={styles.fieldSection}>
+                <Text style={styles.inputLabel}>City / Area / Village</Text>
+                <View style={styles.inputBox}>
+                  <Ionicons name="map-outline" size={18} color={BrandColors.pink.deep} style={styles.inputLeadingIcon} />
+                  <TextInput
+                    style={styles.textInputField}
+                    value={village}
+                    onChangeText={onChangeVillage}
+                    autoComplete="off"
+                    importantForAutofill="no"
+                    placeholder="Enter city, area or village"
+                    placeholderTextColor="#94A3B8"
+                  />
                 </View>
               </View>
-            ) : null}
-          </View>
+
+              {/* District * & State * */}
+              <View style={[styles.districtStateRow, isCompactScreen && styles.districtStateStacked]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>
+                    District <Text style={styles.reqAsterisk}>*</Text>
+                  </Text>
+                  <View style={[styles.inputBox, Boolean(errors.district) && styles.inputErrorBorder]}>
+                    <TextInput
+                      style={styles.textInputField}
+                      value={district}
+                      onChangeText={onChangeDistrict}
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      placeholder="Enter district"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  {errors.district ? <Text style={styles.errorSubText}>{errors.district}</Text> : null}
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>
+                    State <Text style={styles.reqAsterisk}>*</Text>
+                  </Text>
+                  <View style={[styles.inputBox, Boolean(errors.stateName) && styles.inputErrorBorder]}>
+                    <TextInput
+                      style={styles.textInputField}
+                      value={stateName}
+                      onChangeText={onChangeStateName}
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      placeholder="Enter state"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  {errors.stateName ? <Text style={styles.errorSubText}>{errors.stateName}</Text> : null}
+                </View>
+              </View>
+
+              {/* Manual Address Live Coordinates & Fetch Action */}
+              {isManualMode && onLookupManualCoordinates ? (
+                <View style={styles.manualCoordsCard}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.manualCoordsTitle}>
+                      {isGeocodingManual
+                        ? 'Fetching live Lat / Lng...'
+                        : latitude != null && longitude != null
+                          ? `Live Coordinates: ${latitude.toFixed(5)}°, ${longitude.toFixed(5)}°`
+                          : 'Live Lat / Lng not resolved yet'}
+                    </Text>
+                    <Text style={styles.manualCoordsSub}>
+                      {latitude != null && longitude != null
+                        ? 'Resolved from your manual address & PIN code'
+                        : 'Fetches coordinates for your entered city & PIN (never uses unrelated GPS)'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.fetchCoordsBtn}
+                    onPress={onLookupManualCoordinates}
+                    disabled={isGeocodingManual}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Fetch live latitude and longitude"
+                  >
+                    {isGeocodingManual ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="navigate" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.fetchCoordsBtnText}>Fetch Lat/Lng</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* Compact Address Found Preview */}
+              {formattedAddress ? (
+                <View style={styles.addressPreviewBox}>
+                  <Ionicons name="checkmark-circle" size={17} color="#16A34A" style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.addressPreviewTitle}>Address Summary</Text>
+                    <Text style={styles.addressPreviewText} numberOfLines={3}>
+                      {formattedAddress}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -966,6 +1164,115 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
+  },
+  locationSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    gap: Spacing.md,
+    ...Shadows.sm,
+  },
+  locationActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  locationActionRowStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  modeBtnPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF1F2',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  modeBtnPrimaryActive: {
+    backgroundColor: BrandColors.pink.deep,
+    borderColor: BrandColors.pink.deep,
+  },
+  modeBtnSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  modeBtnSecondaryActive: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  modeBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  modeBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  clearManualBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+  },
+  clearManualBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  manualCoordsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: Radius.md,
+    padding: 10,
+    marginBottom: 12,
+  },
+  manualCoordsTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  manualCoordsSub: {
+    fontSize: 11,
+    color: '#475569',
+    marginTop: 2,
+  },
+  fetchCoordsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    minWidth: 96,
+  },
+  fetchCoordsBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   locationCard: {
     backgroundColor: '#FFFFFF',

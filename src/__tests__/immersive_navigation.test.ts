@@ -87,8 +87,9 @@ describe('Immersive Navigation & Auto-Hide Suite', () => {
     assert.match(adminCode, /tabBar=\{\(props\)\s*=>\s*<AutoHideBottomTabBar\s+\{\.\.\.props\}\s*\/>\}/, 'Admin layout must pass AutoHideBottomTabBar to tabBar prop');
     assert.match(adminCode, /title:\s*'Dashboard'/, 'Admin must retain Dashboard tab');
     assert.match(adminCode, /title:\s*'Reports'/, 'Admin must retain Reports tab');
-    assert.match(adminCode, /title:\s*'Approvals'/, 'Admin must retain Approvals tab');
-    assert.match(adminCode, /title:\s*'Users'/, 'Admin must retain Users tab');
+    assert.match(adminCode, /isSmallMobile \? 'Approval' : 'Price Approval'/, 'Admin must retain Price Approval tab');
+    assert.match(adminCode, /isSmallMobile \? 'Sales' : 'Sales Record'/, 'Admin must retain Sales Record tab');
+    assert.match(adminCode, /title:\s*'Employees'/, 'Admin must retain Employees route');
     assert.match(adminCode, /title:\s*'Settings'/, 'Admin must retain Settings tab');
     assert.match(adminCode, /backBehavior="history"/, 'Admin must retain history back behavior');
     assert.match(adminCode, /useSafeAreaInsets/, 'Admin must retain safe area insets');

@@ -246,8 +246,8 @@ export default function AdminSalesScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Sales Directory"
-        subtitle="Orders & Invoices"
+        title="Sales Record"
+        subtitle="Orders & Tax Invoices"
         showBack
         onBack={handleBack}
       />

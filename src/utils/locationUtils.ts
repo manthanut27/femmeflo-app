@@ -7,6 +7,8 @@ import {
   sanitizeIndiaCoordinates,
   DEFAULT_INDIA_COORDINATES,
   scoreConfidence,
+  buildFullShopAddress,
+  type ManualAddressQueryInput,
   type LocationConfidence,
   type LocationSource,
   type ScoreConfidenceParams,
@@ -18,6 +20,8 @@ export {
   sanitizeIndiaCoordinates,
   DEFAULT_INDIA_COORDINATES,
   scoreConfidence,
+  buildFullShopAddress,
+  type ManualAddressQueryInput,
   type LocationConfidence,
   type LocationSource,
   type ScoreConfidenceParams,
@@ -685,4 +689,125 @@ export async function getCurrentLocationWithAddress(
     confidence: 'low',
     warnings: [...warnings, 'No reverse geocoding source available.'],
   };
+}
+
+// ManualAddressQueryInput and buildFullShopAddress are re-exported from ./geoValidation above
+
+/**
+ * Forward-geocodes a manually entered Indian address (street, landmark, city/village,
+ * district, state, pincode) to live latitude & longitude coordinates.
+ * Never falls back to current device GPS so manual addresses (e.g. Thane) never inherit
+ * unrelated device GPS coordinates (e.g. Delhi).
+ */
+export async function resolveManualAddressCoordinates(
+  input: ManualAddressQueryInput
+): Promise<LocationResult | null> {
+  const clean = (v?: string | null) => (v && v.trim() ? v.trim() : '');
+  const dedupeParts = (rawParts: string[]) => {
+    const out: string[] = [];
+    for (const part of rawParts) {
+      if (!part) continue;
+      if (!out.some((existing) => existing.toLowerCase() === part.toLowerCase())) {
+        out.push(part);
+      }
+    }
+    return out;
+  };
+
+  const fullParts = dedupeParts([
+    clean(input.shopNumber),
+    clean(input.streetName),
+    clean(input.address),
+    clean(input.landmark),
+    clean(input.village),
+    clean(input.district),
+    clean(input.state),
+    clean(input.pincode),
+  ]);
+
+  const areaParts = dedupeParts([
+    clean(input.village),
+    clean(input.district),
+    clean(input.state),
+    clean(input.pincode),
+  ]);
+
+  const pinCityParts = dedupeParts([
+    clean(input.pincode),
+    clean(input.district),
+    clean(input.state),
+  ]);
+
+  const candidateQueries = [fullParts, areaParts, pinCityParts]
+    .map((parts) => (parts.length > 0 ? `${parts.join(', ')}, India` : ''))
+    .filter((q, idx, arr) => q.length >= 5 && arr.indexOf(q) === idx);
+
+  if (candidateQueries.length === 0) {
+    return null;
+  }
+
+  // 1. Backend Google Maps Forward Geocoding (Primary)
+  for (const query of candidateQueries) {
+    try {
+      const geoData = await geoApi.lookupAddress(query);
+      if (
+        geoData &&
+        typeof geoData.latitude === 'number' &&
+        typeof geoData.longitude === 'number' &&
+        isWithinIndiaBounds(geoData.latitude, geoData.longitude)
+      ) {
+        return {
+          latitude: Number(geoData.latitude.toFixed(6)),
+          longitude: Number(geoData.longitude.toFixed(6)),
+          accuracy: geoData.locationType === 'ROOFTOP' ? 15 : 50,
+          source: 'backend',
+          confidence: geoData.confidence || 'medium',
+          address: geoData.formattedAddress || query,
+          street: geoData.street || clean(input.streetName) || null,
+          state: geoData.state || clean(input.state) || null,
+          district: geoData.district || clean(input.district) || null,
+          village: geoData.sublocality || clean(input.village) || null,
+          pincode: geoData.pincode || clean(input.pincode) || null,
+          isEmulatorFallback: false,
+        };
+      }
+    } catch {
+      // Try next query or native geocoder
+    }
+  }
+
+  // 2. Native Device Geocoder Fallback (when backend is unreachable)
+  const locModule = getLocationProvider();
+  if (typeof locModule.geocodeAsync === 'function') {
+    for (const query of candidateQueries) {
+      try {
+        const nativeResults = await withCancellableTimeout<Location.LocationGeocodedLocation[]>(
+          Promise.resolve(locModule.geocodeAsync(query)).catch(() => []),
+          4500,
+          []
+        );
+        const match = Array.isArray(nativeResults) ? nativeResults[0] : null;
+        if (match && isWithinIndiaBounds(match.latitude, match.longitude)) {
+          return {
+            latitude: Number(match.latitude.toFixed(6)),
+            longitude: Number(match.longitude.toFixed(6)),
+            accuracy: 60,
+            source: 'native',
+            confidence: 'medium',
+            address: query,
+            street: clean(input.streetName) || null,
+            state: clean(input.state) || null,
+            district: clean(input.district) || null,
+            village: clean(input.village) || null,
+            pincode: clean(input.pincode) || null,
+            isEmulatorFallback: false,
+          };
+        }
+      } catch {
+        // Ignore and continue
+      }
+    }
+  }
+
+  return null;
 }

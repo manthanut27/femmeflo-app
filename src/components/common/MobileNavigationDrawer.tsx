@@ -82,26 +82,19 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
   const isManager = user?.role === 'MANAGER';
 
   const SUPER_ADMIN_MAIN_NAV = [
-    { title: 'Home', icon: 'home-outline', route: '/(admin)/home' },
-    { title: 'Dashboard', icon: 'pie-chart-outline', route: '/(admin)' },
-    { title: 'Managers', icon: 'people-outline', route: '/(admin)/users' },
-    { title: 'Field Officers', icon: 'shield-checkmark-outline', route: '/(admin)/permissions' },
+    { title: 'Employees', icon: 'people-outline', route: '/(admin)/users' },
+    { title: 'Permission Manager', icon: 'shield-checkmark-outline', route: '/(admin)/permissions' },
     { title: 'Customers', icon: 'storefront-outline', route: '/(admin)/customers' },
-    { title: 'Inventory', icon: 'cube-outline', route: '/(admin)/inventory' },
     { title: 'Products', icon: 'pricetag-outline', route: '/(admin)/products' },
-    { title: 'Categories', icon: 'grid-outline', route: '/(admin)/categories' },
-    { title: 'Sales', icon: 'receipt-outline', route: '/(admin)/sales' },
-    { title: 'Approvals', icon: 'checkmark-done-circle-outline', route: '/(admin)/approvals' },
+    { title: 'Product Categories', icon: 'grid-outline', route: '/(admin)/categories' },
+    { title: 'Sales Record', icon: 'receipt-outline', route: '/(admin)/sales' },
   ];
 
   const SUPER_ADMIN_MANAGEMENT_NAV = [
-    { title: 'Field Tracking', icon: 'navigate-outline', route: '/(admin)/shifts' },
+    { title: 'Employee Attendance', icon: 'navigate-outline', route: '/(admin)/shifts' },
     { title: 'Reports & Analytics', icon: 'bar-chart-outline', route: '/(admin)/reports' },
-    { title: 'Invoices & Billing', icon: 'document-text-outline', route: '/(admin)/invoices' },
-    { title: 'Incentives', icon: 'cash-outline', route: '/(admin)/incentives' },
-    { title: 'Notifications', icon: 'notifications-outline', route: '/(shared)/notifications' },
+    { title: 'Employee Incentives', icon: 'cash-outline', route: '/(admin)/incentives' },
     { title: 'System Settings', icon: 'settings-outline', route: '/(admin)/settings' },
-    { title: 'Change Password', icon: 'lock-closed-outline', route: '/(admin)/settings/password' },
   ];
 
   const isRouteActive = (route: string) => {
@@ -124,70 +117,57 @@ export function MobileNavigationDrawer({ visible, onClose }: MobileNavigationDra
         },
         {
           title: 'System Settings',
-          subtitle: 'Legal entity, pricing floors & configuration',
+          subtitle: 'Legal entity, pricing floors & password',
           icon: 'settings-outline',
           route: '/(admin)/settings',
         },
         {
-          title: 'Invoices & Billing',
-          subtitle: 'Official tax invoices, WhatsApp & PDF',
-          icon: 'document-text-outline',
-          route: '/(admin)/invoices',
-        },
-        {
-          title: 'Duty Shifts & Attendance',
+          title: 'Employee Attendance',
           subtitle: 'Live GPS route tracking & audit timeline',
           icon: 'speedometer-outline',
           route: '/(admin)/shifts',
         },
         {
-          title: 'Retail Stores & Customers',
+          title: 'Customers',
           subtitle: 'Retail outlets, KYC & store visits',
           icon: 'storefront-outline',
           route: '/(admin)/customers',
         },
         {
-          title: 'Product Catalog',
+          title: 'Products',
           subtitle: 'National SKUs & base price rules',
           icon: 'pricetag-outline',
           route: '/(admin)/products',
         },
         {
           title: 'Product Categories',
-          subtitle: 'FMCG classifications, HSN & GST codes',
+          subtitle: 'Product & store classifications',
           icon: 'grid-outline',
           route: '/(admin)/categories',
         },
         {
-          title: 'Incentives Engine',
+          title: 'Sales Record',
+          subtitle: 'Orders, collections & tax invoices',
+          icon: 'receipt-outline',
+          route: '/(admin)/sales',
+        },
+        {
+          title: 'Employees',
+          subtitle: 'Managers & field officers',
+          icon: 'people-outline',
+          route: '/(admin)/users',
+        },
+        {
+          title: 'Incentives',
           subtitle: 'Seller commission & payout structures',
           icon: 'cash-outline',
           route: '/(admin)/incentives',
         },
         {
-          title: 'Access Permissions',
+          title: 'Permission Manager',
           subtitle: 'Fine-grained access matrix & security',
           icon: 'key-outline',
           route: '/(admin)/permissions',
-        },
-        {
-          title: 'All Admin Operations',
-          subtitle: 'Central launcher for all 13 modules',
-          icon: 'apps-outline',
-          route: '/(admin)/actions',
-          badge: '13 TOOLS',
-        },
-        {
-          title: 'Change Password',
-          subtitle: 'Update administrative password',
-          icon: 'lock-closed-outline',
-          route: '/(admin)/settings/password',
-        },
-        {
-          title: 'Notifications',
-          subtitle: 'System alerts & announcements',
-          icon: 'notifications-outline',
-          route: '/(shared)/notifications',
         },
       ]
     : [

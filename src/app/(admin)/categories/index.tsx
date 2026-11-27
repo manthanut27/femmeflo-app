@@ -207,14 +207,14 @@ export default function AdminCategoriesScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Customer Categories"
-        subtitle="Retail Store Classifications"
+        title="Product Categories"
+        subtitle="Product & Store Classifications"
         showBack
         onBack={handleBack}
         rightAction={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Create customer category"
+            accessibilityLabel="Create product category"
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
             onPress={openCreateModal}
             hitSlop={HitSlop.md}

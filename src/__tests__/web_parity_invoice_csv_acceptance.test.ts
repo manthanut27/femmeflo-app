@@ -31,26 +31,14 @@ describe('Web Parity & Invoicing / CSV Export Acceptance Suite', () => {
     );
   });
 
-  it('2. Admin Invoices Screen implements dedicated WhatsApp, Email, and CSV export capabilities', () => {
-    const code = readFile('src/app/(admin)/invoices/index.tsx');
+  it('2. Admin Sales Record Screen provides direct Tax Invoice PDF dispatch without separate Invoices page', () => {
+    const code = readFile('src/app/(admin)/sales/index.tsx');
 
-    // WhatsApp Direct Dispatch
-    assert.ok(code.includes('handleShareWhatsApp'), 'Must implement handleShareWhatsApp');
-    assert.ok(code.includes('api.whatsapp.com/send'), 'Must invoke official WhatsApp dispatch URL');
-    assert.ok(code.includes('FemmeFlo Official Tax Invoice'), 'Must include professional FemmeFlo template');
-    assert.ok(code.includes('logo-whatsapp'), 'Must display WhatsApp icon');
-
-    // Email Sharing
-    assert.ok(code.includes('handleShareEmail'), 'Must implement handleShareEmail');
-    assert.ok(code.includes('mailto:'), 'Must generate mailto URL');
-
-    // CSV Table Export
-    assert.ok(code.includes('handleExportCsv'), 'Must implement handleExportCsv');
-    assert.ok(code.includes('escapeCsvCell'), 'Must sanitize and escape CSV cells');
-    assert.ok(code.includes('Invoice Number'), 'CSV must include Invoice Number header');
-    assert.ok(code.includes('Customer Shop'), 'CSV must include Customer Shop header');
-    assert.ok(code.includes('Amount (INR)'), 'CSV must include Amount header');
-    assert.ok(code.includes('writeAsStringAsync') || code.includes('shareAsync'), 'Must write/share CSV file');
+    assert.ok(code.includes('handleOpenInvoice'), 'Sales Record must implement handleOpenInvoice');
+    assert.ok(code.includes('adminApi.getInvoicePdfUrl'), 'Sales Record must fetch invoice PDF URL');
+    assert.ok(code.includes('Open Tax Invoice'), 'Sales Record must expose Open Tax Invoice action');
+    assert.ok(code.includes('<PdfPreviewModal'), 'Sales Record must render PdfPreviewModal for PDF preview & sharing');
+    assert.ok(code.includes('title="Sales Record"'), 'Admin sales page must use Sales Record header title');
   });
 
   it('3. Admin Customers Screen implements Table-Level CSV Export', () => {

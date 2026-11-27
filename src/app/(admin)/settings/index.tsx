@@ -536,12 +536,12 @@ export default function AdminSettingsScreen() {
               )}
             </Card>
 
-            {/* Navigation to Invoices, Categories & Shared Features */}
+            {/* Navigation to Categories, Password Security & Shared Features */}
             <Text style={styles.sectionHeading}>Catalog & Administration</Text>
             <Card style={styles.menuCard}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Manage Field Team and Users"
+                accessibilityLabel="Manage Field Team and Employees"
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => router.push('/(admin)/users' as any)}
               >
@@ -549,23 +549,7 @@ export default function AdminSettingsScreen() {
                   <View style={styles.menuIconCircle}>
                     <Ionicons name="people-outline" size={18} color={BrandColors.pink.dark} />
                   </View>
-                  <Text style={styles.menuText}>Manage Team (Sellers & Managers)</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
-              </Pressable>
-
-              <View style={styles.menuDivider} />
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Central Invoice Directory"
-                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
-                onPress={() => router.push('/(admin)/invoices' as any)}
-              >
-                <View style={styles.menuLeft}>
-                  <View style={styles.menuIconCircle}>
-                    <Ionicons name="receipt-outline" size={18} color={BrandColors.pink.dark} />
-                  </View>
-                  <Text style={styles.menuText}>Central Invoices Directory</Text>
+                  <Text style={styles.menuText}>Employees (Sellers & Managers)</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
               </Pressable>
@@ -574,7 +558,7 @@ export default function AdminSettingsScreen() {
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Manage Customer Categories"
+                accessibilityLabel="Manage Product Categories"
                 style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
                 onPress={() => router.push('/(admin)/categories' as any)}
               >
@@ -582,7 +566,7 @@ export default function AdminSettingsScreen() {
                   <View style={styles.menuIconCircle}>
                     <Ionicons name="pricetags-outline" size={18} color={BrandColors.pink.dark} />
                   </View>
-                  <Text style={styles.menuText}>Manage Customer Categories</Text>
+                  <Text style={styles.menuText}>Product Categories</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
               </Pressable>
@@ -617,6 +601,23 @@ export default function AdminSettingsScreen() {
                     <Ionicons name="shield-checkmark-outline" size={18} color={BrandColors.pink.dark} />
                   </View>
                   <Text style={styles.menuText}>App Permissions</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
+              </Pressable>
+
+              <View style={styles.menuDivider} />
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change Password"
+                style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+                onPress={() => router.push('/(admin)/settings/password' as any)}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.menuIconCircle}>
+                    <Ionicons name="lock-closed-outline" size={18} color={BrandColors.pink.dark} />
+                  </View>
+                  <Text style={styles.menuText}>Change Password</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={Colors.light.textTertiary} />
               </Pressable>

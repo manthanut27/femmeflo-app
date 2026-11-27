@@ -27,7 +27,7 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
     );
   });
 
-  it('verifies Admin Home page contains FemmeFlo, Sale Management System, Masako logo at bottom, and Sidebar', () => {
+  it('verifies Admin Home page contains FemmeFlo, Sale Management System, Masako logo at bottom, and curated Admin Sidebar', () => {
     const home = readFile('src/app/(admin)/home/index.tsx');
     assert.match(home, /FemmeFlo/, 'Admin Home must render FemmeFlo branding');
     assert.match(home, /Sale Management System/, 'Admin Home must render Sale Management System subtitle');
@@ -37,19 +37,59 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
     assert.doesNotMatch(home, /Quick Workspace Access|Quick Actions/i, 'Admin Home must not render quick actions grid');
 
     const drawer = readFile('src/components/common/MobileNavigationDrawer.tsx');
-    assert.match(
-      drawer,
-      /title:\s*'Home'[\s\S]*route:\s*'\/\(admin\)\/home'/,
-      'Admin sidebar must include Home route'
+    const adminMainSlice = drawer.slice(
+      drawer.indexOf('const SUPER_ADMIN_MAIN_NAV'),
+      drawer.indexOf('const SUPER_ADMIN_MANAGEMENT_NAV')
     );
-    assert.match(
-      drawer,
-      /title:\s*'Dashboard'[\s\S]*route:\s*'\/\(admin\)'/,
-      'Admin sidebar must include Dashboard route'
+    const adminMgmtSlice = drawer.slice(
+      drawer.indexOf('const SUPER_ADMIN_MANAGEMENT_NAV'),
+      drawer.indexOf('const isRouteActive')
     );
+    const combinedAdminSidebar = adminMainSlice + adminMgmtSlice;
+
+    // Renamed and kept items in Admin sidebar
+    for (const [title, route] of [
+      ['Employees', '/(admin)/users'],
+      ['Permission Manager', '/(admin)/permissions'],
+      ['Customers', '/(admin)/customers'],
+      ['Products', '/(admin)/products'],
+      ['Product Categories', '/(admin)/categories'],
+      ['Sales Record', '/(admin)/sales'],
+      ['Employee Attendance', '/(admin)/shifts'],
+      ['Reports & Analytics', '/(admin)/reports'],
+      ['Incentives', '/(admin)/incentives'],
+      ['System Settings', '/(admin)/settings'],
+    ]) {
+      assert.ok(
+        combinedAdminSidebar.includes(`title: '${title}'`) && combinedAdminSidebar.includes(`route: '${route}'`),
+        `Admin sidebar must include ${title} -> ${route}`
+      );
+    }
+
+    // Excluded items from Admin sidebar (bottom tabs, top-corner notifications, System Settings password, removed invoices page)
+    for (const removedTitle of [
+      "title: 'Home'",
+      "title: 'Dashboard'",
+      "title: 'Approvals'",
+      "title: 'Inventory'",
+      "title: 'Invoices & Billing'",
+      "title: 'Notifications'",
+      "title: 'Change Password'",
+      "title: 'Field Tracking'",
+      "title: 'Managers'",
+      "title: 'Field Officers'",
+      "title: 'Categories'",
+    ]) {
+      assert.ok(!drawer.includes(removedTitle), `Admin drawer must not contain ${removedTitle}`);
+    }
+    assert.ok(!drawer.includes('/(admin)/invoices'), 'Admin drawer must not reference removed invoices route');
+
+    const settings = readFile('src/app/(admin)/settings/index.tsx');
+    assert.ok(!settings.includes('/(admin)/invoices'), 'System Settings must not link to removed invoices route');
+    assert.ok(settings.includes('/(admin)/settings/password'), 'System Settings must include Change Password');
   });
 
-  it('verifies Admin bottom navbar shows only Home, Dashboard, Approvals, Inventory, and Sales', () => {
+  it('verifies Admin bottom navbar shows Home, Dashboard, Price Approval, Inventory, and Sales Record without Invoices route', () => {
     const layout = readFile('src/app/(admin)/_layout.tsx');
 
     assert.match(
@@ -58,13 +98,18 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
       'Admin layout must keep Tabs backBehavior="history"'
     );
     assert.ok(!layout.includes('href: null'), 'Admin tabs must not use href: null');
+    assert.ok(!layout.includes('name="invoices/index"'), 'Admin layout must remove invoices/index route');
+    assert.ok(
+      !fs.existsSync(path.join(rootDir, 'src/app/(admin)/invoices/index.tsx')),
+      'Admin invoices page must be deleted'
+    );
 
     const visibleTabs = [
       /name="home\/index"[\s\S]*?title:\s*'Home'/,
       /name="index"[\s\S]*?title:\s*'Dashboard'/,
-      /name="approvals\/index"[\s\S]*?title:\s*'Approvals'/,
+      /name="approvals\/index"[\s\S]*?isSmallMobile \? 'Approval' : 'Price Approval'/,
       /name="inventory"[\s\S]*?isSmallMobile \? 'Stock' : 'Inventory'/,
-      /name="sales\/index"[\s\S]*?title:\s*'Sales'/,
+      /name="sales\/index"[\s\S]*?isSmallMobile \? 'Sales' : 'Sales Record'/,
     ];
     for (const pattern of visibleTabs) {
       assert.match(layout, pattern, `Expected visible admin tab matching ${pattern}`);
@@ -73,7 +118,7 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
     assert.match(
       layout,
       /name="users\/index"[\s\S]*?tabBarButton:\s*\(\)\s*=>\s*null/,
-      'Users screen must be hidden from Admin visible bottom navbar'
+      'Users/Employees screen must be hidden from Admin visible bottom navbar'
     );
   });
 
@@ -100,7 +145,6 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
       'src/app/(admin)/reports/index.tsx',
       'src/app/(admin)/settings/index.tsx',
       'src/app/(admin)/shifts/index.tsx',
-      'src/app/(admin)/invoices/index.tsx',
       'src/app/(admin)/incentives/index.tsx',
       'src/app/(admin)/customers/index.tsx',
       'src/app/(admin)/products/index.tsx',

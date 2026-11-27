@@ -191,8 +191,8 @@ export default function AdminPermissionsScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="Manager Permissions"
-        subtitle="Role privileges and operational access control matrix"
+        title="Permission Manager"
+        subtitle="Manager privileges and operational access control matrix"
         leftAction={
           <Pressable
             accessibilityRole="button"

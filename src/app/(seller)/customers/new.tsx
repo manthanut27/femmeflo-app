@@ -2,22 +2,14 @@ import { categoriesApi } from '@/api/categories';
 import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
 import type { CategoryItem, CustomerItem } from '@/api/types';
-import {
-  CustomerOnboardingForm,
-  type PincodeLookupStatus,
-} from '@/components/customers/CustomerOnboardingForm';
+import { CustomerOnboardingForm } from '@/components/customers/CustomerOnboardingForm';
 import type { FeedbackType } from '@/components/ui/FeedbackBanner';
 import type { DropdownOption } from '@/components/ui/SearchableDropdownModal';
 import { useAuth } from '@/context/AuthContext';
+import { useShopLocationAddress } from '@/hooks/useShopLocationAddress';
 import { draftStorage } from '@/utils/draftStorage';
 import { compressImage, DEFAULT_IMAGE_PICKER_OPTIONS } from '@/utils/imageUtils';
-import {
-  acquireGpsCoordinates,
-  getCurrentLocationWithAddress,
-  isWithinIndiaBounds,
-  sanitizeIndiaCoordinates,
-  type GpsAcquisitionStatus,
-} from '@/utils/locationUtils';
+import { isWithinIndiaBounds, sanitizeIndiaCoordinates } from '@/utils/locationUtils';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -39,26 +31,12 @@ export default function AddCustomerScreen() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [categoryLoading, setCategoryLoading] = useState(false);
 
-  // 3. Shop Address Fields
-  const [pincode, setPincode] = useState('');
-  const [address, setAddress] = useState('');
-  const [village, setVillage] = useState('');
-  const [district, setDistrict] = useState(user?.district || '');
-  const [stateName, setStateName] = useState(user?.state || 'Maharashtra');
-  const [pincodeStatus, setPincodeStatus] = useState<PincodeLookupStatus>('idle');
-
-  // 4. Shop Photo & Exemption
+  // 3. Shop Photo & Exemption
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [noPhotoReason, setNoPhotoReason] = useState('');
   const [isReasonDropdownOpen, setIsReasonDropdownOpen] = useState(false);
 
-  // 5. GPS Location State
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
-  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<GpsAcquisitionStatus>('idle');
-
-  // 6. Submission & Feedback State
+  // 4. Submission & Feedback State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{
@@ -68,6 +46,41 @@ export default function AddCustomerScreen() {
   } | null>(null);
   const [savedCustomer, setSavedCustomer] = useState<CustomerItem | null>(null);
 
+  // 5. Shared Location & Manual Address Controller
+  const shopLoc = useShopLocationAddress({
+    initialDistrict: user?.district || '',
+    initialState: user?.state || 'Maharashtra',
+    autoFetchOnMount: true,
+    onNotice: (notice) =>
+      setFeedback(
+        notice.message.includes('Emulator')
+          ? {
+              ...notice,
+              message: 'Emulator / overseas location detected; using default Indian territory coordinates.',
+            }
+          : notice
+      ),
+  });
+
+  const {
+    locationMode,
+    pincode,
+    pincodeStatus,
+    address,
+    streetName,
+    landmark,
+    village,
+    district,
+    stateName,
+    latitude,
+    longitude,
+    gpsAccuracy,
+    gpsStatus,
+    isGeocodingManual,
+    combinedFullAddress,
+    formattedAddress,
+  } = shopLoc;
+
   useEffect(() => {
     setCategoryLoading(true);
     categoriesApi
@@ -75,129 +88,15 @@ export default function AddCustomerScreen() {
       .then((res) => {
         const list = res.items || [];
         setCategories(list);
-        if (list.length > 0 && !categoryId) {
-          setCategoryId(list[0].id);
+        if (list.length > 0) {
+          setCategoryId((prev) => prev || list[0].id);
         }
       })
       .catch(() => {})
       .finally(() => setCategoryLoading(false));
 
-    startGps(false);
-
     draftStorage.clearCustomerDraft().catch(() => {});
   }, []);
-
-  async function startGps(overwriteAddress = false) {
-    setGpsStatus('acquiring_high');
-    try {
-      const locWithAddr = await getCurrentLocationWithAddress({
-        highAccuracyTimeoutMs: 7000,
-        fallbackTimeoutMs: 4000,
-        maxAgeMs: overwriteAddress ? 10000 : 30000,
-        accuracyThresholdMeters: 50,
-      });
-      if (locWithAddr && locWithAddr.latitude !== null && locWithAddr.longitude !== null) {
-        setGpsStatus('acquired');
-        let lat = locWithAddr.latitude;
-        let lng = locWithAddr.longitude;
-        if (!isWithinIndiaBounds(lat, lng)) {
-          const sanitized = sanitizeIndiaCoordinates(lat, lng);
-          lat = sanitized.latitude;
-          lng = sanitized.longitude;
-        }
-        setLatitude(lat);
-        setLongitude(lng);
-        setGpsAccuracy(locWithAddr.accuracy || 10);
-
-        if (locWithAddr.address && (overwriteAddress || !address)) {
-          setAddress(locWithAddr.address);
-          setErrors((prev) => ({ ...prev, address: '' }));
-        }
-        if (locWithAddr.village && (overwriteAddress || !village)) {
-          setVillage(locWithAddr.village);
-          setErrors((prev) => ({ ...prev, village: '' }));
-        }
-        if (locWithAddr.district) {
-          setDistrict(locWithAddr.district);
-          setErrors((prev) => ({ ...prev, district: '' }));
-        }
-        if (locWithAddr.state) {
-          setStateName(locWithAddr.state);
-          setErrors((prev) => ({ ...prev, stateName: '' }));
-        }
-        if (locWithAddr.pincode && (overwriteAddress || !pincode)) {
-          setPincode(locWithAddr.pincode);
-          setPincodeStatus('found');
-          setErrors((prev) => ({ ...prev, pincode: '' }));
-        }
-        return;
-      }
-    } catch (err) {
-      console.warn('Live location with address failed, falling back to acquireGpsCoordinates', err);
-    }
-
-    const res = await acquireGpsCoordinates({
-      highAccuracyTimeoutMs: 6000,
-      fallbackTimeoutMs: 4000,
-      onStatusChange: setGpsStatus,
-    });
-    setGpsStatus(res.status);
-    if (res.status === 'acquired' && res.latitude !== null && res.longitude !== null) {
-      if (!isWithinIndiaBounds(res.latitude, res.longitude) || res.isEmulatorFallback) {
-        const sanitized = sanitizeIndiaCoordinates(res.latitude, res.longitude);
-        setLatitude(sanitized.latitude);
-        setLongitude(sanitized.longitude);
-        setGpsAccuracy(res.accuracy || 15);
-        setFeedback({
-          type: 'info',
-          title: 'Location Notice',
-          message: 'Emulator / overseas location detected; using default Indian territory coordinates.',
-        });
-      } else {
-        setLatitude(res.latitude);
-        setLongitude(res.longitude);
-        setGpsAccuracy(res.accuracy);
-      }
-    }
-  }
-
-  async function handlePincodeChange(text: string) {
-    const digitsOnly = text.replace(/[^0-9]/g, '');
-    setPincode(digitsOnly);
-    if (errors.pincode) {
-      setErrors((prev) => ({ ...prev, pincode: '' }));
-    }
-    if (digitsOnly.length < 6) {
-      setPincodeStatus('idle');
-      return;
-    }
-    if (digitsOnly.length === 6 && /^\d{6}$/.test(digitsOnly)) {
-      setPincodeStatus('loading');
-      try {
-        const lookup = await sellerApi.lookupPincode(digitsOnly);
-        const foundAny = Boolean(lookup.state || lookup.district || lookup.village);
-        if (lookup.state) {
-          setStateName(lookup.state);
-          setErrors((prev) => ({ ...prev, stateName: '' }));
-        }
-        if (lookup.district) {
-          setDistrict(lookup.district);
-          setErrors((prev) => ({ ...prev, district: '' }));
-        }
-        if (lookup.village) {
-          setVillage(lookup.village);
-        }
-        if ((lookup as any).latitude != null || (lookup as any).longitude != null) {
-          const sanitized = sanitizeIndiaCoordinates((lookup as any).latitude, (lookup as any).longitude);
-          setLatitude(sanitized.latitude);
-          setLongitude(sanitized.longitude);
-        }
-        setPincodeStatus(foundAny ? 'found' : 'not_found');
-      } catch {
-        setPincodeStatus('not_found');
-      }
-    }
-  }
 
   async function pickPhoto() {
     Alert.alert('Take Shop Photo', 'Choose Camera or Gallery', [
@@ -256,18 +155,6 @@ export default function AddCustomerScreen() {
     return categories.find((c) => c.id === categoryId);
   }, [categories, categoryId]);
 
-  const formattedAddress = useMemo(() => {
-    const parts = [
-      address.trim(),
-      village.trim(),
-      district.trim(),
-      stateName.trim() && pincode.trim()
-        ? `${stateName.trim()} - ${pincode.trim()}`
-        : stateName.trim() || pincode.trim(),
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : '';
-  }, [address, village, district, stateName, pincode]);
-
   function validate() {
     const errs: Record<string, string> = {};
 
@@ -293,6 +180,9 @@ export default function AddCustomerScreen() {
     }
     if (!address.trim()) {
       errs.address = 'Please enter shop address.';
+    }
+    if (locationMode === 'MANUAL' && !streetName.trim()) {
+      errs.streetName = 'Please enter street or road name.';
     }
     if (!district.trim()) {
       errs.district = 'Please enter district.';
@@ -326,21 +216,34 @@ export default function AddCustomerScreen() {
 
     try {
       const selectedCatId = categoryId || categories[0]?.id || 'cat_retail_default';
+      const resolvedCoords = await shopLoc.resolveCoordinatesForSubmit();
       const coords = sanitizeIndiaCoordinates(latitude, longitude);
+      const effectiveLat =
+        resolvedCoords.latitude ??
+        (locationMode === 'CURRENT' && latitude != null && isWithinIndiaBounds(latitude, longitude ?? 0)
+          ? coords.latitude
+          : undefined);
+      const effectiveLng =
+        resolvedCoords.longitude ??
+        (locationMode === 'CURRENT' && longitude != null && isWithinIndiaBounds(latitude ?? 0, longitude)
+          ? coords.longitude
+          : undefined);
+
       const res = await sellerApi.createCustomer({
         shopName: shopName.trim(),
         ownerName: ownerName.trim(),
         email: email.trim() || undefined,
         phone: phone.trim(),
         categoryId: selectedCatId,
-        address: address.trim(),
+        streetName: streetName.trim() || undefined,
+        address: combinedFullAddress || address.trim(),
         pincode: pincode.trim(),
         state: stateName.trim(),
         district: district.trim(),
         village: village.trim() || undefined,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: gpsAccuracy ?? undefined,
+        latitude: effectiveLat,
+        longitude: effectiveLng,
+        accuracy: resolvedCoords.accuracy ?? (gpsAccuracy ?? undefined),
         photoUri: photoUri || undefined,
         noPhotoReason: photoUri
           ? noPhotoReason.trim() || 'Storefront photo captured'
@@ -380,8 +283,30 @@ export default function AddCustomerScreen() {
       role="SELLER"
       onBack={() => router.back()}
       onOpenBatchEntry={() => router.push('/(seller)/customers/bulk' as any)}
+      locationMode={locationMode}
+      onSelectCurrentLocation={() => {
+        setFeedback(null);
+        shopLoc.fetchCurrentLocation(true);
+      }}
+      onSelectManualAddress={() => {
+        setFeedback(null);
+        shopLoc.switchToManualMode();
+      }}
+      onClearManualAddress={() => {
+        shopLoc.clearManualAddressFields();
+        setErrors((prev) => ({
+          ...prev,
+          address: '',
+          streetName: '',
+          pincode: '',
+          district: '',
+          stateName: '',
+        }));
+      }}
+      isGeocodingManual={isGeocodingManual}
+      onLookupManualCoordinates={() => shopLoc.lookupManualCoordinates()}
       gpsStatus={gpsStatus}
-      onRefreshLocation={() => startGps(true)}
+      onRefreshLocation={() => shopLoc.fetchCurrentLocation(true)}
       latitude={latitude}
       longitude={longitude}
       photoUri={photoUri}
@@ -437,24 +362,44 @@ export default function AddCustomerScreen() {
         if (errors.categoryId) setErrors((prev) => ({ ...prev, categoryId: '' }));
       }}
       pincode={pincode}
-      onChangePincode={handlePincodeChange}
+      onChangePincode={(text) => {
+        if (errors.pincode) setErrors((prev) => ({ ...prev, pincode: '' }));
+        shopLoc.handlePincodeChange(text);
+      }}
       pincodeStatus={pincodeStatus}
       address={address}
       onChangeAddress={(text) => {
-        setAddress(text);
+        shopLoc.setAddress(text);
         if (errors.address) setErrors((prev) => ({ ...prev, address: '' }));
+        shopLoc.scheduleManualGeocode({ address: text });
+      }}
+      streetName={streetName}
+      onChangeStreetName={(text) => {
+        shopLoc.setStreetName(text);
+        if (errors.streetName) setErrors((prev) => ({ ...prev, streetName: '' }));
+        shopLoc.scheduleManualGeocode({ streetName: text });
+      }}
+      landmark={landmark}
+      onChangeLandmark={(text) => {
+        shopLoc.setLandmark(text);
+        shopLoc.scheduleManualGeocode({ landmark: text });
       }}
       village={village}
-      onChangeVillage={setVillage}
+      onChangeVillage={(text) => {
+        shopLoc.setVillage(text);
+        shopLoc.scheduleManualGeocode({ village: text });
+      }}
       district={district}
       onChangeDistrict={(text) => {
-        setDistrict(text);
+        shopLoc.setDistrict(text);
         if (errors.district) setErrors((prev) => ({ ...prev, district: '' }));
+        shopLoc.scheduleManualGeocode({ district: text });
       }}
       stateName={stateName}
       onChangeStateName={(text) => {
-        setStateName(text);
+        shopLoc.setStateName(text);
         if (errors.stateName) setErrors((prev) => ({ ...prev, stateName: '' }));
+        shopLoc.scheduleManualGeocode({ state: text });
       }}
       formattedAddress={formattedAddress}
       errors={errors}
@@ -469,16 +414,11 @@ export default function AddCustomerScreen() {
         setOwnerName('');
         setPhone('');
         setEmail('');
-        setAddress('');
-        setPincode('');
-        setPincodeStatus('idle');
-        setVillage('');
-        setDistrict(user?.district || '');
-        setStateName(user?.state || 'Maharashtra');
+        shopLoc.resetFields(user?.district || '', user?.state || 'Maharashtra');
         setNoPhotoReason('');
         setPhotoUri(null);
         setErrors({});
-        startGps(false);
+        shopLoc.fetchCurrentLocation(false);
       }}
       onDoneAfterSave={() => router.replace('/(seller)/customers' as any)}
     />

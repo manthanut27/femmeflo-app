@@ -472,9 +472,10 @@ describe('Immersive Auto-Hide Navigation & Notification Bar Test Suite', () => {
       // Retains all tab screen names and titles
       assert.match(code, /title:\s*'Dashboard'/, 'Admin must retain Dashboard tab');
       assert.match(code, /title:\s*'Reports'/, 'Admin must retain Reports tab');
-      assert.match(code, /title:\s*'Approvals'/, 'Admin must retain Approvals tab');
+      assert.match(code, /isSmallMobile \? 'Approval' : 'Price Approval'/, 'Admin must retain Price Approval tab');
       assert.match(code, /isSmallMobile \? 'Stock' : 'Inventory'/, 'Admin must retain responsive Inventory tab');
-      assert.match(code, /title:\s*'Users'/, 'Admin must retain Users tab');
+      assert.match(code, /isSmallMobile \? 'Sales' : 'Sales Record'/, 'Admin must retain Sales Record tab');
+      assert.match(code, /title:\s*'Employees'/, 'Admin must retain Employees route');
       assert.match(code, /title:\s*'Settings'/, 'Admin must retain Settings tab');
     });
 

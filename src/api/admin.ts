@@ -754,6 +754,7 @@ export const adminApi = {
     const noPhotoReason = payload.noPhotoReason || payload.photoSkipReason || (payload.photoUri ? 'Storefront photo captured' : undefined);
 
     const coords = sanitizeIndiaCoordinates(payload.latitude, payload.longitude);
+    const hasExplicitCoords = payload.latitude != null && payload.longitude != null;
 
     const body: Record<string, any> = {
       shopName: payload.shopName.trim(),
@@ -764,9 +765,13 @@ export const adminApi = {
       state: payload.state,
       district: payload.district,
       village: payload.village || 'Default',
-      latitude: coords.latitude,
-      longitude: coords.longitude,
     };
+    if (hasExplicitCoords) {
+      body.latitude = coords.latitude;
+      body.longitude = coords.longitude;
+    }
+    if (payload.shopNumber?.trim()) body.shopNumber = payload.shopNumber.trim();
+    if (payload.streetName?.trim()) body.streetName = payload.streetName.trim();
     if (payload.pincode?.trim()) body.pincode = payload.pincode.trim();
     if (payload.email) body.email = payload.email.trim();
     if (payload.accuracy != null) body.accuracy = payload.accuracy;

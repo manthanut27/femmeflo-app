@@ -103,6 +103,9 @@ export interface CreateCustomerPayload {
   email?: string;
   phone: string;
   categoryId: string;
+  shopNumber?: string;
+  streetName?: string;
+  landmark?: string;
   address: string;
   pincode?: string;
   state: string;
@@ -405,7 +408,17 @@ export interface ShiftVisit {
   id: string;
   shiftId: string;
   customerId?: string | null;
-  customer?: { id?: string; shopName: string; ownerName?: string; phone?: string } | null;
+  customer?: {
+    id?: string;
+    shopName: string;
+    ownerName?: string;
+    phone?: string;
+    address?: string | null;
+    district?: string | null;
+    state?: string | null;
+    village?: string | null;
+    pincode?: string | null;
+  } | null;
   shopName?: string;
   checkInTime: string;
   checkOutTime?: string | null;
@@ -419,7 +432,14 @@ export interface ShiftVisit {
   saleDone?: boolean | null;
   customerFeedback?: string | null;
   saleId?: string | null;
-  sale?: { id: string; totalPaise: number; quantity: number; paymentMode: string; status: string } | null;
+  sale?: {
+    id: string;
+    totalPaise: number;
+    quantity: number;
+    paymentMode: string;
+    status: string;
+    customerFeedback?: string | null;
+  } | null;
   summary?: string | null;
   notes?: string | null;
   createdAt?: string;
@@ -428,7 +448,15 @@ export interface ShiftVisit {
 export interface Shift {
   id: string;
   sellerId: string;
-  seller?: { id: string; name: string; phone?: string | null; employeeCode?: string | null };
+  seller?: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    employeeCode?: string | null;
+    district?: string | null;
+    state?: string | null;
+    village?: string | null;
+  };
   status: ShiftStatus;
   startTime: string;
   endTime?: string | null;

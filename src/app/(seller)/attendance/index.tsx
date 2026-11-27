@@ -28,10 +28,7 @@ import { FaceVerificationModal, type FaceVerificationResult } from '@/components
 import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
 import { VerifiedLocationCard } from '@/components/common/VerifiedLocationCard';
 import { VoiceFeedbackTranslator } from '@/components/common/VoiceFeedbackTranslator';
-import {
-  CustomerOnboardingForm,
-  type PincodeLookupStatus,
-} from '@/components/customers/CustomerOnboardingForm';
+import { CustomerOnboardingForm } from '@/components/customers/CustomerOnboardingForm';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -54,6 +51,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { useShopLocationAddress } from '@/hooks/useShopLocationAddress';
 import { normalizeCustomerItem } from '@/utils/customerSanitizer';
 import {
   buildShiftWaypoints,
@@ -71,8 +69,6 @@ import {
   formatShortAddressLabel,
   getCurrentLocationWithAddress,
   isWithinIndiaBounds,
-  sanitizeIndiaCoordinates,
-  type GpsAcquisitionStatus,
   type LocationResult,
 } from '@/utils/locationUtils';
 import { useResponsiveLayout } from '@/utils/responsive';
@@ -203,19 +199,9 @@ export default function SellerAttendanceScreen() {
   const [newShopEmail, setNewShopEmail] = useState('');
   const [newShopCategoryId, setNewShopCategoryId] = useState('');
   const [isNewShopCategoryModalOpen, setIsNewShopCategoryModalOpen] = useState(false);
-  const [newShopPincode, setNewShopPincode] = useState('');
-  const [newShopPincodeStatus, setNewShopPincodeStatus] = useState<PincodeLookupStatus>('idle');
-  const [newShopVillage, setNewShopVillage] = useState('');
-  const [newShopDistrict, setNewShopDistrict] = useState(user?.district || '');
-  const [newShopState, setNewShopState] = useState(user?.state || 'Maharashtra');
-  const [newShopAddress, setNewShopAddress] = useState('');
   const [newShopPhotoUri, setNewShopPhotoUri] = useState<string | null>(null);
   const [newShopNoPhotoReason, setNewShopNoPhotoReason] = useState('');
   const [isNewShopReasonDropdownOpen, setIsNewShopReasonDropdownOpen] = useState(false);
-  const [newShopLatitude, setNewShopLatitude] = useState<number | null>(null);
-  const [newShopLongitude, setNewShopLongitude] = useState<number | null>(null);
-  const [newShopGpsAccuracy, setNewShopGpsAccuracy] = useState<number | null>(null);
-  const [newShopGpsStatus, setNewShopGpsStatus] = useState<GpsAcquisitionStatus>('idle');
   const [newShopErrors, setNewShopErrors] = useState<Record<string, string>>({});
   const [newShopFeedback, setNewShopFeedback] = useState<{
     type: FeedbackType;
@@ -223,6 +209,12 @@ export default function SellerAttendanceScreen() {
     message: string;
   } | null>(null);
   const [isSavingQuickShop, setIsSavingQuickShop] = useState(false);
+
+  const quickShopLoc = useShopLocationAddress({
+    initialDistrict: user?.district || '',
+    initialState: user?.state || 'Maharashtra',
+    onNotice: (notice) => setNewShopFeedback(notice),
+  });
 
   const newShopCategoryOptions = useMemo<DropdownOption[]>(() => {
     return categories.map((cat) => ({
@@ -236,18 +228,6 @@ export default function SellerAttendanceScreen() {
   const selectedNewShopCategory = useMemo(() => {
     return categories.find((c) => c.id === (newShopCategoryId || categories[0]?.id));
   }, [categories, newShopCategoryId]);
-
-  const newShopFormattedAddress = useMemo(() => {
-    const parts = [
-      newShopAddress.trim(),
-      newShopVillage.trim(),
-      newShopDistrict.trim(),
-      newShopState.trim() && newShopPincode.trim()
-        ? `${newShopState.trim()} - ${newShopPincode.trim()}`
-        : newShopState.trim() || newShopPincode.trim(),
-    ].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : '';
-  }, [newShopAddress, newShopVillage, newShopDistrict, newShopState, newShopPincode]);
 
   const filteredCheckoutCustomers = useMemo(() => {
     const q = checkoutShopSearch.trim().toLowerCase();
@@ -631,81 +611,6 @@ export default function SellerAttendanceScreen() {
     }
   }
 
-  async function fetchQuickShopLocation(overwriteAddress = true) {
-    setNewShopGpsStatus('acquiring_high');
-    setNewShopFeedback(null);
-    try {
-      const locWithAddr = await getCurrentLocationWithAddress({
-        highAccuracyTimeoutMs: 7000,
-        fallbackTimeoutMs: 4000,
-        maxAgeMs: overwriteAddress ? 10000 : 30000,
-        accuracyThresholdMeters: 50,
-      });
-      if (locWithAddr && locWithAddr.latitude !== null && locWithAddr.longitude !== null) {
-        setNewShopGpsStatus('acquired');
-        setCurrentLocation(locWithAddr);
-        let lat = locWithAddr.latitude;
-        let lng = locWithAddr.longitude;
-        if (!isWithinIndiaBounds(lat, lng)) {
-          const sanitized = sanitizeIndiaCoordinates(lat, lng);
-          lat = sanitized.latitude;
-          lng = sanitized.longitude;
-        }
-        setNewShopLatitude(Number(lat.toFixed(6)));
-        setNewShopLongitude(Number(lng.toFixed(6)));
-        setNewShopGpsAccuracy(locWithAddr.accuracy || 10);
-
-        if (locWithAddr.address && (overwriteAddress || !newShopAddress.trim())) {
-          setNewShopAddress(locWithAddr.address);
-          setNewShopErrors((prev) => ({ ...prev, address: '' }));
-        }
-        if (locWithAddr.village && (overwriteAddress || !newShopVillage.trim())) {
-          setNewShopVillage(locWithAddr.village);
-        }
-        if (locWithAddr.district) {
-          setNewShopDistrict(locWithAddr.district);
-          setNewShopErrors((prev) => ({ ...prev, district: '' }));
-        }
-        if (locWithAddr.state) {
-          setNewShopState(locWithAddr.state);
-          setNewShopErrors((prev) => ({ ...prev, stateName: '' }));
-        }
-        if (locWithAddr.pincode && (overwriteAddress || !newShopPincode.trim())) {
-          setNewShopPincode(locWithAddr.pincode);
-          setNewShopPincodeStatus('found');
-          setNewShopErrors((prev) => ({ ...prev, pincode: '' }));
-        }
-        return;
-      }
-    } catch (err) {
-      console.warn('Live shop location lookup failed, falling back to acquireGpsCoordinates', err);
-    }
-
-    const res = await acquireGpsCoordinates({
-      highAccuracyTimeoutMs: 6000,
-      fallbackTimeoutMs: 4000,
-      onStatusChange: setNewShopGpsStatus,
-    });
-    setNewShopGpsStatus(res.status);
-    if (res.status === 'acquired' && res.latitude !== null && res.longitude !== null) {
-      if (!isWithinIndiaBounds(res.latitude, res.longitude) || res.isEmulatorFallback) {
-        const sanitized = sanitizeIndiaCoordinates(res.latitude, res.longitude);
-        setNewShopLatitude(sanitized.latitude);
-        setNewShopLongitude(sanitized.longitude);
-        setNewShopGpsAccuracy(res.accuracy || 15);
-        setNewShopFeedback({
-          type: 'info',
-          title: 'Location Notice',
-          message: 'Emulator / overseas location detected; using default Indian territory coordinates.',
-        });
-      } else {
-        setNewShopLatitude(Number(res.latitude.toFixed(6)));
-        setNewShopLongitude(Number(res.longitude.toFixed(6)));
-        setNewShopGpsAccuracy(res.accuracy);
-      }
-    }
-  }
-
   function closeQuickAddShopModal(targetOverride?: 'CHECKIN' | 'CHECKOUT') {
     const target = targetOverride || quickShopTarget;
     setQuickAddShopVisible(false);
@@ -731,12 +636,7 @@ export default function SellerAttendanceScreen() {
     setNewShopPhotoUri(null);
     setNewShopNoPhotoReason('');
     setIsNewShopReasonDropdownOpen(false);
-    setNewShopPincode('');
-    setNewShopPincodeStatus('idle');
-    setNewShopVillage('');
-    setNewShopDistrict(user?.district || '');
-    setNewShopState(user?.state || 'Maharashtra');
-    setNewShopAddress('');
+    quickShopLoc.resetFields(user?.district || '', user?.state || 'Maharashtra');
     setNewShopErrors({});
     setNewShopFeedback(null);
     if (!newShopCategoryId && categories.length > 0) {
@@ -744,43 +644,7 @@ export default function SellerAttendanceScreen() {
     }
 
     setQuickAddShopVisible(true);
-    fetchQuickShopLocation(true);
-  }
-
-  async function handleQuickPincodeChange(pin: string) {
-    const cleanPin = pin.replace(/[^0-9]/g, '').slice(0, 6);
-    setNewShopPincode(cleanPin);
-    if (newShopErrors.pincode) {
-      setNewShopErrors((prev) => ({ ...prev, pincode: '' }));
-    }
-    if (cleanPin.length < 6) {
-      setNewShopPincodeStatus('idle');
-      return;
-    }
-    if (/^\d{6}$/.test(cleanPin)) {
-      setNewShopPincodeStatus('loading');
-      try {
-        const res = await sellerApi.lookupPincode(cleanPin);
-        const foundAny = Boolean(res.state || res.district || res.village);
-        if (res.state) {
-          setNewShopState(res.state);
-          setNewShopErrors((prev) => ({ ...prev, stateName: '' }));
-        }
-        if (res.district) {
-          setNewShopDistrict(res.district);
-          setNewShopErrors((prev) => ({ ...prev, district: '' }));
-        }
-        if (res.village) setNewShopVillage(res.village);
-        if ((res as any).latitude != null || (res as any).longitude != null) {
-          const sanitized = sanitizeIndiaCoordinates((res as any).latitude, (res as any).longitude);
-          setNewShopLatitude(sanitized.latitude);
-          setNewShopLongitude(sanitized.longitude);
-        }
-        setNewShopPincodeStatus(foundAny ? 'found' : 'not_found');
-      } catch {
-        setNewShopPincodeStatus('not_found');
-      }
-    }
+    quickShopLoc.fetchCurrentLocation(true);
   }
 
   async function handlePickNewShopPhoto() {
@@ -846,16 +710,23 @@ export default function SellerAttendanceScreen() {
     if (!(newShopCategoryId || categories[0]?.id) && categories.length > 0) {
       errs.categoryId = 'Please select shop category.';
     }
-    if (!newShopPincode.trim() || newShopPincode.trim().length !== 6 || !/^\d{6}$/.test(newShopPincode.trim())) {
+    if (
+      !quickShopLoc.pincode.trim() ||
+      quickShopLoc.pincode.trim().length !== 6 ||
+      !/^\d{6}$/.test(quickShopLoc.pincode.trim())
+    ) {
       errs.pincode = 'Enter 6-digit PIN code.';
     }
-    if (!newShopAddress.trim()) {
+    if (!quickShopLoc.address.trim()) {
       errs.address = 'Please enter full shop address.';
     }
-    if (!newShopDistrict.trim()) {
+    if (quickShopLoc.locationMode === 'MANUAL' && !quickShopLoc.streetName.trim()) {
+      errs.streetName = 'Please enter street or road name.';
+    }
+    if (!quickShopLoc.district.trim()) {
       errs.district = 'Please enter district.';
     }
-    if (!newShopState.trim()) {
+    if (!quickShopLoc.stateName.trim()) {
       errs.stateName = 'Please enter state.';
     }
     if (!newShopPhotoUri && !newShopNoPhotoReason.trim()) {
@@ -888,33 +759,25 @@ export default function SellerAttendanceScreen() {
     setNewShopFeedback(null);
 
     try {
-      let resolvedLat = newShopLatitude;
-      let resolvedLng = newShopLongitude;
-      let resolvedAcc = newShopGpsAccuracy;
+      // Strictly resolve according to mode: CURRENT uses GPS; MANUAL forward-geocodes manual address/PIN (never falls back to unrelated GPS!)
+      const resolvedCoords = await quickShopLoc.resolveCoordinatesForSubmit();
+      const hasResolvedCoords = resolvedCoords.latitude != null && resolvedCoords.longitude != null;
 
-      if (resolvedLat == null || resolvedLng == null) {
-        const gpsCoords = await acquireCoordinates();
-        if (gpsCoords) {
-          resolvedLat = gpsCoords.latitude;
-          resolvedLng = gpsCoords.longitude;
-        }
-      }
-
-      const coords = sanitizeIndiaCoordinates(resolvedLat, resolvedLng);
       const res = await sellerApi.createCustomer({
         shopName: newShopName.trim(),
         ownerName: newShopOwner.trim(),
         email: newShopEmail.trim() || undefined,
         phone: `+91${cleanPhone}`,
         categoryId,
-        address: newShopAddress.trim(),
-        pincode: newShopPincode.trim(),
-        state: newShopState.trim(),
-        district: newShopDistrict.trim(),
-        village: newShopVillage.trim() || undefined,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        accuracy: resolvedAcc ?? undefined,
+        streetName: quickShopLoc.streetName.trim() || undefined,
+        address: quickShopLoc.combinedFullAddress || quickShopLoc.address.trim(),
+        pincode: quickShopLoc.pincode.trim(),
+        state: quickShopLoc.stateName.trim(),
+        district: quickShopLoc.district.trim(),
+        village: quickShopLoc.village.trim() || undefined,
+        latitude: resolvedCoords.latitude,
+        longitude: resolvedCoords.longitude,
+        accuracy: resolvedCoords.accuracy,
         photoUri: newShopPhotoUri || undefined,
         noPhotoReason: newShopPhotoUri
           ? newShopNoPhotoReason.trim() || 'Storefront photo captured'
@@ -947,7 +810,13 @@ export default function SellerAttendanceScreen() {
         closeQuickAddShopModal();
         Alert.alert(
           'Shop Added',
-          `${createdCustomer.shopName} has been saved with GPS${newShopPhotoUri ? ' & photo' : ''} and selected.`
+          `${createdCustomer.shopName} has been saved${
+            hasResolvedCoords
+              ? quickShopLoc.locationMode === 'MANUAL'
+                ? ' with address GPS'
+                : ' with GPS'
+              : ''
+          }${newShopPhotoUri ? ' & photo' : ''} and selected.`
         );
       }
     } catch (err: any) {
@@ -3000,10 +2869,32 @@ export default function SellerAttendanceScreen() {
           showBatchEntry={false}
           onBack={() => closeQuickAddShopModal()}
           onOpenBatchEntry={() => {}}
-          gpsStatus={newShopGpsStatus}
-          onRefreshLocation={() => fetchQuickShopLocation(true)}
-          latitude={newShopLatitude}
-          longitude={newShopLongitude}
+          locationMode={quickShopLoc.locationMode}
+          onSelectCurrentLocation={() => {
+            setNewShopFeedback(null);
+            quickShopLoc.fetchCurrentLocation(true);
+          }}
+          onSelectManualAddress={() => {
+            setNewShopFeedback(null);
+            quickShopLoc.switchToManualMode();
+          }}
+          onClearManualAddress={() => {
+            quickShopLoc.clearManualAddressFields();
+            setNewShopErrors((prev) => ({
+              ...prev,
+              address: '',
+              streetName: '',
+              pincode: '',
+              district: '',
+              stateName: '',
+            }));
+          }}
+          isGeocodingManual={quickShopLoc.isGeocodingManual}
+          onLookupManualCoordinates={() => quickShopLoc.lookupManualCoordinates()}
+          gpsStatus={quickShopLoc.gpsStatus}
+          onRefreshLocation={() => quickShopLoc.fetchCurrentLocation(true)}
+          latitude={quickShopLoc.latitude}
+          longitude={quickShopLoc.longitude}
           photoUri={newShopPhotoUri}
           onPickPhoto={handlePickNewShopPhoto}
           onRemovePhoto={() => setNewShopPhotoUri(null)}
@@ -3058,27 +2949,49 @@ export default function SellerAttendanceScreen() {
             setIsNewShopCategoryModalOpen(false);
             if (newShopErrors.categoryId) setNewShopErrors((prev) => ({ ...prev, categoryId: '' }));
           }}
-          pincode={newShopPincode}
-          onChangePincode={handleQuickPincodeChange}
-          pincodeStatus={newShopPincodeStatus}
-          address={newShopAddress}
+          pincode={quickShopLoc.pincode}
+          onChangePincode={(pin) => {
+            if (newShopErrors.pincode) {
+              setNewShopErrors((prev) => ({ ...prev, pincode: '' }));
+            }
+            quickShopLoc.handlePincodeChange(pin);
+          }}
+          pincodeStatus={quickShopLoc.pincodeStatus}
+          address={quickShopLoc.address}
           onChangeAddress={(text) => {
-            setNewShopAddress(text);
+            quickShopLoc.setAddress(text);
             if (newShopErrors.address) setNewShopErrors((prev) => ({ ...prev, address: '' }));
+            quickShopLoc.scheduleManualGeocode({ address: text });
           }}
-          village={newShopVillage}
-          onChangeVillage={setNewShopVillage}
-          district={newShopDistrict}
+          streetName={quickShopLoc.streetName}
+          onChangeStreetName={(text) => {
+            quickShopLoc.setStreetName(text);
+            if (newShopErrors.streetName) setNewShopErrors((prev) => ({ ...prev, streetName: '' }));
+            quickShopLoc.scheduleManualGeocode({ streetName: text });
+          }}
+          landmark={quickShopLoc.landmark}
+          onChangeLandmark={(text) => {
+            quickShopLoc.setLandmark(text);
+            quickShopLoc.scheduleManualGeocode({ landmark: text });
+          }}
+          village={quickShopLoc.village}
+          onChangeVillage={(text) => {
+            quickShopLoc.setVillage(text);
+            quickShopLoc.scheduleManualGeocode({ village: text });
+          }}
+          district={quickShopLoc.district}
           onChangeDistrict={(text) => {
-            setNewShopDistrict(text);
+            quickShopLoc.setDistrict(text);
             if (newShopErrors.district) setNewShopErrors((prev) => ({ ...prev, district: '' }));
+            quickShopLoc.scheduleManualGeocode({ district: text });
           }}
-          stateName={newShopState}
+          stateName={quickShopLoc.stateName}
           onChangeStateName={(text) => {
-            setNewShopState(text);
+            quickShopLoc.setStateName(text);
             if (newShopErrors.stateName) setNewShopErrors((prev) => ({ ...prev, stateName: '' }));
+            quickShopLoc.scheduleManualGeocode({ state: text });
           }}
-          formattedAddress={newShopFormattedAddress}
+          formattedAddress={quickShopLoc.formattedAddress}
           errors={newShopErrors}
           feedback={newShopFeedback}
           onDismissFeedback={() => setNewShopFeedback(null)}

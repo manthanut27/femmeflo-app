@@ -710,8 +710,8 @@ export default function AdminUsersScreen() {
   return (
     <View style={styles.container}>
       <Header
-        title="User Management"
-        subtitle="Manage your team"
+        title="Employees"
+        subtitle="Managers & Field Officers"
         showBack
         onBack={handleBack}
         rightAction={

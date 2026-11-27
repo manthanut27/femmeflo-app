@@ -94,7 +94,7 @@ describe('Profile & Details Editing Suite for Seller, Manager, and Admin', () =>
     assert.ok(adminFile.includes('handleStartEditingProfile'), 'Admin screen must include handleStartEditingProfile');
     assert.ok(adminFile.includes('handleSaveAdminProfile'), 'Admin screen must include handleSaveAdminProfile');
     assert.ok(adminFile.includes('isEditingProfile'), 'Admin screen must support isEditingProfile toggle mode');
-    assert.ok(adminFile.includes('Manage Team (Sellers & Managers)'), 'Admin screen must link to team management');
+    assert.ok(adminFile.includes('Employees (Sellers & Managers)'), 'Admin screen must link to employee management');
   });
 
   it('verifies Manager Team sellers page exposes field officer editing modal', () => {

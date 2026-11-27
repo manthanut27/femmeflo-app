@@ -12,6 +12,7 @@ import {
 } from '../utils/distanceUtils.ts';
 import { validateCapturedFaceFrame } from '../utils/faceFrameValidation.ts';
 import { buildCustomerUpdateBody, normalizeCustomerItem } from '../utils/customerSanitizer.ts';
+import { buildFullShopAddress } from '../utils/geoValidation.ts';
 
 describe('Shift Check-in/out, GPS Accuracy & Route Distance Suite', () => {
   const rootDir = process.cwd();
@@ -217,5 +218,95 @@ describe('Shift Check-in/out, GPS Accuracy & Route Distance Suite', () => {
       homeCode.includes('paddingBottom: Math.max(insets.bottom + Spacing.lg, Spacing.xl)'),
       'Seller home modals must clear Android system navigation bar'
     );
+  });
+
+  it('composes manual shop address with street and optional landmark cleanly via buildFullShopAddress', () => {
+    assert.equal(
+      buildFullShopAddress({
+        address: 'Shop 14, Cosmos Arcade',
+        streetName: 'Ghodbunder Road',
+        landmark: 'Viviana Mall',
+      }),
+      'Shop 14, Cosmos Arcade, Ghodbunder Road, Near Viviana Mall'
+    );
+
+    assert.equal(
+      buildFullShopAddress({
+        address: 'Shop 14, Ghodbunder Road',
+        streetName: 'Ghodbunder Road',
+        landmark: 'Near Thane Station',
+      }),
+      'Shop 14, Ghodbunder Road, Near Thane Station'
+    );
+
+    assert.equal(
+      buildFullShopAddress({
+        address: 'Gala 2, Wagle Estate',
+        streetName: 'Road No 16',
+        landmark: '   ',
+      }),
+      'Gala 2, Wagle Estate, Road No 16'
+    );
+  });
+
+  it('supports two-mode shop location (primary GPS + manual address live geocoding) without stale GPS leakage', () => {
+    const onboardingFormCode = readSource('src/components/customers/CustomerOnboardingForm.tsx');
+    const hookCode = readSource('src/hooks/useShopLocationAddress.ts');
+    const attendanceCode = readSource('src/app/(seller)/attendance/index.tsx');
+    const sellerNewCode = readSource('src/app/(seller)/customers/new.tsx');
+    const managerNewCode = readSource('src/app/(manager)/customers/new.tsx');
+
+    // Dual-mode UI buttons + Manual Shop Address fields (aligned with backend customer schema)
+    assert.ok(onboardingFormCode.includes('Use Current Location'), 'Primary GPS button required');
+    assert.ok(onboardingFormCode.includes('Enter Manual Address'), 'Secondary Manual Address toggle button required');
+    assert.ok(onboardingFormCode.includes('Manual Shop Address'), 'Manual address section header required');
+    assert.ok(onboardingFormCode.includes('Street / Road'), 'Street/Road input required');
+    assert.ok(onboardingFormCode.includes('Landmark'), 'Optional landmark input required');
+    assert.ok(onboardingFormCode.includes('Fetch Lat/Lng'), 'Explicit manual coordinate lookup button required');
+
+    // Hook must clear unrelated device GPS coordinates when switching to MANUAL mode
+    assert.ok(hookCode.includes("setLocationMode('MANUAL')"), 'Hook must toggle MANUAL mode');
+    assert.ok(
+      hookCode.includes('switchToManualMode') && hookCode.includes('setLatitude(null)') && hookCode.includes('setLongitude(null)'),
+      'Switching to MANUAL must clear stale GPS lat/lng immediately'
+    );
+    assert.ok(hookCode.includes('resolveManualAddressCoordinates'), 'Manual mode must forward-geocode entered address/PIN');
+    assert.ok(hookCode.includes('resolveCoordinatesForSubmit'), 'Submit coordinate resolver required');
+
+    // Quick Add Shop in Check-In/Checkout & Customer screens must NOT fall back to device GPS in manual mode
+    const createQuickShopSlice = attendanceCode.slice(
+      attendanceCode.indexOf('async function handleCreateQuickShop()'),
+      attendanceCode.indexOf('async function handleCheckInVisit()')
+    );
+    assert.ok(
+      createQuickShopSlice.includes('quickShopLoc.resolveCoordinatesForSubmit()'),
+      'Quick shop save must resolve coordinates strictly via mode-aware resolver'
+    );
+    assert.ok(
+      !createQuickShopSlice.includes('await acquireCoordinates()'),
+      'Quick shop save must never fall back to device GPS when user selected manual address'
+    );
+    assert.ok(attendanceCode.includes('useShopLocationAddress'), 'Attendance quick-add must use shared shop location hook');
+    assert.ok(sellerNewCode.includes('useShopLocationAddress'), 'Seller add customer must use shared shop location hook');
+    assert.ok(managerNewCode.includes('useShopLocationAddress'), 'Manager add customer must use shared shop location hook');
+
+    // API clients must conditionally omit latitude/longitude when offline manual entry has no resolved coords
+    for (const apiPath of ['src/api/seller.ts', 'src/api/manager.ts', 'src/api/admin.ts']) {
+      const apiCode = readSource(apiPath);
+      assert.ok(
+        apiCode.includes('hasExplicitCoords'),
+        `${apiPath} must only send latitude/longitude when explicitly resolved so server forwardGeocode works cleanly`
+      );
+    }
+  });
+
+  it('admin Daily Shift Audit modal and cards expose full route, timing, customer, and sale details safely', () => {
+    const adminShiftsCode = readSource('src/app/(admin)/shifts/index.tsx');
+    assert.ok(adminShiftsCode.includes('Daily Shift Audit'), 'Admin shift modal must show Daily Shift Audit title');
+    assert.ok(adminShiftsCode.includes('Duty Time & Travel Summary'), 'Admin shift audit must show Duty Time & Travel Summary');
+    assert.ok(adminShiftsCode.includes('formatCoordPair'), 'Admin shift audit must format visit coordinates safely without null crashes');
+    assert.ok(adminShiftsCode.includes('Start Selfie:'), 'Admin shift audit must show start face selfie verification status');
+    assert.ok(adminShiftsCode.includes('Odometer Readings'), 'Admin shift audit must render conditional odometer readings card');
+    assert.ok(adminShiftsCode.includes('customerFeedback'), 'Admin shift audit must display visit sale customer feedback when present');
   });
 });

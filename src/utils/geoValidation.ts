@@ -164,3 +164,49 @@ export function scoreConfidence(params: ScoreConfidenceParams): {
   // Tier 3: High Confidence criteria
   return { confidence: 'high', reasons };
 }
+
+export interface ManualAddressQueryInput {
+  shopNumber?: string | null;
+  streetName?: string | null;
+  landmark?: string | null;
+  address?: string | null;
+  village?: string | null;
+  district?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+}
+
+/**
+ * Composes deduplicated address components into a full backend `address` string
+ * including street and optional landmark without sending disallowed strict keys.
+ */
+export function buildFullShopAddress(input: {
+  address?: string | null;
+  streetName?: string | null;
+  landmark?: string | null;
+}): string {
+  const parts: string[] = [];
+  const pushUnique = (val?: string | null) => {
+    const trimmed = val?.trim();
+    if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
+    if (parts.some((p) => p.toLowerCase().includes(lower) || lower.includes(p.toLowerCase()))) {
+      if (trimmed.length > (parts[0]?.length || 0)) {
+        parts[0] = trimmed;
+      }
+      return;
+    }
+    parts.push(trimmed);
+  };
+
+  pushUnique(input.address);
+  pushUnique(input.streetName);
+  if (input.landmark?.trim()) {
+    const lm = input.landmark.trim();
+    const lmLabel = /^near\b/i.test(lm) ? lm : `Near ${lm}`;
+    if (!parts.some((p) => p.toLowerCase().includes(lm.toLowerCase()))) {
+      parts.push(lmLabel);
+    }
+  }
+  return parts.join(', ');
+}
