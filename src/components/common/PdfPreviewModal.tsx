@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,6 +37,8 @@ export function PdfPreviewModal({
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [base64Pdf, setBase64Pdf] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!visible || !pdfUrl) {
@@ -52,7 +54,7 @@ export function PdfPreviewModal({
         if (typeof window !== 'undefined') {
           window.open(pdfUrl, '_blank');
         }
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -62,7 +64,9 @@ export function PdfPreviewModal({
 
       try {
         const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const targetUri = `${FileSystem.cacheDirectory}${safeName}`;
+        const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory || '';
+        const targetUri = `${cacheDir}${safeName}`;
+        const tmpUri = `${cacheDir}${Date.now()}_${safeName}`;
         const freshUrl = pdfUrl.includes('?')
           ? `${pdfUrl}&_t=${Date.now()}`
           : `${pdfUrl}?_t=${Date.now()}`;
@@ -72,7 +76,7 @@ export function PdfPreviewModal({
 
         try {
           const token = await tokenStorage.getToken();
-          const downloadRes = await FileSystem.downloadAsync(freshUrl, targetUri, {
+          const downloadRes = await FileSystem.downloadAsync(freshUrl, tmpUri, {
             headers: {
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
               'Cache-Control': 'no-cache',
@@ -80,9 +84,12 @@ export function PdfPreviewModal({
           });
 
           if (downloadRes.status !== 200) {
+            await FileSystem.deleteAsync(tmpUri, { idempotent: true }).catch(() => {});
             throw new Error(`Could not fetch PDF from server (HTTP ${downloadRes.status}).`);
           }
-          uriToRead = downloadRes.uri;
+          await FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => {});
+          await FileSystem.moveAsync({ from: tmpUri, to: targetUri });
+          uriToRead = targetUri;
         } catch (downloadErr) {
           // Offline resilience: fall back to cached copy only if network fetch fails
           if (!info.exists || (info.size ?? 0) === 0) {
