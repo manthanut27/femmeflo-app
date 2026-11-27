@@ -14,7 +14,11 @@ import {
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
-import { sanitizeBackendPermissions } from '@/utils/permissions';
+import { ManagerPermissionsMatrixCard } from '@/components/admin/ManagerPermissionsMatrixCard';
+import {
+  DEFAULT_MANAGER_INITIAL_PERMISSIONS,
+  sanitizeBackendPermissions,
+} from '@/utils/permissions';
 import { validateOnboardingPassword } from '@/utils/passwordValidation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -41,14 +45,6 @@ const QUALIFICATION_OPTIONS = [
   'Higher Secondary (12th Pass)',
   'Secondary (10th Pass)',
   'Other Qualification',
-];
-
-const DEFAULT_PERMISSIONS = [
-  { id: 'view_sellers', label: 'View assigned field officers' },
-  { id: 'onboard_sellers', label: 'Onboard new field officers' },
-  { id: 'view_customers', label: 'View customer directory' },
-  { id: 'onboard_customers', label: 'Onboard new customers' },
-  { id: 'monitor_stock', label: 'Monitor area stock' },
 ];
 
 function formatAadhaar(raw: string): string {
@@ -86,14 +82,10 @@ export default function AdminOnboardManagerScreen() {
   // Section 3: Seller Capability
   const [isSeller, setIsSeller] = useState(false);
 
-  // Section 4: Initial operational permissions
-  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([
-    'view_sellers',
-    'onboard_sellers',
-    'view_customers',
-    'onboard_customers',
-    'monitor_stock',
-  ]);
+  // Section 4: Initial operational permissions (all 7 capabilities aligned with Permission Manager)
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(
+    DEFAULT_MANAGER_INITIAL_PERMISSIONS
+  );
 
   // Submission & Feedback State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -232,6 +224,7 @@ export default function AdminOnboardManagerScreen() {
               setAddress('');
               setPincode('');
               setIsSeller(false);
+              setSelectedPermissions(DEFAULT_MANAGER_INITIAL_PERMISSIONS);
               setFeedback(null);
             },
           },
@@ -625,33 +618,13 @@ export default function AdminOnboardManagerScreen() {
             </Text>
           </View>
 
-          <Card style={styles.card}>
-            {DEFAULT_PERMISSIONS.map((perm, idx) => {
-              const isChecked = selectedPermissions.includes(perm.id);
-              return (
-                <Pressable
-                  key={perm.id}
-                  style={[
-                    styles.permissionItemRow,
-                    idx < DEFAULT_PERMISSIONS.length - 1 && styles.permissionBorderBottom,
-                  ]}
-                  onPress={() => togglePermission(perm.id)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: isChecked }}
-                >
-                  <Ionicons
-                    name={isChecked ? 'checkbox' : 'square-outline'}
-                    size={22}
-                    color={isChecked ? BrandColors.green.primary : '#94A3B8'}
-                    style={{ marginRight: 12 }}
-                  />
-                  <Text style={[styles.permissionLabel, isChecked && styles.permissionLabelActive]}>
-                    {perm.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </Card>
+          <ManagerPermissionsMatrixCard
+            selectedPermissions={selectedPermissions}
+            onTogglePermission={togglePermission}
+            onChangePermissions={(next) => setSelectedPermissions(next)}
+            accentVariant="green"
+            showSelectAllBar={true}
+          />
 
           {/* SECTION 5: Save Manager Action */}
           <View style={styles.submitSection}>
@@ -864,29 +837,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Permissions
-  permissionItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  permissionBorderBottom: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  permissionLabel: {
-    fontSize: 13,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  permissionLabelActive: {
-    color: '#0F172A',
-    fontWeight: '700',
-  },
-
   // Submit Section
   submitSection: {
-    marginTop: Spacing.xs,
+    marginTop: Spacing.md,
     marginBottom: Spacing.xl,
   },
 });

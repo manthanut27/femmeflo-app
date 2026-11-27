@@ -405,6 +405,26 @@ describe('FemmeFlo Phase 7: Super Admin Parity & Governance Acceptance Suite', (
       assert.equal(canViewInventory(territoryManager), true);
       assert.equal(canApproveSales(territoryManager), false);
     });
+
+    test('D6: Manager creation screens and Permission Manager share full 7-permission matrix', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const read = (rel: string) => fs.readFileSync(path.resolve(process.cwd(), rel), 'utf8');
+
+      const matrixCard = read('src/components/admin/ManagerPermissionsMatrixCard.tsx');
+      assert.ok(matrixCard.includes('MANAGER_PERMISSIONS.map'), 'Matrix card must iterate all 7 MANAGER_PERMISSIONS');
+
+      for (const rel of [
+        'src/app/(admin)/managers/new.tsx',
+        'src/app/(admin)/users/new.tsx',
+        'src/app/(admin)/permissions/index.tsx',
+      ]) {
+        const src = read(rel);
+        assert.ok(src.includes('<ManagerPermissionsMatrixCard'), `${rel} must render ManagerPermissionsMatrixCard`);
+        assert.ok(!src.includes('DEFAULT_PERMISSIONS'), `${rel} must not use partial hardcoded DEFAULT_PERMISSIONS`);
+        assert.ok(!src.includes('DEFAULT_MANAGER_PERMISSIONS'), `${rel} must not use partial DEFAULT_MANAGER_PERMISSIONS`);
+      }
+    });
   });
 
   // ====================================================

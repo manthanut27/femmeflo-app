@@ -57,7 +57,7 @@ describe('Three-Panel Navigation, Admin Home & Bottom Navbar Suite', () => {
       ['Sales Record', '/(admin)/sales'],
       ['Employee Attendance', '/(admin)/shifts'],
       ['Reports & Analytics', '/(admin)/reports'],
-      ['Incentives', '/(admin)/incentives'],
+      ['Employee Incentives', '/(admin)/incentives'],
       ['System Settings', '/(admin)/settings'],
     ]) {
       assert.ok(

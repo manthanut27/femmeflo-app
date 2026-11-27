@@ -8,14 +8,13 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { adminApi } from '@/api/admin';
 import type { PublicUser } from '@/api/types';
-import { Badge } from '@/components/ui/Badge';
+import { ManagerPermissionsMatrixCard } from '@/components/admin/ManagerPermissionsMatrixCard';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
@@ -29,7 +28,6 @@ import {
   BorderRadius,
   BrandColors,
   Colors,
-  Elevation,
   MaxContentWidth,
   Spacing,
   Typography,
@@ -40,7 +38,6 @@ import {
   PERMISSION_METADATA,
   hasPermission,
   sanitizeBackendPermissions,
-  syncPermissionAliases,
 } from '@/utils/permissions';
 
 export default function AdminPermissionsScreen() {
@@ -295,36 +292,18 @@ export default function AdminPermissionsScreen() {
               : 'Global Standard Privileges'}
           </Text>
 
-          <Card style={styles.matrixCard}>
-            {MANAGER_PERMISSIONS.map((permKey, idx) => {
-              const meta = PERMISSION_METADATA[permKey];
-              const isEnabled =
-                scopeMode === 'specific'
-                  ? activePermissions.includes(permKey)
-                  : overallPermissions.includes(permKey);
-
-              return (
-                <View
-                  key={permKey}
-                  style={[
-                    styles.permRow,
-                    idx < MANAGER_PERMISSIONS.length - 1 && styles.permRowBorder,
-                  ]}
-                >
-                  <View style={{ flex: 1, marginRight: Spacing.md }}>
-                    <Text style={styles.permLabel}>{meta?.label || permKey}</Text>
-                    <Text style={styles.permDesc}>{meta?.description || ''}</Text>
-                  </View>
-                  <Switch
-                    value={isEnabled}
-                    onValueChange={() => handleTogglePermission(permKey)}
-                    trackColor={{ false: '#CBD5E1', true: BrandColors.pink.tint }}
-                    thumbColor={isEnabled ? BrandColors.pink.dark : '#F8FAFC'}
-                  />
-                </View>
-              );
-            })}
-          </Card>
+          <ManagerPermissionsMatrixCard
+            selectedPermissions={scopeMode === 'specific' ? activePermissions : overallPermissions}
+            onTogglePermission={handleTogglePermission}
+            onChangePermissions={(next) => {
+              if (scopeMode === 'specific') {
+                setActivePermissions(next);
+              } else {
+                setOverallPermissions(next);
+              }
+            }}
+            accentVariant="pink"
+          />
 
           <View style={styles.saveBtnBox}>
             <Button
@@ -440,29 +419,6 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     flex: 1,
     fontWeight: '600',
-  },
-  matrixCard: {
-    padding: Spacing.md,
-  },
-  permRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-  },
-  permRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.borderSubtle,
-  },
-  permLabel: {
-    ...Typography.body,
-    fontWeight: '700',
-    color: Colors.light.text,
-  },
-  permDesc: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
   },
   saveBtnBox: {
     marginTop: Spacing.sm,

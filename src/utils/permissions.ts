@@ -13,6 +13,14 @@ export const MANAGER_PERMISSIONS = [
 
 export type ManagerPermissionKey = (typeof MANAGER_PERMISSIONS)[number];
 
+/** Standard operational defaults when onboarding a new Area Manager */
+export const DEFAULT_MANAGER_INITIAL_PERMISSIONS: ManagerPermissionKey[] = [
+  'onboard_customers',
+  'view_customers',
+  'manage_sellers',
+  'view_inventory',
+];
+
 // Backend canonical permission set
 export const ALL_BACKEND_PERMISSIONS = [
   'manage_sellers',

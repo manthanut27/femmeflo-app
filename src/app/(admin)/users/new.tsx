@@ -17,7 +17,11 @@ import {
 import { adminApi } from '@/api/admin';
 import { sellerApi } from '@/api/seller';
 import type { PublicUser } from '@/api/types';
-import { sanitizeBackendPermissions, syncPermissionAliases } from '@/utils/permissions';
+import { ManagerPermissionsMatrixCard } from '@/components/admin/ManagerPermissionsMatrixCard';
+import {
+  DEFAULT_MANAGER_INITIAL_PERMISSIONS,
+  sanitizeBackendPermissions,
+} from '@/utils/permissions';
 import { validateOnboardingPassword } from '@/utils/passwordValidation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -53,14 +57,6 @@ const SELLER_QUALIFICATION_OPTIONS = [
   'Diploma / ITI',
   'Post Graduate (M.A. / M.Com / M.Sc / MBA)',
   'Other Qualification',
-];
-
-const DEFAULT_MANAGER_PERMISSIONS = [
-  { id: 'view_sellers', label: 'View assigned field officers' },
-  { id: 'onboard_sellers', label: 'Onboard new field officers' },
-  { id: 'view_customers', label: 'View customer directory' },
-  { id: 'onboard_customers', label: 'Onboard new customers' },
-  { id: 'monitor_stock', label: 'Monitor area stock' },
 ];
 
 function formatAadhaar(raw: string): string {
@@ -105,15 +101,11 @@ export default function AdminOnboardUserScreen() {
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [isQualDropdownOpen, setIsQualDropdownOpen] = useState(false);
 
-  // Manager-Specific Fields
+  // Manager-Specific Fields (all 7 capabilities aligned with Permission Manager)
   const [isSeller, setIsSeller] = useState(false);
-  const [managerPermissions, setManagerPermissions] = useState<string[]>([
-    'view_sellers',
-    'onboard_sellers',
-    'view_customers',
-    'onboard_customers',
-    'monitor_stock',
-  ]);
+  const [managerPermissions, setManagerPermissions] = useState<string[]>(
+    DEFAULT_MANAGER_INITIAL_PERMISSIONS
+  );
 
   // Seller-Specific Fields
   const [managers, setManagers] = useState<PublicUser[]>([]);
@@ -835,33 +827,13 @@ export default function AdminOnboardUserScreen() {
                 </Text>
               </View>
 
-              <Card style={styles.card}>
-                {DEFAULT_MANAGER_PERMISSIONS.map((perm, idx) => {
-                  const isChecked = managerPermissions.includes(perm.id);
-                  return (
-                    <Pressable
-                      key={perm.id}
-                      style={[
-                        styles.permissionItemRow,
-                        idx < DEFAULT_MANAGER_PERMISSIONS.length - 1 && styles.permissionBorderBottom,
-                      ]}
-                      onPress={() => toggleManagerPermission(perm.id)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isChecked }}
-                    >
-                      <Ionicons
-                        name={isChecked ? 'checkbox' : 'square-outline'}
-                        size={22}
-                        color={isChecked ? BrandColors.green.primary : '#94A3B8'}
-                        style={{ marginRight: 12 }}
-                      />
-                      <Text style={[styles.permissionLabel, isChecked && styles.permissionLabelActive]}>
-                        {perm.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </Card>
+              <ManagerPermissionsMatrixCard
+                selectedPermissions={managerPermissions}
+                onTogglePermission={toggleManagerPermission}
+                onChangePermissions={(next) => setManagerPermissions(next)}
+                accentVariant="green"
+                showSelectAllBar={true}
+              />
             </>
           ) : (
             <>
@@ -1639,26 +1611,6 @@ const styles = StyleSheet.create({
     color: '#475569',
     lineHeight: 18,
     marginTop: 4,
-  },
-
-  // Permissions
-  permissionItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  permissionBorderBottom: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  permissionLabel: {
-    fontSize: 13,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  permissionLabelActive: {
-    color: '#0F172A',
-    fontWeight: '700',
   },
 
   // Manager Picker Subview
