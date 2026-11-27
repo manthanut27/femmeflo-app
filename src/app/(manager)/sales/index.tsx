@@ -325,11 +325,12 @@ export default function ManagerSalesScreen() {
       return;
     }
 
-    const safeNum = String(sale.saleNumber || sale.id.slice(0, 8)).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const invoiceLabel = sale.invoice?.number || sale.saleNumber || sale.id.slice(0, 8);
+    const safeNum = String(invoiceLabel).replace(/[^a-zA-Z0-9._-]/g, '_');
     setPdfPreview({
       url: pdfUrl,
       filename: `Invoice_${safeNum}.pdf`,
-      title: `Tax Invoice ${sale.saleNumber ? `#${sale.saleNumber}` : ''}`.trim(),
+      title: `Tax Invoice #${invoiceLabel}`,
     });
   }
 

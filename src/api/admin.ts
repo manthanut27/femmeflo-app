@@ -1061,9 +1061,9 @@ export const adminApi = {
           params: { ...params, status: 'CONFIRMED' },
         }
       );
-      const list = (raw?.sales ?? raw?.items ?? []).map((s) => ({
+      const list = (raw?.sales ?? raw?.items ?? []).map((s, idx) => ({
         id: s.id,
-        number: s.saleNumber || `INV-${s.id.slice(0, 8).toUpperCase()}`,
+        number: s.invoice?.number || s.saleNumber || `INV-${String(idx + 1).padStart(3, '0')}`,
         saleId: s.id,
         createdAt: s.createdAt || new Date().toISOString(),
         sale: {

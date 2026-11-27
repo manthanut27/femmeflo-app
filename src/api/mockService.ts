@@ -1064,9 +1064,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'admin/invoices' && method === 'GET') {
-    const list = mockDb.sales.map((s) => ({
+    const list = mockDb.sales.map((s, idx) => ({
       id: `inv_${s.id}`,
-      number: s.saleNumber || `INV-${s.id.slice(0, 8).toUpperCase()}`,
+      number: s.invoice?.number || s.saleNumber || `INV-${String(idx + 1).padStart(3, '0')}`,
       saleId: s.id,
       createdAt: s.createdAt,
       sale: {
@@ -1091,7 +1091,7 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
     return {
       invoice: {
         id,
-        number: `INV-${id.slice(0, 8).toUpperCase()}`,
+        number: sale.invoice?.number || sale.saleNumber || 'INV-001',
         saleId: sale.id,
         createdAt: sale.createdAt,
         sale,
