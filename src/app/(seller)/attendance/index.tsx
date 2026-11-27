@@ -19,7 +19,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { categoriesApi } from '@/api/categories';
 import { validateCustomerEmail } from '@/api/domainRules';
 import { sellerApi } from '@/api/seller';
-import type { CategoryItem, CustomerItem, PaymentMode, ProductItem, ProductStockItem, Shift, ShiftVisit } from '@/api/types';
+import type { CategoryItem, CustomerItem, PaymentMode, ProductItem, ProductStockItem, Shift, ShiftSummary, ShiftVisit } from '@/api/types';
+import {
+  AttendanceFilterButton,
+  AttendanceFilterModal,
+} from '@/components/common/AttendanceFilterModal';
 import { FaceVerificationModal, type FaceVerificationResult } from '@/components/common/FaceVerificationModal';
 import { ShiftAuthVerificationModal, type ShiftAuthResult } from '@/components/common/ShiftAuthVerificationModal';
 import { VerifiedLocationCard } from '@/components/common/VerifiedLocationCard';
@@ -71,6 +75,12 @@ import {
   type LocationResult,
 } from '@/utils/locationUtils';
 import { useResponsiveLayout } from '@/utils/responsive';
+import {
+  computeAttendanceKpiMetrics,
+  getShiftFilterDateRange,
+  mergeLiveShiftIntoFilteredList,
+  type ShiftFilterState,
+} from '@/utils/shiftFilterUtils';
 
 const PREDEFINED_VISIT_REASONS = [
   'Stock already sufficient',
@@ -112,6 +122,11 @@ export default function SellerAttendanceScreen() {
 
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [pastShifts, setPastShifts] = useState<Shift[]>([]);
+  const [historyServerSummary, setHistoryServerSummary] = useState<ShiftSummary | null>(null);
+  const [shiftFilter, setShiftFilter] = useState<ShiftFilterState>({ preset: 'today' });
+  const shiftFilterRef = useRef<ShiftFilterState>(shiftFilter);
+  shiftFilterRef.current = shiftFilter;
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [expandedShiftIds, setExpandedShiftIds] = useState<Record<string, boolean>>({});
   const [selectedAuditShift, setSelectedAuditShift] = useState<Shift | null>(null);
   const [customers, setCustomers] = useState<CustomerItem[]>([]);
@@ -263,6 +278,7 @@ export default function SellerAttendanceScreen() {
 
   const loadShiftData = useCallback(async () => {
     try {
+      const range = getShiftFilterDateRange(shiftFilterRef.current);
       const [shiftRes, custRes, prodRes, historyRes, invRes, catRes] = await Promise.all([
         sellerApi.getCurrentShift().catch(async () => {
           const cached = await draftStorage.getActiveShift(userId);
@@ -270,7 +286,9 @@ export default function SellerAttendanceScreen() {
         }),
         sellerApi.listCustomers({ pageSize: 100 }).catch(() => ({ items: [] })),
         sellerApi.listProducts().catch(() => ({ items: [] })),
-        sellerApi.getShiftHistory({ page: 1, pageSize: 50 }).catch(() => ({ items: [] })),
+        sellerApi
+          .getShiftHistory({ page: 1, pageSize: 200, from: range.from, to: range.to })
+          .catch(() => ({ items: [], summary: undefined })),
         sellerApi.getInventory().then((inv) => ({ ...inv, _ok: true })).catch(() => ({ balance: 0, products: [], _ok: false })),
         categoriesApi.listCategories().catch(() => ({ items: [] })),
       ]);
@@ -313,6 +331,7 @@ export default function SellerAttendanceScreen() {
 
       const histList = (historyRes as any)?.items ?? (historyRes as any)?.shifts ?? [];
       setPastShifts(Array.isArray(histList) ? histList : []);
+      setHistoryServerSummary((historyRes as any)?.summary || null);
 
       const custList = Array.isArray(custRes?.items) ? custRes.items : [];
       setCustomers(custList);
@@ -363,6 +382,28 @@ export default function SellerAttendanceScreen() {
   useEffect(() => {
     loadShiftData();
   }, [loadShiftData]);
+
+  const isFirstFilterRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstFilterRenderRef.current) {
+      isFirstFilterRenderRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    const range = getShiftFilterDateRange(shiftFilter);
+    sellerApi
+      .getShiftHistory({ page: 1, pageSize: 200, from: range.from, to: range.to })
+      .then((historyRes) => {
+        if (cancelled) return;
+        const histList = (historyRes as any)?.items ?? (historyRes as any)?.shifts ?? [];
+        setPastShifts(Array.isArray(histList) ? histList : []);
+        setHistoryServerSummary((historyRes as any)?.summary || null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [shiftFilter]);
 
   // Elapsed timer ticker for active shift
   useEffect(() => {
@@ -1382,25 +1423,31 @@ export default function SellerAttendanceScreen() {
     }
   }
 
-  // Overall attendance metrics across all shifts
+  // Attendance filter & KPIs across active period/date
+  const dateRangeInfo = useMemo(
+    () => getShiftFilterDateRange(shiftFilter),
+    [shiftFilter]
+  );
+
+  const filteredHistoryShifts = useMemo(
+    () => mergeLiveShiftIntoFilteredList(pastShifts, currentShift, shiftFilter),
+    [pastShifts, currentShift, shiftFilter]
+  );
+
   const overallMetrics = useMemo(() => {
-    const totalDays = pastShifts.length;
-    const completedDays = pastShifts.filter((s) => s.status === 'COMPLETED' || Boolean(s.endTime)).length;
-    let totalShops = 0;
-    let totalKm = 0;
-
-    for (const s of pastShifts) {
-      totalShops += s.visits?.length || 0;
-      totalKm += computeShiftTimingSummary(s).distanceKm;
-    }
-
+    const kpi = computeAttendanceKpiMetrics(
+      filteredHistoryShifts,
+      historyServerSummary,
+      Boolean(currentShift)
+    );
     return {
-      totalDays,
-      completedDays,
-      totalShops,
-      totalKm: totalKm.toFixed(1),
+      ...kpi,
+      totalDays: kpi.totalShifts,
+      completedDays: kpi.completedShifts,
+      totalShops: kpi.shopsVisited,
+      totalKm: kpi.totalDistanceKm.toFixed(1),
     };
-  }, [pastShifts]);
+  }, [filteredHistoryShifts, historyServerSummary, currentShift]);
 
   const activeShopVisit = Array.isArray(currentShift?.visits)
     ? currentShift.visits.find((v) => !v.checkOutTime)
@@ -1623,33 +1670,29 @@ export default function SellerAttendanceScreen() {
             )}
           </Card>
 
-          {/* 2. Overall Attendance Summary KPIs */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statsGridRow}>
-              <View style={styles.statCol}>
-                <StatCard
-                  title="Total Days"
-                  value={overallMetrics.totalDays}
-                  icon="calendar-outline"
-                  iconColor={BrandColors.pink.primary}
-                  iconBg={BrandColors.pink.subtle}
-                />
-              </View>
-              <View style={styles.statCol}>
-                <StatCard
-                  title="Completed"
-                  value={overallMetrics.completedDays}
-                  icon="checkmark-circle-outline"
-                  iconColor={BrandColors.green.primary}
-                  iconBg={BrandColors.green.subtle}
-                />
-              </View>
+          {/* 2. Filtered Attendance Summary KPIs */}
+          <View style={styles.kpiSectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.kpiSectionTitle}>Duty KPIs · {dateRangeInfo.label}</Text>
+              <Text style={styles.kpiSectionSub}>
+                Shops visited, distance & total time
+              </Text>
             </View>
+            <AttendanceFilterButton
+              onPress={() => setFilterModalVisible(true)}
+              hasActiveFilter={shiftFilter.preset !== 'today'}
+              accentColor={BrandColors.pink.primary}
+              accessibilityLabel="Filter attendance KPI and log"
+            />
+          </View>
+
+          <View style={styles.statsGrid}>
             <View style={styles.statsGridRow}>
               <View style={styles.statCol}>
                 <StatCard
                   title="Shops Visited"
                   value={overallMetrics.totalShops}
+                  subtitle={`${overallMetrics.salesDoneVisits} with sale`}
                   icon="storefront-outline"
                   iconColor="#0284C7"
                   iconBg="#F0F9FF"
@@ -1657,11 +1700,34 @@ export default function SellerAttendanceScreen() {
               </View>
               <View style={styles.statCol}>
                 <StatCard
-                  title="Total Travel"
+                  title="Total KM"
                   value={`${overallMetrics.totalKm} km`}
+                  subtitle="Distance traveled"
                   icon="navigate-outline"
                   iconColor="#D97706"
                   iconBg="#FFFBEB"
+                />
+              </View>
+            </View>
+            <View style={styles.statsGridRow}>
+              <View style={styles.statCol}>
+                <StatCard
+                  title="Total Time"
+                  value={overallMetrics.totalTimeLabel}
+                  subtitle="Shift duration"
+                  icon="time-outline"
+                  iconColor={BrandColors.pink.primary}
+                  iconBg={BrandColors.pink.subtle}
+                />
+              </View>
+              <View style={styles.statCol}>
+                <StatCard
+                  title="Completed"
+                  value={`${overallMetrics.completedDays} / ${overallMetrics.totalDays}`}
+                  subtitle={`${overallMetrics.activeShifts} active`}
+                  icon="checkmark-circle-outline"
+                  iconColor={BrandColors.green.primary}
+                  iconBg={BrandColors.green.subtle}
                 />
               </View>
             </View>
@@ -1675,21 +1741,21 @@ export default function SellerAttendanceScreen() {
                 <Text style={styles.sectionTitle}>Attendance Log</Text>
               </View>
               <Badge
-                label={`${pastShifts.length} ${pastShifts.length === 1 ? 'Day' : 'Days'}`}
+                label={`${filteredHistoryShifts.length} ${filteredHistoryShifts.length === 1 ? 'Day' : 'Days'}`}
                 variant="neutral"
               />
             </View>
 
-            {pastShifts.length === 0 ? (
+            {filteredHistoryShifts.length === 0 ? (
               <View style={styles.emptyHistoryBox}>
                 <Ionicons name="calendar-outline" size={32} color="#94A3B8" />
-                <Text style={styles.emptyHistoryTitle}>No attendance records yet</Text>
+                <Text style={styles.emptyHistoryTitle}>No records for {dateRangeInfo.label}</Text>
                 <Text style={styles.emptyHistoryText}>
-                  Your daily duty records, visited shops, and travel details will show here.
+                  Tap the filter icon above to switch period (Week, Month, 3M, 6M) or select a date.
                 </Text>
               </View>
             ) : (
-              pastShifts.map((s, idx) => {
+              filteredHistoryShifts.map((s, idx) => {
                 const isActive = s.status === 'ACTIVE' || (!s.endTime && Boolean(s.startTime));
                 const isExpanded = Boolean(expandedShiftIds[s.id]);
                 const shiftVisits = s.visits || [];
@@ -3020,6 +3086,16 @@ export default function SellerAttendanceScreen() {
           onDoneAfterSave={() => closeQuickAddShopModal()}
         />
       </Modal>
+
+      {/* 7. Attendance KPI & History Date Filter Modal */}
+      <AttendanceFilterModal
+        visible={filterModalVisible}
+        value={shiftFilter}
+        onApply={setShiftFilter}
+        onClose={() => setFilterModalVisible(false)}
+        accentColor={BrandColors.pink.primary}
+        defaultPreset="today"
+      />
     </View>
   );
 }
@@ -3093,6 +3169,21 @@ const styles = StyleSheet.create({
     ...Typography.bodySmall,
     color: Colors.light.textSecondary,
     lineHeight: 20,
+  },
+  kpiSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  kpiSectionTitle: {
+    ...Typography.h3,
+    color: Colors.light.heading,
+  },
+  kpiSectionSub: {
+    ...Typography.caption,
+    color: Colors.light.textSecondary,
   },
   statsGrid: {
     gap: Spacing.sm,

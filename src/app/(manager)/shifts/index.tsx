@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -15,7 +14,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { managerApi } from '@/api/manager';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import type { Shift, ShiftStatus } from '@/api/types';
+import type { Shift, ShiftSummary } from '@/api/types';
+import {
+  AttendanceFilterButton,
+  AttendanceFilterModal,
+} from '@/components/common/AttendanceFilterModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -29,29 +32,21 @@ import {
   HitSlop,
   MaxContentWidth,
   Radius,
-  Shadows,
   Spacing,
   Typography,
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
-import { computeShiftTravelDistance } from '@/utils/distanceUtils';
+import { computeShiftTravelDistance, formatDurationHuman } from '@/utils/distanceUtils';
 import {
   formatDateIST,
-  formatDateTimeIST,
   formatTimeIST,
-  getISTDateKey,
-  getISTDateRangeFilter,
 } from '@/utils/dateUtils';
-
-function formatMinutes(mins: number | null | undefined): string {
-  if (mins === null || mins === undefined) return 'Active now';
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-type PeriodFilter = 'all' | 'today' | 'month';
+import {
+  computeAttendanceKpiMetrics,
+  getShiftDurationSeconds,
+  getShiftFilterDateRange,
+  type ShiftFilterState,
+} from '@/utils/shiftFilterUtils';
 
 export default function ManagerShiftsScreen() {
   const insets = useSafeAreaInsets();
@@ -59,37 +54,45 @@ export default function ManagerShiftsScreen() {
   const router = useRouter();
 
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [serverSummary, setServerSummary] = useState<ShiftSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
+  const [shiftFilter, setShiftFilter] = useState<ShiftFilterState>({
+    preset: 'today',
+    status: 'ALL',
+  });
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedShiftIds, setExpandedShiftIds] = useState<Record<string, boolean>>({});
 
+  const dateRangeInfo = useMemo(
+    () => getShiftFilterDateRange(shiftFilter),
+    [shiftFilter]
+  );
+
   const loadShifts = useCallback(async () => {
     try {
-      const dateFilter = getISTDateRangeFilter(
-        periodFilter === 'all' ? 'all' : periodFilter === 'today' ? 'today' : 'month'
-      );
+      const range = getShiftFilterDateRange(shiftFilter);
 
       const res = await managerApi.listShifts({
         page: 1,
-        pageSize: 100,
-        status: statusFilter === 'ALL' ? undefined : statusFilter,
-        from: dateFilter.from,
-        to: dateFilter.to,
+        pageSize: 200,
+        status: shiftFilter.status && shiftFilter.status !== 'ALL' ? shiftFilter.status : undefined,
+        from: range.from,
+        to: range.to,
       });
 
       setShifts(res.items || []);
+      setServerSummary(res.summary || null);
     } catch (err) {
       console.warn('Failed to load manager shifts', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, periodFilter]);
+  }, [shiftFilter]);
 
   useEffect(() => {
     setLoading(true);
@@ -110,26 +113,6 @@ export default function ManagerShiftsScreen() {
     }));
   };
 
-  // Metrics summary
-  const metrics = useMemo(() => {
-    const activeCount = shifts.filter((s) => s.status === 'ACTIVE').length;
-    const completedCount = shifts.filter((s) => s.status === 'COMPLETED').length;
-    let totalVisits = 0;
-    let totalDistance = 0;
-
-    for (const s of shifts) {
-      totalVisits += s.visits?.length || 0;
-      totalDistance += computeShiftTravelDistance(s).distanceKm;
-    }
-
-    return {
-      activeCount,
-      completedCount,
-      totalVisits,
-      totalDistance: Math.round(totalDistance * 10) / 10,
-    };
-  }, [shifts]);
-
   // Search filter
   const filteredShifts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -141,6 +124,15 @@ export default function ManagerShiftsScreen() {
       return name.includes(q) || code.includes(q) || phone.includes(q);
     });
   }, [shifts, searchQuery]);
+
+  // Metrics summary across filtered period
+  const metrics = useMemo(
+    () => computeAttendanceKpiMetrics(filteredShifts, serverSummary, Boolean(searchQuery.trim())),
+    [filteredShifts, serverSummary, searchQuery]
+  );
+
+  const hasActiveNonDefaultFilter =
+    shiftFilter.preset !== 'today' || (shiftFilter.status && shiftFilter.status !== 'ALL');
 
   return (
     <View style={styles.container}>
@@ -174,6 +166,42 @@ export default function ManagerShiftsScreen() {
         }
       >
         <View style={styles.contentWrapper}>
+          {/* Search Bar + Filter Icon */}
+          <View style={styles.searchFilterRow}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
+              <TextInput
+                placeholder="Search seller name or phone..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={styles.searchInput}
+                placeholderTextColor={Colors.light.textTertiary}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable onPress={() => setSearchQuery('')} hitSlop={HitSlop.sm}>
+                  <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+                </Pressable>
+              )}
+            </View>
+            <AttendanceFilterButton
+              onPress={() => setFilterModalVisible(true)}
+              hasActiveFilter={Boolean(hasActiveNonDefaultFilter)}
+              accentColor={BrandColors.green.primary}
+              accessibilityLabel="Open attendance filter"
+            />
+          </View>
+
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiSectionTitle}>
+              Attendance Summary · {dateRangeInfo.label}
+            </Text>
+            <Badge
+              label={`${metrics.activeShifts} active`}
+              variant={metrics.activeShifts > 0 ? 'ACTIVE' : 'neutral'}
+              size="sm"
+            />
+          </View>
+
           {/* Metric Cards */}
           {loading ? (
             <View style={styles.kpiContainer}>
@@ -199,34 +227,9 @@ export default function ManagerShiftsScreen() {
               <View style={styles.kpiRow}>
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
-                    title="On Duty Now"
-                    value={String(metrics.activeCount)}
-                    subtitle="Working today"
-                    icon="navigate-outline"
-                    iconColor={BrandColors.green.primary}
-                    iconBg="#DCFCE7"
-                    accentColor={BrandColors.green.primary}
-                  />
-                </View>
-
-                <View style={styles.kpiCardWrapper}>
-                  <StatCard
-                    title="Done Shifts"
-                    value={String(metrics.completedCount)}
-                    subtitle="Finished duties"
-                    icon="checkmark-done-circle-outline"
-                    iconColor="#0284C7"
-                    iconBg="#F0F9FF"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.kpiRow}>
-                <View style={styles.kpiCardWrapper}>
-                  <StatCard
                     title="Shops Visited"
-                    value={String(metrics.totalVisits)}
-                    subtitle="Total shop stops"
+                    value={String(metrics.shopsVisited)}
+                    subtitle={`${metrics.salesDoneVisits} with sale`}
                     icon="storefront-outline"
                     iconColor={BrandColors.pink.primary}
                     iconBg={BrandColors.pink.subtle}
@@ -236,7 +239,7 @@ export default function ManagerShiftsScreen() {
                 <View style={styles.kpiCardWrapper}>
                   <StatCard
                     title="Distance"
-                    value={`${metrics.totalDistance} km`}
+                    value={metrics.totalDistanceLabel}
                     subtitle="Total travel km"
                     icon="speedometer-outline"
                     iconColor="#F59E0B"
@@ -244,118 +247,33 @@ export default function ManagerShiftsScreen() {
                   />
                 </View>
               </View>
+
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Total Time"
+                    value={metrics.totalTimeLabel}
+                    subtitle="Combined duty time"
+                    icon="time-outline"
+                    iconColor="#0284C7"
+                    iconBg="#F0F9FF"
+                  />
+                </View>
+
+                <View style={styles.kpiCardWrapper}>
+                  <StatCard
+                    title="Done Shifts"
+                    value={`${metrics.completedShifts} / ${metrics.totalShifts}`}
+                    subtitle={`${metrics.activeShifts} on duty`}
+                    icon="checkmark-done-circle-outline"
+                    iconColor={BrandColors.green.primary}
+                    iconBg="#DCFCE7"
+                    accentColor={BrandColors.green.primary}
+                  />
+                </View>
+              </View>
             </View>
           )}
-
-          {/* Period Filter Chips */}
-          <View style={styles.filterChipRow}>
-            <Pressable
-              onPress={() => setPeriodFilter('all')}
-              style={[styles.filterChip, periodFilter === 'all' && styles.filterChipActive]}
-              hitSlop={HitSlop.sm}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  periodFilter === 'all' && styles.filterChipTextActive,
-                ]}
-              >
-                All
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setPeriodFilter('today')}
-              style={[styles.filterChip, periodFilter === 'today' && styles.filterChipActive]}
-              hitSlop={HitSlop.sm}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  periodFilter === 'today' && styles.filterChipTextActive,
-                ]}
-              >
-                Today
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setPeriodFilter('month')}
-              style={[styles.filterChip, periodFilter === 'month' && styles.filterChipActive]}
-              hitSlop={HitSlop.sm}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  periodFilter === 'month' && styles.filterChipTextActive,
-                ]}
-              >
-                This Month
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Status Segmented Control */}
-          <View style={styles.statusSegment}>
-            <Pressable
-              onPress={() => setStatusFilter('ALL')}
-              style={[styles.statusBtn, statusFilter === 'ALL' && styles.statusBtnActive]}
-            >
-              <Text
-                style={[
-                  styles.statusBtnText,
-                  statusFilter === 'ALL' && styles.statusBtnTextActive,
-                ]}
-              >
-                All Shifts
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setStatusFilter('ACTIVE')}
-              style={[styles.statusBtn, statusFilter === 'ACTIVE' && styles.statusBtnActive]}
-            >
-              <Text
-                style={[
-                  styles.statusBtnText,
-                  statusFilter === 'ACTIVE' && styles.statusBtnTextActive,
-                ]}
-              >
-                On Duty ({metrics.activeCount})
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setStatusFilter('COMPLETED')}
-              style={[styles.statusBtn, statusFilter === 'COMPLETED' && styles.statusBtnActive]}
-            >
-              <Text
-                style={[
-                  styles.statusBtnText,
-                  statusFilter === 'COMPLETED' && styles.statusBtnTextActive,
-                ]}
-              >
-                Done
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Search Box */}
-          <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={18} color={Colors.light.textTertiary} />
-            <TextInput
-              placeholder="Search seller name or phone..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              style={styles.searchInput}
-              placeholderTextColor={Colors.light.textTertiary}
-            />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')} hitSlop={HitSlop.sm}>
-                <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
-              </Pressable>
-            )}
-          </View>
 
           {/* Shift List */}
           {loading ? (
@@ -365,7 +283,7 @@ export default function ManagerShiftsScreen() {
           ) : filteredShifts.length === 0 ? (
             <EmptyState
               title="No attendance records"
-              description="No shift records found for this filter."
+              description={`No shift records found for ${dateRangeInfo.label}.`}
               icon="calendar-outline"
               actionTitle="Start New Shift"
               onAction={() => router.push('/(seller)/attendance' as any)}
@@ -373,12 +291,19 @@ export default function ManagerShiftsScreen() {
           ) : (
             <View style={styles.shiftList}>
               {filteredShifts.map((shift) => {
-                const isActive = shift.status === 'ACTIVE';
-                const visitsCount = shift.visits?.length || 0;
+                const isActive = shift.status === 'ACTIVE' || shift.status === 'OPEN';
+                const visitsCount = shift.visits?.length ?? shift.timing?.visitCount ?? 0;
                 const isExpanded = Boolean(expandedShiftIds[shift.id]);
                 const distInfo = computeShiftTravelDistance(shift);
                 const startKmVal = shift.startOdometer ?? shift.startOdometerKm;
                 const endKmVal = shift.endOdometer ?? shift.endOdometerKm;
+                const durationSecs = getShiftDurationSeconds(shift);
+                const durationLabel =
+                  durationSecs > 0
+                    ? formatDurationHuman(durationSecs)
+                    : isActive
+                      ? 'Active now'
+                      : '0m';
 
                 return (
                   <Card key={shift.id} style={styles.shiftCard}>
@@ -416,9 +341,7 @@ export default function ManagerShiftsScreen() {
 
                       <View style={styles.timeCol}>
                         <Text style={styles.timeLabel}>Duration</Text>
-                        <Text style={styles.timeValue}>
-                          {formatMinutes(shift.durationMins)}
-                        </Text>
+                        <Text style={styles.timeValue}>{durationLabel}</Text>
                       </View>
                     </View>
 
@@ -503,6 +426,16 @@ export default function ManagerShiftsScreen() {
           )}
         </View>
       </ScrollView>
+
+      <AttendanceFilterModal
+        visible={filterModalVisible}
+        value={shiftFilter}
+        onApply={setShiftFilter}
+        onClose={() => setFilterModalVisible(false)}
+        accentColor={BrandColors.green.primary}
+        showStatusFilter
+        defaultPreset="today"
+      />
     </View>
   );
 }
@@ -534,63 +467,27 @@ const styles = StyleSheet.create({
   kpiCardWrapper: {
     flex: 1,
   },
-  filterChipRow: {
+  searchFilterRow: {
     flexDirection: 'row',
-    gap: Spacing.xs,
+    alignItems: 'center',
+    gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  filterChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.light.surface,
-    borderColor: Colors.light.border,
-    borderWidth: 1,
-  },
-  filterChipActive: {
-    backgroundColor: BrandColors.green.primary,
-    borderColor: BrandColors.green.primary,
-  },
-  filterChipText: {
-    ...Typography.caption,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  statusSegment: {
+  kpiHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: Colors.light.surface,
-    borderRadius: Radius.lg,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginBottom: Spacing.md,
-  },
-  statusBtn: {
-    flex: 1,
-    paddingVertical: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
+    justifyContent: 'space-between',
+    marginBottom: Spacing.xs,
   },
-  statusBtnActive: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: BrandColors.green.light,
-  },
-  statusBtnText: {
+  kpiSectionTitle: {
     ...Typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.light.textSecondary,
-  },
-  statusBtnTextActive: {
-    color: BrandColors.green.dark,
-    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.surface,
@@ -599,7 +496,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: 8,
-    marginBottom: Spacing.md,
     gap: 8,
   },
   searchInput: {

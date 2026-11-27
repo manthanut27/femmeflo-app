@@ -418,9 +418,14 @@ export const managerApi = {
     to?: string;
     sellerId?: string;
     status?: string;
-  }): Promise<{ items: Shift[]; pagination: PaginationMeta }> {
+  }): Promise<{ items: Shift[]; pagination: PaginationMeta; summary?: import('./types').ShiftSummary }> {
     try {
-      const raw = await apiRequest<{ items?: Shift[]; shifts?: Shift[]; pagination: PaginationMeta }>(
+      const raw = await apiRequest<{
+        items?: Shift[];
+        shifts?: Shift[];
+        pagination: PaginationMeta;
+        summary?: import('./types').ShiftSummary;
+      }>(
         'manager/shifts',
         {
           method: 'GET',
@@ -430,6 +435,7 @@ export const managerApi = {
       const list = raw?.items ?? raw?.shifts ?? [];
       return {
         items: list,
+        summary: raw?.summary,
         pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
       };
     } catch {

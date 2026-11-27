@@ -11,7 +11,11 @@ import {
   View,
 } from 'react-native';
 import { sellerApi } from '@/api/seller';
-import type { Shift } from '@/api/types';
+import type { Shift, ShiftSummary } from '@/api/types';
+import {
+  AttendanceFilterButton,
+  AttendanceFilterModal,
+} from '@/components/common/AttendanceFilterModal';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -29,29 +33,49 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { computeShiftTravelDistance } from '@/utils/distanceUtils';
+import {
+  computeAttendanceKpiMetrics,
+  getShiftFilterDateRange,
+  type ShiftFilterState,
+} from '@/utils/shiftFilterUtils';
 
 export default function SellerAllShiftsScreen() {
   const { user } = useAuth();
   const router = useRouter();
 
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [serverSummary, setServerSummary] = useState<ShiftSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedShiftIds, setExpandedShiftIds] = useState<Record<string, boolean>>({});
+  const [shiftFilter, setShiftFilter] = useState<ShiftFilterState>({ preset: 'all' });
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  const dateRangeInfo = useMemo(
+    () => getShiftFilterDateRange(shiftFilter),
+    [shiftFilter]
+  );
 
   const loadShifts = useCallback(async () => {
     try {
-      const res = await sellerApi.getShiftHistory({ pageSize: 50 });
+      const range = getShiftFilterDateRange(shiftFilter);
+      const res = await sellerApi.getShiftHistory({
+        pageSize: 200,
+        from: range.from,
+        to: range.to,
+      });
       setShifts(res.items || []);
+      setServerSummary(res.summary || null);
     } catch (err) {
       console.warn('Failed to load seller shift history', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [shiftFilter]);
 
   useEffect(() => {
+    setLoading(true);
     loadShifts();
   }, [loadShifts]);
 
@@ -67,24 +91,10 @@ export default function SellerAllShiftsScreen() {
     }));
   };
 
-  const metrics = useMemo(() => {
-    const totalCount = shifts.length;
-    const completedCount = shifts.filter((s) => s.status === 'COMPLETED').length;
-    let totalKm = 0;
-    let totalVisits = 0;
-
-    for (const s of shifts) {
-      totalVisits += s.visits?.length || 0;
-      totalKm += computeShiftTravelDistance(s).distanceKm;
-    }
-
-    return {
-      totalCount,
-      completedCount,
-      totalKm: totalKm.toFixed(1),
-      totalVisits,
-    };
-  }, [shifts]);
+  const metrics = useMemo(
+    () => computeAttendanceKpiMetrics(shifts, serverSummary),
+    [shifts, serverSummary]
+  );
 
   const renderShiftItem = ({ item }: { item: Shift }) => {
     const isExpanded = Boolean(expandedShiftIds[item.id]);
@@ -215,8 +225,16 @@ export default function SellerAllShiftsScreen() {
     <View style={styles.container}>
       <Header
         title="Duty Shifts History"
-        subtitle={`Total: ${shifts.length} shifts • ${user?.name || 'Field Officer'}`}
+        subtitle={`${dateRangeInfo.label}: ${shifts.length} shifts • ${user?.name || 'Field Officer'}`}
         showBack
+        rightAction={
+          <AttendanceFilterButton
+            onPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={shiftFilter.preset !== 'all'}
+            accentColor={BrandColors.pink.primary}
+            accessibilityLabel="Filter shift history"
+          />
+        }
         onBack={() => {
           if (router.canGoBack()) {
             router.back();
@@ -244,17 +262,17 @@ export default function SellerAllShiftsScreen() {
             {/* KPI Stats */}
             <View style={styles.kpiRow}>
               <StatCard
-                title="Total Shifts"
-                value={String(metrics.totalCount)}
-                subtitle="Duty sessions logged"
-                icon="time-outline"
-                iconColor={BrandColors.pink.primary}
-                iconBg={BrandColors.pink.subtle}
+                title="Stores Visited"
+                value={String(metrics.shopsVisited)}
+                subtitle={`${metrics.salesDoneVisits} with sale`}
+                icon="storefront-outline"
+                iconColor="#0284C7"
+                iconBg="#F0F9FF"
               />
               <StatCard
                 title="Total Travel"
-                value={`${metrics.totalKm} KM`}
-                subtitle="Combined odometer"
+                value={`${metrics.totalDistanceKm} KM`}
+                subtitle="Combined distance"
                 icon="speedometer-outline"
                 iconColor={BrandColors.green.primary}
                 iconBg={BrandColors.green.subtle}
@@ -263,16 +281,16 @@ export default function SellerAllShiftsScreen() {
             </View>
             <View style={styles.kpiRow}>
               <StatCard
-                title="Stores Visited"
-                value={String(metrics.totalVisits)}
-                subtitle="Retail touchpoints"
-                icon="storefront-outline"
-                iconColor="#0284C7"
-                iconBg="#F0F9FF"
+                title="Total Time"
+                value={metrics.totalTimeLabel}
+                subtitle={`${metrics.totalShifts} shifts logged`}
+                icon="time-outline"
+                iconColor={BrandColors.pink.primary}
+                iconBg={BrandColors.pink.subtle}
               />
               <StatCard
                 title="Completed"
-                value={`${metrics.completedCount} / ${metrics.totalCount}`}
+                value={`${metrics.completedShifts} / ${metrics.totalShifts}`}
                 subtitle="Finished duty runs"
                 icon="checkmark-done-circle-outline"
                 iconColor={BrandColors.green.primary}
@@ -280,7 +298,9 @@ export default function SellerAllShiftsScreen() {
               />
             </View>
 
-            <Text style={styles.listSectionTitle}>All Field Duty Records</Text>
+            <Text style={styles.listSectionTitle}>
+              Field Duty Records · {dateRangeInfo.label}
+            </Text>
           </View>
         }
         ListEmptyComponent={
@@ -292,12 +312,21 @@ export default function SellerAllShiftsScreen() {
             <EmptyState
               icon="time-outline"
               title="No Shifts Recorded"
-              description="You have not recorded any field duty shifts yet. Start your first shift from the Duty Shift tab."
+              description={`No shifts found for ${dateRangeInfo.label}.`}
               actionTitle="Go to Shift Screen"
               onAction={() => router.push('/(seller)/attendance' as any)}
             />
           )
         }
+      />
+
+      <AttendanceFilterModal
+        visible={filterModalVisible}
+        value={shiftFilter}
+        onApply={setShiftFilter}
+        onClose={() => setFilterModalVisible(false)}
+        accentColor={BrandColors.pink.primary}
+        defaultPreset="all"
       />
     </View>
   );

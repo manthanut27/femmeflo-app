@@ -447,6 +447,25 @@ export interface Shift {
   territory?: string | null;
   notes?: string | null;
   visits?: ShiftVisit[];
+  timing?: {
+    totalShiftMins?: number | null;
+    totalVisitMins?: number;
+    travelMins?: number | null;
+    totalSeconds?: number | null;
+    totalVisitSeconds?: number;
+    travelSeconds?: number | null;
+    visitCount?: number;
+  };
+}
+
+export interface ShiftSummary {
+  totalShifts: number;
+  activeShifts: number;
+  completedShifts: number;
+  totalVisits: number;
+  totalDistanceKm: number;
+  totalDurationSeconds: number;
+  totalDurationMins: number;
 }
 
 export interface StartShiftPayload {

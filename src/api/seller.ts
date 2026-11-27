@@ -792,9 +792,20 @@ export const sellerApi = {
     }
   },
 
-  async getShiftHistory(params?: { page?: number; pageSize?: number }): Promise<{ items: Shift[]; pagination: PaginationMeta }> {
+  async getShiftHistory(params?: {
+    page?: number;
+    pageSize?: number;
+    from?: string;
+    to?: string;
+    status?: string;
+  }): Promise<{ items: Shift[]; pagination: PaginationMeta; summary?: import('./types').ShiftSummary }> {
     try {
-      const raw = await apiRequest<{ items?: Shift[]; shifts?: Shift[]; pagination: PaginationMeta }>(
+      const raw = await apiRequest<{
+        items?: Shift[];
+        shifts?: Shift[];
+        pagination: PaginationMeta;
+        summary?: import('./types').ShiftSummary;
+      }>(
         'seller/shifts/history',
         {
           method: 'GET',
@@ -807,6 +818,7 @@ export const sellerApi = {
       const list = raw?.items ?? raw?.shifts ?? [];
       return {
         items: list,
+        summary: raw?.summary,
         pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
       };
     } catch {

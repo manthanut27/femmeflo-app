@@ -15,23 +15,33 @@ import {
 } from 'react-native';
 import { adminApi } from '@/api/admin';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import type { Shift, ShiftStatus, ShiftVisit } from '@/api/types';
+import type { Shift, ShiftSummary, ShiftVisit } from '@/api/types';
+import {
+  AttendanceFilterButton,
+  AttendanceFilterModal,
+} from '@/components/common/AttendanceFilterModal';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { Input } from '@/components/ui/Input';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
+import { StatCard } from '@/components/ui/StatCard';
 import {
   BorderRadius,
   BrandColors,
   Colors,
-  Elevation,
   MaxContentWidth,
   Spacing,
   Typography,
 } from '@/constants/theme';
-import { computeShiftTravelDistance } from '@/utils/distanceUtils';
+import { computeShiftTravelDistance, formatDurationHuman } from '@/utils/distanceUtils';
+import {
+  computeAttendanceKpiMetrics,
+  getShiftDurationSeconds,
+  getShiftFilterDateRange,
+  type ShiftFilterState,
+} from '@/utils/shiftFilterUtils';
 
 function formatMinutes(mins: number | null | undefined): string {
   if (mins === null || mins === undefined) return 'Active now';
@@ -86,54 +96,52 @@ export default function AdminShiftsScreen() {
   }, [handleBack]);
 
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [serverSummary, setServerSummary] = useState<ShiftSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<ShiftStatus | 'ALL'>('ALL');
-  const [datePreset, setDatePreset] = useState<'today' | '7days' | '30days' | 'all'>('today');
+  const [shiftFilter, setShiftFilter] = useState<ShiftFilterState>({
+    preset: 'today',
+    status: 'ALL',
+  });
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [search, setSearch] = useState('');
 
   // Selected Shift for Details Modal
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
 
+  const dateRangeInfo = useMemo(
+    () => getShiftFilterDateRange(shiftFilter),
+    [shiftFilter]
+  );
+
   const fetchShifts = useCallback(async () => {
     try {
-      const now = new Date();
-      let from: string | undefined;
-      let to: string | undefined = now.toISOString();
-
-      if (datePreset === 'today') {
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        from = startOfDay.toISOString();
-      } else if (datePreset === '7days') {
-        const d = new Date();
-        d.setDate(d.getDate() - 7);
-        from = d.toISOString();
-      } else if (datePreset === '30days') {
-        const d = new Date();
-        d.setDate(d.getDate() - 30);
-        from = d.toISOString();
-      }
+      const range = getShiftFilterDateRange(shiftFilter);
+      const apiStatus =
+        shiftFilter.status && shiftFilter.status !== 'ALL' ? shiftFilter.status : undefined;
 
       const res = await adminApi.listShifts({
         page: 1,
-        pageSize: 100,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        from,
-        to,
+        pageSize: 200,
+        status: apiStatus,
+        from: range.from,
+        to: range.to,
       });
 
       setShifts(res.items || []);
+      setServerSummary(res.summary || null);
     } catch (err: any) {
       console.warn('Failed to load shifts', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, datePreset]);
+  }, [shiftFilter]);
 
   useEffect(() => {
+    setLoading(true);
     fetchShifts();
   }, [fetchShifts]);
 
@@ -155,13 +163,27 @@ export default function AdminShiftsScreen() {
     });
   }, [shifts, search]);
 
+  const kpiMetrics = useMemo(
+    () => computeAttendanceKpiMetrics(filteredShifts, serverSummary, Boolean(search.trim())),
+    [filteredShifts, serverSummary, search]
+  );
+
+  const hasActiveNonDefaultFilter =
+    shiftFilter.preset !== 'today' || (shiftFilter.status && shiftFilter.status !== 'ALL');
+
   const renderShiftItem = ({ item }: { item: Shift }) => {
     const isOpen = item.status === 'OPEN' || item.status === 'ACTIVE';
     const sellerName = item.seller?.name || 'Field Officer';
-    const visitsCount = item.visits?.length ?? 0;
-    const duration = formatMinutes(item.durationMins);
+    const visitsCount = item.visits?.length ?? item.timing?.visitCount ?? 0;
+    const durationSecs = getShiftDurationSeconds(item);
+    const duration = isOpen
+      ? durationSecs > 0
+        ? `${formatDurationHuman(durationSecs)} (Live)`
+        : 'Active now'
+      : durationSecs > 0
+        ? formatDurationHuman(durationSecs)
+        : formatMinutes(item.durationMins);
     const startKm = item.startOdometer ?? item.startOdometerKm;
-    const endKm = item.endOdometer ?? item.endOdometerKm;
     const distInfo = computeShiftTravelDistance(item);
     const distanceKm = distInfo.distanceKm > 0 ? distInfo.formatted : (isOpen ? null : '0 km');
 
@@ -245,50 +267,22 @@ export default function AdminShiftsScreen() {
       />
 
       <View style={styles.filterSection}>
-        <View style={styles.searchInner}>
-          <Input
-            placeholder="Search officer, phone or area..."
-            value={search}
-            onChangeText={setSearch}
-            leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}
+        <View style={styles.searchFilterRow}>
+          <View style={{ flex: 1 }}>
+            <Input
+              placeholder="Search officer, phone or area..."
+              value={search}
+              onChangeText={setSearch}
+              containerStyle={{ marginBottom: 0 }}
+              leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}
+            />
+          </View>
+          <AttendanceFilterButton
+            onPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={Boolean(hasActiveNonDefaultFilter)}
+            accentColor={BrandColors.pink.dark}
+            accessibilityLabel="Open shift date and status filter"
           />
-        </View>
-
-        {/* Date presets */}
-        <View style={styles.presetTabsRow}>
-          {(
-            [
-              { id: 'today', label: 'Today' },
-              { id: '7days', label: 'Last 7 Days' },
-              { id: '30days', label: 'Last 30 Days' },
-              { id: 'all', label: 'All Time' },
-            ] as const
-          ).map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={[styles.presetTab, datePreset === p.id && styles.presetTabActive]}
-              onPress={() => setDatePreset(p.id)}
-            >
-              <Text style={[styles.presetTabText, datePreset === p.id && styles.presetTabTextActive]}>
-                {p.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Status filter */}
-        <View style={styles.statusTabsRow}>
-          {(['ALL', 'OPEN', 'COMPLETED'] as const).map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.statusTab, statusFilter === s && styles.statusTabActive]}
-              onPress={() => setStatusFilter(s as any)}
-            >
-              <Text style={[styles.statusTabText, statusFilter === s && styles.statusTabTextActive]}>
-                {s === 'OPEN' ? 'ON DUTY' : s}
-              </Text>
-            </TouchableOpacity>
-          ))}
         </View>
       </View>
 
@@ -298,16 +292,6 @@ export default function AdminShiftsScreen() {
           <CardSkeleton />
           <CardSkeleton />
         </View>
-      ) : filteredShifts.length === 0 ? (
-        <EmptyState
-          icon="time-outline"
-          title="No Shifts Found"
-          description={
-            search
-              ? 'No shift records match your search criteria.'
-              : 'No shifts recorded for the selected period.'
-          }
-        />
       ) : (
         <FlatList
           data={filteredShifts}
@@ -321,8 +305,87 @@ export default function AdminShiftsScreen() {
               colors={[BrandColors.pink.dark]}
             />
           }
+          ListHeaderComponent={
+            <View style={styles.kpiWrapper}>
+              <View style={styles.kpiHeaderRow}>
+                <Text style={styles.kpiSectionTitle}>
+                  Attendance KPIs · {dateRangeInfo.label}
+                </Text>
+                <Badge
+                  label={`${kpiMetrics.totalShifts} ${kpiMetrics.totalShifts === 1 ? 'shift' : 'shifts'}`}
+                  variant="neutral"
+                  size="sm"
+                />
+              </View>
+              <View style={styles.kpiGridRow}>
+                <View style={styles.kpiGridCol}>
+                  <StatCard
+                    title="Shops Visited"
+                    value={kpiMetrics.shopsVisited}
+                    subtitle={`${kpiMetrics.salesDoneVisits} with sale`}
+                    icon="storefront-outline"
+                    iconColor="#0284C7"
+                    iconBg="#F0F9FF"
+                  />
+                </View>
+                <View style={styles.kpiGridCol}>
+                  <StatCard
+                    title="Total KM"
+                    value={kpiMetrics.totalDistanceLabel}
+                    subtitle="Field travel distance"
+                    icon="speedometer-outline"
+                    iconColor={BrandColors.green.primary}
+                    iconBg={BrandColors.green.subtle}
+                  />
+                </View>
+              </View>
+              <View style={styles.kpiGridRow}>
+                <View style={styles.kpiGridCol}>
+                  <StatCard
+                    title="Total Time"
+                    value={kpiMetrics.totalTimeLabel}
+                    subtitle="Combined duty hours"
+                    icon="time-outline"
+                    iconColor={BrandColors.pink.dark}
+                    iconBg={BrandColors.pink.subtle}
+                  />
+                </View>
+                <View style={styles.kpiGridCol}>
+                  <StatCard
+                    title="Completed"
+                    value={`${kpiMetrics.completedShifts} / ${kpiMetrics.totalShifts}`}
+                    subtitle={`${kpiMetrics.activeShifts} active now`}
+                    icon="checkmark-done-circle-outline"
+                    iconColor="#D97706"
+                    iconBg="#FFFBEB"
+                  />
+                </View>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon="time-outline"
+              title="No Shifts Found"
+              description={
+                search
+                  ? 'No shift records match your search criteria.'
+                  : `No shifts recorded for ${dateRangeInfo.label}.`
+              }
+            />
+          }
         />
       )}
+
+      <AttendanceFilterModal
+        visible={filterModalVisible}
+        value={shiftFilter}
+        onApply={setShiftFilter}
+        onClose={() => setFilterModalVisible(false)}
+        accentColor={BrandColors.pink.dark}
+        showStatusFilter
+        defaultPreset="today"
+      />
 
       {/* GPS Visits Audit Modal */}
       <Modal
@@ -449,67 +512,39 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.borderSubtle,
-    gap: Spacing.xs,
-    paddingBottom: Spacing.xs,
-  },
-  searchInner: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.xs,
-    maxWidth: MaxContentWidth,
-    width: '100%',
-    alignSelf: 'center',
+    paddingVertical: Spacing.sm,
   },
-  presetTabsRow: {
+  searchFilterRow: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    gap: 6,
+    alignItems: 'center',
+    gap: Spacing.sm,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  presetTab: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.light.surfaceSecondary,
+  kpiWrapper: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  presetTabActive: {
-    backgroundColor: '#0F172A',
-  },
-  presetTabText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  presetTabTextActive: {
-    color: '#FFFFFF',
-  },
-  statusTabsRow: {
+  kpiHeaderRow: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    gap: 6,
-    maxWidth: MaxContentWidth,
-    width: '100%',
-    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  statusTab: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: BorderRadius.md,
-  },
-  statusTabActive: {
-    backgroundColor: BrandColors.pink.primary,
-  },
-  statusTabText: {
+  kpiSectionTitle: {
     ...Typography.caption,
-    fontSize: 11,
     fontWeight: '700',
     color: Colors.light.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
-  statusTabTextActive: {
-    color: '#FFFFFF',
+  kpiGridRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  kpiGridCol: {
+    flex: 1,
   },
   loadingPadding: {
     padding: Spacing.md,

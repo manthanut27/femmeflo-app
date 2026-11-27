@@ -830,8 +830,13 @@ export const adminApi = {
     sellerId?: string;
     managerId?: string;
     status?: string;
-  }): Promise<{ items: Shift[]; pagination: PaginationMeta }> {
-    const raw = await apiRequest<{ items?: Shift[]; shifts?: Shift[]; pagination: PaginationMeta }>(
+  }): Promise<{ items: Shift[]; pagination: PaginationMeta; summary?: import('./types').ShiftSummary }> {
+    const raw = await apiRequest<{
+      items?: Shift[];
+      shifts?: Shift[];
+      pagination: PaginationMeta;
+      summary?: import('./types').ShiftSummary;
+    }>(
       'admin/shifts',
       {
         method: 'GET',
@@ -841,6 +846,7 @@ export const adminApi = {
     const list = raw?.items ?? raw?.shifts ?? [];
     return {
       items: list,
+      summary: raw?.summary,
       pagination: raw?.pagination ?? { page: 1, pageSize: 20, total: list.length, totalPages: 1 },
     };
   },

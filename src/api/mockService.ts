@@ -775,7 +775,16 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   if (cleanEndpoint === 'seller/shifts/history') {
     const page = Number(options.params?.page || 1);
     const pageSize = options.params?.pageSize ? Number(options.params.pageSize) : 20;
-    const all = mockDb.shiftHistory;
+    const fromMs = options.params?.from ? new Date(String(options.params.from)).getTime() : null;
+    const toMs = options.params?.to ? new Date(String(options.params.to)).getTime() : null;
+    const statusFilter = options.params?.status ? String(options.params.status) : null;
+    const all = mockDb.shiftHistory.filter((s) => {
+      if (statusFilter && statusFilter !== 'ALL' && s.status !== statusFilter) return false;
+      const startMs = new Date(s.startTime).getTime();
+      if (fromMs !== null && !Number.isNaN(fromMs) && startMs < fromMs) return false;
+      if (toMs !== null && !Number.isNaN(toMs) && startMs > toMs) return false;
+      return true;
+    });
     const startIndex = (page - 1) * pageSize;
     const items = options.params?.pageSize ? all.slice(startIndex, startIndex + pageSize) : all;
     return {
@@ -965,7 +974,16 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   }
 
   if (cleanEndpoint === 'manager/shifts') {
-    const allShifts = [mockDb.currentShift, ...mockDb.shiftHistory].filter(Boolean) as Shift[];
+    const fromMs = options.params?.from ? new Date(String(options.params.from)).getTime() : null;
+    const toMs = options.params?.to ? new Date(String(options.params.to)).getTime() : null;
+    const statusFilter = options.params?.status ? String(options.params.status) : null;
+    const allShifts = ([mockDb.currentShift, ...mockDb.shiftHistory].filter(Boolean) as Shift[]).filter((s) => {
+      if (statusFilter && statusFilter !== 'ALL' && s.status !== statusFilter) return false;
+      const startMs = new Date(s.startTime).getTime();
+      if (fromMs !== null && !Number.isNaN(fromMs) && startMs < fromMs) return false;
+      if (toMs !== null && !Number.isNaN(toMs) && startMs > toMs) return false;
+      return true;
+    });
     return {
       items: allShifts,
       shifts: allShifts,
@@ -1506,12 +1524,20 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
   // Admin: Shifts
   // ----------------------------------------------------
   if (cleanEndpoint === 'admin/shifts' && method === 'GET') {
+    const fromMs = options.params?.from ? new Date(String(options.params.from)).getTime() : null;
+    const toMs = options.params?.to ? new Date(String(options.params.to)).getTime() : null;
     let list = [...mockDb.shiftHistory];
     if (options.params?.status && options.params.status !== 'ALL') {
       list = list.filter((s) => s.status === options.params?.status);
     }
     if (options.params?.sellerId) {
       list = list.filter((s) => s.sellerId === options.params?.sellerId);
+    }
+    if (fromMs !== null && !Number.isNaN(fromMs)) {
+      list = list.filter((s) => new Date(s.startTime).getTime() >= fromMs);
+    }
+    if (toMs !== null && !Number.isNaN(toMs)) {
+      list = list.filter((s) => new Date(s.startTime).getTime() <= toMs);
     }
     return {
       items: list,
