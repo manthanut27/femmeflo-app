@@ -1416,6 +1416,9 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
       if (body.pincode !== undefined) s.pincode = body.pincode;
       if (body.active !== undefined) s.active = Boolean(body.active);
       if (body.dailyTarget !== undefined) (s as any).dailyTarget = body.dailyTarget;
+      if (body.salesTargetPackets !== undefined) s.salesTargetPackets = body.salesTargetPackets;
+      if (body.salesTargetPeriod !== undefined) s.salesTargetPeriod = body.salesTargetPeriod;
+      if (body.targetBonusPaise !== undefined) s.targetBonusPaise = body.targetBonusPaise;
       if (body.managerId !== undefined) s.managerId = body.managerId;
       return { seller: s, user: s, success: true } as unknown as T;
     }
@@ -1591,6 +1594,22 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
         status: 'PARTIALLY_PAID',
         currentMonth: { salesIncentivePaise: 50000, allocatedPaidPaise: 40000, outstandingPaise: 10000 },
         previousMonth: { salesIncentivePaise: 60000, allocatedPaidPaise: 50000, outstandingPaise: 10000 },
+        salesTargetPackets: s.salesTargetPackets ?? 150,
+        salesTargetPeriod: s.salesTargetPeriod ?? 'MONTHLY',
+        targetBonusPaise: s.targetBonusPaise ?? 50000,
+        targetProgress: {
+          hasTarget: (s.salesTargetPackets ?? 150) > 0,
+          period: s.salesTargetPeriod ?? 'MONTHLY',
+          periodLabel: 'Nov 2026',
+          targetPackets: s.salesTargetPackets ?? 150,
+          completedPackets: 112,
+          remainingPackets: Math.max(0, (s.salesTargetPackets ?? 150) - 112),
+          completedRevenuePaise: 1680000,
+          progressPercent: Math.min(100, Math.round((112 / (s.salesTargetPackets ?? 150)) * 100)),
+          bonusPaise: s.targetBonusPaise ?? 50000,
+          earnedBonusPaise: 112 >= (s.salesTargetPackets ?? 150) ? (s.targetBonusPaise ?? 50000) : 0,
+          isAchieved: 112 >= (s.salesTargetPackets ?? 150),
+        },
       })),
       managers: mockDb.managers.map((m) => ({
         id: m.id,
@@ -1611,6 +1630,17 @@ export async function handleMockRequest<T>(endpoint: string, options: RequestOpt
 
   if (cleanEndpoint.startsWith('admin/incentives/users/') && cleanEndpoint.endsWith('/rate') && method === 'PATCH') {
     return { success: true, message: 'Incentive rate updated successfully' } as unknown as T;
+  }
+
+  if (cleanEndpoint.startsWith('admin/incentives/users/') && cleanEndpoint.endsWith('/target') && method === 'PATCH') {
+    const userId = cleanEndpoint.replace('admin/incentives/users/', '').replace('/target', '');
+    const targetUser = mockDb.sellers.find((u) => u.id === userId) || mockDb.managers.find((u) => u.id === userId);
+    if (targetUser) {
+      targetUser.salesTargetPackets = body.salesTargetPackets ?? null;
+      targetUser.salesTargetPeriod = body.salesTargetPeriod ?? 'MONTHLY';
+      targetUser.targetBonusPaise = body.targetBonusPaise ?? null;
+    }
+    return { success: true, message: 'Sales target updated successfully' } as unknown as T;
   }
 
   if (cleanEndpoint.startsWith('admin/incentives/users/') && cleanEndpoint.endsWith('/adjustments') && method === 'POST') {

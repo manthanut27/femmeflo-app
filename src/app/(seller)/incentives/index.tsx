@@ -12,6 +12,7 @@ import type { SellerIncentiveData } from '@/api/types';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { Header } from '@/components/ui/Header';
+import { TargetProgressStrip } from '@/components/incentives/TargetProgressStrip';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { BrandColors, Colors, MaxContentWidth, Radius, Spacing, Typography } from '@/constants/theme';
 import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
@@ -164,6 +165,13 @@ export default function SellerIncentivesScreen() {
                   {/* Confirmed Sales Contributing to Commission */}
                   {incentives?.items && incentives.items.length > 0 ? (
                     <>
+                      <TargetProgressStrip
+                        targetProgress={incentives.targetProgress}
+                        ratePerPacketPaise={ratePaise}
+                        mode="detailed"
+                        showWhenUnset
+                      />
+
                       <Text style={styles.sectionHeading}>Confirmed Sale Incentives ({incentives.items.length})</Text>
                       {incentives.items.slice(0, 20).map((s: any, idx: number) => {
                         const qty = Number(s.quantity ?? s.packetsSold ?? 0);
@@ -282,6 +290,30 @@ export default function SellerIncentivesScreen() {
                       </View>
                     </Card>
                   ))}
+
+                  {incentives && Array.isArray(incentives.adjustments) && incentives.adjustments.length > 0 && (
+                    <>
+                      <Text style={styles.sectionHeading}>Bonuses &amp; Adjustments ({incentives.adjustments.length})</Text>
+                      {incentives.adjustments.map((adj: any, idx: number) => (
+                        <Card key={adj.id || idx} style={styles.historyCard}>
+                          <View style={styles.historyHeader}>
+                            <Text style={[styles.historyMonth, { flex: 1, marginRight: Spacing.sm }]}>
+                              {adj.reason || (adj.type === 'DEDUCT' ? 'Deduction' : 'Bonus Addition')}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.historyEarned,
+                                { color: adj.type === 'DEDUCT' ? Colors.light.danger : Colors.light.success },
+                              ]}
+                            >
+                              {adj.type === 'DEDUCT' ? '-' : '+'}
+                              {formatRupees(adj.amountPaise || 0)}
+                            </Text>
+                          </View>
+                        </Card>
+                      ))}
+                    </>
+                  )}
                 </>
               );
             })()}

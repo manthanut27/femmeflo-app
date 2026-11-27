@@ -135,6 +135,9 @@ export default function AdminUsersScreen() {
   const [userVillage, setUserVillage] = useState('');
   const [userAddress, setUserAddress] = useState('');
   const [userDailyTarget, setUserDailyTarget] = useState('30');
+  const [userSalesTargetPackets, setUserSalesTargetPackets] = useState('');
+  const [userSalesTargetPeriod, setUserSalesTargetPeriod] = useState<'DAILY' | 'MONTHLY'>('MONTHLY');
+  const [userTargetBonusRupees, setUserTargetBonusRupees] = useState('');
   const [userActive, setUserActive] = useState(true);
   const [userAssignedManagerId, setUserAssignedManagerId] = useState('');
   const [userIsSeller, setUserIsSeller] = useState(false);
@@ -335,6 +338,17 @@ export default function AdminUsersScreen() {
     setUserVillage(user.village || '');
     setUserAddress(user.address || '');
     setUserDailyTarget(String((user as any).dailyTarget || 30));
+    setUserSalesTargetPackets(
+      user.salesTargetPackets != null && user.salesTargetPackets > 0
+        ? String(user.salesTargetPackets)
+        : ''
+    );
+    setUserSalesTargetPeriod(user.salesTargetPeriod === 'DAILY' ? 'DAILY' : 'MONTHLY');
+    setUserTargetBonusRupees(
+      user.targetBonusPaise != null && user.targetBonusPaise > 0
+        ? String(Number((user.targetBonusPaise / 100).toFixed(2)))
+        : ''
+    );
     setUserActive(user.active !== false);
     setUserAssignedManagerId((user as any).managerId || (user as any).manager?.id || '');
 
@@ -423,6 +437,20 @@ export default function AdminUsersScreen() {
     setUserModalSuccess(null);
 
     try {
+      const parsedPacketsNum = parseInt(userSalesTargetPackets.trim(), 10);
+      const resolvedTargetPackets =
+        userSalesTargetPackets.trim().length > 0 && Number.isFinite(parsedPacketsNum) && parsedPacketsNum > 0
+          ? parsedPacketsNum
+          : null;
+      const parsedBonusNum = parseFloat(userTargetBonusRupees.trim());
+      const resolvedTargetBonusPaise =
+        resolvedTargetPackets !== null &&
+        userTargetBonusRupees.trim().length > 0 &&
+        Number.isFinite(parsedBonusNum) &&
+        parsedBonusNum > 0
+          ? Math.round(parsedBonusNum * 100)
+          : null;
+
       if (selectedUser.role === 'MANAGER') {
         const res = await adminApi.updateManager(selectedUser.id, {
           name: userName.trim(),
@@ -433,6 +461,9 @@ export default function AdminUsersScreen() {
           district: userDistrict.trim() || undefined,
           address: userAddress.trim() || undefined,
           active: userActive,
+          salesTargetPackets: resolvedTargetPackets,
+          salesTargetPeriod: userSalesTargetPeriod,
+          targetBonusPaise: resolvedTargetBonusPaise,
         });
         const updated = {
           ...selectedUser,
@@ -444,6 +475,9 @@ export default function AdminUsersScreen() {
           district: userDistrict.trim() || selectedUser.district,
           address: userAddress.trim() || selectedUser.address,
           active: userActive,
+          salesTargetPackets: resolvedTargetPackets,
+          salesTargetPeriod: userSalesTargetPeriod,
+          targetBonusPaise: resolvedTargetBonusPaise,
         };
         setSelectedUser(updated);
         setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
@@ -451,7 +485,6 @@ export default function AdminUsersScreen() {
         setIsEditMode(false);
         setScreenFeedback({ type: 'success', message: `Manager ${updated.name} saved.` });
       } else {
-        const targetNum = parseInt(userDailyTarget, 10);
         const res = await adminApi.updateSeller(selectedUser.id, {
           name: userName.trim(),
           phone: formattedPhone,
@@ -461,7 +494,9 @@ export default function AdminUsersScreen() {
           state: userState.trim() || undefined,
           district: userDistrict.trim() || undefined,
           address: userAddress.trim() || undefined,
-          dailyTarget: isNaN(targetNum) ? 30 : targetNum,
+          salesTargetPackets: resolvedTargetPackets,
+          salesTargetPeriod: userSalesTargetPeriod,
+          targetBonusPaise: resolvedTargetBonusPaise,
           active: userActive,
           managerId: userAssignedManagerId || undefined,
         });
@@ -475,7 +510,9 @@ export default function AdminUsersScreen() {
           state: userState.trim() || selectedUser.state,
           district: userDistrict.trim() || selectedUser.district,
           address: userAddress.trim() || selectedUser.address,
-          dailyTarget: isNaN(targetNum) ? 30 : targetNum,
+          salesTargetPackets: resolvedTargetPackets,
+          salesTargetPeriod: userSalesTargetPeriod,
+          targetBonusPaise: resolvedTargetBonusPaise,
           active: userActive,
         };
         setSelectedUser(updated);
@@ -1560,8 +1597,12 @@ export default function AdminUsersScreen() {
                               </Text>
                             </View>
                             <View style={styles.infoGridCol}>
-                              <Text style={styles.infoLabel}>Daily Visit Target</Text>
-                              <Text style={styles.infoValueBold}>{userDailyTarget} outlets / day</Text>
+                              <Text style={styles.infoLabel}>Sales Target</Text>
+                              <Text style={styles.infoValueBold}>
+                                {userSalesTargetPackets
+                                  ? `${userSalesTargetPackets} pkts / ${userSalesTargetPeriod === 'DAILY' ? 'day' : 'month'}`
+                                  : 'Not set'}
+                              </Text>
                             </View>
                           </View>
                         )}
@@ -1575,11 +1616,26 @@ export default function AdminUsersScreen() {
                               </Text>
                             </View>
                             <View style={styles.infoGridCol}>
-                              <Text style={styles.infoLabel}>Team Role</Text>
-                              <Text style={styles.infoValueBold}>Area Team Lead</Text>
+                              <Text style={styles.infoLabel}>Sales Target</Text>
+                              <Text style={styles.infoValueBold}>
+                                {userSalesTargetPackets
+                                  ? `${userSalesTargetPackets} pkts / ${userSalesTargetPeriod === 'DAILY' ? 'day' : 'month'}`
+                                  : 'Not set'}
+                              </Text>
                             </View>
                           </View>
                         )}
+
+                        {userSalesTargetPackets && userTargetBonusRupees ? (
+                          <View style={styles.infoGridRow}>
+                            <View style={styles.infoGridCol}>
+                              <Text style={styles.infoLabel}>Target Completion Bonus</Text>
+                              <Text style={[styles.infoValueBold, { color: '#15803D' }]}>
+                                ₹{userTargetBonusRupees} on 100% completion
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
                       </View>
 
                       <View style={{ marginTop: Spacing.sm }}>
@@ -1659,27 +1715,65 @@ export default function AdminUsersScreen() {
                       </View>
 
                       {selectedUser?.role === 'SELLER' && (
+                        <Input
+                          label="Village / Area (Optional)"
+                          value={userVillage}
+                          onChangeText={setUserVillage}
+                          placeholder="e.g. Badlapur"
+                          autoCapitalize="words"
+                        />
+                      )}
+
+                      <View style={{ marginBottom: Spacing.sm, padding: Spacing.sm, borderRadius: BorderRadius.md, backgroundColor: '#FAF8F5', borderWidth: 1, borderColor: Colors.light.border }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.xs }}>
+                          <Text style={{ ...Typography.caption, fontWeight: '700', color: Colors.light.text }}>
+                            Sales Target (Optional)
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            {(['MONTHLY', 'DAILY'] as const).map((p) => {
+                              const active = userSalesTargetPeriod === p;
+                              return (
+                                <Pressable
+                                  key={p}
+                                  onPress={() => setUserSalesTargetPeriod(p)}
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 4,
+                                    borderRadius: 999,
+                                    backgroundColor: active ? BrandColors.pink.primary : Colors.light.surface,
+                                    borderWidth: 1,
+                                    borderColor: active ? BrandColors.pink.primary : Colors.light.border,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, fontWeight: '700', color: active ? '#FFFFFF' : Colors.light.textSecondary }}>
+                                    {p === 'MONTHLY' ? 'Monthly' : 'Daily'}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
                         <View style={styles.formRow}>
                           <View style={{ flex: 1, marginRight: Spacing.sm }}>
                             <Input
-                              label="Village / Area (Optional)"
-                              value={userVillage}
-                              onChangeText={setUserVillage}
-                              placeholder="e.g. Badlapur"
-                              autoCapitalize="words"
+                              label={`Target Packets / ${userSalesTargetPeriod === 'DAILY' ? 'Day' : 'Month'}`}
+                              value={userSalesTargetPackets}
+                              onChangeText={setUserSalesTargetPackets}
+                              placeholder="e.g. 150 (blank = none)"
+                              keyboardType="number-pad"
                             />
                           </View>
                           <View style={{ flex: 1, marginLeft: Spacing.sm }}>
                             <Input
-                              label="Daily Shop Visit Target"
-                              value={userDailyTarget}
-                              onChangeText={setUserDailyTarget}
-                              placeholder="e.g. 30"
-                              keyboardType="numeric"
+                              label="Bonus (₹ Optional)"
+                              value={userTargetBonusRupees}
+                              onChangeText={setUserTargetBonusRupees}
+                              placeholder="e.g. 500"
+                              keyboardType="decimal-pad"
                             />
                           </View>
                         </View>
-                      )}
+                      </View>
 
                       <Input
                         label="Office / Street Address (Optional)"

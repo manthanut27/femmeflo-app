@@ -563,6 +563,9 @@ export const adminApi = {
     pincode?: string;
     permissions?: string[];
     isSeller?: boolean;
+    salesTargetPackets?: number | null;
+    salesTargetPeriod?: 'DAILY' | 'MONTHLY';
+    targetBonusPaise?: number | null;
   }): Promise<{ manager: PublicUser }> {
     const rawPhone = (payload.phone || '').trim();
     const phone = rawPhone.startsWith('+') ? rawPhone : `+91${rawPhone.replace(/^0+/, '')}`;
@@ -583,6 +586,9 @@ export const adminApi = {
       body.permissions = sanitizeBackendPermissions(payload.permissions);
     }
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
+    if (payload.salesTargetPackets !== undefined) body.salesTargetPackets = payload.salesTargetPackets;
+    if (payload.salesTargetPeriod !== undefined) body.salesTargetPeriod = payload.salesTargetPeriod;
+    if (payload.targetBonusPaise !== undefined) body.targetBonusPaise = payload.targetBonusPaise;
 
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>('admin/managers', {
       method: 'POST',
@@ -606,6 +612,9 @@ export const adminApi = {
       permissions?: string[];
       isSeller?: boolean;
       active?: boolean;
+      salesTargetPackets?: number | null;
+      salesTargetPeriod?: 'DAILY' | 'MONTHLY';
+      targetBonusPaise?: number | null;
     }
   ): Promise<{ manager: PublicUser }> {
     const body: Record<string, any> = {};
@@ -624,6 +633,9 @@ export const adminApi = {
     if (payload.permissions !== undefined) body.permissions = payload.permissions;
     if (payload.isSeller !== undefined) body.isSeller = payload.isSeller;
     if (payload.active !== undefined) body.active = payload.active;
+    if (payload.salesTargetPackets !== undefined) body.salesTargetPackets = payload.salesTargetPackets;
+    if (payload.salesTargetPeriod !== undefined) body.salesTargetPeriod = payload.salesTargetPeriod;
+    if (payload.targetBonusPaise !== undefined) body.targetBonusPaise = payload.targetBonusPaise;
 
     const res = await apiRequest<{ manager?: PublicUser; user?: PublicUser }>(`admin/managers/${managerId}`, {
       method: 'PATCH',
@@ -657,6 +669,9 @@ export const adminApi = {
     district?: string;
     village?: string;
     dailyTarget?: number;
+    salesTargetPackets?: number | null;
+    salesTargetPeriod?: 'DAILY' | 'MONTHLY';
+    targetBonusPaise?: number | null;
     shiftTiming?: string;
     designation?: string;
     employeeCode?: string;
@@ -681,6 +696,9 @@ export const adminApi = {
     if (payload.district?.trim()) body.district = payload.district.trim();
     if (payload.village?.trim()) body.village = payload.village.trim();
     if (payload.dailyTarget) body.dailyTarget = payload.dailyTarget;
+    if (payload.salesTargetPackets !== undefined) body.salesTargetPackets = payload.salesTargetPackets;
+    if (payload.salesTargetPeriod !== undefined) body.salesTargetPeriod = payload.salesTargetPeriod;
+    if (payload.targetBonusPaise !== undefined) body.targetBonusPaise = payload.targetBonusPaise;
     if (payload.shiftTiming?.trim()) body.shiftTiming = payload.shiftTiming.trim();
     if (payload.designation?.trim()) body.designation = payload.designation.trim();
     if (payload.employeeCode?.trim()) body.employeeCode = payload.employeeCode.trim();
@@ -698,7 +716,12 @@ export const adminApi = {
 
   async updateSeller(
     sellerId: string,
-    payload: Partial<PublicUser> & { dailyTarget?: number }
+    payload: Partial<PublicUser> & {
+      dailyTarget?: number;
+      salesTargetPackets?: number | null;
+      salesTargetPeriod?: 'DAILY' | 'MONTHLY';
+      targetBonusPaise?: number | null;
+    }
   ): Promise<{ seller: PublicUser }> {
     const res = await apiRequest<{ seller?: PublicUser; user?: PublicUser }>(`admin/sellers/${sellerId}`, {
       method: 'PATCH',
@@ -890,6 +913,34 @@ export const adminApi = {
   async createPayout(userId: string, payload: CreatePayoutPayload): Promise<{ success: boolean; message?: string }> {
     return apiRequest<{ success: boolean; message?: string }>(`admin/incentives/users/${userId}/payouts`, {
       method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateUserTarget(
+    userId: string,
+    payload: {
+      salesTargetPackets: number | null;
+      salesTargetPeriod: 'DAILY' | 'MONTHLY';
+      targetBonusPaise?: number | null;
+    }
+  ): Promise<{
+    success: boolean;
+    message?: string;
+    data?: {
+      user: {
+        id: string;
+        name: string;
+        role: string;
+        salesTargetPackets: number | null;
+        salesTargetPeriod: 'DAILY' | 'MONTHLY';
+        targetBonusPaise: number | null;
+      };
+      targetProgress: import('./types').TargetProgressSummary;
+    };
+  }> {
+    return apiRequest(`admin/incentives/users/${userId}/target`, {
+      method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },

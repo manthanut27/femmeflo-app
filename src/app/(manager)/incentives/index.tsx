@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
+import { TargetProgressStrip } from '@/components/incentives/TargetProgressStrip';
 import { CardSkeleton } from '@/components/ui/LoadingSkeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import {
@@ -31,6 +32,8 @@ import { useDashboardBackHandler } from '@/hooks/useDashboardBackHandler';
 import { formatCurrencyINR, formatDateIST } from '@/utils/dateUtils';
 
 interface TeamIncentiveMember {
+  targetProgress?: import('@/api/types').TargetProgressSummary | null;
+  ratePerPacketPaise?: number;
   seller: {
     id: string;
     name: string;
@@ -433,6 +436,13 @@ export default function ManagerIncentivesScreen() {
                           <Badge label={statusLabel} variant={statusVariant} />
                         </View>
 
+                        <TargetProgressStrip
+                          targetProgress={member.targetProgress}
+                          ratePerPacketPaise={member.ratePerPacketPaise}
+                          mode="compact"
+                          showWhenUnset={false}
+                        />
+
                         {/* Breakdown Box */}
                         <View style={styles.figuresGrid}>
                           <View style={styles.figCol}>
@@ -529,6 +539,15 @@ export default function ManagerIncentivesScreen() {
                 </View>
               </Card>
 
+              <View style={{ marginTop: Spacing.md }}>
+                <TargetProgressStrip
+                  targetProgress={personal?.targetProgress}
+                  ratePerPacketPaise={personalRatePaise}
+                  mode="detailed"
+                  showWhenUnset
+                />
+              </View>
+
               {Array.isArray(personal?.items) && personal.items.length > 0 && (
                 <Card style={[styles.personalDetailCard, { marginTop: Spacing.md }]}>
                   <Text style={styles.personalTitle}>Confirmed Sales Breakdown ({personal.items.length})</Text>
@@ -552,6 +571,32 @@ export default function ManagerIncentivesScreen() {
                       </View>
                     );
                   })}
+                </Card>
+              )}
+
+              {Array.isArray(personal?.adjustments) && personal.adjustments.length > 0 && (
+                <Card style={[styles.personalDetailCard, { marginTop: Spacing.md }]}>
+                  <Text style={styles.personalTitle}>Bonuses &amp; Adjustments ({personal.adjustments.length})</Text>
+                  {personal.adjustments.map((adj: any, idx: number) => (
+                    <View key={adj.id || idx} style={styles.personalSummaryRow}>
+                      <View style={{ flex: 1, marginRight: Spacing.sm }}>
+                        <Text style={styles.personalSummaryLabel}>
+                          {adj.reason || (adj.type === 'DEDUCT' ? 'Deduction' : 'Bonus Addition')}
+                        </Text>
+                        <Text style={styles.memberSub}>
+                          {adj.adjustmentDate ? formatDateIST(adj.adjustmentDate, 'short') : 'Recorded'}
+                        </Text>
+                      </View>
+                      <Text
+                        style={
+                          adj.type === 'DEDUCT' ? styles.figValuePink : styles.personalSummaryValGreen
+                        }
+                      >
+                        {adj.type === 'DEDUCT' ? '-' : '+'}
+                        {formatCurrencyINR(adj.amountPaise || 0)}
+                      </Text>
+                    </View>
+                  ))}
                 </Card>
               )}
 

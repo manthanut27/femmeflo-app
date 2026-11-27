@@ -4,7 +4,26 @@
 
 export type AuthRole = 'SUPER_ADMIN' | 'MANAGER' | 'SELLER';
 
+export type TargetPeriodType = 'DAILY' | 'MONTHLY';
+
+export interface TargetProgressSummary {
+  hasTarget: boolean;
+  period: TargetPeriodType;
+  periodLabel: string;
+  targetPackets: number | null;
+  completedPackets: number;
+  remainingPackets: number;
+  completedRevenuePaise: number;
+  progressPercent: number;
+  bonusPaise: number;
+  earnedBonusPaise: number;
+  isAchieved: boolean;
+}
+
 export interface PublicUser {
+  salesTargetPackets?: number | null;
+  salesTargetPeriod?: TargetPeriodType;
+  targetBonusPaise?: number | null;
   id: string;
   name: string;
   email: string;
@@ -560,6 +579,10 @@ export interface EndShiftPayload {
 // Incentives
 // ----------------------------------------------------
 export interface SellerIncentiveData {
+  salesTargetPackets?: number | null;
+  salesTargetPeriod?: TargetPeriodType;
+  targetBonusPaise?: number | null;
+  targetProgress?: TargetProgressSummary | null;
   currentMonthEarnedPaise: number;
   totalPacketsSoldMonth: number;
   ratePerPacketPaise: number;
@@ -779,6 +802,10 @@ export interface IncentiveItem {
 }
 
 export interface IncentiveSummaryItem {
+  salesTargetPackets?: number | null;
+  salesTargetPeriod?: TargetPeriodType;
+  targetBonusPaise?: number | null;
+  targetProgress?: TargetProgressSummary | null;
   id: string;
   sellerId: string;
   sellerName?: string;
@@ -812,6 +839,8 @@ export interface AdminIncentiveListResponse {
     totalAdditionsPaise?: number;
     totalDeductionsPaise?: number;
     pendingEmployeesCount?: number;
+    targetsAssignedCount?: number;
+    targetsAchievedCount?: number;
     currentMonth?: any;
     previousMonth?: any;
   };
@@ -848,6 +877,10 @@ export interface ManagerIncentiveData {
   };
   personal?: {
     summary: Record<string, any>;
+    targetProgress?: TargetProgressSummary | null;
+    salesTargetPackets?: number | null;
+    salesTargetPeriod?: TargetPeriodType;
+    targetBonusPaise?: number | null;
     items?: Array<Record<string, any>>;
     adjustments?: Array<Record<string, any>>;
     payouts?: Array<Record<string, any>>;
@@ -1011,6 +1044,7 @@ export interface ListSalesParams {
 }
 
 export interface UserIncentiveDetails {
+  targetProgress?: TargetProgressSummary | null;
   user: {
     id: string;
     name: string;
@@ -1027,6 +1061,9 @@ export interface UserIncentiveDetails {
     effectiveRatePaise: number;
     effectiveRateRupees: number;
     isCustomRate: boolean;
+    salesTargetPackets?: number | null;
+    salesTargetPeriod?: TargetPeriodType;
+    targetBonusPaise?: number | null;
   };
   summary: any;
   rateHistory?: any[];

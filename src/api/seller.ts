@@ -559,6 +559,10 @@ export const sellerApi = {
       adjustments: raw?.adjustments || [],
       payouts: raw?.payouts || [],
       months: raw?.months || [],
+      salesTargetPackets: raw?.salesTargetPackets ?? summary?.salesTargetPackets ?? null,
+      salesTargetPeriod: raw?.salesTargetPeriod ?? summary?.salesTargetPeriod ?? 'MONTHLY',
+      targetBonusPaise: raw?.targetBonusPaise ?? summary?.targetBonusPaise ?? 0,
+      targetProgress: raw?.targetProgress ?? summary?.targetProgress ?? null,
     };
   },
 
