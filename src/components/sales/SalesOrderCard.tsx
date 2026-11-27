@@ -12,6 +12,7 @@ import type { SaleItem } from '@/api/types';
 import { isSaleResubmitted } from '@/api/admin';
 import { Badge, type BadgeVariant } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
+import { formatPaymentModeLabel } from '@/components/sales/AdminSalesFilterModal';
 import { BorderRadius, BrandColors, Colors, Spacing, Typography } from '@/constants/theme';
 import { formatDateTimeIST } from '@/utils/dateUtils';
 
@@ -123,7 +124,11 @@ export function SalesOrderCard({
               size="sm"
             />
           )}
-          <Badge label={item.paymentMode} variant={item.paymentMode as BadgeVariant} size="sm" />
+          <Badge
+            label={formatPaymentModeLabel(item.paymentMode)}
+            variant={item.paymentMode as BadgeVariant}
+            size="sm"
+          />
         </View>
       </View>
 

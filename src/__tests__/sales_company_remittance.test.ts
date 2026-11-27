@@ -34,6 +34,20 @@ describe('Sales Company Remittance & Bulk Complete Contracts', () => {
     assert.ok(adminSalesSrc.includes('Select for Bulk Complete'));
     assert.ok(adminSalesSrc.includes('Amount Received & Complete'));
     assert.ok(adminSalesSrc.includes('RemittanceActionModal'));
+    assert.ok(adminSalesSrc.includes('<AttendanceFilterButton'));
+    assert.ok(adminSalesSrc.includes('<AdminSalesFilterModal'));
+
+    const adminFilterModalSrc = fs.readFileSync(
+      path.join(appRoot, 'src/components/sales/AdminSalesFilterModal.tsx'),
+      'utf8'
+    );
+    assert.ok(adminFilterModalSrc.includes("label: 'All Sales'"));
+    assert.ok(adminFilterModalSrc.includes("label: 'Confirmed'"));
+    assert.ok(adminFilterModalSrc.includes("label: 'Pending'"));
+    assert.ok(adminFilterModalSrc.includes("label: 'Received'"));
+    assert.ok(adminFilterModalSrc.includes("label: 'Cash'"));
+    assert.ok(adminFilterModalSrc.includes("label: 'UPI / Bank'"));
+    assert.ok(adminFilterModalSrc.includes("label: 'Pay Later'"));
 
     const orderCardSrc = fs.readFileSync(path.join(appRoot, 'src/components/sales/SalesOrderCard.tsx'), 'utf8');
     assert.ok(orderCardSrc.includes('Receive'));

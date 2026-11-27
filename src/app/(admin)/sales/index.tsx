@@ -1,16 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as FileSystem from 'expo-file-system/legacy';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import * as Sharing from 'expo-sharing';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   BackHandler,
   FlatList,
-  Linking,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,16 +15,21 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { adminApi, isSaleResubmitted } from '@/api/admin';
-import { tokenStorage } from '@/api/client';
-import type { SaleItem, PaymentMode } from '@/api/types';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { adminApi } from '@/api/admin';
+import type { SaleItem } from '@/api/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Header } from '@/components/ui/Header';
 import { MobileNavigationDrawer } from '@/components/common/MobileNavigationDrawer';
+import { AttendanceFilterButton } from '@/components/common/AttendanceFilterModal';
 import { PdfPreviewModal } from '@/components/common/PdfPreviewModal';
+import {
+  AdminSalesFilterModal,
+  formatPaymentModeLabel,
+  type AdminSalesPaymentFilter,
+  type AdminSalesStatusFilter,
+} from '@/components/sales/AdminSalesFilterModal';
 import { SalesOrderCard } from '@/components/sales/SalesOrderCard';
 import { RemittanceActionModal } from '@/components/sales/RemittanceActionModal';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
@@ -65,7 +65,6 @@ function formatISTDateTime(isoString: string | null | undefined): string {
 
 export default function AdminSalesScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
   const { width } = useWindowDimensions();
   const isMultiColumn = width >= 768;
@@ -82,7 +81,7 @@ export default function AdminSalesScreen() {
         router.replace('/(admin)' as any);
       }
     }
-  }, [navigation, router]);
+  }, [router]);
 
   useEffect(() => {
     const onBackPress = () => {
@@ -101,11 +100,9 @@ export default function AdminSalesScreen() {
   // Filters
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<
-    'ALL' | 'CONFIRMED' | 'SENT_TO_COMPANY' | 'COMPLETED' | 'PENDING_APPROVAL' | 'RESUBMITTED' | 'REJECTED'
-  >('ALL');
-  const [paymentFilter, setPaymentFilter] = useState<PaymentMode | 'ALL'>('ALL');
-  const [periodFilter, setPeriodFilter] = useState<'all' | 'this_month' | 'last_month'>('all');
+  const [statusFilter, setStatusFilter] = useState<AdminSalesStatusFilter>('ALL');
+  const [paymentFilter, setPaymentFilter] = useState<AdminSalesPaymentFilter>('ALL');
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   // Selection & Company Payment Receipt state
   const [selectionMode, setSelectionMode] = useState(false);
@@ -127,29 +124,14 @@ export default function AdminSalesScreen() {
   const fetchSales = useCallback(async () => {
     setLoadError(null);
     try {
-      const backendStatus =
-        statusFilter === 'RESUBMITTED'
-          ? 'PENDING_APPROVAL'
-          : statusFilter === 'SENT_TO_COMPANY'
-          ? 'CONFIRMED'
-          : statusFilter !== 'ALL'
-          ? statusFilter
-          : undefined;
-
       const res = await adminApi.listSales({
         page: 1,
         pageSize: 100,
-        status: backendStatus,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
         paymentMode: paymentFilter !== 'ALL' ? paymentFilter : undefined,
-        period: periodFilter,
         search: debouncedSearch.trim() || undefined,
       });
-      let fetched = res?.items || res?.sales || [];
-      if (statusFilter === 'RESUBMITTED') {
-        fetched = fetched.filter((s) => isSaleResubmitted(s));
-      } else if (statusFilter === 'SENT_TO_COMPANY') {
-        fetched = fetched.filter((s) => s.status === 'CONFIRMED' && Boolean(s.paymentSentAt));
-      }
+      const fetched = res?.items || res?.sales || [];
       setSales(fetched);
       const validSet = new Set(
         fetched
@@ -165,7 +147,7 @@ export default function AdminSalesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [statusFilter, paymentFilter, periodFilter, debouncedSearch]);
+  }, [statusFilter, paymentFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchSales();
@@ -313,115 +295,60 @@ export default function AdminSalesScreen() {
       />
 
       <View style={styles.filterSection}>
-        <View style={styles.searchInner}>
-          <Input
-            placeholder="Search order ID, shop or seller..."
-            value={search}
-            onChangeText={setSearch}
-            leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}
-            rightIcon={
-              search.length > 0 ? (
-                <Pressable
-                  onPress={() => {
-                    setSearch('');
-                    setDebouncedSearch('');
-                  }}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear search"
-                >
-                  <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
-                </Pressable>
-              ) : undefined
-            }
+        <View style={styles.searchFilterRow}>
+          <View style={{ flex: 1 }}>
+            <Input
+              placeholder="Search order ID, shop or seller..."
+              value={search}
+              onChangeText={setSearch}
+              containerStyle={{ marginBottom: 0 }}
+              leftIcon={<Ionicons name="search" size={18} color={Colors.light.textMuted} />}
+              rightIcon={
+                search.length > 0 ? (
+                  <Pressable
+                    onPress={() => {
+                      setSearch('');
+                      setDebouncedSearch('');
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search"
+                  >
+                    <Ionicons name="close-circle" size={18} color={Colors.light.textTertiary} />
+                  </Pressable>
+                ) : undefined
+              }
+            />
+          </View>
+          <AttendanceFilterButton
+            onPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={statusFilter !== 'ALL' || paymentFilter !== 'ALL'}
+            accentColor={BrandColors.pink.dark}
+            accessibilityLabel="Open sales status and payment mode filter"
           />
         </View>
 
-        {/* Status filters */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-          style={styles.filterScroll}
-        >
-          {(
-            ['ALL', 'CONFIRMED', 'SENT_TO_COMPANY', 'COMPLETED', 'PENDING_APPROVAL', 'RESUBMITTED', 'REJECTED'] as const
-          ).map((st) => {
-            const active = statusFilter === st;
-            const label =
-              st === 'ALL'
-                ? 'All'
-                : st === 'CONFIRMED'
-                ? 'Confirmed'
-                : st === 'SENT_TO_COMPANY'
-                ? 'Cash Sent'
-                : st === 'COMPLETED'
-                ? 'Completed'
-                : st === 'PENDING_APPROVAL'
-                ? 'Pending'
-                : st === 'RESUBMITTED'
-                ? 'Resubmitted'
-                : 'Rejected';
-            return (
-              <TouchableOpacity
-                key={st}
-                style={[
-                  styles.filterChip,
-                  active &&
-                    (st === 'RESUBMITTED'
-                      ? styles.filterChipActivePurple
-                      : st === 'COMPLETED'
-                      ? { backgroundColor: '#0F766E' }
-                      : st === 'SENT_TO_COMPANY'
-                      ? { backgroundColor: '#1D4ED8' }
-                      : styles.filterChipActive),
-                ]}
-                onPress={() => setStatusFilter(st)}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Payment mode filters */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-          style={styles.filterScroll}
-        >
-          {(['ALL', 'CASH', 'BANK', 'PENDING'] as const).map((pm) => {
-            const active = paymentFilter === pm;
-            const label =
-              pm === 'ALL'
-                ? 'All Modes'
-                : pm === 'CASH'
-                ? 'Cash'
-                : pm === 'BANK'
-                ? 'Bank'
-                : 'Pending';
-            return (
-              <TouchableOpacity
-                key={pm}
-                style={[styles.paymentChip, active && styles.paymentChipActive]}
-                onPress={() => setPaymentFilter(pm)}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[styles.paymentChipText, active && styles.paymentChipTextActive]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {/* Active Filter Summary */}
+        {hasActiveFilters ? (
+          <View style={styles.activeSummaryBar}>
+            <Text style={styles.activeSummaryText} numberOfLines={1}>
+              {sales.length} {sales.length === 1 ? 'result' : 'results'}
+              {statusFilter !== 'ALL'
+                ? ` · ${
+                    statusFilter === 'CONFIRMED'
+                      ? 'Confirmed'
+                      : statusFilter === 'PENDING_APPROVAL'
+                      ? 'Pending'
+                      : 'Received'
+                  }`
+                : ''}
+              {paymentFilter !== 'ALL' ? ` · ${formatPaymentModeLabel(paymentFilter)}` : ''}
+            </Text>
+            <TouchableOpacity onPress={clearAllFilters} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.clearAllText}>Clear All</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Bulk Selection Toolbar */}
         {readyToCompleteSales.length > 0 ? (
@@ -466,18 +393,6 @@ export default function AdminSalesScreen() {
                   ? 'Deselect All'
                   : `Select All Ready (${readyToCompleteSales.length})`}
               </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {/* Active Filter Summary */}
-        {hasActiveFilters ? (
-          <View style={styles.activeSummaryBar}>
-            <Text style={styles.activeSummaryText}>
-              {sales.length} {sales.length === 1 ? 'result' : 'results'}
-            </Text>
-            <TouchableOpacity onPress={clearAllFilters} hitSlop={8} accessibilityRole="button">
-              <Text style={styles.clearAllText}>Clear All</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -612,7 +527,7 @@ export default function AdminSalesScreen() {
                 </View>
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>Payment Mode:</Text>
-                  <Text style={styles.metaVal}>{selectedSale?.paymentMode}</Text>
+                  <Text style={styles.metaVal}>{formatPaymentModeLabel(selectedSale?.paymentMode)}</Text>
                 </View>
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>Order Status:</Text>
@@ -807,6 +722,17 @@ export default function AdminSalesScreen() {
         onSubmit={handleSubmitReceivePayment}
       />
 
+      <AdminSalesFilterModal
+        visible={filterModalVisible}
+        statusFilter={statusFilter}
+        paymentFilter={paymentFilter}
+        onApply={({ statusFilter: nextStatus, paymentFilter: nextPayment }) => {
+          setStatusFilter(nextStatus);
+          setPaymentFilter(nextPayment);
+        }}
+        onClose={() => setFilterModalVisible(false)}
+      />
+
       <PdfPreviewModal
         visible={pdfPreview !== null}
         pdfUrl={pdfPreview?.url || null}
@@ -842,71 +768,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.borderSubtle,
     gap: 8,
-    paddingBottom: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
-  searchInner: {
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.xs,
     maxWidth: MaxContentWidth,
     width: '100%',
     alignSelf: 'center',
-  },
-  filterScroll: {
-    maxWidth: MaxContentWidth,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  filterScrollContent: {
-    paddingHorizontal: Spacing.md,
-    gap: 8,
-    alignItems: 'center',
-  },
-  filterChip: {
-    minHeight: 34,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterChipActive: {
-    backgroundColor: BrandColors.pink.primary,
-  },
-  filterChipActivePurple: {
-    backgroundColor: '#7C3AED',
-  },
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
-  },
-  paymentChip: {
-    minHeight: 30,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  paymentChipActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#006B35',
-  },
-  paymentChipText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  paymentChipTextActive: {
-    color: '#006B35',
-    fontWeight: '700',
   },
   activeSummaryBar: {
     flexDirection: 'row',
