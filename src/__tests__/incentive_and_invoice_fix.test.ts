@@ -66,5 +66,8 @@ describe('Incentive Default Rate, Dual-Role Visibility & In-App Tax Invoice PDF 
 
     assert.ok(sellerSalesListCode.includes("import { PdfPreviewModal } from '@/components/common/PdfPreviewModal'"), 'seller sales list imports PdfPreviewModal');
     assert.ok(sellerSalesListCode.includes('handleOpenInvoice(item)') && sellerSalesListCode.includes('Tax Invoice'), 'seller sales list exposes quick in-app Tax Invoice preview on confirmed sales');
+
+    const pdfPreviewModalCode = readSource('src/components/common/PdfPreviewModal.tsx');
+    assert.ok(pdfPreviewModalCode.includes('freshUrl') && pdfPreviewModalCode.includes('_t=${Date.now()}'), 'PdfPreviewModal always re-fetches updated server PDF with offline cache fallback');
   });
 });

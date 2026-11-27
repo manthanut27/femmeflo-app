@@ -63,20 +63,32 @@ export function PdfPreviewModal({
       try {
         const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
         const targetUri = `${FileSystem.cacheDirectory}${safeName}`;
+        const freshUrl = pdfUrl.includes('?')
+          ? `${pdfUrl}&_t=${Date.now()}`
+          : `${pdfUrl}?_t=${Date.now()}`;
 
         const info = await FileSystem.getInfoAsync(targetUri);
         let uriToRead = targetUri;
 
-        if (!info.exists || (info.size ?? 0) === 0) {
+        try {
           const token = await tokenStorage.getToken();
-          const downloadRes = await FileSystem.downloadAsync(pdfUrl, targetUri, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          const downloadRes = await FileSystem.downloadAsync(freshUrl, targetUri, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              'Cache-Control': 'no-cache',
+            },
           });
 
           if (downloadRes.status !== 200) {
             throw new Error(`Could not fetch PDF from server (HTTP ${downloadRes.status}).`);
           }
           uriToRead = downloadRes.uri;
+        } catch (downloadErr) {
+          // Offline resilience: fall back to cached copy only if network fetch fails
+          if (!info.exists || (info.size ?? 0) === 0) {
+            throw downloadErr;
+          }
+          uriToRead = targetUri;
         }
 
         const b64 = await FileSystem.readAsStringAsync(uriToRead, {
