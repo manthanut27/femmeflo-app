@@ -122,14 +122,17 @@ describe('Attendance / Duty Shift Filter, Calendar Picker & KPI Metrics Suite', 
 
   it('wires AttendanceFilterButton, AttendanceFilterModal (Today/Week/Month/3M/6M + Calendar), and KPIs across Admin, Manager, and Seller', () => {
     const filterModalCode = readSource('src/components/common/AttendanceFilterModal.tsx');
+    const filterUtilsCode = readSource('src/utils/shiftFilterUtils.ts');
     const adminCode = readSource('src/app/(admin)/shifts/index.tsx');
     const managerCode = readSource('src/app/(manager)/shifts/index.tsx');
     const sellerAttendanceCode = readSource('src/app/(seller)/attendance/index.tsx');
     const sellerProfileShiftsCode = readSource('src/app/(seller)/profile/shifts.tsx');
 
-    for (const label of ['Today', 'Week', 'Month', '3 Months', '6 Months', 'Select Specific Date']) {
-      assert.ok(filterModalCode.includes(label), `Filter modal must contain ${label}`);
+    assert.ok(filterModalCode.includes('SHIFT_FILTER_PRESETS'), 'Filter modal must render SHIFT_FILTER_PRESETS');
+    for (const label of ['Today', 'Week', 'Month', '3 Months', '6 Months']) {
+      assert.ok(filterUtilsCode.includes(label), `Filter presets must contain ${label}`);
     }
+    assert.ok(filterModalCode.includes('Select Specific Date'), 'Filter modal must include Select Specific Date calendar option');
     assert.ok(filterModalCode.includes('calendar-outline'), 'Filter modal must display calendar icon');
     assert.ok(filterModalCode.includes('options-outline'), 'Filter button must render clean icon-only filter trigger');
 

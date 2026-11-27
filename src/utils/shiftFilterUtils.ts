@@ -1,10 +1,10 @@
-import type { Shift, ShiftSummary } from '@/api/types';
-import { formatDateIST, getISTDateKey, getISTDateParts } from '@/utils/dateUtils';
+import type { Shift, ShiftSummary } from '../api/types.ts';
+import { formatDateIST, getISTDateKey, getISTDateParts } from './dateUtils.ts';
 import {
   computeShiftTimingSummary,
   computeShiftTravelDistance,
   formatDurationHuman,
-} from '@/utils/distanceUtils';
+} from './distanceUtils.ts';
 
 export type ShiftFilterPreset =
   | 'today'
